@@ -9,19 +9,6 @@
 #endif
 
 
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t error = call; \
-        if (error != cudaSuccess) { \
-            std::stringstream ss; \
-            ss << "CUDA call (" << #call << " ) failed with error: '" \
-               << cudaGetErrorString(error) \
-               << "' (" __FILE__ << ":" << __LINE__ << ")\n"; \
-            throw std::runtime_error(ss.str().c_str()); \
-        } \
-    } while (0)
-
-
 
 namespace CUDAHelper {
 #ifdef CUDAHPlatform_Windows_MSVC
@@ -46,7 +33,7 @@ namespace CUDAHelper {
 
     Buffer::Buffer() :
         m_deviceIndex(0),
-        m_hostPointer(nullptr), m_devicePointer(nullptr),
+        m_hostPointer(nullptr), m_devicePointer(nullptr), m_mappedPointer(nullptr),
         m_GLBufferID(0), m_cudaGfxResource(nullptr) {
     }
 
@@ -87,11 +74,98 @@ namespace CUDAHelper {
             CUDA_CHECK(cudaMalloc(&m_devicePointer, m_width * m_height * m_stride));
 
         if (m_type == BufferType::GL_Interop)
-            CUDA_CHECK(cudaGraphicsGLRegisterBuffer(&m_cudaGfxResource, m_GLBufferID, cudaGraphicsMapFlagsWriteDiscard));
+            CUDA_CHECK(cudaGraphicsGLRegisterBuffer(&m_cudaGfxResource, m_GLBufferID, cudaGraphicsRegisterFlagsNone)); // TODO
 
         if (m_type == BufferType::ZeroCopy) {
             CUDA_CHECK(cudaHostAlloc(&m_hostPointer, m_width * m_height * m_stride, cudaHostAllocPortable | cudaHostAllocMapped));
             CUDA_CHECK(cudaHostGetDevicePointer(&m_devicePointer, m_hostPointer, 0));
+        }
+    }
+
+    void Buffer::finalize() {
+        makeCurrent();
+
+        if (m_type == BufferType::ZeroCopy) {
+            CUDA_CHECK(cudaFreeHost(m_hostPointer));
+            m_devicePointer = nullptr;
+            m_hostPointer = nullptr;
+        }
+
+        if (m_type == BufferType::GL_Interop) {
+            CUDA_CHECK(cudaGraphicsUnregisterResource(m_cudaGfxResource));
+            m_devicePointer = 0;
+        }
+
+        if (m_type == BufferType::Device || m_type == BufferType::P2P) {
+            CUDA_CHECK(cudaFree(m_devicePointer));
+            m_devicePointer = nullptr;
+        }
+    }
+
+
+
+    CUdeviceptr Buffer::getDevicePointer() {
+        return (CUdeviceptr)m_devicePointer;
+    }
+
+
+
+    void* Buffer::mapOnDevice(CUstream stream) {
+        if (m_type == BufferType::GL_Interop) {
+            makeCurrent();
+
+            size_t bufferSize = 0;
+            CUDA_CHECK(cudaGraphicsMapResources(1, &m_cudaGfxResource, stream));
+            CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(&m_devicePointer, &bufferSize, m_cudaGfxResource));
+        }
+
+        return m_devicePointer;
+    }
+
+    void Buffer::unmapOnDevice(CUstream stream) {
+        makeCurrent();
+
+        if (m_type == BufferType::Device || m_type == BufferType::P2P) {
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+        }
+        else if (m_type == BufferType::GL_Interop) {
+            CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
+        }
+        else {
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+        }
+    }
+
+    void* Buffer::map() {
+        if (m_type == BufferType::Device ||
+            m_type == BufferType::P2P ||
+            m_type == BufferType::GL_Interop) {
+            CUDAHAssert(m_mappedPointer == nullptr, "This buffer is already mapped.");
+            size_t size = m_width * m_height * m_stride;
+            m_mappedPointer = new uint8_t[size];
+
+            makeCurrent();
+            CUDA_CHECK(cudaMemcpy(m_mappedPointer, mapOnDevice(0), size, cudaMemcpyDeviceToHost));
+            unmapOnDevice(0);
+
+            return m_mappedPointer;
+        }
+        else {
+            return m_hostPointer;
+        }
+    }
+
+    void Buffer::unmap() {
+        if (m_type == BufferType::Device ||
+            m_type == BufferType::P2P ||
+            m_type == BufferType::GL_Interop) {
+            CUDAHAssert(m_mappedPointer, "This buffer is not mapped.");
+
+            makeCurrent();
+            CUDA_CHECK(cudaMemcpy(mapOnDevice(0), m_mappedPointer, m_width * m_height * m_stride, cudaMemcpyHostToDevice));
+            unmapOnDevice(0);
+
+            delete[] m_mappedPointer;
         }
     }
 }

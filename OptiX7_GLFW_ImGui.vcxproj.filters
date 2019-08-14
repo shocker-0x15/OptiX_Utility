@@ -81,6 +81,7 @@
     </ClInclude>
     <ClInclude Include="GLToolkit.h" />
     <ClInclude Include="cuda_helper.h" />
+    <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis">
@@ -94,5 +95,14 @@
     <None Include="shaders\scale.frag">
       <Filter>shaders</Filter>
     </None>
+    <None Include="shaders\drawOptiXResult.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\drawOptiXResult.frag">
+      <Filter>shaders</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu" />
   </ItemGroup>
 </Project>

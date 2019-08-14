@@ -59,6 +59,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -70,6 +71,22 @@
 
 xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     </PostBuildEvent>
+    <CudaCompile>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+    </CudaCompile>
+    <CudaCompile>
+      <NvccCompilation>ptx</NvccCompilation>
+    </CudaCompile>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CudaRuntime>Shared</CudaRuntime>
+      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\ptxes\%(Filename).ptx</CompileOut>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <AdditionalOptions>--use_fast_math %(AdditionalOptions)</AdditionalOptions>
+    </CudaCompile>
+    <CudaLink>
+      <PerformDeviceLink>false</PerformDeviceLink>
+    </CudaLink>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -80,6 +97,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -92,6 +110,21 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
 
 xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     </PostBuildEvent>
+    <CudaCompile>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+    </CudaCompile>
+    <CudaCompile>
+      <NvccCompilation>ptx</NvccCompilation>
+    </CudaCompile>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CudaRuntime>Shared</CudaRuntime>
+      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\ptxes\%(Filename).ptx</CompileOut>
+      <AdditionalOptions>--use_fast_math %(AdditionalOptions)</AdditionalOptions>
+    </CudaCompile>
+    <CudaLink>
+      <PerformDeviceLink>false</PerformDeviceLink>
+    </CudaLink>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="cuda_helper.cpp" />
@@ -119,13 +152,19 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <ClInclude Include="ext\imgui\imstb_textedit.h" />
     <ClInclude Include="ext\imgui\imstb_truetype.h" />
     <ClInclude Include="GLToolkit.h" />
+    <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\drawOptiXResult.frag" />
+    <None Include="shaders\drawOptiXResult.vert" />
     <None Include="shaders\scale.frag" />
     <None Include="shaders\scale.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

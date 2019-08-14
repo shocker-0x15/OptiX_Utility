@@ -40,6 +40,18 @@
 #define CUDAHAssert_ShouldNotBeCalled() CUDAHAssert(false, "Should not be called!")
 #define CUDAHAssert_NotImplemented() CUDAHAssert(false, "Not implemented yet!")
 
+#define CUDA_CHECK(call) \
+    do { \
+        cudaError_t error = call; \
+        if (error != cudaSuccess) { \
+            std::stringstream ss; \
+            ss << "CUDA call (" << #call << " ) failed with error: '" \
+               << cudaGetErrorString(error) \
+               << "' (" __FILE__ << ":" << __LINE__ << ")\n"; \
+            throw std::runtime_error(ss.str().c_str()); \
+        } \
+    } while (0)
+
 
 
 #include <sstream>
@@ -76,11 +88,11 @@ namespace CUDAHelper {
 
         void* m_hostPointer;
         void* m_devicePointer;
+        void* m_mappedPointer;
 
         GLuint m_GLBufferID;
         cudaGraphicsResource* m_cudaGfxResource;
 
-        CUstream m_stream;
         int32_t m_deviceIndex;
 
         void makeCurrent();
@@ -90,5 +102,14 @@ namespace CUDAHelper {
         ~Buffer();
 
         void initialize(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID);
+        void finalize();
+
+        CUdeviceptr getDevicePointer();
+
+        void* mapOnDevice(CUstream stream);
+        void unmapOnDevice(CUstream stream);
+
+        void* map();
+        void unmap();
     };
 }

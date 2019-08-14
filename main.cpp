@@ -1,3 +1,24 @@
+ï»¿// Platform defines
+#if defined(_WIN32) || defined(_WIN64)
+#    define HP_Platform_Windows
+#    if defined(_MSC_VER)
+#        define HP_Platform_Windows_MSVC
+#    endif
+#elif defined(__APPLE__)
+#    define HP_Platform_macOS
+#endif
+
+#if defined(HP_Platform_Windows_MSVC)
+#   define NOMINMAX
+#   define _USE_MATH_DEFINES
+#   include <Windows.h>
+#   undef near
+#   undef far
+#   undef RGB
+#endif
+
+
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
@@ -19,17 +40,13 @@
 #include "GLToolkit.h"
 #include "cuda_helper.h"
 
+#include <optix.h>
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+
+#include "shared.h"
 
 
-// Platform defines
-#if defined(_WIN32) || defined(_WIN64)
-#    define HP_Platform_Windows
-#    if defined(_MSC_VER)
-#        define HP_Platform_Windows_MSVC
-#    endif
-#elif defined(__APPLE__)
-#    define HP_Platform_macOS
-#endif
 
 #ifdef _DEBUG
 #   define ENABLE_ASSERT
@@ -67,6 +84,42 @@ template <typename T, size_t size>
 constexpr size_t lengthof(const T(&array)[size]) {
     return size;
 }
+
+
+
+#define OPTIX_CHECK(call) \
+    do { \
+        OptixResult error = call; \
+        if (error != OPTIX_SUCCESS) { \
+            std::stringstream ss; \
+            ss << "OptiX call (" << #call << ") failed: " \
+               << "(" __FILE__ << ":" << __LINE__ << ")\n"; \
+            throw std::runtime_error(ss.str().c_str()); \
+        } \
+    } while (0)
+
+#define OPTIX_CHECK_LOG(call) \
+    do { \
+        OptixResult error = call; \
+        if (error != OPTIX_SUCCESS) { \
+            std::stringstream ss; \
+            ss << "OptiX call (" << #call << ") failed: " \
+               << "(" __FILE__ << ":" << __LINE__ << ")\n" \
+               << "Log: " << log << (logSize > sizeof(log) ? "<TRUNCATED>" : "") \
+               << "\n"; \
+            throw std::runtime_error(ss.str().c_str()); \
+        } \
+    } while (0)
+
+
+
+template <typename T>
+struct SBTRecord {
+    __align__(OPTIX_SBT_RECORD_ALIGNMENT) uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
+    T data;
+};
+
+using RayGenSBTRecord = SBTRecord<Shared::RayGenData>;
 
 
 
@@ -113,6 +166,12 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 
+static void optixLogCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
+    hpprintf("[%2u][%12s]: %s\n", level, tag, message);
+}
+
+
+
 float sRGB_degamma_s(float value) {
     Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
     if (value <= 0.04045f)
@@ -122,7 +181,7 @@ float sRGB_degamma_s(float value) {
 
 
 
-int32_t main(int32_t argc, const char* argv[]) {
+int32_t mainFunc(int32_t argc, const char* argv[]) {
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit()) {
         hpprintf("Failed to initialize GLFW.\n");
@@ -131,7 +190,7 @@ int32_t main(int32_t argc, const char* argv[]) {
 
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 
-    // JP: OpenGL 4.6 Core Profile‚ÌƒRƒ“ƒeƒLƒXƒg‚ğì¬‚·‚éB
+    // JP: OpenGL 4.6 Core Profileã®ã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆã‚’ä½œæˆã™ã‚‹ã€‚
     const uint32_t OpenGLMajorVersion = 4;
     const uint32_t OpenGLMinorVersion = 6;
     const char* glsl_version = "#version 460";
@@ -146,8 +205,8 @@ int32_t main(int32_t argc, const char* argv[]) {
     int32_t renderTargetSizeX = 1280;
     int32_t renderTargetSizeY = 720;
 
-    // JP: ƒEƒCƒ“ƒhƒE‚Ì‰Šú‰»B
-    //     HiDPIƒfƒBƒXƒvƒŒƒC‚É‘Î‰‚·‚éB
+    // JP: ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã®åˆæœŸåŒ–ã€‚
+    //     HiDPIãƒ‡ã‚£ã‚¹ãƒ—ãƒ¬ã‚¤ã«å¯¾å¿œã™ã‚‹ã€‚
     float contentScaleX, contentScaleY;
     glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
     float UIScaling = contentScaleX;
@@ -169,7 +228,7 @@ int32_t main(int32_t argc, const char* argv[]) {
 
 
 
-    // JP: gl3wInit()‚Í‰½‚ç‚©‚ÌOpenGLƒRƒ“ƒeƒLƒXƒg‚ªì‚ç‚ê‚½Œã‚ÉŒÄ‚Ô•K—v‚ª‚ ‚éB
+    // JP: gl3wInit()ã¯ä½•ã‚‰ã‹ã®OpenGLã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆãŒä½œã‚‰ã‚ŒãŸå¾Œã«å‘¼ã¶å¿…è¦ãŒã‚ã‚‹ã€‚
     int32_t gl3wRet = gl3wInit();
     if (!gl3wIsSupported(OpenGLMajorVersion, OpenGLMinorVersion)) {
         hpprintf("gl3w doesn't support OpenGL %u.%u\n", OpenGLMajorVersion, OpenGLMinorVersion);
@@ -206,33 +265,203 @@ int32_t main(int32_t argc, const char* argv[]) {
     ImGui::GetStyle() = guiStyleWithGamma;
 
 
+    OptixDeviceContext optixContext = nullptr;
+    {
+        // initialize CUDA.
+        // Zero means taking the current optixContext.
+        CUDA_CHECK(cudaFree(0));
+        CUcontext cudaContext = 0;
+
+        OPTIX_CHECK(optixInit());
+        OptixDeviceContextOptions options = {};
+        options.logCallbackFunction = &optixLogCallBack;
+        options.logCallbackLevel = 4;
+        OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &optixContext));
+    }
+
+
+
+    OptixPipelineCompileOptions pipelineCompileOptions = {};
+    pipelineCompileOptions.numPayloadValues = 0;
+    pipelineCompileOptions.numAttributeValues = 0;
+    pipelineCompileOptions.pipelineLaunchParamsVariableName = "iv";
+    pipelineCompileOptions.usesMotionBlur = false;
+    pipelineCompileOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pipelineCompileOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+
+    char log[2048];
+    size_t logSize;
+
+    OptixModule module = nullptr;
+    {
+        OptixModuleCompileOptions moduleCompileOptions = {};
+        moduleCompileOptions.maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT;
+        moduleCompileOptions.optLevel = OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
+        moduleCompileOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO;
+
+        const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernel.ptx");
+
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixModuleCreateFromPTX(optixContext, 
+                                                 &moduleCompileOptions,
+                                                 &pipelineCompileOptions,
+                                                 ptx.c_str(), ptx.size(),
+                                                 log, &logSize,
+                                                 &module));
+    }
+
+
+
+    OptixProgramGroup pgRaygen = nullptr;
+    {
+        OptixProgramGroupOptions programGroupOptions = {}; // Initialize to zeros
+
+        OptixProgramGroupDesc progGroupDesc = {};
+        progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+        progGroupDesc.raygen.module = module;
+        progGroupDesc.raygen.entryFunctionName = "__raygen__fill";
+
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixProgramGroupCreate(optixContext,
+                                                &progGroupDesc, 1, // num program groups
+                                                &programGroupOptions,
+                                                log, &logSize,
+                                                &pgRaygen));
+    }
+
+    OptixProgramGroup pgMiss = nullptr;
+    {
+        OptixProgramGroupOptions programGroupOptions = {}; // Initialize to zeros
+
+        OptixProgramGroupDesc progGroupDesc = {};
+        progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixProgramGroupCreate(optixContext,
+                                                &progGroupDesc, 1, // num program groups
+                                                &programGroupOptions,
+                                                log, &logSize,
+                                                &pgMiss));
+    }
+
+    OptixProgramGroup pgHitGroup = nullptr;
+    {
+        OptixProgramGroupOptions programGroupOptions = {}; // Initialize to zeros
+
+        OptixProgramGroupDesc progGroupDesc = {};
+        progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixProgramGroupCreate(optixContext,
+                                                &progGroupDesc, 1, // num program groups
+                                                &programGroupOptions,
+                                                log, &logSize,
+                                                &pgHitGroup));
+    }
+
+
+
+    OptixPipeline pipeline = nullptr;
+    {
+        OptixProgramGroup programGroups[] = { pgRaygen };
+
+        OptixPipelineLinkOptions pipelineLinkOptions = {};
+        pipelineLinkOptions.maxTraceDepth = 3;
+        pipelineLinkOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_FULL;
+        pipelineLinkOptions.overrideUsesMotionBlur = false;
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixPipelineCreate(optixContext,
+                                            &pipelineCompileOptions,
+                                            &pipelineLinkOptions,
+                                            programGroups, lengthof(programGroups),
+                                            log, &logSize,
+                                            &pipeline));
+    }
+
+    OptixShaderBindingTable sbt = {};
+    CUdeviceptr rayGenSBTBuffer;
+    {
+        RayGenSBTRecord rayGenSBTR;
+        OPTIX_CHECK(optixSbtRecordPackHeader(pgRaygen, &rayGenSBTR));
+        rayGenSBTR.data = { 1.0f, 1.0f, 0.0f };
+
+        CUDA_CHECK(cudaMalloc((void**)&rayGenSBTBuffer, sizeof(rayGenSBTR)));
+        CUDA_CHECK(cudaMemcpy((void*)rayGenSBTBuffer, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice));
+
+        SBTRecord<int32_t> missSBTR;
+        OPTIX_CHECK(optixSbtRecordPackHeader(pgMiss, &missSBTR));
+        missSBTR.data = 0;
+
+        CUdeviceptr missSBTBuffer;
+        CUDA_CHECK(cudaMalloc((void**)&missSBTBuffer, sizeof(missSBTR)));
+        CUDA_CHECK(cudaMemcpy((void*)missSBTBuffer, &missSBTR, sizeof(missSBTR), cudaMemcpyHostToDevice));
+
+        SBTRecord<int32_t> hitGroupSBTR;
+        OPTIX_CHECK(optixSbtRecordPackHeader(pgHitGroup, &hitGroupSBTR));
+        hitGroupSBTR.data = 0;
+
+        CUdeviceptr hitGroupSBTBuffer;
+        CUDA_CHECK(cudaMalloc((void**)&hitGroupSBTBuffer, sizeof(hitGroupSBTR)));
+        CUDA_CHECK(cudaMemcpy((void*)hitGroupSBTBuffer, &hitGroupSBTR, sizeof(hitGroupSBTR), cudaMemcpyHostToDevice));
+
+        sbt.raygenRecord = rayGenSBTBuffer;
+        sbt.missRecordBase = missSBTBuffer;
+        sbt.missRecordStrideInBytes = sizeof(missSBTR);
+        sbt.missRecordCount = 1;
+        sbt.hitgroupRecordBase = hitGroupSBTBuffer;
+        sbt.hitgroupRecordStrideInBytes = sizeof(hitGroupSBTR);
+        sbt.hitgroupRecordCount = 1;
+    }
+
+
+    
+    // EN: default stream
+    CUstream stream = 0;
+    //CUDA_CHECK(cudaStreamCreate(&stream));
+
+
 
     GLTK::Buffer outputBufferGL;
     GLTK::BufferTexture outputTexture;
     CUDAHelper::Buffer outputBufferCUDA;
-    outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, 16, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
-    outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX, renderTargetSizeY, 16, outputBufferGL.getRawHandle());
-    outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGB32F);
+    outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
+    outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
+    outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX, renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
     
-    // JP: ƒtƒ‹ƒXƒNƒŠ[ƒ“ƒNƒAƒbƒh(or OŠpŒ`)—p‚Ì‹ó‚ÌVAOB
+    // JP: ãƒ•ãƒ«ã‚¹ã‚¯ãƒªãƒ¼ãƒ³ã‚¯ã‚¢ãƒƒãƒ‰(or ä¸‰è§’å½¢)ç”¨ã®ç©ºã®VAOã€‚
     GLTK::VertexArray vertexArrayForFullScreen;
     vertexArrayForFullScreen.initialize();
 
     const filesystem::path exeDir = getExecutableDirectory();
 
-    // JP: HiDPIƒfƒBƒXƒvƒŒƒC‚Å‰ßè‚ÈƒŒƒ“ƒ_ƒŠƒ“ƒO•‰‰×‚É‚È‚Á‚Ä‚µ‚Ü‚¤‚½‚ß’á‰ğ‘œ“xƒtƒŒ[ƒ€ƒoƒbƒtƒ@[‚ğì¬‚·‚éB
+    // JP: HiDPIãƒ‡ã‚£ã‚¹ãƒ—ãƒ¬ã‚¤ã§éå‰°ãªãƒ¬ãƒ³ãƒ€ãƒªãƒ³ã‚°è² è·ã«ãªã£ã¦ã—ã¾ã†ãŸã‚ä½è§£åƒåº¦ãƒ•ãƒ¬ãƒ¼ãƒ ãƒãƒƒãƒ•ã‚¡ãƒ¼ã‚’ä½œæˆã™ã‚‹ã€‚
     GLTK::FrameBuffer frameBuffer;
     frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
 
-    // JP: ƒAƒbƒvƒXƒP[ƒ‹—p‚ÌƒVƒF[ƒ_[B
+    // JP: OptiXã®çµæœã‚’ãƒ•ãƒ¬ãƒ¼ãƒ ãƒãƒƒãƒ•ã‚¡ãƒ¼ã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã€‚
+    GLTK::GraphicsShader drawOptiXResultShader;
+    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "shaders/drawOptiXResult.vert"),
+                                         readTxtFile(exeDir / "shaders/drawOptiXResult.frag"));
+
+    // JP: ã‚¢ãƒƒãƒ—ã‚¹ã‚±ãƒ¼ãƒ«ç”¨ã®ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã€‚
     GLTK::GraphicsShader scaleShader;
     scaleShader.initializeVSPS(readTxtFile(exeDir / "shaders/scale.vert"),
                                readTxtFile(exeDir / "shaders/scale.frag"));
 
-    // JP: ƒAƒbƒvƒXƒP[ƒ‹—p‚ÌƒTƒ“ƒvƒ‰[B
-    //     texelFetch()‚ğg‚¤ê‡‚É‚Íİ’è’l‚Í–³ŠÖŒWB‚¾‚ªƒoƒCƒ“ƒh‚Í•K—v‚È—lqB
+    // JP: ã‚¢ãƒƒãƒ—ã‚¹ã‚±ãƒ¼ãƒ«ç”¨ã®ã‚µãƒ³ãƒ—ãƒ©ãƒ¼ã€‚
+    //     texelFetch()ã‚’ä½¿ã†å ´åˆã«ã¯è¨­å®šå€¤ã¯ç„¡é–¢ä¿‚ã€‚ã ãŒãƒã‚¤ãƒ³ãƒ‰ã¯å¿…è¦ãªæ§˜å­ã€‚
     GLTK::Sampler scaleSampler;
     scaleSampler.initialize(GLTK::Sampler::MinFilter::Nearest, GLTK::Sampler::MagFilter::Nearest, GLTK::Sampler::WrapMode::Repeat, GLTK::Sampler::WrapMode::Repeat);
+
+
+
+    Shared::InterfaceVariables iv;
+    iv.imageSize.x = renderTargetSizeX;
+    iv.imageSize.y = renderTargetSizeY;
+    iv.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
+
+    CUdeviceptr ivOnDevice;
+    CUDA_CHECK(cudaMalloc((void**)&ivOnDevice, sizeof(iv)));
 
 
 
@@ -254,12 +483,37 @@ int32_t main(int32_t argc, const char* argv[]) {
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
 
-            frameBuffer.finalize();
+            outputBufferCUDA.finalize();
+            outputTexture.finalize();
+            outputBufferGL.finalize();
+            outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
+            outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
+            outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX, renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
+            frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
+
+            // EN: update the pipeline parameters.
+            iv.imageSize.x = renderTargetSizeX;
+            iv.imageSize.y = renderTargetSizeY;
+            iv.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
 
             resized = true;
         }
+
+
+
+        static RayGenSBTRecord rayGenSBTR;
+        OPTIX_CHECK(optixSbtRecordPackHeader(pgRaygen, &rayGenSBTR));
+        rayGenSBTR.data = { 1.0f, 1.0f, 0.5f + 0.5f * (float)std::cos(2 * M_PI * (frameIndex % 300) / 300.0f) };
+        CUDA_CHECK(cudaMemcpyAsync((void*)rayGenSBTBuffer, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice, stream));
+
+        iv.outputBuffer = (float4*)outputBufferCUDA.mapOnDevice(stream);
+
+        CUDA_CHECK(cudaMemcpyAsync((void*)ivOnDevice, &iv, sizeof(iv), cudaMemcpyHostToDevice, stream));
+        OPTIX_CHECK(optixLaunch(pipeline, stream, ivOnDevice, sizeof(iv), &sbt, renderTargetSizeX, renderTargetSizeY, 1));
+
+        outputBufferCUDA.unmapOnDevice(stream);
 
 
 
@@ -271,7 +525,7 @@ int32_t main(int32_t argc, const char* argv[]) {
             ImGui::ShowDemoWindow();
 
             // ----------------------------------------------------------------
-            // JP: OptiX‚Ìo—Í‚ÆImGui‚Ì•`‰æB
+            // JP: OptiXã®å‡ºåŠ›ã¨ImGuiã®æç”»ã€‚
 
             frameBuffer.bind(GLTK::FrameBuffer::Target::ReadDraw);
 
@@ -279,6 +533,21 @@ int32_t main(int32_t argc, const char* argv[]) {
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             glClearDepth(1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            {
+                drawOptiXResultShader.useProgram();
+
+                glUniform1i(0, (int32_t)renderTargetSizeX); GLTK::errorCheck();
+
+                glActiveTexture(GL_TEXTURE0); GLTK::errorCheck();
+                outputTexture.bind();
+
+                vertexArrayForFullScreen.bind();
+                glDrawArrays(GL_TRIANGLES, 0, 3); GLTK::errorCheck();
+                vertexArrayForFullScreen.unbind();
+
+                outputTexture.unbind();
+            }
 
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -290,7 +559,7 @@ int32_t main(int32_t argc, const char* argv[]) {
         }
 
         // ----------------------------------------------------------------
-        // JP: ƒXƒP[ƒŠƒ“ƒO
+        // JP: ã‚¹ã‚±ãƒ¼ãƒªãƒ³ã‚°
 
         glEnable(GL_FRAMEBUFFER_SRGB);
         GLTK::errorCheck();
@@ -322,11 +591,20 @@ int32_t main(int32_t argc, const char* argv[]) {
 
 
 
+    CUDA_CHECK(cudaFree((void*)ivOnDevice));
+
+
+
     scaleSampler.finalize();
     scaleShader.finalize();
+    drawOptiXResultShader.finalize();
     frameBuffer.finalize();
 
     vertexArrayForFullScreen.finalize();
+
+    outputBufferCUDA.finalize();
+    outputTexture.finalize();
+    outputBufferGL.finalize();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -335,6 +613,17 @@ int32_t main(int32_t argc, const char* argv[]) {
     glfwDestroyWindow(window);
     
     glfwTerminate();
+
+    return 0;
+}
+
+int32_t main(int32_t argc, const char* argv[]) {
+    try {
+        mainFunc(argc, argv);
+    }
+    catch (const std::exception &ex) {
+        hpprintf("Error: %s\n", ex.what());
+    }
 
     return 0;
 }
