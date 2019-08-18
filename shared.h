@@ -4,7 +4,7 @@
 #include <cstdint>
 
 namespace Shared {
-    struct InterfaceVariables {
+    struct PipelineLaunchParameters {
         int2 imageSize;
         float4* outputBuffer;
     };

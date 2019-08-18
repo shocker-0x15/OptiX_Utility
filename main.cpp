@@ -120,6 +120,7 @@ struct SBTRecord {
 };
 
 using RayGenSBTRecord = SBTRecord<Shared::RayGenData>;
+using EmptySBTRecord = SBTRecord<int32_t>;
 
 
 
@@ -182,6 +183,10 @@ float sRGB_degamma_s(float value) {
 
 
 int32_t mainFunc(int32_t argc, const char* argv[]) {
+    // ----------------------------------------------------------------
+    // JP: OpenGL, GLFWの初期化。
+    // EN: Initialize OpenGL and GLFW.
+
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit()) {
         hpprintf("Failed to initialize GLFW.\n");
@@ -191,22 +196,23 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 
     // JP: OpenGL 4.6 Core Profileのコンテキストを作成する。
+    // EN: Create an OpenGL 4.6 core profile context.
     const uint32_t OpenGLMajorVersion = 4;
     const uint32_t OpenGLMinorVersion = 6;
     const char* glsl_version = "#version 460";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OpenGLMajorVersion);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OpenGLMinorVersion);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
-#if defined(HP_Platform_macOS)
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
 
     int32_t renderTargetSizeX = 1280;
     int32_t renderTargetSizeY = 720;
 
     // JP: ウインドウの初期化。
     //     HiDPIディスプレイに対応する。
+    // EN: Initialize a window.
+    //     Support Hi-DPI display.
     float contentScaleX, contentScaleY;
     glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
     float UIScaling = contentScaleX;
@@ -229,6 +235,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     // JP: gl3wInit()は何らかのOpenGLコンテキストが作られた後に呼ぶ必要がある。
+    // EN: gl3wInit() must be called after some OpenGL context has been created.
     int32_t gl3wRet = gl3wInit();
     if (!gl3wIsSupported(OpenGLMajorVersion, OpenGLMinorVersion)) {
         hpprintf("gl3w doesn't support OpenGL %u.%u\n", OpenGLMajorVersion, OpenGLMinorVersion);
@@ -239,9 +246,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     glEnable(GL_FRAMEBUFFER_SRGB);
     GLTK::errorCheck();
 
+    // END: Initialize OpenGL and GLFW.
+    // ----------------------------------------------------------------
 
 
-    // Setup ImGui binding
+
+    // ----------------------------------------------------------------
+    // JP: ImGuiの初期化。
+    // EN: Initialize ImGui.
+
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
@@ -250,6 +263,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Setup style
+    // JP: ガンマ補正が有効なレンダーターゲットで、同じUIの見た目を得るためにデガンマされたスタイルも用意する。
+    // EN: Prepare a degamma-ed style to have the identical UI appearance on gamma-corrected render target.
     ImGuiStyle guiStyle, guiStyleWithGamma;
     ImGui::StyleColorsDark(&guiStyle);
     guiStyleWithGamma = guiStyle;
@@ -264,11 +279,23 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
     ImGui::GetStyle() = guiStyleWithGamma;
 
+    // END: Initialize ImGui.
+    // ----------------------------------------------------------------
 
+
+
+    // ----------------------------------------------------------------
+    // JP: OptiXのコンテキストとパイプラインの設定。
+    //     OptiXが定義する構造体(例：OptixPipelineCompileOptions)は将来の拡張に備えてゼロで初期化しておく必要がある。
+    // EN: Settings for OptiX context and pipeline.
+    //     Structs (e.g. OptixPipelineCompileOptions) defined by OptiX should be initialized with zeroes for future extensions.
+    
     OptixDeviceContext optixContext = nullptr;
     {
-        // initialize CUDA.
-        // Zero means taking the current optixContext.
+        // JP: CUDAの初期化。
+        //     ゼロは現在のCUDAコンテキストを意味する。
+        // EN: initialize CUDA.
+        //     Zero means taking the current CUDA ontext.
         CUDA_CHECK(cudaFree(0));
         CUcontext cudaContext = 0;
 
@@ -281,16 +308,20 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
+    // EN: Set a pipeline compile options common among modules in the pipeline and the pipeline itself.
     OptixPipelineCompileOptions pipelineCompileOptions = {};
     pipelineCompileOptions.numPayloadValues = 0;
     pipelineCompileOptions.numAttributeValues = 0;
-    pipelineCompileOptions.pipelineLaunchParamsVariableName = "iv";
+    pipelineCompileOptions.pipelineLaunchParamsVariableName = "plp";
     pipelineCompileOptions.usesMotionBlur = false;
     pipelineCompileOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
     pipelineCompileOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
 
     char log[2048];
     size_t logSize;
+
+
 
     OptixModule module = nullptr;
     {
@@ -312,9 +343,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    OptixProgramGroup pgRaygen = nullptr;
+    OptixProgramGroup pgRayGen = nullptr;
     {
-        OptixProgramGroupOptions programGroupOptions = {}; // Initialize to zeros
+        OptixProgramGroupOptions programGroupOptions = {};
 
         OptixProgramGroupDesc progGroupDesc = {};
         progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -326,12 +357,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                 &progGroupDesc, 1, // num program groups
                                                 &programGroupOptions,
                                                 log, &logSize,
-                                                &pgRaygen));
+                                                &pgRayGen));
     }
 
+    // JP: 空のMissプログラム
+    // EN: Dummy Miss Program
     OptixProgramGroup pgMiss = nullptr;
     {
-        OptixProgramGroupOptions programGroupOptions = {}; // Initialize to zeros
+        OptixProgramGroupOptions programGroupOptions = {};
 
         OptixProgramGroupDesc progGroupDesc = {};
         progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
@@ -344,9 +377,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                 &pgMiss));
     }
 
+    // JP: 空のヒットグループ
+    // EN: Dummy Hit Group
     OptixProgramGroup pgHitGroup = nullptr;
     {
-        OptixProgramGroupOptions programGroupOptions = {}; // Initialize to zeros
+        OptixProgramGroupOptions programGroupOptions = {};
 
         OptixProgramGroupDesc progGroupDesc = {};
         progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
@@ -363,10 +398,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     OptixPipeline pipeline = nullptr;
     {
-        OptixProgramGroup programGroups[] = { pgRaygen };
+        OptixProgramGroup programGroups[] = { pgRayGen };
 
         OptixPipelineLinkOptions pipelineLinkOptions = {};
-        pipelineLinkOptions.maxTraceDepth = 3;
+        pipelineLinkOptions.maxTraceDepth = 0;
         pipelineLinkOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_FULL;
         pipelineLinkOptions.overrideUsesMotionBlur = false;
         logSize = sizeof(log);
@@ -378,17 +413,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                             &pipeline));
     }
 
+
+
     OptixShaderBindingTable sbt = {};
-    CUdeviceptr rayGenSBTBuffer;
     {
-        RayGenSBTRecord rayGenSBTR;
-        OPTIX_CHECK(optixSbtRecordPackHeader(pgRaygen, &rayGenSBTR));
-        rayGenSBTR.data = { 1.0f, 1.0f, 0.0f };
+        CUdeviceptr rayGenSBTBuffer;
+        CUDA_CHECK(cudaMalloc((void**)&rayGenSBTBuffer, sizeof(RayGenSBTRecord)));
+        // JP: RayGen用レコードはこのサンプルでは毎フレーム更新する。
+        // EN: This sample updates a record for raygen every frame.
+        //CUDA_CHECK(cudaMemcpy((void*)rayGenSBTBuffer, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice));
 
-        CUDA_CHECK(cudaMalloc((void**)&rayGenSBTBuffer, sizeof(rayGenSBTR)));
-        CUDA_CHECK(cudaMemcpy((void*)rayGenSBTBuffer, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice));
-
-        SBTRecord<int32_t> missSBTR;
+        EmptySBTRecord missSBTR;
         OPTIX_CHECK(optixSbtRecordPackHeader(pgMiss, &missSBTR));
         missSBTR.data = 0;
 
@@ -396,7 +431,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         CUDA_CHECK(cudaMalloc((void**)&missSBTBuffer, sizeof(missSBTR)));
         CUDA_CHECK(cudaMemcpy((void*)missSBTBuffer, &missSBTR, sizeof(missSBTR), cudaMemcpyHostToDevice));
 
-        SBTRecord<int32_t> hitGroupSBTR;
+        EmptySBTRecord hitGroupSBTR;
         OPTIX_CHECK(optixSbtRecordPackHeader(pgHitGroup, &hitGroupSBTR));
         hitGroupSBTR.data = 0;
 
@@ -413,55 +448,74 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         sbt.hitgroupRecordCount = 1;
     }
 
+    // END: Settings for OptiX context and pipeline.
+    // ----------------------------------------------------------------
+
 
     
+    // JP: デフォルトストリーム
     // EN: default stream
     CUstream stream = 0;
     //CUDA_CHECK(cudaStreamCreate(&stream));
 
 
 
+    // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
+    // EN: Create a CUDA buffer from an OpenGL buffer object.
     GLTK::Buffer outputBufferGL;
     GLTK::BufferTexture outputTexture;
     CUDAHelper::Buffer outputBufferCUDA;
     outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
     outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
     outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX, renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+
+
     
+    // JP: Hi-DPIディスプレイで過剰なレンダリング負荷になってしまうため低解像度フレームバッファーを作成する。
+    // EN: Create a low-resolution frame buffer to avoid too much rendering load caused by Hi-DPI display.
+    GLTK::FrameBuffer frameBuffer;
+    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
+
+
+
     // JP: フルスクリーンクアッド(or 三角形)用の空のVAO。
+    // EN: Empty VAO for full screen qud (or triangle).
     GLTK::VertexArray vertexArrayForFullScreen;
     vertexArrayForFullScreen.initialize();
 
     const filesystem::path exeDir = getExecutableDirectory();
 
-    // JP: HiDPIディスプレイで過剰なレンダリング負荷になってしまうため低解像度フレームバッファーを作成する。
-    GLTK::FrameBuffer frameBuffer;
-    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
-
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
+    // EN: Shader to copy OptiX result to a frame buffer.
     GLTK::GraphicsShader drawOptiXResultShader;
     drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "shaders/drawOptiXResult.vert"),
                                          readTxtFile(exeDir / "shaders/drawOptiXResult.frag"));
 
     // JP: アップスケール用のシェーダー。
+    // EN: Shader for upscale.
     GLTK::GraphicsShader scaleShader;
     scaleShader.initializeVSPS(readTxtFile(exeDir / "shaders/scale.vert"),
                                readTxtFile(exeDir / "shaders/scale.frag"));
 
     // JP: アップスケール用のサンプラー。
     //     texelFetch()を使う場合には設定値は無関係。だがバインドは必要な様子。
+    // EN: Sampler for upscaling.
+    //     It seems to require to bind a sampler even when using texelFetch() which is independent from the sampler settings.
     GLTK::Sampler scaleSampler;
     scaleSampler.initialize(GLTK::Sampler::MinFilter::Nearest, GLTK::Sampler::MagFilter::Nearest, GLTK::Sampler::WrapMode::Repeat, GLTK::Sampler::WrapMode::Repeat);
 
 
 
-    Shared::InterfaceVariables iv;
-    iv.imageSize.x = renderTargetSizeX;
-    iv.imageSize.y = renderTargetSizeY;
-    iv.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
+    Shared::PipelineLaunchParameters plp;
+    plp.imageSize.x = renderTargetSizeX;
+    plp.imageSize.y = renderTargetSizeY;
+    plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
 
-    CUdeviceptr ivOnDevice;
-    CUDA_CHECK(cudaMalloc((void**)&ivOnDevice, sizeof(iv)));
+    CUdeviceptr plpOnDevice;
+    CUDA_CHECK(cudaMalloc((void**)&plpOnDevice, sizeof(plp)));
+
+    RayGenSBTRecord rayGenSBTR;
+    OPTIX_CHECK(optixSbtRecordPackHeader(pgRayGen, &rayGenSBTR));
 
 
 
@@ -494,24 +548,22 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
 
             // EN: update the pipeline parameters.
-            iv.imageSize.x = renderTargetSizeX;
-            iv.imageSize.y = renderTargetSizeY;
-            iv.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
+            plp.imageSize.x = renderTargetSizeX;
+            plp.imageSize.y = renderTargetSizeY;
+            plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
 
             resized = true;
         }
 
 
 
-        static RayGenSBTRecord rayGenSBTR;
-        OPTIX_CHECK(optixSbtRecordPackHeader(pgRaygen, &rayGenSBTR));
-        rayGenSBTR.data = { 1.0f, 1.0f, 0.5f + 0.5f * (float)std::cos(2 * M_PI * (frameIndex % 300) / 300.0f) };
-        CUDA_CHECK(cudaMemcpyAsync((void*)rayGenSBTBuffer, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice, stream));
+        rayGenSBTR.data = { 1.0f, 1.0f, (frameIndex % 300) / 300.0f };
+        CUDA_CHECK(cudaMemcpyAsync((void*)sbt.raygenRecord, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice, stream));
 
-        iv.outputBuffer = (float4*)outputBufferCUDA.mapOnDevice(stream);
+        plp.outputBuffer = (float4*)outputBufferCUDA.mapOnDevice(stream);
 
-        CUDA_CHECK(cudaMemcpyAsync((void*)ivOnDevice, &iv, sizeof(iv), cudaMemcpyHostToDevice, stream));
-        OPTIX_CHECK(optixLaunch(pipeline, stream, ivOnDevice, sizeof(iv), &sbt, renderTargetSizeX, renderTargetSizeY, 1));
+        CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
+        OPTIX_CHECK(optixLaunch(pipeline, stream, plpOnDevice, sizeof(plp), &sbt, renderTargetSizeX, renderTargetSizeY, 1));
 
         outputBufferCUDA.unmapOnDevice(stream);
 
@@ -591,20 +643,34 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    CUDA_CHECK(cudaFree((void*)ivOnDevice));
+    CUDA_CHECK(cudaFree((void*)plpOnDevice));
 
 
 
     scaleSampler.finalize();
     scaleShader.finalize();
     drawOptiXResultShader.finalize();
-    frameBuffer.finalize();
-
     vertexArrayForFullScreen.finalize();
+
+    frameBuffer.finalize();
 
     outputBufferCUDA.finalize();
     outputTexture.finalize();
     outputBufferGL.finalize();
+
+    CUDA_CHECK(cudaFree((void*)sbt.hitgroupRecordBase));
+    CUDA_CHECK(cudaFree((void*)sbt.missRecordBase));
+    CUDA_CHECK(cudaFree((void*)sbt.raygenRecord));
+
+    OPTIX_CHECK(optixPipelineDestroy(pipeline));
+
+    OPTIX_CHECK(optixProgramGroupDestroy(pgHitGroup));
+    OPTIX_CHECK(optixProgramGroupDestroy(pgMiss));
+    OPTIX_CHECK(optixProgramGroupDestroy(pgRayGen));
+
+    OPTIX_CHECK(optixModuleDestroy(module));
+
+    OPTIX_CHECK(optixDeviceContextDestroy(optixContext));
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
