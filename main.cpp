@@ -56,8 +56,8 @@
 static void devPrintf(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    char str[1024];
-    vsprintf_s(str, fmt, args);
+    char str[4096];
+    vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
     va_end(args);
     OutputDebugString(str);
 }
@@ -114,13 +114,252 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 template <typename T>
-struct SBTRecord {
-    __align__(OPTIX_SBT_RECORD_ALIGNMENT) uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
+struct alignas(OPTIX_SBT_RECORD_ALIGNMENT) SBTRecord {
+    uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
     T data;
 };
 
 using RayGenSBTRecord = SBTRecord<Shared::RayGenData>;
+using MissSBTRecord = SBTRecord<Shared::MissData>;
+using HitGroupSBTRecord = SBTRecord<Shared::HitGroupData>;
 using EmptySBTRecord = SBTRecord<int32_t>;
+
+
+
+class AccelerationStructure {
+    OptixDeviceContext m_context;
+    std::vector<OptixBuildInput> m_children;
+
+    OptixAccelBuildOptions m_buildOptions;
+
+    size_t m_accelBufferSize;
+    CUDAHelper::Buffer m_accelBuffer;
+    CUDAHelper::Buffer m_accelTempBuffer;
+
+    CUDAHelper::Buffer m_compactedSizeOnDevice;
+    size_t m_compactedSize;
+    OptixAccelEmitDesc m_propertyCompactedSize;
+    CUDAHelper::Buffer m_compactedAccelBuffer;
+
+    OptixTraversableHandle m_handle;
+    OptixTraversableHandle m_compactedHandle;
+    struct {
+        unsigned int m_available : 1;
+        unsigned int m_compactedAvailable : 1;
+    };
+
+public:
+    void initialize(OptixDeviceContext context, const OptixBuildInput* children, uint32_t numChildren,
+                    bool preferFastTrace, bool allowUpdate, bool enableCompaction) {
+        m_context = context;
+
+        m_children.resize(numChildren);
+        std::copy_n(children, numChildren, m_children.data());
+
+        std::memset(&m_buildOptions, 0, sizeof(m_buildOptions));
+        m_buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
+                                     (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                     (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+        //m_buildOptions.motionOptions
+        m_buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+
+        OptixAccelBufferSizes bufferSizes;
+        OPTIX_CHECK(optixAccelComputeMemoryUsage(m_context, &m_buildOptions, m_children.data(), m_children.size(),
+                                                 &bufferSizes));
+
+        m_accelBufferSize = bufferSizes.outputSizeInBytes;
+        m_accelTempBuffer.initialize(CUDAHelper::BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+
+        m_compactedSizeOnDevice.initialize(CUDAHelper::BufferType::Device, 1, sizeof(size_t), 0);
+
+        std::memset(&m_propertyCompactedSize, 0, sizeof(m_propertyCompactedSize));
+        m_propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
+        m_propertyCompactedSize.result = m_compactedSizeOnDevice.getDevicePointer();
+
+        m_available = false;
+        m_compactedAvailable = false;
+    }
+
+    void finalize() {
+        if (m_compactedAvailable)
+            m_compactedAccelBuffer.finalize();
+        m_compactedSizeOnDevice.finalize();
+
+        m_accelTempBuffer.finalize();
+        if (m_available)
+            m_accelBuffer.finalize();
+
+        m_children.clear();
+
+        m_context = nullptr;
+    }
+
+    void rebuild(CUstream stream) {
+        bool compactionEnabled = (m_buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+
+        if (!m_available)
+            m_accelBuffer.initialize(CUDAHelper::BufferType::Device, m_accelBufferSize, 1, 0);
+
+        m_buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        OPTIX_CHECK(optixAccelBuild(m_context, stream, &m_buildOptions, m_children.data(), m_children.size(),
+                                    m_accelTempBuffer.getDevicePointer(), m_accelTempBuffer.size(),
+                                    m_accelBuffer.getDevicePointer(), m_accelBuffer.size(),
+                                    &m_handle,
+                                    compactionEnabled ? &m_propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
+
+        m_available = true;
+        m_compactedHandle = 0;
+        m_compactedAvailable = false;
+    }
+
+    void compaction(CUstream rebuildOrUpdateStream, CUstream stream) {
+        bool compactionEnabled = (m_buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+
+        if (!m_available || m_compactedAvailable || !compactionEnabled)
+            return;
+
+        // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
+        CUDA_CHECK(cudaStreamSynchronize(rebuildOrUpdateStream));
+        CUDA_CHECK(cudaMemcpy(&m_compactedSize, (void*)m_propertyCompactedSize.result, sizeof(m_compactedSize), cudaMemcpyDeviceToHost));
+        // JP: 以下になるべき？
+        // CUDA_CHECK(cudaMemcpyAsync(&m_compactedSize, (void*)m_propertyCompactedSize.result, sizeof(m_compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
+
+        if (m_compactedSize < m_accelBuffer.size()) {
+            m_compactedAccelBuffer.initialize(CUDAHelper::BufferType::Device, m_compactedSize, 1, 0);
+
+            OPTIX_CHECK(optixAccelCompact(m_context, stream, m_handle, m_compactedAccelBuffer.getDevicePointer(), m_compactedAccelBuffer.size(),
+                                          &m_compactedHandle));
+
+            m_compactedAvailable = true;
+        }
+    }
+
+    void removeUncompacted(CUstream compactionStream) {
+        bool compactionEnabled = (m_buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+
+        if (!m_compactedAvailable || !compactionEnabled)
+            return;
+
+        // JP: コンパクションの完了を待ってバッファーを解放。
+        CUDA_CHECK(cudaStreamSynchronize(compactionStream));
+        m_accelBuffer.finalize();
+
+        m_handle = 0;
+        m_available = false;
+    }
+
+    void update(CUstream stream) {
+        bool updateEnabled = (m_buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+
+        // Should this be an assert?
+        if ((!m_available && !m_compactedAvailable) || !updateEnabled)
+            return;
+
+        const CUDAHelper::Buffer &accelBuffer = m_compactedAvailable ? m_compactedAccelBuffer : m_accelBuffer;
+        OptixTraversableHandle &handle = m_compactedAvailable ? m_compactedHandle : m_handle;
+
+        m_buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
+        OPTIX_CHECK(optixAccelBuild(m_context, stream, &m_buildOptions, m_children.data(), m_children.size(),
+                                    m_accelTempBuffer.getDevicePointer(), m_accelTempBuffer.size(),
+                                    accelBuffer.getDevicePointer(), accelBuffer.size(),
+                                    &handle,
+                                    nullptr, 0));
+    }
+
+    OptixTraversableHandle getHandle() const {
+        if (m_compactedAvailable)
+            return m_compactedHandle;
+        if (m_available)
+            return m_handle;
+        return 0;
+    }
+};
+
+
+
+class TriangleMesh {
+    struct MaterialGroup {
+        CUDAHelper::Buffer triangleBuffer;
+        uint32_t* buildInputFlags;
+        Shared::MaterialData material;
+    };
+
+    CUdeviceptr m_vertexBuffers[1];
+    CUDAHelper::Buffer m_vertexBuffer;
+    std::vector<MaterialGroup> m_materialGroups;
+    std::vector<OptixBuildInput> m_buildInputs;
+    uint32_t m_numSBTRecords;
+
+    TriangleMesh(const TriangleMesh &) = delete;
+    TriangleMesh &operator=(const TriangleMesh &) = delete;
+public:
+    TriangleMesh() : m_numSBTRecords(0) {}
+
+    void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
+        m_vertexBuffer.initialize(CUDAHelper::BufferType::Device, numVertices, sizeof(vertices[0]), 0);
+        auto verticesD = (Shared::Vertex*)m_vertexBuffer.map();
+        std::copy_n(vertices, numVertices, verticesD);
+        m_vertexBuffer.unmap();
+
+        // JP: モーションキーごとのバーテックスバッファー配列。
+        m_vertexBuffers[0] = m_vertexBuffer.getDevicePointer();
+    }
+
+    void addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, const Shared::MaterialData &matData) {
+        m_materialGroups.push_back(MaterialGroup());
+        m_buildInputs.push_back(OptixBuildInput{});
+
+        MaterialGroup &group = m_materialGroups.back();
+        {
+            group.triangleBuffer.initialize(CUDAHelper::BufferType::Device, numTriangles, sizeof(triangles[0]), 0);
+            auto trianglesD = (Shared::Triangle*)group.triangleBuffer.map();
+            std::copy_n(triangles, numTriangles, trianglesD);
+            group.triangleBuffer.unmap();
+
+            group.material = matData;
+        }
+
+        OptixBuildInput &buildInput = m_buildInputs.back();
+        {
+            std::memset(&buildInput, 0, sizeof(buildInput));
+
+            buildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
+            OptixBuildInputTriangleArray &triArray = buildInput.triangleArray;
+
+            triArray.vertexBuffers = m_vertexBuffers;
+            triArray.numVertices = m_vertexBuffer.numElements();
+            triArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+            triArray.vertexStrideInBytes = m_vertexBuffer.stride();
+
+            triArray.indexBuffer = group.triangleBuffer.getDevicePointer();
+            triArray.numIndexTriplets = numTriangles;
+            triArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
+            triArray.indexStrideInBytes = group.triangleBuffer.stride();
+            triArray.primitiveIndexOffset = 0;
+
+            // JP: per-Primitive SBT Recordは使用しないこととする。
+            triArray.numSbtRecords = 1;
+            triArray.sbtIndexOffsetBuffer = 0; // No per-primitive record
+            triArray.sbtIndexOffsetSizeInBytes = 0; // No effect
+            triArray.sbtIndexOffsetStrideInBytes = 0; // No effect
+
+            triArray.preTransform = 0;
+
+            group.buildInputFlags = new uint32_t[triArray.numSbtRecords];
+            for (int i = 0; i < triArray.numSbtRecords; ++i)
+                group.buildInputFlags[i] = OPTIX_GEOMETRY_FLAG_NONE;
+            triArray.flags = group.buildInputFlags;
+
+            m_numSBTRecords += triArray.numSbtRecords;
+        }
+    }
+
+    void getBuildInfo(const OptixBuildInput** buildInputs, uint32_t* numBuildInputs, uint32_t* numSBTRecords) const {
+        *buildInputs = m_buildInputs.data();
+        *numBuildInputs = m_buildInputs.size();
+        *numSBTRecords = m_numSBTRecords;
+    }
+};
 
 
 
@@ -311,12 +550,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
     // EN: Set a pipeline compile options common among modules in the pipeline and the pipeline itself.
     OptixPipelineCompileOptions pipelineCompileOptions = {};
-    pipelineCompileOptions.numPayloadValues = 0;
+    pipelineCompileOptions.numPayloadValues = 3;
     pipelineCompileOptions.numAttributeValues = 0;
     pipelineCompileOptions.pipelineLaunchParamsVariableName = "plp";
     pipelineCompileOptions.usesMotionBlur = false;
     pipelineCompileOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
-    pipelineCompileOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+    pipelineCompileOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
 
     char log[2048];
     size_t logSize;
@@ -343,6 +582,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    std::vector<OptixProgramGroup> programGroups;
+    
     OptixProgramGroup pgRayGen = nullptr;
     {
         OptixProgramGroupOptions programGroupOptions = {};
@@ -358,11 +599,32 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                 &programGroupOptions,
                                                 log, &logSize,
                                                 &pgRayGen));
+
+        programGroups.push_back(pgRayGen);
+    }
+
+    OptixProgramGroup pgMissSearchRay = nullptr;
+    {
+        OptixProgramGroupOptions programGroupOptions = {};
+
+        OptixProgramGroupDesc progGroupDesc = {};
+        progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+        progGroupDesc.miss.module = module;
+        progGroupDesc.miss.entryFunctionName = "__miss__searchRay";
+
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixProgramGroupCreate(optixContext,
+                                                &progGroupDesc, 1, // num program groups
+                                                &programGroupOptions,
+                                                log, &logSize,
+                                                &pgMissSearchRay));
+
+        programGroups.push_back(pgMissSearchRay);
     }
 
     // JP: 空のMissプログラム
     // EN: Dummy Miss Program
-    OptixProgramGroup pgMiss = nullptr;
+    OptixProgramGroup pgMissEmpty = nullptr;
     {
         OptixProgramGroupOptions programGroupOptions = {};
 
@@ -374,89 +636,308 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                 &progGroupDesc, 1, // num program groups
                                                 &programGroupOptions,
                                                 log, &logSize,
-                                                &pgMiss));
+                                                &pgMissEmpty));
+
+        programGroups.push_back(pgMissEmpty);
     }
 
-    // JP: 空のヒットグループ
-    // EN: Dummy Hit Group
-    OptixProgramGroup pgHitGroup = nullptr;
+    OptixProgramGroup pgHitGroupSearchRay = nullptr;
     {
         OptixProgramGroupOptions programGroupOptions = {};
 
         OptixProgramGroupDesc progGroupDesc = {};
         progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        progGroupDesc.hitgroup.moduleCH = module;
+        progGroupDesc.hitgroup.entryFunctionNameCH = "__closesthit__shading";
 
         logSize = sizeof(log);
         OPTIX_CHECK_LOG(optixProgramGroupCreate(optixContext,
                                                 &progGroupDesc, 1, // num program groups
                                                 &programGroupOptions,
                                                 log, &logSize,
-                                                &pgHitGroup));
+                                                &pgHitGroupSearchRay));
+
+        programGroups.push_back(pgHitGroupSearchRay);
+    }
+
+    OptixProgramGroup pgHitGroupVisibilityRay = nullptr;
+    {
+        OptixProgramGroupOptions programGroupOptions = {};
+
+        OptixProgramGroupDesc progGroupDesc = {};
+        progGroupDesc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        progGroupDesc.hitgroup.moduleAH = module;
+        progGroupDesc.hitgroup.entryFunctionNameAH = "__anyhit__visibility";
+
+        logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixProgramGroupCreate(optixContext,
+                                                &progGroupDesc, 1, // num program groups
+                                                &programGroupOptions,
+                                                log, &logSize,
+                                                &pgHitGroupVisibilityRay));
+
+        programGroups.push_back(pgHitGroupVisibilityRay);
     }
 
 
 
     OptixPipeline pipeline = nullptr;
     {
-        OptixProgramGroup programGroups[] = { pgRayGen };
-
         OptixPipelineLinkOptions pipelineLinkOptions = {};
-        pipelineLinkOptions.maxTraceDepth = 0;
+        pipelineLinkOptions.maxTraceDepth = 1;
         pipelineLinkOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_FULL;
         pipelineLinkOptions.overrideUsesMotionBlur = false;
         logSize = sizeof(log);
         OPTIX_CHECK_LOG(optixPipelineCreate(optixContext,
                                             &pipelineCompileOptions,
                                             &pipelineLinkOptions,
-                                            programGroups, lengthof(programGroups),
+                                            programGroups.data(), programGroups.size(),
                                             log, &logSize,
                                             &pipeline));
-    }
-
-
-
-    OptixShaderBindingTable sbt = {};
-    {
-        CUdeviceptr rayGenSBTBuffer;
-        CUDA_CHECK(cudaMalloc((void**)&rayGenSBTBuffer, sizeof(RayGenSBTRecord)));
-        // JP: RayGen用レコードはこのサンプルでは毎フレーム更新する。
-        // EN: This sample updates a record for raygen every frame.
-        //CUDA_CHECK(cudaMemcpy((void*)rayGenSBTBuffer, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice));
-
-        EmptySBTRecord missSBTR;
-        OPTIX_CHECK(optixSbtRecordPackHeader(pgMiss, &missSBTR));
-        missSBTR.data = 0;
-
-        CUdeviceptr missSBTBuffer;
-        CUDA_CHECK(cudaMalloc((void**)&missSBTBuffer, sizeof(missSBTR)));
-        CUDA_CHECK(cudaMemcpy((void*)missSBTBuffer, &missSBTR, sizeof(missSBTR), cudaMemcpyHostToDevice));
-
-        EmptySBTRecord hitGroupSBTR;
-        OPTIX_CHECK(optixSbtRecordPackHeader(pgHitGroup, &hitGroupSBTR));
-        hitGroupSBTR.data = 0;
-
-        CUdeviceptr hitGroupSBTBuffer;
-        CUDA_CHECK(cudaMalloc((void**)&hitGroupSBTBuffer, sizeof(hitGroupSBTR)));
-        CUDA_CHECK(cudaMemcpy((void*)hitGroupSBTBuffer, &hitGroupSBTR, sizeof(hitGroupSBTR), cudaMemcpyHostToDevice));
-
-        sbt.raygenRecord = rayGenSBTBuffer;
-        sbt.missRecordBase = missSBTBuffer;
-        sbt.missRecordStrideInBytes = sizeof(missSBTR);
-        sbt.missRecordCount = 1;
-        sbt.hitgroupRecordBase = hitGroupSBTBuffer;
-        sbt.hitgroupRecordStrideInBytes = sizeof(hitGroupSBTR);
-        sbt.hitgroupRecordCount = 1;
     }
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
 
-    
+
     // JP: デフォルトストリーム
     // EN: default stream
     CUstream stream = 0;
     //CUDA_CHECK(cudaStreamCreate(&stream));
+
+
+
+    // ----------------------------------------------------------------
+    // JP: シーンデータを読み込み、GPU転送する。
+    //     シェーダーバインディングテーブルのセットアップしAcceleration Structureを構築する。
+    // EN: Read scene data and transfer it to GPU.
+    //     Setup a shader binding table and build acceleration structures.
+    
+    TriangleMesh meshCornellBox;
+    {
+        Shared::Vertex vertices[] = {
+            // floor
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 1) },
+            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(1, 1) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(1, 0) },
+            // back wall
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 1) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 0) },
+            // ceiling
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3(1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(1, 0) },
+            // left wall
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 1) },
+            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 1) },
+            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 0) },
+            // right wall
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 0) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 1) },
+            { make_float3(1.0f, 1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 1) },
+            { make_float3(1.0f, -1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 0) },
+        };
+
+        Shared::Triangle triangles[] = {
+            // floor
+            { 0, 1, 2 }, { 0, 2, 3 },
+            // back wall
+            { 4, 5, 6 }, { 4, 6, 7 },
+            // ceiling
+            { 8, 11, 10 }, { 8, 10, 9 },
+            // left wall
+            { 15, 12, 13 }, { 15, 13, 14 },
+            // right wall
+            { 16, 19, 18 }, { 16, 18, 17 }
+        };
+
+        // JP: 頂点バッファーは共通にしてみる。
+        meshCornellBox.setVertexBuffer(vertices, lengthof(vertices));
+
+        Shared::MaterialData mat;
+        
+        // JP: インデックスバッファーは別々にしてみる。
+        // floor, back wall, ceiling
+        mat.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+        meshCornellBox.addMaterialGroup(triangles + 0, 6, mat);
+        // left wall
+        mat.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
+        meshCornellBox.addMaterialGroup(triangles + 6, 2, mat);
+        // right wall
+        mat.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
+        meshCornellBox.addMaterialGroup(triangles + 8, 2, mat);
+    }
+
+    TriangleMesh meshAreaLight;
+    {
+        Shared::Vertex vertices[] = {
+            { make_float3(-0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-0.5f, 0.0f, 0.5f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3(0.5f, 0.0f, 0.5f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(1, 0) },
+        };
+
+        Shared::Triangle triangles[] = {
+            { 0, 1, 2 }, { 0, 2, 3 },
+        };
+
+        meshAreaLight.setVertexBuffer(vertices, lengthof(vertices));
+
+        Shared::MaterialData mat;
+        mat.albedo = make_float3(1, 1, 1);
+        meshAreaLight.addMaterialGroup(triangles + 0, 2, mat);
+    }
+
+
+
+    // R: Radiance Ray, V: Visibility Ray
+    //
+    // | RG   |
+    // +------+------+
+    // | MS R | MS V |
+    // +------+------+------+------+------+------+------+------+
+    // |    0 |    1 |    2 |    3 |    4 |    5 |    6 |    7 |
+    // +------+------+------+------+------+------+------+------+
+    // | HG R | HG V | HG R | HG V | HG R | HG V | HG R | HG V |
+    // | b.i. 0-0    | b.i. 1-0    | b.i. 2-0    | b.i. 0-0    |
+    // | GAS 0                                   | GAS 1       |
+
+
+
+    std::vector<OptixInstance> instances;
+    uint32_t sbtOffset = 0;
+
+    AccelerationStructure gasCornellBox;
+    {
+        const OptixBuildInput* buildInputs;
+        uint32_t numBuildInputs;
+        uint32_t numSBTRecords;
+        meshCornellBox.getBuildInfo(&buildInputs, &numBuildInputs, &numSBTRecords);
+
+        gasCornellBox.initialize(optixContext, buildInputs, numBuildInputs,
+                                 true, false, true);
+
+        gasCornellBox.rebuild(stream);
+        gasCornellBox.compaction(stream, stream);
+        gasCornellBox.removeUncompacted(stream);
+
+        instances.push_back(OptixInstance());
+        OptixInstance &inst = instances.back();
+        std::memset(&inst, 0, sizeof(inst));
+        inst.flags = OPTIX_INSTANCE_FLAG_NONE;
+        inst.instanceId = 0;
+        inst.visibilityMask = 0xFF;
+        inst.traversableHandle = gasCornellBox.getHandle();
+        float tfCornellBox[] = {
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0
+        };
+        std::copy_n(tfCornellBox, 12, inst.transform);
+        inst.sbtOffset = sbtOffset;
+
+        sbtOffset += numSBTRecords * Shared::NumRayTypes;
+    }
+
+    AccelerationStructure gasLight;
+    {
+        const OptixBuildInput* buildInputs;
+        uint32_t numBuildInputs;
+        uint32_t numSBTRecords;
+        meshAreaLight.getBuildInfo(&buildInputs, &numBuildInputs, &numSBTRecords);
+
+        gasLight.initialize(optixContext, buildInputs, numBuildInputs,
+                            true, false, true);
+
+        gasLight.rebuild(stream);
+        gasLight.compaction(stream, stream);
+        gasLight.removeUncompacted(stream);
+
+        instances.push_back(OptixInstance());
+        OptixInstance &inst = instances.back();
+        inst.flags = OPTIX_INSTANCE_FLAG_NONE;
+        inst.instanceId = 0;
+        inst.visibilityMask = 0xFF;
+        inst.traversableHandle = gasLight.getHandle();
+        float tfCornellBox[] = {
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0.99f
+        };
+        std::copy_n(tfCornellBox, 12, inst.transform);
+        inst.sbtOffset = sbtOffset;
+
+        sbtOffset += numSBTRecords * Shared::NumRayTypes;
+    }
+
+    CUDAHelper::Buffer instanceBuffer;
+    instanceBuffer.initialize(CUDAHelper::BufferType::Device, instances.size(), sizeof(instances[0]), 0);
+    auto instancesD = (OptixInstance*)instanceBuffer.map();
+    std::copy_n(instances.data(), instances.size(), instancesD);
+    instanceBuffer.unmap();
+
+    OptixBuildInput iasBuildInput;
+    std::memset(&iasBuildInput, 0, sizeof(iasBuildInput));
+    iasBuildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+    OptixBuildInputInstanceArray &instArray = iasBuildInput.instanceArray;
+    instArray.instances = instanceBuffer.getDevicePointer();
+    instArray.numInstances = instances.size();
+
+    AccelerationStructure iasScene;
+    iasScene.initialize(optixContext, &iasBuildInput, 1, false, true, true);
+
+    iasScene.rebuild(stream);
+    iasScene.compaction(stream, stream);
+    iasScene.removeUncompacted(stream);
+
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+
+
+    OptixShaderBindingTable sbt = {};
+    {
+        CUDAHelper::Buffer rayGenSBTRBuffer;
+        rayGenSBTRBuffer.initialize(CUDAHelper::BufferType::Device, 1, sizeof(RayGenSBTRecord), 0);
+
+        MissSBTRecord searchRayMissSBTR;
+        OPTIX_CHECK(optixSbtRecordPackHeader(pgMissSearchRay, &searchRayMissSBTR));
+        searchRayMissSBTR.data.bgRadiance = make_float3(0, 0, 0.25f);
+
+        MissSBTRecord visibilityRayMissSBTR;
+        OPTIX_CHECK(optixSbtRecordPackHeader(pgMissEmpty, &visibilityRayMissSBTR));
+
+        CUDAHelper::Buffer missSBTRBuffer;
+        missSBTRBuffer.initialize(CUDAHelper::BufferType::Device, Shared::NumRayTypes, sizeof(MissSBTRecord), 0);
+        {
+            auto missSBTRs = (MissSBTRecord*)missSBTRBuffer.map();
+            missSBTRs[Shared::RayType_Search] = searchRayMissSBTR;
+            missSBTRs[Shared::RayType_Visibility] = visibilityRayMissSBTR;
+            missSBTRBuffer.unmap();
+        }
+
+        CUDAHelper::Buffer hitGroupSBTRBuffer;
+        hitGroupSBTRBuffer.initialize(CUDAHelper::BufferType::Device, Shared::NumRayTypes, sizeof(HitGroupSBTRecord), 0);
+
+        sbt.raygenRecord = rayGenSBTRBuffer.getDevicePointer();
+
+        sbt.missRecordBase = missSBTRBuffer.getDevicePointer();
+        sbt.missRecordStrideInBytes = sizeof(MissSBTRecord);
+        sbt.missRecordCount = missSBTRBuffer.numElements();
+
+        sbt.hitgroupRecordBase = hitGroupSBTRBuffer.getDevicePointer();
+        sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupSBTRecord);
+        sbt.hitgroupRecordCount = hitGroupSBTRBuffer.numElements();
+    }
+
+    // END: Read scene data and transfer it to GPU.
+    //      Setup a shader binding table and build acceleration structures.
+    // ----------------------------------------------------------------
 
 
 
@@ -507,6 +988,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     Shared::PipelineLaunchParameters plp;
+    plp.topGroup = 0;
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
@@ -516,6 +998,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     RayGenSBTRecord rayGenSBTR;
     OPTIX_CHECK(optixSbtRecordPackHeader(pgRayGen, &rayGenSBTR));
+    rayGenSBTR.data.camera.fovY = 60 * M_PI / 180;
+    rayGenSBTR.data.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
 
 
@@ -557,15 +1041,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-        rayGenSBTR.data = { 1.0f, 1.0f, (frameIndex % 300) / 300.0f };
         CUDA_CHECK(cudaMemcpyAsync((void*)sbt.raygenRecord, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice, stream));
 
-        plp.outputBuffer = (float4*)outputBufferCUDA.mapOnDevice(stream);
+        plp.outputBuffer = (float4*)outputBufferCUDA.beginCUDAAccess(stream);
 
         CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
         OPTIX_CHECK(optixLaunch(pipeline, stream, plpOnDevice, sizeof(plp), &sbt, renderTargetSizeX, renderTargetSizeY, 1));
 
-        outputBufferCUDA.unmapOnDevice(stream);
+        outputBufferCUDA.endCUDAAccess(stream);
 
 
 
@@ -658,14 +1141,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     outputTexture.finalize();
     outputBufferGL.finalize();
 
-    CUDA_CHECK(cudaFree((void*)sbt.hitgroupRecordBase));
-    CUDA_CHECK(cudaFree((void*)sbt.missRecordBase));
-    CUDA_CHECK(cudaFree((void*)sbt.raygenRecord));
-
     OPTIX_CHECK(optixPipelineDestroy(pipeline));
 
-    OPTIX_CHECK(optixProgramGroupDestroy(pgHitGroup));
-    OPTIX_CHECK(optixProgramGroupDestroy(pgMiss));
+    OPTIX_CHECK(optixProgramGroupDestroy(pgHitGroupVisibilityRay));
+    OPTIX_CHECK(optixProgramGroupDestroy(pgHitGroupSearchRay));
+    OPTIX_CHECK(optixProgramGroupDestroy(pgMissSearchRay));
     OPTIX_CHECK(optixProgramGroupDestroy(pgRayGen));
 
     OPTIX_CHECK(optixModuleDestroy(module));

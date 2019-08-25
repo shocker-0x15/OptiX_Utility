@@ -81,7 +81,6 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\ptxes\%(Filename).ptx</CompileOut>
-      <GPUDebugInfo>false</GPUDebugInfo>
       <AdditionalOptions>--use_fast_math %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
     <CudaLink>

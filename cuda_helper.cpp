@@ -34,7 +34,8 @@ namespace CUDAHelper {
     Buffer::Buffer() :
         m_deviceIndex(0),
         m_hostPointer(nullptr), m_devicePointer(nullptr), m_mappedPointer(nullptr),
-        m_GLBufferID(0), m_cudaGfxResource(nullptr) {
+        m_GLBufferID(0), m_cudaGfxResource(nullptr),
+        m_initialized(false) {
     }
 
     Buffer::~Buffer() {
@@ -48,7 +49,7 @@ namespace CUDAHelper {
 
 
     
-    void Buffer::initialize(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID) {
+    void Buffer::initializeInternal(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID) {
         m_type = type;
 
         // If using GL Interop, expect that the active device is also the display device.
@@ -63,7 +64,6 @@ namespace CUDAHelper {
 
         m_width = width;
         m_height = height;
-        m_dimension = 2;
         m_stride = stride;
 
         m_GLBufferID = glBufferID;
@@ -80,6 +80,18 @@ namespace CUDAHelper {
             CUDA_CHECK(cudaHostAlloc(&m_hostPointer, m_width * m_height * m_stride, cudaHostAllocPortable | cudaHostAllocMapped));
             CUDA_CHECK(cudaHostGetDevicePointer(&m_devicePointer, m_hostPointer, 0));
         }
+
+        m_initialized = true;
+    }
+    
+    void Buffer::initialize(BufferType type, int32_t width, int32_t stride, uint32_t glBufferID) {
+        m_dimension = 1;
+        initializeInternal(type, width, 1, stride, glBufferID);
+    }
+
+    void Buffer::initialize(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID) {
+        m_dimension = 2;
+        initializeInternal(type, width, height, stride, glBufferID);
     }
 
     void Buffer::finalize() {
@@ -100,17 +112,15 @@ namespace CUDAHelper {
             CUDA_CHECK(cudaFree(m_devicePointer));
             m_devicePointer = nullptr;
         }
+
+        m_initialized = false;
     }
 
 
 
-    CUdeviceptr Buffer::getDevicePointer() {
-        return (CUdeviceptr)m_devicePointer;
-    }
+    CUdeviceptr Buffer::beginCUDAAccess(CUstream stream) {
+        CUDAHAssert(m_type == BufferType::GL_Interop, "This is not an OpenGL-interop buffer.");
 
-
-
-    void* Buffer::mapOnDevice(CUstream stream) {
         if (m_type == BufferType::GL_Interop) {
             makeCurrent();
 
@@ -119,20 +129,16 @@ namespace CUDAHelper {
             CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(&m_devicePointer, &bufferSize, m_cudaGfxResource));
         }
 
-        return m_devicePointer;
+        return (CUdeviceptr)m_devicePointer;
     }
 
-    void Buffer::unmapOnDevice(CUstream stream) {
-        makeCurrent();
+    void Buffer::endCUDAAccess(CUstream stream) {
+        CUDAHAssert(m_type == BufferType::GL_Interop, "This is not an OpenGL-interop buffer.");
 
-        if (m_type == BufferType::Device || m_type == BufferType::P2P) {
-            CUDA_CHECK(cudaStreamSynchronize(stream));
-        }
-        else if (m_type == BufferType::GL_Interop) {
+        if (m_type == BufferType::GL_Interop) {
+            makeCurrent();
+
             CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
-        }
-        else {
-            CUDA_CHECK(cudaStreamSynchronize(stream));
         }
     }
 
@@ -141,12 +147,20 @@ namespace CUDAHelper {
             m_type == BufferType::P2P ||
             m_type == BufferType::GL_Interop) {
             CUDAHAssert(m_mappedPointer == nullptr, "This buffer is already mapped.");
-            size_t size = m_width * m_height * m_stride;
-            m_mappedPointer = new uint8_t[size];
 
             makeCurrent();
-            CUDA_CHECK(cudaMemcpy(m_mappedPointer, mapOnDevice(0), size, cudaMemcpyDeviceToHost));
-            unmapOnDevice(0);
+
+            size_t size = (size_t)m_width * m_height * m_stride;
+            m_mappedPointer = new uint8_t[size];
+
+            void* devicePointer = m_devicePointer;
+            if (m_type == BufferType::GL_Interop)
+                devicePointer = (void*)beginCUDAAccess(0);
+
+            CUDA_CHECK(cudaMemcpy(m_mappedPointer, devicePointer, size, cudaMemcpyDeviceToHost));
+
+            if (m_type == BufferType::GL_Interop)
+                endCUDAAccess(0);
 
             return m_mappedPointer;
         }
@@ -162,8 +176,17 @@ namespace CUDAHelper {
             CUDAHAssert(m_mappedPointer, "This buffer is not mapped.");
 
             makeCurrent();
-            CUDA_CHECK(cudaMemcpy(mapOnDevice(0), m_mappedPointer, m_width * m_height * m_stride, cudaMemcpyHostToDevice));
-            unmapOnDevice(0);
+
+            size_t size = (size_t)m_width * m_height * m_stride;
+
+            void* devicePointer = m_devicePointer;
+            if (m_type == BufferType::GL_Interop)
+                devicePointer = (void*)beginCUDAAccess(0);
+
+            CUDA_CHECK(cudaMemcpy(devicePointer, m_mappedPointer, size, cudaMemcpyHostToDevice));
+
+            if (m_type == BufferType::GL_Interop)
+                endCUDAAccess(0);
 
             delete[] m_mappedPointer;
         }

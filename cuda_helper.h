@@ -95,19 +95,46 @@ namespace CUDAHelper {
 
         int32_t m_deviceIndex;
 
+        struct {
+            unsigned int m_initialized : 1;
+        };
+
         void makeCurrent();
+
+        void initializeInternal(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID);
+
+        Buffer(const Buffer &) = delete;
+        Buffer &operator=(const Buffer &) = delete;
 
     public:
         Buffer();
         ~Buffer();
 
+        Buffer(Buffer &&b) = default;
+        Buffer &operator=(Buffer &&b) = default;
+
+        void initialize(BufferType type, int32_t width, int32_t stride, uint32_t glBufferID);
         void initialize(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID);
         void finalize();
 
-        CUdeviceptr getDevicePointer();
+        CUdeviceptr getDevicePointer() const {
+            return (CUdeviceptr)m_devicePointer;
+        }
+        size_t size() const {
+            return (size_t)m_width * m_height * m_stride;
+        }
+        size_t stride() const {
+            return m_stride;
+        }
+        size_t numElements() const {
+            return (size_t)m_width * m_height;
+        }
+        bool isInitialized() const {
+            return m_initialized;
+        }
 
-        void* mapOnDevice(CUstream stream);
-        void unmapOnDevice(CUstream stream);
+        CUdeviceptr beginCUDAAccess(CUstream stream);
+        void endCUDAAccess(CUstream stream);
 
         void* map();
         void unmap();
