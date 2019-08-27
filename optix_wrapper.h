@@ -63,7 +63,7 @@ namespace optix {
     class GeometryAccelerationStructure;
     class InstanceAccelerationStructure;
 
-#define OPTIX_PIMPL(Name) \
+#define OPTIX_PIMPL() \
 public: \
     class Impl; \
 private: \
@@ -72,7 +72,7 @@ private: \
 
 
     class Context {
-        OPTIX_PIMPL(Context);
+        OPTIX_PIMPL();
 
     public:
         static Context create();
@@ -104,7 +104,7 @@ private: \
 
 
     class ProgramGroup {
-        OPTIX_PIMPL(ProgramGroup);
+        OPTIX_PIMPL();
 
     public:
         void destroy();
@@ -113,7 +113,7 @@ private: \
 
 
     class GeometryInstance {
-        OPTIX_PIMPL(GeometryInstance);
+        OPTIX_PIMPL();
 
     public:
         void destroy();
@@ -130,7 +130,7 @@ private: \
 
 
     class GeometryAccelerationStructure {
-        OPTIX_PIMPL(GeometryAccelerationStructure);
+        OPTIX_PIMPL();
 
     public:
         void destroy();
@@ -145,8 +145,7 @@ private: \
 
 
     //class InstanceAccelerationStructure {
-    //    friend class _InstanceAccelerationStructure;
-    //    _InstanceAccelerationStructure* m_opaque;
+    //    OPTIX_PIMPL();
 
     //public:
     //    void destroy();
