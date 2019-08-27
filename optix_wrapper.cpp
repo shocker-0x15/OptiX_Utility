@@ -44,6 +44,16 @@ namespace optix {
     }
 
 
+    
+#define OPTIX_ALIAS_PIMPL(Name) using _ ## Name = Name::Impl
+
+   OPTIX_ALIAS_PIMPL(Context);
+   OPTIX_ALIAS_PIMPL(ProgramGroup);
+   OPTIX_ALIAS_PIMPL(GeometryInstance);
+   OPTIX_ALIAS_PIMPL(GeometryAccelerationStructure);
+   //OPTIX_ALIAS_PIMPL(InstanceAccelerationStructure);
+
+
 
 #define OPTIX_OPAQUE_BRIDGE(BaseName) \
     BaseName getPublicType() { \
@@ -52,13 +62,13 @@ namespace optix {
         return ret; \
     } \
  \
-    static _ ## BaseName* extract(BaseName publicType) { \
+    static BaseName::Impl* extract(BaseName publicType) { \
         return publicType.m_opaque; \
     }
 
 
 
-    struct _Context {
+    struct Context::Impl {
         OptixDeviceContext rawContext;
 
         uint32_t numRayTypes;
@@ -68,7 +78,7 @@ namespace optix {
         std::vector<OptixProgramGroup> programGroups;
         OptixPipeline pipeline;
 
-        _Context() : rawContext(nullptr) {}
+        Impl() : rawContext(nullptr) {}
 
         OPTIX_OPAQUE_BRIDGE(Context);
 
@@ -95,10 +105,10 @@ namespace optix {
 
 
 
-    struct _ProgramGroup {
+    struct ProgramGroup::Impl {
         OptixProgramGroup rawGroup;
 
-        _ProgramGroup(OptixProgramGroup group) : rawGroup(group) {
+        Impl(OptixProgramGroup group) : rawGroup(group) {
         }
 
         OPTIX_OPAQUE_BRIDGE(ProgramGroup);
@@ -124,7 +134,7 @@ namespace optix {
         }
     };
 
-    struct _GeometryInstance {
+    struct GeometryInstance::Impl {
         _Context* context;
 
         CUdeviceptr vertexBufferArray[1];
@@ -134,7 +144,7 @@ namespace optix {
         std::vector<std::vector<HitGroupSet>> hitGroupSets;
         std::vector<uint32_t> buildInputFlags;
 
-        _GeometryInstance(_Context* ctxt) : 
+        Impl(_Context* ctxt) :
             context(ctxt),
             vertexBuffer(nullptr), triangleBuffer(nullptr), hitGroupIndexBuffer(nullptr) {
         }
@@ -208,7 +218,7 @@ namespace optix {
 
 
 
-    struct _GeometryAccelerationStructure {
+    struct GeometryAccelerationStructure::Impl {
         _Context* context;
 
         std::vector<_GeometryInstance*> children;
@@ -232,7 +242,7 @@ namespace optix {
             unsigned int compactedAvailable : 1;
         };
 
-        _GeometryAccelerationStructure(_Context* ctxt) : context(ctxt) {
+        Impl(_Context* ctxt) : context(ctxt) {
             compactedSizeOnDevice.initialize(CUDAHelper::BufferType::Device, 1, sizeof(size_t), 0);
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
@@ -242,7 +252,7 @@ namespace optix {
             available = false;
             compactedAvailable = false;
         }
-        ~_GeometryAccelerationStructure() {
+        ~Impl() {
             compactedSizeOnDevice.finalize();
         }
 
@@ -272,7 +282,7 @@ namespace optix {
 
 
 
-    //struct _InstanceAccelerationStructure {
+    //struct InstanceAccelerationStructure::Impl {
     //    _Context &context;
 
     //    std::vector<_Instance> children;

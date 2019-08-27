@@ -57,22 +57,22 @@ namespace optix {
 
 
 
-#define OPTIX_DECLARE_TYPE_PAIR(Name) struct _ ## Name; struct Name
-    
-    OPTIX_DECLARE_TYPE_PAIR(Context);
-    OPTIX_DECLARE_TYPE_PAIR(ProgramGroup);
-    OPTIX_DECLARE_TYPE_PAIR(GeometryInstance);
-    OPTIX_DECLARE_TYPE_PAIR(GeometryAccelerationStructure);
-    OPTIX_DECLARE_TYPE_PAIR(InstanceAccelerationStructure);
+    class Context;
+    class ProgramGroup;
+    class GeometryInstance;
+    class GeometryAccelerationStructure;
+    class InstanceAccelerationStructure;
 
-#define OPTIX_FRIEND_OPAQUE_TYPE(Name) \
-    friend class _ ## Name; \
-    _ ## Name* m_opaque
+#define OPTIX_PIMPL(Name) \
+public: \
+    class Impl; \
+private: \
+    Impl* m_opaque
 
 
 
     class Context {
-        OPTIX_FRIEND_OPAQUE_TYPE(Context);
+        OPTIX_PIMPL(Context);
 
     public:
         static Context create();
@@ -104,7 +104,7 @@ namespace optix {
 
 
     class ProgramGroup {
-        OPTIX_FRIEND_OPAQUE_TYPE(ProgramGroup);
+        OPTIX_PIMPL(ProgramGroup);
 
     public:
         void destroy();
@@ -113,7 +113,7 @@ namespace optix {
 
 
     class GeometryInstance {
-        OPTIX_FRIEND_OPAQUE_TYPE(GeometryInstance);
+        OPTIX_PIMPL(GeometryInstance);
 
     public:
         void destroy();
@@ -130,7 +130,7 @@ namespace optix {
 
 
     class GeometryAccelerationStructure {
-        OPTIX_FRIEND_OPAQUE_TYPE(GeometryAccelerationStructure);
+        OPTIX_PIMPL(GeometryAccelerationStructure);
 
     public:
         void destroy();
