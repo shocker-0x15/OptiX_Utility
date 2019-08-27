@@ -135,6 +135,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <ClCompile Include="ext\imgui\imgui_impl_opengl3.cpp" />
     <ClCompile Include="ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="optix_wrapper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cuda_helper.h" />
@@ -151,6 +152,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <ClInclude Include="ext\imgui\imstb_textedit.h" />
     <ClInclude Include="ext\imgui\imstb_truetype.h" />
     <ClInclude Include="GLToolkit.h" />
+    <ClInclude Include="optix_wrapper.h" />
     <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>

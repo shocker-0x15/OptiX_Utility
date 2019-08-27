@@ -281,19 +281,19 @@ class TriangleMesh {
     struct MaterialGroup {
         CUDAHelper::Buffer triangleBuffer;
         uint32_t* buildInputFlags;
-        Shared::MaterialData material;
+        Shared::MaterialData* material;
+        uint32_t numSBTRecords;
     };
 
     CUdeviceptr m_vertexBuffers[1];
     CUDAHelper::Buffer m_vertexBuffer;
     std::vector<MaterialGroup> m_materialGroups;
-    std::vector<OptixBuildInput> m_buildInputs;
-    uint32_t m_numSBTRecords;
+    uint32_t m_totalNumSBTRecords;
 
     TriangleMesh(const TriangleMesh &) = delete;
     TriangleMesh &operator=(const TriangleMesh &) = delete;
 public:
-    TriangleMesh() : m_numSBTRecords(0) {}
+    TriangleMesh() : m_totalNumSBTRecords(0) {}
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
         m_vertexBuffer.initialize(CUDAHelper::BufferType::Device, numVertices, sizeof(vertices[0]), 0);
@@ -307,21 +307,32 @@ public:
 
     void addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, const Shared::MaterialData &matData) {
         m_materialGroups.push_back(MaterialGroup());
-        m_buildInputs.push_back(OptixBuildInput{});
 
         MaterialGroup &group = m_materialGroups.back();
-        {
-            group.triangleBuffer.initialize(CUDAHelper::BufferType::Device, numTriangles, sizeof(triangles[0]), 0);
-            auto trianglesD = (Shared::Triangle*)group.triangleBuffer.map();
-            std::copy_n(triangles, numTriangles, trianglesD);
-            group.triangleBuffer.unmap();
 
-            group.material = matData;
-        }
+        group.triangleBuffer.initialize(CUDAHelper::BufferType::Device, numTriangles, sizeof(triangles[0]), 0);
+        auto trianglesD = (Shared::Triangle*)group.triangleBuffer.map();
+        std::copy_n(triangles, numTriangles, trianglesD);
+        group.triangleBuffer.unmap();
 
-        OptixBuildInput &buildInput = m_buildInputs.back();
-        {
-            std::memset(&buildInput, 0, sizeof(buildInput));
+        // JP: マテリアルグループあたりマテリアル数(この場合SBTレコード数)は1とする。
+        group.numSBTRecords = 1;
+        m_totalNumSBTRecords += group.numSBTRecords;
+
+        group.buildInputFlags = new uint32_t[group.numSBTRecords];
+
+        group.material = new Shared::MaterialData[group.numSBTRecords];
+        group.material[0] = matData;
+    }
+
+    uint32_t getNumBuildInputs() const {
+        return m_materialGroups.size();
+    }
+    void fillBuildInputs(OptixBuildInput* buildInputs) const {
+        std::memset(buildInputs, 0, sizeof(OptixBuildInput) * getNumBuildInputs());
+        for (int i = 0; i < getNumBuildInputs(); ++i) {
+            const MaterialGroup &group = m_materialGroups[i];
+            OptixBuildInput &buildInput = buildInputs[i];
 
             buildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             OptixBuildInputTriangleArray &triArray = buildInput.triangleArray;
@@ -332,7 +343,7 @@ public:
             triArray.vertexStrideInBytes = m_vertexBuffer.stride();
 
             triArray.indexBuffer = group.triangleBuffer.getDevicePointer();
-            triArray.numIndexTriplets = numTriangles;
+            triArray.numIndexTriplets = group.triangleBuffer.numElements();
             triArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
             triArray.indexStrideInBytes = group.triangleBuffer.stride();
             triArray.primitiveIndexOffset = 0;
@@ -345,19 +356,30 @@ public:
 
             triArray.preTransform = 0;
 
-            group.buildInputFlags = new uint32_t[triArray.numSbtRecords];
             for (int i = 0; i < triArray.numSbtRecords; ++i)
                 group.buildInputFlags[i] = OPTIX_GEOMETRY_FLAG_NONE;
             triArray.flags = group.buildInputFlags;
-
-            m_numSBTRecords += triArray.numSbtRecords;
         }
     }
-
-    void getBuildInfo(const OptixBuildInput** buildInputs, uint32_t* numBuildInputs, uint32_t* numSBTRecords) const {
-        *buildInputs = m_buildInputs.data();
-        *numBuildInputs = m_buildInputs.size();
-        *numSBTRecords = m_numSBTRecords;
+    uint32_t getNumSBTRecords() const {
+        return m_totalNumSBTRecords;
+    }
+    void fillHitGroupSBTRecords(HitGroupSBTRecord* sbtRecords, uint32_t multiplier) const {
+        uint32_t cumNumSBTRecords = 0;
+        for (int i = 0; i < getNumBuildInputs(); ++i) {
+            const MaterialGroup &group = m_materialGroups[i];
+            for (int j = 0; j < group.numSBTRecords; ++j) {
+                const Shared::MaterialData &mat = group.material[j];
+                for (int k = 0; k < multiplier; ++k) {
+                    Shared::HitGroupData &data = sbtRecords[multiplier * (cumNumSBTRecords + j) + k].data;
+                    data.geom.vertexBuffer = (Shared::Vertex*)m_vertexBuffer.getDevicePointer();
+                    data.geom.triangleBuffer = (Shared::Triangle*)group.triangleBuffer.getDevicePointer();
+                    data.mat = mat;
+                }
+            }
+            cumNumSBTRecords += group.numSBTRecords;
+        }
+        Assert(cumNumSBTRecords == getNumSBTRecords(), "Unexpected number of SBT records.");
     }
 };
 
@@ -876,6 +898,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         sbtOffset += numSBTRecords * Shared::NumRayTypes;
     }
 
+    uint32_t numHitGroupSBTRecords = sbtOffset;
+
     CUDAHelper::Buffer instanceBuffer;
     instanceBuffer.initialize(CUDAHelper::BufferType::Device, instances.size(), sizeof(instances[0]), 0);
     auto instancesD = (OptixInstance*)instanceBuffer.map();
@@ -922,7 +946,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         }
 
         CUDAHelper::Buffer hitGroupSBTRBuffer;
-        hitGroupSBTRBuffer.initialize(CUDAHelper::BufferType::Device, Shared::NumRayTypes, sizeof(HitGroupSBTRecord), 0);
+        hitGroupSBTRBuffer.initialize(CUDAHelper::BufferType::Device, numHitGroupSBTRecords, sizeof(HitGroupSBTRecord), 0);
+        {
+            auto hgSBTRs = (MissSBTRecord*)hitGroupSBTRBuffer.map();
+            missSBTRs[Shared::RayType_Search] = searchRayMissSBTR;
+            missSBTRs[Shared::RayType_Visibility] = visibilityRayMissSBTR;
+            hitGroupSBTRBuffer.unmap();
+        }
 
         sbt.raygenRecord = rayGenSBTRBuffer.getDevicePointer();
 
@@ -988,7 +1018,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     Shared::PipelineLaunchParameters plp;
-    plp.topGroup = 0;
+    plp.topGroup = iasScene.getHandle();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
