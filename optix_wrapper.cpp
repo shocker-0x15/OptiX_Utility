@@ -1,4 +1,5 @@
 #include "optix_wrapper.h"
+#include <optix_function_table_definition.h>
 
 #include <vector>
 #include <algorithm>
@@ -76,6 +77,7 @@ namespace optix {
         uint32_t numRayTypes;
         uint32_t maxTraceDepth;
         OptixPipelineCompileOptions pipelineCompileOptions;
+        size_t sizeOfPipelineLaunchParams;
         std::vector<OptixModule> modules;
         std::vector<OptixProgramGroup> programGroups;
         OptixPipeline pipeline;
@@ -84,26 +86,14 @@ namespace optix {
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
 
+        struct {
+            unsigned int pipelineLinked : 1;
+        };
+
         Impl() : 
-            rawContext(nullptr), rayGenProgram(nullptr), exceptionProgram(nullptr) {}
+            rawContext(nullptr), rayGenProgram(nullptr), exceptionProgram(nullptr), pipelineLinked(false) {}
 
         OPTIX_OPAQUE_BRIDGE(Context);
-
-        void linkPipeline() {
-            OptixPipelineLinkOptions pipelineLinkOptions = {};
-            pipelineLinkOptions.maxTraceDepth = maxTraceDepth;
-            pipelineLinkOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_FULL;
-            pipelineLinkOptions.overrideUsesMotionBlur = false;
-
-            char log[4096];
-            size_t logSize = sizeof(log);
-            OPTIX_CHECK_LOG(optixPipelineCreate(rawContext,
-                                                &pipelineCompileOptions,
-                                                &pipelineLinkOptions,
-                                                programGroups.data(), programGroups.size(),
-                                                log, &logSize,
-                                                &pipeline));
-        }
 
         OptixDeviceContext getRawContext() const {
             return rawContext;
@@ -133,7 +123,7 @@ namespace optix {
         size_t dataSize;
 
         HitGroupSet() : hitGroup(nullptr) {}
-        HitGroupSet(const _ProgramGroup* group, void* data, size_t size) {
+        HitGroupSet(const _ProgramGroup* group, const void* data, size_t size) {
             hitGroup = group;
             std::memcpy(recordData, data, size);
             size_t alignMask = OPTIX_SBT_RECORD_ALIGNMENT - 1;
@@ -323,7 +313,17 @@ namespace optix {
             std::memset(&rawInstance, 0, sizeof(rawInstance));
             rawInstance.instanceId = 0;
             rawInstance.visibilityMask = 0xFF;
-            std::copy_n(transform, 12, rawInstance.transform);
+            if (transform) {
+                std::copy_n(transform, 12, rawInstance.transform);
+            }
+            else {
+                float identity[] = {
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0
+                };
+                std::copy_n(identity, 12, rawInstance.transform);
+            }
             rawInstance.flags = OPTIX_INSTANCE_FLAG_NONE;
         }
     };
@@ -415,6 +415,7 @@ namespace optix {
         }
 
         void fillBuildInput() {
+            std::memset(&buildInput, 0, sizeof(buildInput));
             buildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
             OptixBuildInputInstanceArray &instArray = buildInput.instanceArray;
             instArray.instances = instanceBuffer.getDevicePointer();
@@ -483,7 +484,7 @@ namespace optix {
         m_opaque->maxTraceDepth = maxTraceDepth;
     }
 
-    void Context::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName,
+    void Context::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                      bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
         // EN: Set a pipeline compile options common among modules in the pipeline and the pipeline itself.
@@ -494,17 +495,19 @@ namespace optix {
         m_opaque->pipelineCompileOptions.usesMotionBlur = useMotionBlur;
         m_opaque->pipelineCompileOptions.traversableGraphFlags = traversableGraphFlags;
         m_opaque->pipelineCompileOptions.exceptionFlags = exceptionFlags;
+
+        m_opaque->sizeOfPipelineLaunchParams = sizeOfLaunchParams;
     }
 
     int32_t Context::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const {
         int32_t moduleID = m_opaque->modules.size();
-        m_opaque->modules.push_back(OptixModule());
-        OptixModule &module = m_opaque->modules.back();
 
         OptixModuleCompileOptions moduleCompileOptions = {};
         moduleCompileOptions.maxRegisterCount = maxRegisterCount;
         moduleCompileOptions.optLevel = optLevel;
         moduleCompileOptions.debugLevel = debugLevel;
+
+        OptixModule module;
 
         char log[4096];
         size_t logSize = sizeof(log);
@@ -514,6 +517,11 @@ namespace optix {
                                                  ptxString.c_str(), ptxString.size(),
                                                  log, &logSize,
                                                  &module));
+
+        if (module)
+            m_opaque->modules.push_back(module);
+        else
+            moduleID = -1;
 
         return moduleID;
     }
@@ -596,11 +604,14 @@ namespace optix {
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        desc.hitgroup.moduleCH = m_opaque->modules[moduleID_CH];
+        if (entryFunctionNameCH)
+            desc.hitgroup.moduleCH = m_opaque->modules[moduleID_CH];
         desc.hitgroup.entryFunctionNameCH = entryFunctionNameCH;
-        desc.hitgroup.moduleAH = m_opaque->modules[moduleID_AH];
+        if (entryFunctionNameAH)
+            desc.hitgroup.moduleAH = m_opaque->modules[moduleID_AH];
         desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
-        desc.hitgroup.moduleIS = m_opaque->modules[moduleID_IS];
+        if (entryFunctionNameIS)
+            desc.hitgroup.moduleIS = m_opaque->modules[moduleID_IS];
         desc.hitgroup.entryFunctionNameIS = entryFunctionNameIS;
 
         char log[4096];
@@ -656,6 +667,26 @@ namespace optix {
         m_opaque->missPrograms[rayType] = _ProgramGroup::extract(miss);
     }
 
+    void Context::linkPipeline(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const {
+        if (!m_opaque->pipelineLinked) {
+            OptixPipelineLinkOptions pipelineLinkOptions = {};
+            pipelineLinkOptions.maxTraceDepth = m_opaque->maxTraceDepth;
+            pipelineLinkOptions.debugLevel = debugLevel;
+            pipelineLinkOptions.overrideUsesMotionBlur = overrideUseMotionBlur;
+
+            char log[4096];
+            size_t logSize = sizeof(log);
+            OPTIX_CHECK_LOG(optixPipelineCreate(m_opaque->rawContext,
+                                                &m_opaque->pipelineCompileOptions,
+                                                &pipelineLinkOptions,
+                                                m_opaque->programGroups.data(), m_opaque->programGroups.size(),
+                                                log, &logSize,
+                                                &m_opaque->pipeline));
+
+            m_opaque->pipelineLinked = true;
+        }
+    }
+
     GeometryInstance Context::createGeometryInstance() const {
         return (new _GeometryInstance(m_opaque))->getPublicType();
     }
@@ -666,6 +697,10 @@ namespace optix {
 
     InstanceAccelerationStructure Context::createInstanceAccelerationStructure() const {
         return (new _InstanceAccelerationStructure(m_opaque))->getPublicType();
+    }
+
+    void Context::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) {
+
     }
 
 
@@ -681,13 +716,13 @@ namespace optix {
         delete m_opaque;
     }
     
-    void GeometryInstance::setVertexBuffer(Buffer &vertexBuffer) const {
-        m_opaque->vertexBuffer = &vertexBuffer;
-        m_opaque->vertexBufferArray[0] = vertexBuffer.getDevicePointer();
+    void GeometryInstance::setVertexBuffer(Buffer* vertexBuffer) const {
+        m_opaque->vertexBuffer = vertexBuffer;
+        m_opaque->vertexBufferArray[0] = vertexBuffer->getDevicePointer();
     }
 
-    void GeometryInstance::setTriangleBuffer(Buffer &triangleBuffer) const {
-        m_opaque->triangleBuffer = &triangleBuffer;
+    void GeometryInstance::setTriangleBuffer(Buffer* triangleBuffer) const {
+        m_opaque->triangleBuffer = triangleBuffer;
     }
 
     void GeometryInstance::setNumHitGroups(uint32_t num) const {
@@ -703,7 +738,7 @@ namespace optix {
     }
 
     void GeometryInstance::setHitGroup(uint32_t idx, uint32_t rayType, const ProgramGroup &hitGroup,
-                                       void* sbtRecordData, size_t size) const {
+                                       const void* sbtRecordData, size_t size) const {
         optixAssert(idx < m_opaque->hitGroupSets.size(), "Out of bounds.");
         optixAssert(rayType < m_opaque->context->numRayTypes, "Invalid ray type.");
         m_opaque->hitGroupSets[idx][rayType] = HitGroupSet(_ProgramGroup::extract(hitGroup), sbtRecordData, size);
@@ -723,8 +758,6 @@ namespace optix {
     }
     
     void GeometryAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const {
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-
         m_opaque->fillBuildInputs();
 
         if (!m_opaque->available) {
@@ -735,7 +768,8 @@ namespace optix {
             //buildOptions.motionOptions
 
             OptixAccelBufferSizes bufferSizes;
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(m_opaque->context->getRawContext(), &m_opaque->buildOptions, m_opaque->buildInputs.data(), m_opaque->buildInputs.size(),
+            OPTIX_CHECK(optixAccelComputeMemoryUsage(m_opaque->context->getRawContext(), &m_opaque->buildOptions,
+                                                     m_opaque->buildInputs.data(), m_opaque->buildInputs.size(),
                                                      &bufferSizes));
 
             m_opaque->accelBufferSize = bufferSizes.outputSizeInBytes;
@@ -743,6 +777,8 @@ namespace optix {
 
             m_opaque->accelBuffer.initialize(CUDAHelper::BufferType::Device, m_opaque->accelBufferSize, 1, 0);
         }
+
+        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m_opaque->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m_opaque->context->getRawContext(), stream,
@@ -817,6 +853,10 @@ namespace optix {
         return m_opaque->isReady();
     }
 
+    OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
+        return m_opaque->getHandle();
+    }
+
 
 
     void InstanceAccelerationStructure::destroy() {
@@ -832,8 +872,6 @@ namespace optix {
     }
 
     void InstanceAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const {
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-
         m_opaque->setupInstances();
         m_opaque->fillBuildInput();
 
@@ -845,7 +883,8 @@ namespace optix {
             //buildOptions.motionOptions
 
             OptixAccelBufferSizes bufferSizes;
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(m_opaque->context->getRawContext(), &m_opaque->buildOptions, &m_opaque->buildInput, 1,
+            OPTIX_CHECK(optixAccelComputeMemoryUsage(m_opaque->context->getRawContext(), &m_opaque->buildOptions,
+                                                     &m_opaque->buildInput, 1,
                                                      &bufferSizes));
 
             m_opaque->accelBufferSize = bufferSizes.outputSizeInBytes;
@@ -853,6 +892,8 @@ namespace optix {
 
             m_opaque->accelBuffer.initialize(CUDAHelper::BufferType::Device, m_opaque->accelBufferSize, 1, 0);
         }
+
+        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m_opaque->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m_opaque->context->getRawContext(), stream, &m_opaque->buildOptions, &m_opaque->buildInput, 1,
@@ -924,5 +965,9 @@ namespace optix {
 
     bool InstanceAccelerationStructure::isReady() const {
         return m_opaque->isReady();
+    }
+
+    OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {
+        return m_opaque->getHandle();
     }
 }

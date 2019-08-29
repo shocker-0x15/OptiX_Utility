@@ -22,7 +22,6 @@
 #include "cuda_helper.h"
 
 #include <optix.h>
-#include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 
 
@@ -80,7 +79,7 @@ private: \
 
         void setNumRayTypes(uint32_t numRayTypes) const;
         void setMaxTraceDepth(uint32_t maxTraceDepth) const;
-        void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName,
+        void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                 bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const;
 
         int32_t createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
@@ -98,10 +97,14 @@ private: \
         void setExceptionProgram(ProgramGroup exception) const;
         void setMissProgram(uint32_t rayType, ProgramGroup miss) const;
 
+        void linkPipeline(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const;
+
         GeometryInstance createGeometryInstance() const;
 
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
+
+        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ);
     };
 
 
@@ -121,13 +124,13 @@ private: \
     public:
         void destroy();
 
-        void setVertexBuffer(Buffer &vertexBuffer) const;
-        void setTriangleBuffer(Buffer &triangleBuffer) const;
+        void setVertexBuffer(Buffer* vertexBuffer) const;
+        void setTriangleBuffer(Buffer* triangleBuffer) const;
 
         void setNumHitGroups(uint32_t num) const;
         void setGeometryFlags(uint32_t idx, OptixGeometryFlags flags) const;
         void setHitGroup(uint32_t idx, uint32_t rayType, const ProgramGroup &hitGroup,
-                         void* sbtRecordData, size_t size) const;
+                         const void* sbtRecordData, size_t size) const;
         template <typename RecordDataType>
         void setHitGroup(uint32_t idx, uint32_t rayType, const ProgramGroup &hitGroup,
                          const RecordDataType &sbtRecordData) const {
@@ -151,6 +154,7 @@ private: \
         void update(CUstream stream) const;
 
         bool isReady() const;
+        OptixTraversableHandle getHandle() const;
     };
 
 
@@ -169,5 +173,6 @@ private: \
         void update(CUstream stream) const;
 
         bool isReady() const;
+        OptixTraversableHandle getHandle() const;
     };
 }

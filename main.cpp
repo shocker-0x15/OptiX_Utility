@@ -111,16 +111,8 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 
-template <typename T>
-struct alignas(OPTIX_SBT_RECORD_ALIGNMENT) SBTRecord {
-    uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
-    T data;
-};
-
-using RayGenSBTRecord = SBTRecord<Shared::RayGenData>;
-using MissSBTRecord = SBTRecord<Shared::MissData>;
-using HitGroupSBTRecord = SBTRecord<Shared::HitGroupData>;
-using EmptySBTRecord = SBTRecord<int32_t>;
+optix::ProgramGroup searchRayHitProgramGroup;
+optix::ProgramGroup visibilityRayHitProgramGroup;
 
 
 
@@ -128,7 +120,7 @@ class TriangleMesh {
     optix::Context m_context;
 
     struct MaterialGroup {
-        CUDAHelper::Buffer triangleBuffer;
+        CUDAHelper::Buffer* triangleBuffer;
         Shared::MaterialData material;
         optix::GeometryInstance geometryInstance;
     };
@@ -153,19 +145,26 @@ public:
 
         MaterialGroup &group = m_materialGroups.back();
 
-        group.triangleBuffer.initialize(CUDAHelper::BufferType::Device, numTriangles, sizeof(triangles[0]), 0);
-        auto trianglesD = (Shared::Triangle*)group.triangleBuffer.map();
+        auto triangleBuffer = new CUDAHelper::Buffer();
+        group.triangleBuffer = triangleBuffer;
+        triangleBuffer->initialize(CUDAHelper::BufferType::Device, numTriangles, sizeof(triangles[0]), 0);
+        auto trianglesD = (Shared::Triangle*)triangleBuffer->map();
         std::copy_n(triangles, numTriangles, trianglesD);
-        group.triangleBuffer.unmap();
+        triangleBuffer->unmap();
 
         group.material = matData;
 
+        Shared::HitGroupData recordData;
+        recordData.geom.vertexBuffer = (Shared::Vertex*)m_vertexBuffer.getDevicePointer();
+        recordData.geom.triangleBuffer = (Shared::Triangle*)triangleBuffer->getDevicePointer();
+        recordData.mat = matData;
+
         optix::GeometryInstance geomInst = m_context.createGeometryInstance();
-        geomInst.setVertexBuffer(m_vertexBuffer);
-        geomInst.setTriangleBuffer(group.triangleBuffer);
+        geomInst.setVertexBuffer(&m_vertexBuffer);
+        geomInst.setTriangleBuffer(triangleBuffer);
         geomInst.setNumHitGroups(1);
-        geomInst.setHitGroup(0, Shared::RayType_Search, , matData);
-        geomInst.setHitGroup(0, Shared::RayType_Visibility, , matData);
+        geomInst.setHitGroup(0, Shared::RayType_Search, searchRayHitProgramGroup, recordData);
+        geomInst.setHitGroup(0, Shared::RayType_Visibility, visibilityRayHitProgramGroup, recordData);
 
         group.geometryInstance = geomInst;
     }
@@ -346,7 +345,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     
     optix::Context optixContext = optix::Context::create();
 
-    optixContext.setPipelineOptions(3, 0, "plp",
+    optixContext.setPipelineOptions(3, 0, "plp", sizeof(Shared::PipelineLaunchParameters),
                                     false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                                     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH);
 
@@ -355,13 +354,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                               OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 
     optix::ProgramGroup rayGenProgram = optixContext.createRayGenProgram(moduleID, "__raygen__fill");
-    optix::ProgramGroup searchRayMissProgram = optixContext.createRayGenProgram(moduleID, "__miss__searchRay");
+    optix::ProgramGroup searchRayMissProgram = optixContext.createMissProgram(moduleID, "__miss__searchRay");
 
-    optix::ProgramGroup searchRayHitProgramGroup = optixContext.createHitProgramGroup(moduleID, "__closesthit__shading", 0, nullptr, 0, nullptr);
-    optix::ProgramGroup visibilityRayHitProgramGroup = optixContext.createHitProgramGroup(0, nullptr, moduleID, "__anyhit__visibility", 0, nullptr);
+    searchRayHitProgramGroup = optixContext.createHitProgramGroup(moduleID, "__closesthit__shading", 0, nullptr, 0, nullptr);
+    visibilityRayHitProgramGroup = optixContext.createHitProgramGroup(0, nullptr, moduleID, "__anyhit__visibility", 0, nullptr);
 
     optixContext.setNumRayTypes(Shared::NumRayTypes);
     optixContext.setMaxTraceDepth(2);
+
+    optixContext.linkPipeline(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
 
     optixContext.setRayGenerationProgram(rayGenProgram);
     optixContext.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
@@ -552,14 +553,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
+    plp.camera.fovY = 60 * M_PI / 180;
+    plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     CUdeviceptr plpOnDevice;
     CUDA_CHECK(cudaMalloc((void**)&plpOnDevice, sizeof(plp)));
-
-    RayGenSBTRecord rayGenSBTR;
-    OPTIX_CHECK(optixSbtRecordPackHeader(pgRayGen, &rayGenSBTR));
-    rayGenSBTR.data.camera.fovY = 60 * M_PI / 180;
-    rayGenSBTR.data.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
 
 
@@ -601,12 +599,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-        CUDA_CHECK(cudaMemcpyAsync((void*)sbt.raygenRecord, &rayGenSBTR, sizeof(rayGenSBTR), cudaMemcpyHostToDevice, stream));
-
         plp.outputBuffer = (float4*)outputBufferCUDA.beginCUDAAccess(stream);
 
         CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
-        OPTIX_CHECK(optixLaunch(pipeline, stream, plpOnDevice, sizeof(plp), &sbt, renderTargetSizeX, renderTargetSizeY, 1));
+        optixContext.launch(stream, plpOnDevice,
+                            renderTargetSizeX, renderTargetSizeY, 1);
 
         outputBufferCUDA.endCUDAAccess(stream);
 
@@ -701,16 +698,21 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     outputTexture.finalize();
     outputBufferGL.finalize();
 
-    OPTIX_CHECK(optixPipelineDestroy(pipeline));
+    iasScene.destroy();
 
-    OPTIX_CHECK(optixProgramGroupDestroy(pgHitGroupVisibilityRay));
-    OPTIX_CHECK(optixProgramGroupDestroy(pgHitGroupSearchRay));
-    OPTIX_CHECK(optixProgramGroupDestroy(pgMissSearchRay));
-    OPTIX_CHECK(optixProgramGroupDestroy(pgRayGen));
+    gasAreaLight.destroy();
+    gasCornellBox.destroy();
 
-    OPTIX_CHECK(optixModuleDestroy(module));
+    //meshLight.finalize();
+    //meshCornellBox.finalize();
 
-    OPTIX_CHECK(optixDeviceContextDestroy(optixContext));
+    visibilityRayHitProgramGroup.destroy();
+    searchRayHitProgramGroup.destroy();
+
+    searchRayMissProgram.destroy();
+    rayGenProgram.destroy();
+
+    optixContext.destroy();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

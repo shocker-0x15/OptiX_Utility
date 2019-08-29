@@ -27,10 +27,6 @@ namespace Shared {
         float fovY;
     };
 
-    struct RayGenData {
-        PerspectiveCamera camera;
-    };
-
     struct MissData {
         float3 bgRadiance;
     };
@@ -53,5 +49,6 @@ namespace Shared {
         OptixTraversableHandle topGroup;
         int2 imageSize;
         float4* outputBuffer;
+        PerspectiveCamera camera;
     };
 }

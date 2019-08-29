@@ -141,15 +141,13 @@ struct HitPointParameter {
 
 
 RT_PROGRAM void __raygen__fill() {
-    const auto &sbrtData = *(RayGenData*)optixGetSbtDataPointer();
-
     uint3 launchIndex = optixGetLaunchIndex();
     int32_t index = plp.imageSize.x * launchIndex.y + launchIndex.x;
 
     float x = (float)(launchIndex.x + 0.5f) / plp.imageSize.x;
     float y = (float)(launchIndex.y + 0.5f) / plp.imageSize.y;
-    float vh = 2 * std::tan(sbrtData.camera.fovY * 0.5f);
-    float vw = sbrtData.camera.aspect * vh;
+    float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
+    float vw = plp.camera.aspect * vh;
 
     float3 origin = make_float3(0, 0, 5);
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
