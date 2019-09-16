@@ -81,9 +81,7 @@ namespace CUDAHelper {
     class Buffer {
         BufferType m_type;
 
-        int32_t m_width;
-        int32_t m_height;
-        int32_t m_dimension;
+        int32_t m_numElements;
         int32_t m_stride;
 
         void* m_hostPointer;
@@ -97,11 +95,10 @@ namespace CUDAHelper {
 
         struct {
             unsigned int m_initialized : 1;
+            unsigned int m_mapped : 1;
         };
 
         void makeCurrent();
-
-        void initializeInternal(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID);
 
         Buffer(const Buffer &) = delete;
         Buffer &operator=(const Buffer &) = delete;
@@ -113,21 +110,20 @@ namespace CUDAHelper {
         Buffer(Buffer &&b) = default;
         Buffer &operator=(Buffer &&b) = default;
 
-        void initialize(BufferType type, int32_t width, int32_t stride, uint32_t glBufferID);
-        void initialize(BufferType type, int32_t width, int32_t height, int32_t stride, uint32_t glBufferID);
+        void initialize(BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID);
         void finalize();
 
         CUdeviceptr getDevicePointer() const {
             return (CUdeviceptr)m_devicePointer;
         }
         size_t size() const {
-            return (size_t)m_width * m_height * m_stride;
+            return (size_t)m_numElements * m_stride;
         }
         size_t stride() const {
             return m_stride;
         }
         size_t numElements() const {
-            return (size_t)m_width * m_height;
+            return (size_t)m_numElements;
         }
         bool isInitialized() const {
             return m_initialized;

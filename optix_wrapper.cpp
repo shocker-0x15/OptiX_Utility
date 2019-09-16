@@ -2,6 +2,8 @@
 #include <optix_function_table_definition.h>
 
 #include <vector>
+#include <set>
+#include <map>
 #include <algorithm>
 
 #include <stdexcept>
@@ -40,6 +42,16 @@ namespace optix {
         OutputDebugString(str);
     }
 
+    std::runtime_error make_runtime_error(const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        char str[4096];
+        vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
+        va_end(args);
+
+        return std::runtime_error(str);
+    }
+
 
 
     static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
@@ -51,6 +63,8 @@ namespace optix {
 #define OPTIX_ALIAS_PIMPL(Name) using _ ## Name = Name::Impl
 
    OPTIX_ALIAS_PIMPL(Context);
+   OPTIX_ALIAS_PIMPL(Pipeline);
+   OPTIX_ALIAS_PIMPL(Module);
    OPTIX_ALIAS_PIMPL(ProgramGroup);
    OPTIX_ALIAS_PIMPL(GeometryInstance);
    OPTIX_ALIAS_PIMPL(GeometryAccelerationStructure);
@@ -59,39 +73,26 @@ namespace optix {
 
 
 #define OPTIX_OPAQUE_BRIDGE(BaseName) \
+    friend class BaseName; \
+ \
     BaseName getPublicType() { \
         BaseName ret; \
-        ret.m_opaque = this; \
+        ret.m = this; \
         return ret; \
     } \
  \
     static BaseName::Impl* extract(BaseName publicType) { \
-        return publicType.m_opaque; \
+        return publicType.m; \
     }
 
 
 
-    struct Context::Impl {
+    class Context::Impl {
         OptixDeviceContext rawContext;
 
-        uint32_t numRayTypes;
-        uint32_t maxTraceDepth;
-        OptixPipelineCompileOptions pipelineCompileOptions;
-        size_t sizeOfPipelineLaunchParams;
-        std::vector<OptixModule> modules;
-        std::vector<OptixProgramGroup> programGroups;
-        OptixPipeline pipeline;
-
-        _ProgramGroup* rayGenProgram;
-        _ProgramGroup* exceptionProgram;
-        std::vector<_ProgramGroup*> missPrograms;
-
-        struct {
-            unsigned int pipelineLinked : 1;
-        };
-
+    public:
         Impl() : 
-            rawContext(nullptr), rayGenProgram(nullptr), exceptionProgram(nullptr), pipelineLinked(false) {}
+            rawContext(nullptr) {}
 
         OPTIX_OPAQUE_BRIDGE(Context);
 
@@ -102,13 +103,127 @@ namespace optix {
 
 
 
-    struct ProgramGroup::Impl {
+    class Pipeline::Impl {
+        const _Context* context;
+        OptixPipeline rawPipeline;
+
+        uint32_t numRayTypes;
+        uint32_t maxTraceDepth;
+        OptixPipelineCompileOptions pipelineCompileOptions;
+        size_t sizeOfPipelineLaunchParams;
+        std::set<OptixProgramGroup> programGroups;
+
+        _ProgramGroup* rayGenProgram;
+        _ProgramGroup* exceptionProgram;
+        std::vector<_ProgramGroup*> missPrograms;
+        Buffer rayGenRecord;
+        Buffer missRecords;
+        Buffer hitGroupRecords;
+
+        OptixShaderBindingTable sbt;
+
+        struct {
+            unsigned int pipelineLinked : 1;
+            unsigned int sbtSetup : 1;
+        };
+
+        void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group) {
+            char log[4096];
+            size_t logSize = sizeof(log);
+            OPTIX_CHECK_LOG(optixProgramGroupCreate(context->getRawContext(),
+                                                    &desc, 1, // num program groups
+                                                    &options,
+                                                    log, &logSize,
+                                                    group));
+            programGroups.insert(*group);
+        }
+        void destroyProgram(OptixProgramGroup group) {
+            optixAssert(programGroups.count(group) > 0, "This program group has not been registered.");
+            programGroups.erase(group);
+            OPTIX_CHECK(optixProgramGroupDestroy(group));
+        }
+
+        void setupShaderBindingTable() {
+            if (!sbtSetup) {
+                if (rayGenProgram == nullptr)
+                    throw make_runtime_error("Ray generation program is not set.");
+
+                for (int i = 0; i < numRayTypes; ++i)
+                    if (missPrograms[i] == nullptr)
+                        throw make_runtime_error("Miss program is not set for some ray types.");
+
+                std::memset(&sbt, 0, sizeof(sbt));
+                {
+                    sbt.raygenRecord = rayGenRecord.getDevicePointer();
+
+                    sbt.exceptionRecord = 0;
+
+                    for (int i = 0; i < numRayTypes; ++i) {
+                        void* dst = (void*)(missRecords.getDevicePointer() + OPTIX_SBT_RECORD_HEADER_SIZE * i);
+                    }
+                }
+
+                sbtSetup = true;
+            }
+        }
+
+    public:
+        Impl(const _Context* ctxt) : context(ctxt), 
+            numRayTypes(0), maxTraceDepth(0),
+            rayGenProgram(nullptr), exceptionProgram(nullptr), 
+            pipelineLinked(false), sbtSetup(false) {
+        }
+
+        OPTIX_OPAQUE_BRIDGE(Pipeline);
+
+        uint32_t getNumRayTypes() const {
+            if (numRayTypes == 0)
+                throw make_runtime_error("Num ray types is not set.");
+
+            return numRayTypes;
+        }
+    };
+
+
+
+    class Module::Impl {
+        const _Pipeline* pipeline;
+        OptixModule rawModule;
+
+    public:
+        Impl(const _Pipeline* pl, OptixModule module) : pipeline(pl), rawModule(module) {
+        }
+
+        OPTIX_OPAQUE_BRIDGE(Module);
+
+        const _Pipeline* getPipeline() const {
+            return pipeline;
+        }
+
+        OptixModule getRawModule() const {
+            return rawModule;
+        }
+    };
+
+
+
+    class ProgramGroup::Impl {
+        const _Pipeline* pipeline;
         OptixProgramGroup rawGroup;
 
-        Impl(OptixProgramGroup group) : rawGroup(group) {
+    public:
+        Impl(const _Pipeline* pl, OptixProgramGroup group) : pipeline(pl), rawGroup(group) {
         }
 
         OPTIX_OPAQUE_BRIDGE(ProgramGroup);
+
+        const _Pipeline* getPipeline() const {
+            return pipeline;
+        }
+
+        OptixProgramGroup getRawProgramGroup() const {
+            return rawGroup;
+        }
 
         void packHeader(uint8_t* record) const {
             OPTIX_CHECK(optixSbtRecordPackHeader(rawGroup, record));
@@ -117,40 +232,48 @@ namespace optix {
 
 
     
-    struct HitGroupSet {
-        const _ProgramGroup* hitGroup;
-        uint8_t recordData[128];
-        size_t dataSize;
+    class GeometryInstance::Impl {
+    public:
+        struct HitGroupData {
+            const _ProgramGroup* program;
+            uint8_t recordData[128];
+            size_t dataSize;
 
-        HitGroupSet() : hitGroup(nullptr) {}
-        HitGroupSet(const _ProgramGroup* group, const void* data, size_t size) {
-            hitGroup = group;
-            std::memcpy(recordData, data, size);
-            size_t alignMask = OPTIX_SBT_RECORD_ALIGNMENT - 1;
-            dataSize = (size + alignMask) & ~alignMask;
-        }
-    };
+            HitGroupData() : program(nullptr), dataSize(0) {}
+            HitGroupData(const _ProgramGroup* _program, const void* data, size_t size) {
+                program = _program;
+                std::memcpy(recordData, data, size);
+                size_t alignMask = OPTIX_SBT_RECORD_ALIGNMENT - 1;
+                dataSize = (size + alignMask) & ~alignMask;
+            }
+        };
 
-    struct GeometryInstance::Impl {
+        struct PerPipelineInfo {
+            HitGroupData* hitGroupData; // per ray type, per SBT record
+
+            PerPipelineInfo() : hitGroupData(nullptr) {}
+        };
+
+    private:
         _Context* context;
 
         CUdeviceptr vertexBufferArray[1];
         Buffer* vertexBuffer;
         Buffer* triangleBuffer;
         Buffer* hitGroupIndexBuffer;
-        std::vector<std::vector<HitGroupSet>> hitGroupSets;
-        std::vector<uint32_t> buildInputFlags;
+        std::vector<uint32_t> buildInputFlags; // per SBT record
 
+        std::map<const _Pipeline*, PerPipelineInfo> perPipelineInfos;
+
+    public:
         Impl(_Context* ctxt) :
             context(ctxt),
-            vertexBuffer(nullptr), triangleBuffer(nullptr), hitGroupIndexBuffer(nullptr) {
+            vertexBuffer(nullptr), triangleBuffer(nullptr) {
         }
 
         OPTIX_OPAQUE_BRIDGE(GeometryInstance);
 
         void fillBuildInput(OptixBuildInput* input) const {
-            optixAssert(hitGroupSets.size() == buildInputFlags.size(), "These sizes should match.");
-
             std::memset(input, 0, sizeof(*input));
 
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
@@ -167,7 +290,7 @@ namespace optix {
             triArray.indexStrideInBytes = triangleBuffer->stride();
             triArray.primitiveIndexOffset = 0;
 
-            triArray.numSbtRecords = hitGroupSets.size();
+            triArray.numSbtRecords = buildInputFlags.size();
             if (triArray.numSbtRecords > 1) {
                 optixAssert_NotImplemented();
                 triArray.sbtIndexOffsetBuffer = hitGroupIndexBuffer->getDevicePointer();
@@ -186,34 +309,41 @@ namespace optix {
         }
 
         // without #RayTypes multiplier
-        void calcNumSBTRecordsAndMaxSize(uint32_t* numSBTRecords, size_t* maxSize) const {
-            *numSBTRecords = hitGroupSets.size();
-            if (maxSize == nullptr)
-                return;
-            *maxSize = 0;
-            for (int i = 0; i < hitGroupSets.size(); ++i)
-                for (int j = 0; j < hitGroupSets[i].size(); ++j)
-                    *maxSize = std::max(*maxSize, OPTIX_SBT_RECORD_HEADER_SIZE + hitGroupSets[i][j].dataSize);
+        void getNumSBTRecords(uint32_t* numSBTRecords) const {
+            *numSBTRecords = buildInputFlags.size();
         }
 
-        uintptr_t fillSBTRecords(uint8_t* sbtRecords, size_t stride) const {
-            uintptr_t offset = 0;
-            for (int i = 0; i < hitGroupSets.size(); ++i) {
-                for (int j = 0; j < hitGroupSets[i].size(); ++j) {
-                    const auto &hitGroupSet = hitGroupSets[i][j];
-                    hitGroupSet.hitGroup->packHeader(sbtRecords + offset);
-                    offset += OPTIX_SBT_RECORD_HEADER_SIZE;
-                    std::copy_n(hitGroupSet.recordData, hitGroupSet.dataSize, sbtRecords + offset);
-                    offset += stride;
-                }
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint8_t* sbtRecords, size_t stride) const {
+            if (perPipelineInfos.count(pipeline) == 0)
+                throw make_runtime_error("The pipeline %p has not been registered.", pipeline);
+
+            const PerPipelineInfo &info = perPipelineInfos.at(pipeline);
+
+            uint32_t numHitGroups = buildInputFlags.size();
+            uint32_t numRayTypes = pipeline->getNumRayTypes();
+            for (int i = 0; i < numHitGroups * numRayTypes; ++i) {
+                uintptr_t offset = i * stride;
+                const auto &hitGroupData = info.hitGroupData[i];
+
+                hitGroupData.program->packHeader(sbtRecords + offset);
+                offset += OPTIX_SBT_RECORD_HEADER_SIZE;
+
+                std::copy_n(hitGroupData.recordData, hitGroupData.dataSize, sbtRecords + offset);
             }
-            return offset;
+
+            return numHitGroups * numRayTypes;
         }
     };
 
 
 
-    struct GeometryAccelerationStructure::Impl {
+    class GeometryAccelerationStructure::Impl {
+    public:
+        struct PerPipelineInfo {
+
+        };
+
+    private:
         _Context* context;
 
         std::vector<_GeometryInstance*> children;
@@ -222,13 +352,13 @@ namespace optix {
         OptixAccelBuildOptions buildOptions;
 
         size_t accelBufferSize;
-        CUDAHelper::Buffer accelBuffer;
-        CUDAHelper::Buffer accelTempBuffer;
+        Buffer accelBuffer;
+        Buffer accelTempBuffer;
 
-        CUDAHelper::Buffer compactedSizeOnDevice;
+        Buffer compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
-        CUDAHelper::Buffer compactedAccelBuffer;
+        Buffer compactedAccelBuffer;
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
@@ -237,8 +367,15 @@ namespace optix {
             unsigned int compactedAvailable : 1;
         };
 
+        void fillBuildInputs() {
+            buildInputs.resize(children.size(), OptixBuildInput{});
+            for (int i = 0; i < children.size(); ++i)
+                children[i]->fillBuildInput(&buildInputs[i]);
+        }
+
+    public:
         Impl(_Context* ctxt) : context(ctxt) {
-            compactedSizeOnDevice.initialize(CUDAHelper::BufferType::Device, 1, sizeof(size_t), 0);
+            compactedSizeOnDevice.initialize(BufferType::Device, 1, sizeof(size_t), 0);
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
@@ -267,30 +404,20 @@ namespace optix {
             return 0;
         }
 
-        void fillBuildInputs() {
-            for (int i = 0; i < children.size(); ++i)
-                children[i]->fillBuildInput(&buildInputs[i]);
-        }
-
-        void calcNumSBTRecordsAndMaxSize(uint32_t* numSBTRecords, size_t* maxSize) const {
+        void calcNumSBTRecords(uint32_t* numSBTRecords) const {
             *numSBTRecords = 0;
-            if (maxSize)
-                *maxSize = 0;
             for (int i = 0; i < children.size(); ++i) {
                 uint32_t cNumSBTRecords = 0;
-                size_t cMaxSize = 0;
-                children[i]->calcNumSBTRecordsAndMaxSize(&cNumSBTRecords, maxSize ? &cMaxSize : nullptr);
+                children[i]->getNumSBTRecords(&cNumSBTRecords);
                 *numSBTRecords += cNumSBTRecords;
-                if (maxSize)
-                    *maxSize = std::max(*maxSize, cMaxSize);
             }
         }
 
-        uintptr_t fillSBTRecords(uint8_t* sbtRecords, size_t stride) const {
-            uintptr_t offset = 0;
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint8_t* sbtRecords, size_t stride) const {
+            uint32_t numSBTRecords = 0;
             for (int i = 0; i < children.size(); ++i)
-                offset += children[i]->fillSBTRecords(sbtRecords + offset, stride);
-            return offset;
+                numSBTRecords += children[i]->fillSBTRecords(pipeline, sbtRecords + stride * numSBTRecords, stride);
+            return numSBTRecords;
         }
     };
 
@@ -330,23 +457,24 @@ namespace optix {
 
     
     
-    struct InstanceAccelerationStructure::Impl {
+    class InstanceAccelerationStructure::Impl {
         _Context* context;
 
         std::vector<_Instance> children;
         OptixBuildInput buildInput;
-        CUDAHelper::Buffer instanceBuffer;
+        Buffer instanceBuffer;
 
         OptixAccelBuildOptions buildOptions;
+        uint32_t maxNumRayTypes;
 
         size_t accelBufferSize;
-        CUDAHelper::Buffer accelBuffer;
-        CUDAHelper::Buffer accelTempBuffer;
+        Buffer accelBuffer;
+        Buffer accelTempBuffer;
 
-        CUDAHelper::Buffer compactedSizeOnDevice;
+        Buffer compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
-        CUDAHelper::Buffer compactedAccelBuffer;
+        Buffer compactedAccelBuffer;
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
@@ -355,37 +483,9 @@ namespace optix {
             unsigned int compactedAvailable : 1;
         };
 
-        Impl(_Context* ctxt) : context(ctxt) {
-            compactedSizeOnDevice.initialize(CUDAHelper::BufferType::Device, 1, sizeof(size_t), 0);
-
-            std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
-            propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = compactedSizeOnDevice.getDevicePointer();
-
-            available = false;
-            compactedAvailable = false;
-        }
-        ~Impl() {
-            compactedSizeOnDevice.finalize();
-        }
-
-        OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
-
-        bool isReady() const {
-            return available || compactedAvailable;
-        }
-
-        OptixTraversableHandle getHandle() const {
-            optixAssert(isReady(), "Traversable handle is not ready.");
-            if (compactedAvailable)
-                return compactedHandle;
-            if (available)
-                return handle;
-            optixAssert_ShouldNotBeCalled();
-            return 0;
-        }
-
         void setupInstances() {
+            instanceBuffer.finalize();
+
             instanceBuffer.initialize(BufferType::Device, children.size(), sizeof(OptixInstance), 0);
             auto instancesD = (OptixInstance*)instanceBuffer.map();
 
@@ -397,12 +497,13 @@ namespace optix {
 
                 if (inst.type == InstanceType::GAS) {
                     if (!inst.gas->isReady())
-                        throw std::runtime_error("A GAS is not ready.");
+                        throw make_runtime_error("GAS %p is not ready.", inst.gas);
+
                     inst.rawInstance.traversableHandle = inst.gas->getHandle();
-                    inst.rawInstance.sbtOffset = sbtOffset * context->numRayTypes;
-                    uint32_t numSBTRecords = 0;
-                    inst.gas->calcNumSBTRecordsAndMaxSize(&numSBTRecords, nullptr);
-                    sbtOffset += numSBTRecords;
+                    inst.rawInstance.sbtOffset = sbtOffset * maxNumRayTypes;
+                    uint32_t cNumSBTRecords = 0;
+                    inst.gas->calcNumSBTRecords(&cNumSBTRecords);
+                    sbtOffset += cNumSBTRecords;
                 }
                 else {
                     optixAssert_NotImplemented();
@@ -422,23 +523,74 @@ namespace optix {
             instArray.numInstances = children.size();
         }
 
-        void calcNumSBTRecordsAndMaxSize(uint32_t* numSBTRecords, size_t* maxSize) const {
-            *numSBTRecords = 0;
-            *maxSize = 0;
+    public:
+        Impl(_Context* ctxt) : context(ctxt) {
+            compactedSizeOnDevice.initialize(BufferType::Device, 1, sizeof(size_t), 0);
+
+            std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
+            propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
+            propertyCompactedSize.result = compactedSizeOnDevice.getDevicePointer();
+
+            available = false;
+            compactedAvailable = false;
+        }
+        ~Impl() {
+            instanceBuffer.finalize();
+
+            compactedSizeOnDevice.finalize();
+        }
+
+        OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
+
+        bool isReady() const {
+            return available || compactedAvailable;
+        }
+
+        bool isReadyRecursive() const {
+            if (!isReady())
+                return false;
+
             for (int i = 0; i < children.size(); ++i) {
                 const _Instance &inst = children[i];
 
                 uint32_t cNumSBTRecords = 0;
                 size_t cMaxSize = 0;
                 if (inst.type == InstanceType::GAS) {
-                    inst.gas->calcNumSBTRecordsAndMaxSize(&cNumSBTRecords, &cMaxSize);
+                    if (!inst.gas->isReady())
+                        return false;
+                }
+                else {
+                    optixAssert_NotImplemented();
+                }
+            }
+
+            return true;
+        }
+
+        OptixTraversableHandle getHandle() const {
+            optixAssert(isReady(), "Traversable handle is not ready.");
+            if (compactedAvailable)
+                return compactedHandle;
+            if (available)
+                return handle;
+            optixAssert_ShouldNotBeCalled();
+            return 0;
+        }
+
+        void calcNumSBTRecords(uint32_t* numSBTRecords) const {
+            *numSBTRecords = 0;
+            for (int i = 0; i < children.size(); ++i) {
+                const _Instance &inst = children[i];
+
+                uint32_t cNumSBTRecords = 0;
+                if (inst.type == InstanceType::GAS) {
+                    inst.gas->calcNumSBTRecords(&cNumSBTRecords);
                 }
                 else {
                     optixAssert_NotImplemented();
                 }
 
                 *numSBTRecords += cNumSBTRecords;
-                *maxSize = std::max(*maxSize, cMaxSize);
             }
         }
 
@@ -460,48 +612,77 @@ namespace optix {
         OPTIX_CHECK(optixInit());
 
         Context ret;
-        ret.m_opaque = new _Context();
+        ret.m = new _Context();
         OptixDeviceContextOptions options = {};
         options.logCallbackFunction = &logCallBack;
         options.logCallbackLevel = 4;
-        OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &ret.m_opaque->rawContext));
+        OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &ret.m->rawContext));
 
         return ret;
     }
 
     void Context::destroy() {
-        delete m_opaque;
+        OPTIX_CHECK(optixDeviceContextDestroy(m->rawContext));
+        delete m;
+        m = nullptr;
     }
 
 
 
-    void Context::setNumRayTypes(uint32_t numRayTypes) const {
-        m_opaque->numRayTypes = numRayTypes;
-        m_opaque->missPrograms.resize(numRayTypes, nullptr);
+    Pipeline Context::createPipeline() const {
+        return (new _Pipeline(m))->getPublicType();
     }
 
-    void Context::setMaxTraceDepth(uint32_t maxTraceDepth) const {
-        m_opaque->maxTraceDepth = maxTraceDepth;
+    GeometryInstance Context::createGeometryInstance() const {
+        return (new _GeometryInstance(m))->getPublicType();
     }
 
-    void Context::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-                                     bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
+    GeometryAccelerationStructure Context::createGeometryAccelerationStructure() const {
+        return (new _GeometryAccelerationStructure(m))->getPublicType();
+    }
+
+    InstanceAccelerationStructure Context::createInstanceAccelerationStructure() const {
+        return (new _InstanceAccelerationStructure(m))->getPublicType();
+    }
+
+
+
+    void Pipeline::destroy() {
+        if (m->pipelineLinked)
+            OPTIX_CHECK(optixPipelineDestroy(m->rawPipeline));
+        delete m;
+        m = nullptr;
+    }
+
+
+
+    void Pipeline::setNumRayTypes(uint32_t numRayTypes) const {
+        m->numRayTypes = numRayTypes;
+        m->missPrograms.resize(numRayTypes, nullptr);
+    }
+
+    void Pipeline::setMaxTraceDepth(uint32_t maxTraceDepth) const {
+        m->maxTraceDepth = maxTraceDepth;
+    }
+
+    void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
+                                      bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
         // EN: Set a pipeline compile options common among modules in the pipeline and the pipeline itself.
-        std::memset(&m_opaque->pipelineCompileOptions, 0, sizeof(m_opaque->pipelineCompileOptions));
-        m_opaque->pipelineCompileOptions.numPayloadValues = numPayloadValues;
-        m_opaque->pipelineCompileOptions.numAttributeValues = numAttributeValues;
-        m_opaque->pipelineCompileOptions.pipelineLaunchParamsVariableName = launchParamsVariableName;
-        m_opaque->pipelineCompileOptions.usesMotionBlur = useMotionBlur;
-        m_opaque->pipelineCompileOptions.traversableGraphFlags = traversableGraphFlags;
-        m_opaque->pipelineCompileOptions.exceptionFlags = exceptionFlags;
+        std::memset(&m->pipelineCompileOptions, 0, sizeof(m->pipelineCompileOptions));
+        m->pipelineCompileOptions.numPayloadValues = numPayloadValues;
+        m->pipelineCompileOptions.numAttributeValues = numAttributeValues;
+        m->pipelineCompileOptions.pipelineLaunchParamsVariableName = launchParamsVariableName;
+        m->pipelineCompileOptions.usesMotionBlur = useMotionBlur;
+        m->pipelineCompileOptions.traversableGraphFlags = traversableGraphFlags;
+        m->pipelineCompileOptions.exceptionFlags = exceptionFlags;
 
-        m_opaque->sizeOfPipelineLaunchParams = sizeOfLaunchParams;
+        m->sizeOfPipelineLaunchParams = sizeOfLaunchParams;
     }
 
-    int32_t Context::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const {
-        int32_t moduleID = m_opaque->modules.size();
 
+
+    Module Pipeline::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const {
         OptixModuleCompileOptions moduleCompileOptions = {};
         moduleCompileOptions.maxRegisterCount = maxRegisterCount;
         moduleCompileOptions.optLevel = optLevel;
@@ -511,463 +692,530 @@ namespace optix {
 
         char log[4096];
         size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixModuleCreateFromPTX(m_opaque->rawContext,
+        OPTIX_CHECK_LOG(optixModuleCreateFromPTX(m->context->getRawContext(),
                                                  &moduleCompileOptions,
-                                                 &m_opaque->pipelineCompileOptions,
+                                                 &m->pipelineCompileOptions,
                                                  ptxString.c_str(), ptxString.size(),
                                                  log, &logSize,
                                                  &module));
 
-        if (module)
-            m_opaque->modules.push_back(module);
-        else
-            moduleID = -1;
-
-        return moduleID;
+        return (new _Module(m, module))->getPublicType();
     }
 
-    ProgramGroup Context::createRayGenProgram(int32_t moduleID, const char* entryFunctionName) const {
-        OptixProgramGroup group;
+    void Pipeline::destroyModule(Module module) const {
+        auto _module = _Module::extract(module);
+        OPTIX_CHECK(optixModuleDestroy(_module->getRawModule()));
+        delete _module;
+    }
 
-        OptixProgramGroupOptions options = {};
+
+
+    ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
+        auto _module = _Module::extract(module);
+        if (_module->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
-        desc.raygen.module = m_opaque->modules[moduleID];
+        desc.raygen.module = _module->getRawModule();
         desc.raygen.entryFunctionName = entryFunctionName;
 
-        char log[4096];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixProgramGroupCreate(m_opaque->rawContext,
-                                                &desc, 1, // num program groups
-                                                &options,
-                                                log, &logSize,
-                                                &group));
+        OptixProgramGroupOptions options = {};
 
-        m_opaque->programGroups.push_back(group);
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
 
-        return (new _ProgramGroup(group))->getPublicType();
+        return (new _ProgramGroup(m, group))->getPublicType();
     }
 
-    ProgramGroup Context::createExceptionProgram(int32_t moduleID, const char* entryFunctionName) const {
-        OptixProgramGroup group;
-
-        OptixProgramGroupOptions options = {};
+    ProgramGroup Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
+        auto _module = _Module::extract(module);
+        if (_module->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
-        desc.exception.module = m_opaque->modules[moduleID];
+        desc.exception.module = _module->getRawModule();
         desc.exception.entryFunctionName = entryFunctionName;
 
-        char log[4096];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixProgramGroupCreate(m_opaque->rawContext,
-                                                &desc, 1, // num program groups
-                                                &options,
-                                                log, &logSize,
-                                                &group));
+        OptixProgramGroupOptions options = {};
 
-        m_opaque->programGroups.push_back(group);
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
 
-        return (new _ProgramGroup(group))->getPublicType();
+        return (new _ProgramGroup(m, group))->getPublicType();
     }
 
-    ProgramGroup Context::createMissProgram(int32_t moduleID, const char* entryFunctionName) const {
-        OptixProgramGroup group;
-
-        OptixProgramGroupOptions options = {};
+    ProgramGroup Pipeline::createMissProgram(Module module, const char* entryFunctionName) const {
+        auto _module = _Module::extract(module);
+        if (_module && _module->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-        desc.miss.module = m_opaque->modules[moduleID];
+        if (_module)
+            desc.miss.module = _module->getRawModule();
         desc.miss.entryFunctionName = entryFunctionName;
 
-        char log[4096];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixProgramGroupCreate(m_opaque->rawContext,
-                                                &desc, 1, // num program groups
-                                                &options,
-                                                log, &logSize,
-                                                &group));
+        OptixProgramGroupOptions options = {};
 
-        m_opaque->programGroups.push_back(group);
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
 
-        return (new _ProgramGroup(group))->getPublicType();
+        return (new _ProgramGroup(m, group))->getPublicType();
     }
 
-    ProgramGroup Context::createHitProgramGroup(int32_t moduleID_CH, const char* entryFunctionNameCH,
-                                                int32_t moduleID_AH, const char* entryFunctionNameAH,
-                                                int32_t moduleID_IS, const char* entryFunctionNameIS) const {
-        OptixProgramGroup group;
+    ProgramGroup Pipeline::createHitProgramGroup(Module module_CH, const char* entryFunctionNameCH,
+                                                 Module module_AH, const char* entryFunctionNameAH,
+                                                 Module module_IS, const char* entryFunctionNameIS) const {
+        auto _module_CH = _Module::extract(module_CH);
+        auto _module_AH = _Module::extract(module_AH);
+        auto _module_IS = _Module::extract(module_IS);
+        if (entryFunctionNameCH && _module_CH && _module_CH->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given CH module.");
+        if (entryFunctionNameAH && _module_AH && _module_AH->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given AH module.");
+        if (entryFunctionNameIS && _module_IS && _module_IS->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given IS module.");
 
-        OptixProgramGroupOptions options = {};
+        if (entryFunctionNameCH == nullptr &&
+            entryFunctionNameAH == nullptr &&
+            entryFunctionNameIS == nullptr)
+            throw make_runtime_error("Either of CH/AH/IS entry function name should be provided.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        if (entryFunctionNameCH)
-            desc.hitgroup.moduleCH = m_opaque->modules[moduleID_CH];
-        desc.hitgroup.entryFunctionNameCH = entryFunctionNameCH;
-        if (entryFunctionNameAH)
-            desc.hitgroup.moduleAH = m_opaque->modules[moduleID_AH];
-        desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
-        if (entryFunctionNameIS)
-            desc.hitgroup.moduleIS = m_opaque->modules[moduleID_IS];
-        desc.hitgroup.entryFunctionNameIS = entryFunctionNameIS;
-
-        char log[4096];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixProgramGroupCreate(m_opaque->rawContext,
-                                                &desc, 1, // num program groups
-                                                &options,
-                                                log, &logSize,
-                                                &group));
-
-        m_opaque->programGroups.push_back(group);
-
-        return (new _ProgramGroup(group))->getPublicType();
-    }
-
-    ProgramGroup Context::createCallableGroup(int32_t moduleID_DC, const char* entryFunctionNameDC,
-                                              int32_t moduleID_CC, const char* entryFunctionNameCC) const {
-        OptixProgramGroup group;
+        if (entryFunctionNameCH && _module_CH) {
+            desc.hitgroup.moduleCH = _module_CH->getRawModule();
+            desc.hitgroup.entryFunctionNameCH = entryFunctionNameCH;
+        }
+        if (entryFunctionNameAH && _module_AH) {
+            desc.hitgroup.moduleAH = _module_AH->getRawModule();
+            desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
+        }
+        if (entryFunctionNameIS && _module_IS) {
+            desc.hitgroup.moduleIS = _module_IS->getRawModule();
+            desc.hitgroup.entryFunctionNameIS = entryFunctionNameIS;
+        }
 
         OptixProgramGroupOptions options = {};
 
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
+
+        return (new _ProgramGroup(m, group))->getPublicType();
+    }
+
+    ProgramGroup Pipeline::createCallableGroup(Module module_DC, const char* entryFunctionNameDC,
+                                               Module module_CC, const char* entryFunctionNameCC) const {
+        auto _module_DC = _Module::extract(module_DC);
+        auto _module_CC = _Module::extract(module_CC);
+        if (entryFunctionNameDC && _module_DC && _module_DC->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given DC module.");
+        if (entryFunctionNameCC && _module_CC && _module_CC->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given CC module.");
+
+        if (entryFunctionNameDC == nullptr && entryFunctionNameCC == nullptr)
+            throw make_runtime_error("Either of CC/DC entry function name should be provided.");
+
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-        desc.callables.moduleDC = m_opaque->modules[moduleID_DC];
-        desc.callables.entryFunctionNameDC = entryFunctionNameDC;
-        desc.callables.moduleCC = m_opaque->modules[moduleID_CC];
-        desc.callables.entryFunctionNameCC = entryFunctionNameCC;
+        if (entryFunctionNameDC && _module_DC) {
+            desc.callables.moduleDC = _module_DC->getRawModule();
+            desc.callables.entryFunctionNameDC = entryFunctionNameDC;
+        }
+        if (entryFunctionNameCC && _module_CC) {
+            desc.callables.moduleCC = _module_CC->getRawModule();
+            desc.callables.entryFunctionNameCC = entryFunctionNameCC;
+        }
 
-        char log[4096];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixProgramGroupCreate(m_opaque->rawContext,
-                                                &desc, 1, // num program groups
-                                                &options,
-                                                log, &logSize,
-                                                &group));
+        OptixProgramGroupOptions options = {};
 
-        m_opaque->programGroups.push_back(group);
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
 
-        return (new _ProgramGroup(group))->getPublicType();
+        return (new _ProgramGroup(m, group))->getPublicType();
     }
 
-    void Context::setRayGenerationProgram(ProgramGroup rayGen) const {
-        m_opaque->rayGenProgram = _ProgramGroup::extract(rayGen);
+    void Pipeline::destroyProgramGroup(ProgramGroup program) const {
+        auto _program = _ProgramGroup::extract(program);
+        m->destroyProgram(_program->getRawProgramGroup());
+        delete _program;
     }
 
-    void Context::setExceptionProgram(ProgramGroup exception) const {
-        m_opaque->exceptionProgram = _ProgramGroup::extract(exception);
 
-    }
 
-    void Context::setMissProgram(uint32_t rayType, ProgramGroup miss) const {
-        optixAssert(rayType < m_opaque->numRayTypes, "Invalid ray type.");
-        m_opaque->missPrograms[rayType] = _ProgramGroup::extract(miss);
-    }
+    void Pipeline::link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const {
+        if (m->pipelineLinked)
+            throw make_runtime_error("This pipeline has been already linked.");
 
-    void Context::linkPipeline(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const {
-        if (!m_opaque->pipelineLinked) {
+        if (!m->pipelineLinked) {
             OptixPipelineLinkOptions pipelineLinkOptions = {};
-            pipelineLinkOptions.maxTraceDepth = m_opaque->maxTraceDepth;
+            pipelineLinkOptions.maxTraceDepth = m->maxTraceDepth;
             pipelineLinkOptions.debugLevel = debugLevel;
             pipelineLinkOptions.overrideUsesMotionBlur = overrideUseMotionBlur;
 
+            std::vector<OptixProgramGroup> groups;
+            groups.resize(m->programGroups.size());
+            std::copy(m->programGroups.cbegin(), m->programGroups.cend(), groups.begin());
+
             char log[4096];
             size_t logSize = sizeof(log);
-            OPTIX_CHECK_LOG(optixPipelineCreate(m_opaque->rawContext,
-                                                &m_opaque->pipelineCompileOptions,
+            OPTIX_CHECK_LOG(optixPipelineCreate(m->context->getRawContext(),
+                                                &m->pipelineCompileOptions,
                                                 &pipelineLinkOptions,
-                                                m_opaque->programGroups.data(), m_opaque->programGroups.size(),
+                                                groups.data(), groups.size(),
                                                 log, &logSize,
-                                                &m_opaque->pipeline));
+                                                &m->rawPipeline));
 
-            m_opaque->pipelineLinked = true;
+            m->pipelineLinked = true;
+
+
+
+            m->rayGenRecord.initialize(BufferType::Device, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            m->missRecords.initialize(BufferType::Device, m->numRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
         }
     }
 
-    GeometryInstance Context::createGeometryInstance() const {
-        return (new _GeometryInstance(m_opaque))->getPublicType();
+
+
+    void Pipeline::setRayGenerationProgram(ProgramGroup program) const {
+        auto _program = _ProgramGroup::extract(program);
+        if (_program == nullptr)
+            throw make_runtime_error("Invalid program %p.", _program);
+        if (_program->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given program (group).");
+
+        m->rayGenProgram = _program;
     }
 
-    GeometryAccelerationStructure Context::createGeometryAccelerationStructure() const {
-        return (new _GeometryAccelerationStructure(m_opaque))->getPublicType();
+    void Pipeline::setExceptionProgram(ProgramGroup program) const {
+        auto _program = _ProgramGroup::extract(program);
+        if (_program == nullptr)
+            throw make_runtime_error("Invalid program %p.", _program);
+        if (_program->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given program (group).");
+
+        m->exceptionProgram = _program;
     }
 
-    InstanceAccelerationStructure Context::createInstanceAccelerationStructure() const {
-        return (new _InstanceAccelerationStructure(m_opaque))->getPublicType();
+    void Pipeline::setMissProgram(uint32_t rayType, ProgramGroup program) const {
+        auto _program = _ProgramGroup::extract(program);
+        if (rayType >= m->numRayTypes)
+            throw make_runtime_error("Invalid ray type.");
+        if (_program == nullptr)
+            throw make_runtime_error("Invalid program %p.", _program);
+        if (_program->getPipeline() != m)
+            throw make_runtime_error("Pipeline mismatch for the given program (group).");
+
+        m->missPrograms[rayType] = _program;
     }
 
-    void Context::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) {
+    void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) {
+        m->setupShaderBindingTable();
 
-    }
-
-
-
-    void ProgramGroup::destroy() {
-        optixProgramGroupDestroy(m_opaque->rawGroup);
-        delete m_opaque;
+        OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
+                                &m->sbt, dimX, dimY, dimZ));
     }
 
 
 
     void GeometryInstance::destroy() {
-        delete m_opaque;
+        for (auto &it : m->perPipelineInfos) {
+            if (it.second.hitGroupData)
+                delete[] it.second.hitGroupData;
+        }
+        delete m;
+        m = nullptr;
     }
     
     void GeometryInstance::setVertexBuffer(Buffer* vertexBuffer) const {
-        m_opaque->vertexBuffer = vertexBuffer;
-        m_opaque->vertexBufferArray[0] = vertexBuffer->getDevicePointer();
+        m->vertexBuffer = vertexBuffer;
+        m->vertexBufferArray[0] = vertexBuffer->getDevicePointer();
     }
 
     void GeometryInstance::setTriangleBuffer(Buffer* triangleBuffer) const {
-        m_opaque->triangleBuffer = triangleBuffer;
+        m->triangleBuffer = triangleBuffer;
     }
 
-    void GeometryInstance::setNumHitGroups(uint32_t num) const {
-        m_opaque->hitGroupSets.resize(num);
-        for (int i = 0; i < num; ++i)
-            m_opaque->hitGroupSets[i].resize(m_opaque->context->numRayTypes);
-        m_opaque->buildInputFlags.resize(num, OPTIX_GEOMETRY_FLAG_NONE);
+    void GeometryInstance::setNumHitGroups(uint32_t numHitGroups) const {
+        if (m->buildInputFlags.size() != 0)
+            throw make_runtime_error("Number of hit groups has been already set.");
+
+        m->buildInputFlags.resize(numHitGroups, OPTIX_GEOMETRY_FLAG_NONE);
     }
 
-    void GeometryInstance::setGeometryFlags(uint32_t idx, OptixGeometryFlags flags) const {
-        optixAssert(idx < m_opaque->buildInputFlags.size(), "Out of bounds.");
-        m_opaque->buildInputFlags[idx] = flags;
+    void GeometryInstance::setGeometryFlags(uint32_t hitGroupIdx, OptixGeometryFlags flags) const {
+        size_t numHitGroups = m->buildInputFlags.size();
+        if (hitGroupIdx >= numHitGroups)
+            throw make_runtime_error("Out of hit group bounds [0, %u).", (uint32_t)numHitGroups);
+
+        m->buildInputFlags[hitGroupIdx] = flags;
     }
 
-    void GeometryInstance::setHitGroup(uint32_t idx, uint32_t rayType, const ProgramGroup &hitGroup,
+    void GeometryInstance::setHitGroup(Pipeline pipeline, uint32_t hitGroupIdx, uint32_t rayType, const ProgramGroup &hitGroup,
                                        const void* sbtRecordData, size_t size) const {
-        optixAssert(idx < m_opaque->hitGroupSets.size(), "Out of bounds.");
-        optixAssert(rayType < m_opaque->context->numRayTypes, "Invalid ray type.");
-        m_opaque->hitGroupSets[idx][rayType] = HitGroupSet(_ProgramGroup::extract(hitGroup), sbtRecordData, size);
+        const auto _pipeline = _Pipeline::extract(pipeline);
+        if (_pipeline == nullptr)
+            throw make_runtime_error("Invalid pipeline.");
+
+        bool isNewPipeline = m->perPipelineInfos.count(_pipeline) == 0;
+
+        _GeometryInstance::PerPipelineInfo &info = m->perPipelineInfos[_pipeline];
+        size_t numHitGroups = m->buildInputFlags.size();
+        if (hitGroupIdx >= numHitGroups)
+            throw make_runtime_error("Out of hit group bounds [0, %u).", (uint32_t)numHitGroups);
+        uint32_t numRayTypes = _pipeline->getNumRayTypes();
+        if (rayType >= numRayTypes)
+            throw make_runtime_error("Invalid ray type.");
+
+        if (isNewPipeline)
+            info.hitGroupData = new _GeometryInstance::HitGroupData[numHitGroups * numRayTypes];
+        info.hitGroupData[hitGroupIdx * numRayTypes + rayType] = _GeometryInstance::HitGroupData(_ProgramGroup::extract(hitGroup), sbtRecordData, size);
     }
 
 
 
     void GeometryAccelerationStructure::destroy() {
-        delete m_opaque;
+        m->accelBuffer.finalize();
+        m->accelTempBuffer.finalize();
+
+        delete m;
+        m = nullptr;
     }
 
     void GeometryAccelerationStructure::addChild(const GeometryInstance &geomInst) const {
         auto _geomInst = _GeometryInstance::extract(geomInst);
-        m_opaque->children.push_back(_geomInst);
-        // JP: この段階では値を設定しないでおく。
-        m_opaque->buildInputs.push_back(OptixBuildInput{});
+        if (_geomInst == nullptr)
+            throw make_runtime_error("Invalid geometry instance %p.", _geomInst);
+
+        m->children.push_back(_geomInst);
     }
     
     void GeometryAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const {
-        m_opaque->fillBuildInputs();
+        m->fillBuildInputs();
 
-        if (!m_opaque->available) {
-            std::memset(&m_opaque->buildOptions, 0, sizeof(m_opaque->buildOptions));
-            m_opaque->buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
-                                                 (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                                 (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+        {
+            m->accelBuffer.finalize();
+            m->accelTempBuffer.finalize();
+
+            std::memset(&m->buildOptions, 0, sizeof(m->buildOptions));
+            m->buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
+                                          (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                          (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
             //buildOptions.motionOptions
 
             OptixAccelBufferSizes bufferSizes;
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(m_opaque->context->getRawContext(), &m_opaque->buildOptions,
-                                                     m_opaque->buildInputs.data(), m_opaque->buildInputs.size(),
+            OPTIX_CHECK(optixAccelComputeMemoryUsage(m->context->getRawContext(), &m->buildOptions,
+                                                     m->buildInputs.data(), m->buildInputs.size(),
                                                      &bufferSizes));
 
-            m_opaque->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m_opaque->accelTempBuffer.initialize(CUDAHelper::BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+            m->accelBufferSize = bufferSizes.outputSizeInBytes;
+            m->accelTempBuffer.initialize(BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
 
-            m_opaque->accelBuffer.initialize(CUDAHelper::BufferType::Device, m_opaque->accelBufferSize, 1, 0);
+            m->accelBuffer.initialize(BufferType::Device, m->accelBufferSize, 1, 0);
         }
 
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
-        m_opaque->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
-        OPTIX_CHECK(optixAccelBuild(m_opaque->context->getRawContext(), stream,
-                                    &m_opaque->buildOptions, m_opaque->buildInputs.data(), m_opaque->buildInputs.size(),
-                                    m_opaque->accelTempBuffer.getDevicePointer(), m_opaque->accelTempBuffer.size(),
-                                    m_opaque->accelBuffer.getDevicePointer(), m_opaque->accelBuffer.size(),
-                                    &m_opaque->handle,
-                                    compactionEnabled ? &m_opaque->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        OPTIX_CHECK(optixAccelBuild(m->context->getRawContext(), stream,
+                                    &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
+                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.size(),
+                                    &m->handle,
+                                    compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
-        m_opaque->available = true;
-        m_opaque->compactedHandle = 0;
-        m_opaque->compactedAvailable = false;
+        m->available = true;
+        m->compactedHandle = 0;
+        m->compactedAvailable = false;
     }
 
     void GeometryAccelerationStructure::compaction(CUstream rebuildOrUpdateStream, CUstream stream) const {
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
-        if (!m_opaque->available || m_opaque->compactedAvailable || !compactionEnabled)
+        if (!m->available || m->compactedAvailable || !compactionEnabled)
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
         CUDA_CHECK(cudaStreamSynchronize(rebuildOrUpdateStream));
-        CUDA_CHECK(cudaMemcpy(&m_opaque->compactedSize, (void*)m_opaque->propertyCompactedSize.result, sizeof(m_opaque->compactedSize), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost));
         // JP: 以下になるべき？
-        // CUDA_CHECK(cudaMemcpyAsync(&m_opaque->compactedSize, (void*)m_opaque->propertyCompactedSize.result, sizeof(m_opaque->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
+        // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
-        if (m_opaque->compactedSize < m_opaque->accelBuffer.size()) {
-            m_opaque->compactedAccelBuffer.initialize(CUDAHelper::BufferType::Device, m_opaque->compactedSize, 1, 0);
+        if (m->compactedSize < m->accelBuffer.size()) {
+            m->compactedAccelBuffer.initialize(BufferType::Device, m->compactedSize, 1, 0);
 
-            OPTIX_CHECK(optixAccelCompact(m_opaque->context->getRawContext(), stream,
-                                          m_opaque->handle, m_opaque->compactedAccelBuffer.getDevicePointer(), m_opaque->compactedAccelBuffer.size(),
-                                          &m_opaque->compactedHandle));
+            OPTIX_CHECK(optixAccelCompact(m->context->getRawContext(), stream,
+                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.size(),
+                                          &m->compactedHandle));
 
-            m_opaque->compactedAvailable = true;
+            m->compactedAvailable = true;
         }
     }
 
     void GeometryAccelerationStructure::removeUncompacted(CUstream compactionStream) const {
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
-        if (!m_opaque->compactedAvailable || !compactionEnabled)
+        if (!m->compactedAvailable || !compactionEnabled)
             return;
 
         // JP: コンパクションの完了を待ってバッファーを解放。
         CUDA_CHECK(cudaStreamSynchronize(compactionStream));
-        m_opaque->accelBuffer.finalize();
+        m->accelBuffer.finalize();
 
-        m_opaque->handle = 0;
-        m_opaque->available = false;
+        m->handle = 0;
+        m->available = false;
     }
 
     void GeometryAccelerationStructure::update(CUstream stream) const {
-        bool updateEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+        bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
 
         // Should this be an assert?
-        if ((!m_opaque->available && !m_opaque->compactedAvailable) || !updateEnabled)
+        if ((!m->available && !m->compactedAvailable) || !updateEnabled)
             return;
 
-        const CUDAHelper::Buffer &accelBuffer = m_opaque->compactedAvailable ? m_opaque->compactedAccelBuffer : m_opaque->accelBuffer;
-        OptixTraversableHandle &handle = m_opaque->compactedAvailable ? m_opaque->compactedHandle : m_opaque->handle;
+        const Buffer &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
+        OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;
 
-        m_opaque->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
-        OPTIX_CHECK(optixAccelBuild(m_opaque->context->getRawContext(), stream,
-                                    &m_opaque->buildOptions, m_opaque->buildInputs.data(), m_opaque->buildInputs.size(),
-                                    m_opaque->accelTempBuffer.getDevicePointer(), m_opaque->accelTempBuffer.size(),
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
+        OPTIX_CHECK(optixAccelBuild(m->context->getRawContext(), stream,
+                                    &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
                                     accelBuffer.getDevicePointer(), accelBuffer.size(),
                                     &handle,
                                     nullptr, 0));
     }
 
     bool GeometryAccelerationStructure::isReady() const {
-        return m_opaque->isReady();
+        return m->isReady();
     }
 
     OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
-        return m_opaque->getHandle();
+        return m->getHandle();
     }
 
 
 
     void InstanceAccelerationStructure::destroy() {
-        delete m_opaque;
+        m->accelBuffer.finalize();
+        m->accelTempBuffer.finalize();
+
+        delete m;
+        m = nullptr;
     }
 
     void InstanceAccelerationStructure::addChild(const GeometryAccelerationStructure &gas, const float instantTransform[12]) const {
         auto _gas = _GeometryAccelerationStructure::extract(gas);
+        if (_gas == nullptr)
+            throw make_runtime_error("Invalid GAS %p.", _gas);
 
-        _Instance inst = _Instance(_GeometryAccelerationStructure::extract(gas), instantTransform);
+        _Instance inst = _Instance(_gas, instantTransform);
 
-        m_opaque->children.push_back(inst);
+        m->children.push_back(inst);
     }
 
-    void InstanceAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const {
-        m_opaque->setupInstances();
-        m_opaque->fillBuildInput();
+    void InstanceAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, uint32_t maxNumRayTypes, CUstream stream) const {
+        m->maxNumRayTypes = maxNumRayTypes;
+        m->setupInstances();
+        m->fillBuildInput();
 
-        if (!m_opaque->available) {
-            std::memset(&m_opaque->buildOptions, 0, sizeof(m_opaque->buildOptions));
-            m_opaque->buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
-                                                 (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                                 (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+        {
+            m->accelBuffer.finalize();
+            m->accelTempBuffer.finalize();
+
+            std::memset(&m->buildOptions, 0, sizeof(m->buildOptions));
+            m->buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
+                                          (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                          (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
             //buildOptions.motionOptions
 
             OptixAccelBufferSizes bufferSizes;
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(m_opaque->context->getRawContext(), &m_opaque->buildOptions,
-                                                     &m_opaque->buildInput, 1,
+            OPTIX_CHECK(optixAccelComputeMemoryUsage(m->context->getRawContext(), &m->buildOptions,
+                                                     &m->buildInput, 1,
                                                      &bufferSizes));
 
-            m_opaque->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m_opaque->accelTempBuffer.initialize(CUDAHelper::BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+            m->accelBufferSize = bufferSizes.outputSizeInBytes;
+            m->accelTempBuffer.initialize(BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
 
-            m_opaque->accelBuffer.initialize(CUDAHelper::BufferType::Device, m_opaque->accelBufferSize, 1, 0);
+            m->accelBuffer.initialize(BufferType::Device, m->accelBufferSize, 1, 0);
         }
 
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
-        m_opaque->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
-        OPTIX_CHECK(optixAccelBuild(m_opaque->context->getRawContext(), stream, &m_opaque->buildOptions, &m_opaque->buildInput, 1,
-                                    m_opaque->accelTempBuffer.getDevicePointer(), m_opaque->accelTempBuffer.size(),
-                                    m_opaque->accelBuffer.getDevicePointer(), m_opaque->accelBuffer.size(),
-                                    &m_opaque->handle,
-                                    compactionEnabled ? &m_opaque->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        OPTIX_CHECK(optixAccelBuild(m->context->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
+                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.size(),
+                                    &m->handle,
+                                    compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
-        m_opaque->available = true;
-        m_opaque->compactedHandle = 0;
-        m_opaque->compactedAvailable = false;
+        m->available = true;
+        m->compactedHandle = 0;
+        m->compactedAvailable = false;
     }
 
     void InstanceAccelerationStructure::compaction(CUstream rebuildOrUpdateStream, CUstream stream) const {
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
-        if (!m_opaque->available || m_opaque->compactedAvailable || !compactionEnabled)
+        if (!m->available || m->compactedAvailable || !compactionEnabled)
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
         CUDA_CHECK(cudaStreamSynchronize(rebuildOrUpdateStream));
-        CUDA_CHECK(cudaMemcpy(&m_opaque->compactedSize, (void*)m_opaque->propertyCompactedSize.result, sizeof(m_opaque->compactedSize), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost));
         // JP: 以下になるべき？
-        // CUDA_CHECK(cudaMemcpyAsync(&m_opaque->compactedSize, (void*)m_opaque->propertyCompactedSize.result, sizeof(m_opaque->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
+        // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
-        if (m_opaque->compactedSize < m_opaque->accelBuffer.size()) {
-            m_opaque->compactedAccelBuffer.initialize(CUDAHelper::BufferType::Device, m_opaque->compactedSize, 1, 0);
+        if (m->compactedSize < m->accelBuffer.size()) {
+            m->compactedAccelBuffer.initialize(BufferType::Device, m->compactedSize, 1, 0);
 
-            OPTIX_CHECK(optixAccelCompact(m_opaque->context->getRawContext(), stream,
-                                          m_opaque->handle, m_opaque->compactedAccelBuffer.getDevicePointer(), m_opaque->compactedAccelBuffer.size(),
-                                          &m_opaque->compactedHandle));
+            OPTIX_CHECK(optixAccelCompact(m->context->getRawContext(), stream,
+                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.size(),
+                                          &m->compactedHandle));
 
-            m_opaque->compactedAvailable = true;
+            m->compactedAvailable = true;
         }
     }
 
     void InstanceAccelerationStructure::removeUncompacted(CUstream compactionStream) const {
-        bool compactionEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
-        if (!m_opaque->compactedAvailable || !compactionEnabled)
+        if (!m->compactedAvailable || !compactionEnabled)
             return;
 
         // JP: コンパクションの完了を待ってバッファーを解放。
         CUDA_CHECK(cudaStreamSynchronize(compactionStream));
-        m_opaque->accelBuffer.finalize();
+        m->accelBuffer.finalize();
 
-        m_opaque->handle = 0;
-        m_opaque->available = false;
+        m->handle = 0;
+        m->available = false;
     }
 
     void InstanceAccelerationStructure::update(CUstream stream) const {
-        bool updateEnabled = (m_opaque->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+        bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
 
         // Should this be an assert?
-        if ((!m_opaque->available && !m_opaque->compactedAvailable) || !updateEnabled)
+        if ((!m->available && !m->compactedAvailable) || !updateEnabled)
             return;
 
-        const CUDAHelper::Buffer &accelBuffer = m_opaque->compactedAvailable ? m_opaque->compactedAccelBuffer : m_opaque->accelBuffer;
-        OptixTraversableHandle &handle = m_opaque->compactedAvailable ? m_opaque->compactedHandle : m_opaque->handle;
+        const Buffer &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
+        OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;
 
-        m_opaque->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
-        OPTIX_CHECK(optixAccelBuild(m_opaque->context->getRawContext(), stream,
-                                    &m_opaque->buildOptions, &m_opaque->buildInput, 1,
-                                    m_opaque->accelTempBuffer.getDevicePointer(), m_opaque->accelTempBuffer.size(),
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
+        OPTIX_CHECK(optixAccelBuild(m->context->getRawContext(), stream,
+                                    &m->buildOptions, &m->buildInput, 1,
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
                                     accelBuffer.getDevicePointer(), accelBuffer.size(),
                                     &handle,
                                     nullptr, 0));
     }
 
     bool InstanceAccelerationStructure::isReady() const {
-        return m_opaque->isReady();
+        return m->isReady();
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {
-        return m_opaque->getHandle();
+        return m->getHandle();
     }
 }

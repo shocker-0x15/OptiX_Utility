@@ -111,6 +111,7 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 
+optix::Pipeline pipeline;
 optix::ProgramGroup searchRayHitProgramGroup;
 optix::ProgramGroup visibilityRayHitProgramGroup;
 
@@ -163,8 +164,8 @@ public:
         geomInst.setVertexBuffer(&m_vertexBuffer);
         geomInst.setTriangleBuffer(triangleBuffer);
         geomInst.setNumHitGroups(1);
-        geomInst.setHitGroup(0, Shared::RayType_Search, searchRayHitProgramGroup, recordData);
-        geomInst.setHitGroup(0, Shared::RayType_Visibility, visibilityRayHitProgramGroup, recordData);
+        geomInst.setHitGroup(pipeline, 0, Shared::RayType_Search, searchRayHitProgramGroup, recordData);
+        geomInst.setHitGroup(pipeline, 0, Shared::RayType_Visibility, visibilityRayHitProgramGroup, recordData);
 
         group.geometryInstance = geomInst;
     }
@@ -345,27 +346,33 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     
     optix::Context optixContext = optix::Context::create();
 
-    optixContext.setPipelineOptions(3, 0, "plp", sizeof(Shared::PipelineLaunchParameters),
-                                    false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                                    OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH);
+    optix::Pipeline pipeline = optixContext.createPipeline();
+
+    pipeline.setPipelineOptions(3, 0, "plp", sizeof(Shared::PipelineLaunchParameters),
+                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernel.ptx");
-    int32_t moduleID = optixContext.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+    optix::Module module = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
                                                               OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 
-    optix::ProgramGroup rayGenProgram = optixContext.createRayGenProgram(moduleID, "__raygen__fill");
-    optix::ProgramGroup searchRayMissProgram = optixContext.createMissProgram(moduleID, "__miss__searchRay");
+    optix::Module emptyModule;
 
-    searchRayHitProgramGroup = optixContext.createHitProgramGroup(moduleID, "__closesthit__shading", 0, nullptr, 0, nullptr);
-    visibilityRayHitProgramGroup = optixContext.createHitProgramGroup(0, nullptr, moduleID, "__anyhit__visibility", 0, nullptr);
+    optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, "__raygen__fill");
+    optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(module, "__miss__searchRay");
+    optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optixContext.setNumRayTypes(Shared::NumRayTypes);
-    optixContext.setMaxTraceDepth(2);
+    searchRayHitProgramGroup = pipeline.createHitProgramGroup(module, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
+    visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, module, "__anyhit__visibility", emptyModule, nullptr);
 
-    optixContext.linkPipeline(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
+    pipeline.setNumRayTypes(Shared::NumRayTypes);
+    pipeline.setMaxTraceDepth(2);
 
-    optixContext.setRayGenerationProgram(rayGenProgram);
-    optixContext.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
+    pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
+
+    pipeline.setRayGenerationProgram(rayGenProgram);
+    pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
+    pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -490,7 +497,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     iasScene.addChild(gasAreaLight, tfAreaLight);
 
-    iasScene.rebuild(false, true, true, stream);
+    uint32_t maxNumRayTypes = Shared::NumRayTypes;
+    iasScene.rebuild(false, true, true, maxNumRayTypes, stream);
     iasScene.compaction(stream, stream);
     iasScene.removeUncompacted(stream);
 
@@ -509,7 +517,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUDAHelper::Buffer outputBufferCUDA;
     outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
     outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-    outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX, renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+    outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
 
     
@@ -584,7 +592,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             outputBufferGL.finalize();
             outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
             outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-            outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX, renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+            outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
@@ -602,8 +610,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         plp.outputBuffer = (float4*)outputBufferCUDA.beginCUDAAccess(stream);
 
         CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
-        optixContext.launch(stream, plpOnDevice,
-                            renderTargetSizeX, renderTargetSizeY, 1);
+        pipeline.launch(stream, plpOnDevice,
+                        renderTargetSizeX, renderTargetSizeY, 1);
 
         outputBufferCUDA.endCUDAAccess(stream);
 
@@ -706,11 +714,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //meshLight.finalize();
     //meshCornellBox.finalize();
 
-    visibilityRayHitProgramGroup.destroy();
-    searchRayHitProgramGroup.destroy();
+    pipeline.destroy();
 
-    searchRayMissProgram.destroy();
-    rayGenProgram.destroy();
+    pipeline.destroyProgramGroup(visibilityRayHitProgramGroup);
+    pipeline.destroyProgramGroup(searchRayHitProgramGroup);
+
+    pipeline.destroyProgramGroup(visibilityRayMissProgram);
+    pipeline.destroyProgramGroup(searchRayMissProgram);
+    pipeline.destroyProgramGroup(rayGenProgram);
 
     optixContext.destroy();
 
