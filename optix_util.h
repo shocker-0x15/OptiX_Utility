@@ -140,7 +140,7 @@ private: \
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
 
-        void generateSBTOffsets() const;
+        void generateSBTLayout() const;
     };
 
 

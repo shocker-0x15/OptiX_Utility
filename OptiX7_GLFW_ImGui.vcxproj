@@ -137,7 +137,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <ClCompile Include="ext\imgui\imgui_impl_opengl3.cpp" />
     <ClCompile Include="ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="optix_wrapper.cpp">
+    <ClCompile Include="optix_util.cpp">
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819</DisableSpecificWarnings>
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819</DisableSpecificWarnings>
     </ClCompile>
@@ -157,8 +157,8 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <ClInclude Include="ext\imgui\imstb_textedit.h" />
     <ClInclude Include="ext\imgui\imstb_truetype.h" />
     <ClInclude Include="GLToolkit.h" />
-    <ClInclude Include="optix_wrapper.h" />
-    <ClInclude Include="optix_wrapper_private.h" />
+    <ClInclude Include="optix_util.h" />
+    <ClInclude Include="optix_util_private.h" />
     <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>

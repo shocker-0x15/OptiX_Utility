@@ -1,4 +1,4 @@
-#include "optix_wrapper_private.h"
+#include "optix_util_private.h"
 
 namespace optix {
     void devPrintf(const char* fmt, ...) {
@@ -126,7 +126,7 @@ namespace optix {
         return _instAS->getPublicType();
     }
 
-    void Scene::generateSBTOffsets() const {
+    void Scene::generateSBTLayout() const {
         uint32_t sbtOffset = 0;
         m->sbtOffsets.clear();
         for (auto gas : m->geomASs) {
@@ -468,7 +468,7 @@ namespace optix {
 
     void InstanceAccelerationStructure::Priv::setupInstances() {
         if (!scene->sbtOffsetsGenerationIsDone())
-            throw make_runtime_error("SBT offsets generation should be done before.");
+            throw make_runtime_error("SBT layout generation should be done before.");
 
         instanceBuffer.finalize();
 

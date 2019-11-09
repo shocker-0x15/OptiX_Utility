@@ -41,7 +41,7 @@
       <Filter>gl3w</Filter>
     </ClCompile>
     <ClCompile Include="cuda_helper.cpp" />
-    <ClCompile Include="optix_wrapper.cpp" />
+    <ClCompile Include="optix_util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ext\imgui\imgui_internal.h">
@@ -83,8 +83,8 @@
     <ClInclude Include="GLToolkit.h" />
     <ClInclude Include="cuda_helper.h" />
     <ClInclude Include="shared.h" />
-    <ClInclude Include="optix_wrapper.h" />
-    <ClInclude Include="optix_wrapper_private.h" />
+    <ClInclude Include="optix_util.h" />
+    <ClInclude Include="optix_util_private.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis">

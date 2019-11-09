@@ -41,7 +41,7 @@
 #include "GLToolkit.h"
 #include "cuda_helper.h"
 
-#include "optix_wrapper.h"
+#include "optix_util.h"
 
 #include "shared.h"
 
@@ -503,7 +503,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasAreaLight.compaction(stream, stream);
     gasAreaLight.removeUncompacted(stream);
 
-    scene.generateSBTOffsets();
+    scene.generateSBTLayout();
 
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     iasScene.addChild(gasCornellBox);

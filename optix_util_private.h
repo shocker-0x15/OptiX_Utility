@@ -1,6 +1,6 @@
 #pragma once
 
-#include "optix_wrapper.h"
+#include "optix_util.h"
 
 #include <optix_function_table_definition.h>
 
