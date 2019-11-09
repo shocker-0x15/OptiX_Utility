@@ -56,19 +56,44 @@ namespace optix {
 
 
 
+    /*
+
+    Context --+-- Pipeline --+-- Module
+              |              |
+              |              +-- ProgramGroup
+              |
+              |
+              +-- Material
+              |
+              |
+              +-- Scene --+-- IAS
+                          |
+                          +-- GAS
+                          |
+                          +-- GeomInst
+
+    JP: 
+    EN: 
+
+    */
+
+
+
     class Context;
-    class Pipeline;
-    class Module;
-    class ProgramGroup;
+    class Material;
+    class Scene;
     class GeometryInstance;
     class GeometryAccelerationStructure;
     class InstanceAccelerationStructure;
+    class Pipeline;
+    class Module;
+    class ProgramGroup;
 
 #define OPTIX_PIMPL() \
 public: \
-    class Impl; \
+    class Priv; \
 private: \
-    Impl* m
+    Priv* m = nullptr
 
 
 
@@ -79,66 +104,43 @@ private: \
         static Context create();
         void destroy();
 
+        Material createMaterial() const;
+        Scene createScene() const;
+
         Pipeline createPipeline() const;
+    };
+
+
+
+    class Material {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
+
+        void setData(uint32_t rayType, const ProgramGroup &hitGroup,
+                     const void* sbtRecordData, size_t size, size_t alignment) const;
+        template <typename RecordDataType>
+        void setData(uint32_t rayType, const ProgramGroup &hitGroup,
+                     const RecordDataType &sbtRecordData) const {
+            setData(rayType, hitGroup, &sbtRecordData, sizeof(RecordDataType), alignof(RecordDataType));
+        }
+    };
+
+
+
+    class Scene {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
 
         GeometryInstance createGeometryInstance() const;
 
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
-    };
 
-
-
-    class Pipeline {
-        OPTIX_PIMPL();
-
-    public:
-        Pipeline() {}
-        void destroy();
-
-        void setNumRayTypes(uint32_t numRayTypes) const;
-        void setMaxTraceDepth(uint32_t maxTraceDepth) const;
-        void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-                                bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const;
-
-        Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
-        void destroyModule(Module module) const;
-
-        ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;
-        ProgramGroup createExceptionProgram(Module module, const char* entryFunctionName) const;
-        ProgramGroup createMissProgram(Module module, const char* entryFunctionName) const;
-        ProgramGroup createHitProgramGroup(Module module_CH, const char* entryFunctionNameCH,
-                                           Module module_AH, const char* entryFunctionNameAH,
-                                           Module module_IS, const char* entryFunctionNameIS) const;
-        ProgramGroup createCallableGroup(Module module_DC, const char* entryFunctionNameDC,
-                                         Module module_CC, const char* entryFunctionNameCC) const;
-        void destroyProgramGroup(ProgramGroup program) const;
-
-        void link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const;
-
-        void setRayGenerationProgram(ProgramGroup program) const;
-        void setExceptionProgram(ProgramGroup program) const;
-        void setMissProgram(uint32_t rayType, ProgramGroup program) const;
-
-        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ);
-    };
-
-
-
-    class Module {
-        OPTIX_PIMPL();
-
-    public:
-        Module() {}
-    };
-
-
-
-    class ProgramGroup {
-        OPTIX_PIMPL();
-
-    public:
-        ProgramGroup() {}
+        void generateSBTOffsets() const;
     };
 
 
@@ -151,16 +153,16 @@ private: \
 
         void setVertexBuffer(Buffer* vertexBuffer) const;
         void setTriangleBuffer(Buffer* triangleBuffer) const;
-
-        void setNumHitGroups(uint32_t numHitGroups) const;
-        void setGeometryFlags(uint32_t hitGroupIdx, OptixGeometryFlags flags) const;
-        void setHitGroup(Pipeline pipeline, uint32_t hitGroupIdx, uint32_t rayType, const ProgramGroup &hitGroup,
-                         const void* sbtRecordData, size_t size) const;
+        void setMaterialIndexOffsetBuffer(Buffer* matIdxOffsetBuffer) const;
+        void setData(const void* sbtRecordData, size_t size, size_t alignment) const;
         template <typename RecordDataType>
-        void setHitGroup(Pipeline pipeline, uint32_t hitGroupIdx, uint32_t rayType, const ProgramGroup &hitGroup,
-                         const RecordDataType &sbtRecordData) const {
-            setHitGroup(pipeline, hitGroupIdx, rayType, hitGroup, &sbtRecordData, sizeof(sbtRecordData));
+        void setData(const RecordDataType &sbtRecordData) const {
+            setData(&sbtRecordData, sizeof(RecordDataType), alignof(RecordDataType));
         }
+
+        void setNumMaterials(uint32_t numMaterials) const;
+        void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
+        void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
     };
 
 
@@ -171,6 +173,8 @@ private: \
     public:
         void destroy();
 
+        void setNumMaterialSets(uint32_t numMatSets) const;
+        void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
         void addChild(const GeometryInstance &geomInst) const;
 
         void rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const;
@@ -190,14 +194,67 @@ private: \
     public:
         void destroy();
 
-        void addChild(const GeometryAccelerationStructure &gas, const float instantTransform[12] = nullptr) const;
+        void addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0, const float instantTransform[12] = nullptr) const;
 
-        void rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, uint32_t maxNumRayTypes, CUstream stream) const;
+        void rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const;
         void compaction(CUstream rebuildOrUpdateStream, CUstream stream) const;
         void removeUncompacted(CUstream compactionStream) const;
         void update(CUstream stream) const;
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
+    };
+
+
+
+    class Pipeline {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
+
+        void setMaxTraceDepth(uint32_t maxTraceDepth) const;
+        void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
+                                bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const;
+
+        Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
+
+        ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;
+        ProgramGroup createExceptionProgram(Module module, const char* entryFunctionName) const;
+        ProgramGroup createMissProgram(Module module, const char* entryFunctionName) const;
+        ProgramGroup createHitProgramGroup(Module module_CH, const char* entryFunctionNameCH,
+                                           Module module_AH, const char* entryFunctionNameAH,
+                                           Module module_IS, const char* entryFunctionNameIS) const;
+        ProgramGroup createCallableGroup(Module module_DC, const char* entryFunctionNameDC,
+                                         Module module_CC, const char* entryFunctionNameCC) const;
+
+        void link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const;
+
+        void setScene(Scene scene) const;
+        void setNumMissRayTypes(uint32_t numMissRayTypes) const;
+
+        void setRayGenerationProgram(ProgramGroup program) const;
+        void setExceptionProgram(ProgramGroup program) const;
+        void setMissProgram(uint32_t rayType, ProgramGroup program) const;
+
+        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ);
+    };
+
+
+
+    class Module {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
+    };
+
+
+
+    class ProgramGroup {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
     };
 }

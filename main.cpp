@@ -26,6 +26,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <vector>
 #include <filesystem>
 
 #include <GL/gl3w.h>
@@ -111,18 +112,12 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 
-optix::Pipeline pipeline;
-optix::ProgramGroup searchRayHitProgramGroup;
-optix::ProgramGroup visibilityRayHitProgramGroup;
-
-
-
 class TriangleMesh {
-    optix::Context m_context;
+    optix::Scene m_scene;
 
     struct MaterialGroup {
         CUDAHelper::Buffer* triangleBuffer;
-        Shared::MaterialData material;
+        optix::Material material;
         optix::GeometryInstance geometryInstance;
     };
 
@@ -132,7 +127,7 @@ class TriangleMesh {
     TriangleMesh(const TriangleMesh &) = delete;
     TriangleMesh &operator=(const TriangleMesh &) = delete;
 public:
-    TriangleMesh(optix::Context context) : m_context(context) {}
+    TriangleMesh(optix::Scene scene) : m_scene(scene) {}
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
         m_vertexBuffer.initialize(CUDAHelper::BufferType::Device, numVertices, sizeof(vertices[0]), 0);
@@ -141,7 +136,7 @@ public:
         m_vertexBuffer.unmap();
     }
 
-    void addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, const Shared::MaterialData &matData) {
+    void addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, optix::Material &material) {
         m_materialGroups.push_back(MaterialGroup());
 
         MaterialGroup &group = m_materialGroups.back();
@@ -153,19 +148,18 @@ public:
         std::copy_n(triangles, numTriangles, trianglesD);
         triangleBuffer->unmap();
 
-        group.material = matData;
+        group.material = material;
 
-        Shared::HitGroupData recordData;
-        recordData.geom.vertexBuffer = (Shared::Vertex*)m_vertexBuffer.getDevicePointer();
-        recordData.geom.triangleBuffer = (Shared::Triangle*)triangleBuffer->getDevicePointer();
-        recordData.mat = matData;
+        Shared::GeometryData recordData;
+        recordData.vertexBuffer = (Shared::Vertex*)m_vertexBuffer.getDevicePointer();
+        recordData.triangleBuffer = (Shared::Triangle*)triangleBuffer->getDevicePointer();
 
-        optix::GeometryInstance geomInst = m_context.createGeometryInstance();
+        optix::GeometryInstance geomInst = m_scene.createGeometryInstance();
         geomInst.setVertexBuffer(&m_vertexBuffer);
         geomInst.setTriangleBuffer(triangleBuffer);
-        geomInst.setNumHitGroups(1);
-        geomInst.setHitGroup(pipeline, 0, Shared::RayType_Search, searchRayHitProgramGroup, recordData);
-        geomInst.setHitGroup(pipeline, 0, Shared::RayType_Visibility, visibilityRayHitProgramGroup, recordData);
+        geomInst.setData(recordData);
+        geomInst.setNumMaterials(1);
+        geomInst.setMaterial(0, 0, material);
 
         group.geometryInstance = geomInst;
     }
@@ -178,9 +172,8 @@ public:
 
 
 
-namespace filesystem = std::experimental::filesystem;
-static filesystem::path getExecutableDirectory() {
-    static filesystem::path ret;
+static std::filesystem::path getExecutableDirectory() {
+    static std::filesystem::path ret;
 
     static bool done = false;
     if (!done) {
@@ -201,7 +194,7 @@ static filesystem::path getExecutableDirectory() {
     return ret;
 }
 
-static std::string readTxtFile(const filesystem::path& filepath) {
+static std::string readTxtFile(const std::filesystem::path& filepath) {
     std::ifstream ifs;
     ifs.open(filepath, std::ios::in);
     if (ifs.fail())
@@ -362,15 +355,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(module, "__miss__searchRay");
     optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    searchRayHitProgramGroup = pipeline.createHitProgramGroup(module, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
-    visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, module, "__anyhit__visibility", emptyModule, nullptr);
+    optix::ProgramGroup searchRayHitProgramGroup = pipeline.createHitProgramGroup(module, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
+    optix::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, module, "__anyhit__visibility", emptyModule, nullptr);
 
-    pipeline.setNumRayTypes(Shared::NumRayTypes);
     pipeline.setMaxTraceDepth(2);
-
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
+    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
@@ -387,12 +379,35 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     // ----------------------------------------------------------------
-    // JP: シーンデータを読み込み、GPU転送する。
-    //     シェーダーバインディングテーブルのセットアップしAcceleration Structureを構築する。
-    // EN: Read scene data and transfer it to GPU.
-    //     Setup a shader binding table and build acceleration structures.
+    // JP: 
+
+    optix::Scene scene = optixContext.createScene();
+
+    optix::Material matGray = optixContext.createMaterial();
+    Shared::MaterialData matGrayData;
+    matGrayData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    matGray.setData(Shared::RayType_Search, searchRayHitProgramGroup, matGrayData);
+    matGray.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matGrayData);
+
+    optix::Material matLeft = optixContext.createMaterial();
+    Shared::MaterialData matLeftData;
+    matLeftData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
+    matLeft.setData(Shared::RayType_Search, searchRayHitProgramGroup, matLeftData);
+    matLeft.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matLeftData);
+
+    optix::Material matRight = optixContext.createMaterial();
+    Shared::MaterialData matRightData;
+    matRightData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
+    matRight.setData(Shared::RayType_Search, searchRayHitProgramGroup, matRightData);
+    matRight.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matRightData);
+
+    optix::Material matLight = optixContext.createMaterial();
+    Shared::MaterialData matLightData;
+    matLightData.albedo = make_float3(1, 1, 1);
+    matLight.setData(Shared::RayType_Search, searchRayHitProgramGroup, matLightData);
+    matLight.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matLightData);
     
-    TriangleMesh meshCornellBox(optixContext);
+    TriangleMesh meshCornellBox(scene);
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -442,17 +457,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         
         // JP: インデックスバッファーは別々にしてみる。
         // floor, back wall, ceiling
-        mat.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-        meshCornellBox.addMaterialGroup(triangles + 0, 6, mat);
+        meshCornellBox.addMaterialGroup(triangles + 0, 6, matGray);
         // left wall
-        mat.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
-        meshCornellBox.addMaterialGroup(triangles + 6, 2, mat);
+        meshCornellBox.addMaterialGroup(triangles + 6, 2, matLeft);
         // right wall
-        mat.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
-        meshCornellBox.addMaterialGroup(triangles + 8, 2, mat);
+        meshCornellBox.addMaterialGroup(triangles + 8, 2, matRight);
     }
 
-    TriangleMesh meshAreaLight(optixContext);
+    TriangleMesh meshAreaLight(scene);
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -468,44 +480,49 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         meshAreaLight.setVertexBuffer(vertices, lengthof(vertices));
 
         Shared::MaterialData mat;
-        mat.albedo = make_float3(1, 1, 1);
-        meshAreaLight.addMaterialGroup(triangles + 0, 2, mat);
+        meshAreaLight.addMaterialGroup(triangles + 0, 2, matLight);
     }
 
 
-
-    optix::GeometryAccelerationStructure gasCornellBox = optixContext.createGeometryAccelerationStructure();
+    
+    optix::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
+    gasCornellBox.setNumMaterialSets(1);
+    gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
 
     gasCornellBox.rebuild(true, false, true, stream);
     gasCornellBox.compaction(stream, stream);
     gasCornellBox.removeUncompacted(stream);
 
-    optix::GeometryAccelerationStructure gasAreaLight = optixContext.createGeometryAccelerationStructure();
+    optix::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
+    gasAreaLight.setNumMaterialSets(1);
+    gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
 
     gasAreaLight.rebuild(true, false, true, stream);
     gasAreaLight.compaction(stream, stream);
     gasAreaLight.removeUncompacted(stream);
 
-    optix::InstanceAccelerationStructure iasScene = optixContext.createInstanceAccelerationStructure();
+    scene.generateSBTOffsets();
+
+    optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     iasScene.addChild(gasCornellBox);
     float tfAreaLight[] = {
         1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0.99f
+        0, 1, 0, 0.99f,
+        0, 0, 1, 0
     };
-    iasScene.addChild(gasAreaLight, tfAreaLight);
+    iasScene.addChild(gasAreaLight, 0, tfAreaLight);
 
-    uint32_t maxNumRayTypes = Shared::NumRayTypes;
-    iasScene.rebuild(false, true, true, maxNumRayTypes, stream);
+    iasScene.rebuild(false, true, true, stream);
     iasScene.compaction(stream, stream);
     iasScene.removeUncompacted(stream);
 
+    pipeline.setScene(scene);
+
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
-    // END: Read scene data and transfer it to GPU.
-    //      Setup a shader binding table and build acceleration structures.
+    // END: 
     // ----------------------------------------------------------------
 
 
@@ -533,7 +550,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     GLTK::VertexArray vertexArrayForFullScreen;
     vertexArrayForFullScreen.initialize();
 
-    const filesystem::path exeDir = getExecutableDirectory();
+    const std::filesystem::path exeDir = getExecutableDirectory();
 
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
@@ -711,17 +728,23 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasAreaLight.destroy();
     gasCornellBox.destroy();
 
-    //meshLight.finalize();
-    //meshCornellBox.finalize();
+    matLight.destroy();
+    matRight.destroy();
+    matLeft.destroy();
+    matGray.destroy();
+
+    scene.destroy();
+
+    visibilityRayHitProgramGroup.destroy();
+    searchRayHitProgramGroup.destroy();
+
+    visibilityRayMissProgram.destroy();
+    searchRayMissProgram.destroy();
+    rayGenProgram.destroy();
+
+    module.destroy();
 
     pipeline.destroy();
-
-    pipeline.destroyProgramGroup(visibilityRayHitProgramGroup);
-    pipeline.destroyProgramGroup(searchRayHitProgramGroup);
-
-    pipeline.destroyProgramGroup(visibilityRayMissProgram);
-    pipeline.destroyProgramGroup(searchRayMissProgram);
-    pipeline.destroyProgramGroup(rayGenProgram);
 
     optixContext.destroy();
 

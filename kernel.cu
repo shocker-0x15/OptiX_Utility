@@ -149,7 +149,7 @@ RT_PROGRAM void __raygen__fill() {
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
-    float3 origin = make_float3(0, 0, 5);
+    float3 origin = make_float3(0, 0, 3);
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
 
     PayloadAccessor<SearchRayPayload> payload;
@@ -161,10 +161,9 @@ RT_PROGRAM void __raygen__fill() {
 }
 
 RT_PROGRAM void __miss__searchRay() {
-    const auto &sbtrData = *(MissData*)optixGetSbtDataPointer();
-
     PayloadAccessor<SearchRayPayload> payload;
-    payload.raw.contribution = sbtrData.bgRadiance;
+
+    payload.raw.contribution = make_float3(0.0f, 0.0f, 0.05f);
     
     payload.setAll();
 }

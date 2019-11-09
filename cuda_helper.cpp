@@ -174,7 +174,7 @@ namespace CUDAHelper {
     }
 
     void Buffer::unmap() {
-        if (m_mapped)
+        if (!m_mapped)
             throw std::runtime_error("This buffer is not mapped.");
 
         m_mapped = false;

@@ -84,6 +84,7 @@
     <ClInclude Include="cuda_helper.h" />
     <ClInclude Include="shared.h" />
     <ClInclude Include="optix_wrapper.h" />
+    <ClInclude Include="optix_wrapper_private.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis">
