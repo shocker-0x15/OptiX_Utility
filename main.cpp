@@ -28,6 +28,7 @@
 #include <sstream>
 #include <vector>
 #include <filesystem>
+#include <random>
 
 #include <GL/gl3w.h>
 
@@ -158,7 +159,7 @@ public:
         geomInst.setVertexBuffer(&m_vertexBuffer);
         geomInst.setTriangleBuffer(triangleBuffer);
         geomInst.setData(recordData);
-        geomInst.setNumMaterials(1);
+        geomInst.setNumMaterials(1, nullptr);
         geomInst.setMaterial(0, 0, material);
 
         group.geometryInstance = geomInst;
@@ -339,7 +340,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optix::Pipeline pipeline = optixContext.createPipeline();
 
-    pipeline.setPipelineOptions(3, 0, "plp", sizeof(Shared::PipelineLaunchParameters),
+    pipeline.setPipelineOptions(6, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH);
 
@@ -489,21 +490,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
 
-    gasCornellBox.rebuild(stream);
-    gasCornellBox.compaction(stream, stream);
-    gasCornellBox.removeUncompacted(stream);
-
     optix::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     gasAreaLight.setConfiguration(true, false, true);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
-
-    gasAreaLight.rebuild(stream);
-    gasAreaLight.compaction(stream, stream);
-    gasAreaLight.removeUncompacted(stream);
-
-    scene.generateSBTLayout();
 
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     iasScene.setConfiguration(false, true, true);
@@ -515,9 +506,26 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     iasScene.addChild(gasAreaLight, 0, tfAreaLight);
 
+#if 1
+    // High-level control
+    scene.setupASsAndSBTLayout(stream);
+#else
+    // Fine detail control
+
+    gasCornellBox.rebuild(stream);
+    gasCornellBox.compaction(stream, stream);
+    gasCornellBox.removeUncompacted(stream);
+
+    gasAreaLight.rebuild(stream);
+    gasAreaLight.compaction(stream, stream);
+    gasAreaLight.removeUncompacted(stream);
+
+    scene.generateSBTLayout();
+
     iasScene.rebuild(stream);
     iasScene.compaction(stream, stream);
     iasScene.removeUncompacted(stream);
+#endif
 
     pipeline.setScene(scene);
 
@@ -574,10 +582,28 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    CUDAHelper::Buffer rngBuffer;
+    rngBuffer.initialize(CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(Shared::PCG32RNG), 0);
+    {
+        std::mt19937_64 rng(591842031321323413);
+
+        auto seeds = reinterpret_cast<uint64_t*>(rngBuffer.map());
+        for (int y = 0; y < renderTargetSizeY; ++y) {
+            for (int x = 0; x < renderTargetSizeX; ++x) {
+                seeds[y * renderTargetSizeX + x] = rng();
+            }
+        }
+        rngBuffer.unmap();
+    }
+
+
+
     Shared::PipelineLaunchParameters plp;
     plp.topGroup = iasScene.getHandle();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
+    plp.numAccumFrames = 1;
+    plp.rngBuffer = (Shared::PCG32RNG*)rngBuffer.getDevicePointer();
     plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
     plp.camera.fovY = 60 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
@@ -629,6 +655,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
         pipeline.launch(stream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        ++plp.numAccumFrames;
 
         outputBufferCUDA.endCUDAAccess(stream);
 
@@ -712,6 +739,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    rngBuffer.finalize();
+    
     scaleSampler.finalize();
     scaleShader.finalize();
     drawOptiXResultShader.finalize();

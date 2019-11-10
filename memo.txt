@@ -23,3 +23,31 @@ GeometryInstance
   (パイプラインごとに異なるデータとすることも容易か)
 - インスタンシング時にマテリアルを切り替えられるように、マテリアルセットの概念を取り入れる。
   実際のMaterialはマテリアルのインデックスだけでなく、マテリアルセットのインデックスを併せて登録する。
+
+- TraversableHandleをユーザーが直接扱う現状の実装では、ローンチ前にGAS, SBT Layout, IASのセットアップをユーザー側で終えておく必要がある。
+
+GASのDirty化条件:
+1. GASに対するGeomInstの追加・削除 (Auto)
+2. GASのビルド設定の更新 (Auto)
+3. GASに所属するGeomInstのジオメトリデータの更新
+
+SBT LayoutのDirty化条件:
+1. Sceneに所属するGASのDirty化 (Auto)
+2. Sceneに所属するGASのNumMaterialSets変更 (Auto)
+3. Sceneに所属するGASのNumRayTypes変更 (Auto)
+
+IASのDirty化条件:
+1. SBT LayoutがDirty化 (Auto)
+2. IASに対するInstanceの追加・削除 (Auto)
+3. IASのビルド設定の更新 (Auto)
+4. IASに所属するInstanceのデータの更新
+
+SBTのDirty化条件:
+1. SBT LayoutのDirty化
+2. GeomInstのRecordDataの更新
+3. GeomInstに所属するMaterialの更新
+4. Sceneの切り替え
+
+(Auto)は該当の条件によるDirty化が自動で行われることを示す。
+例: GASに対するGeomInstの追加・削除 (Auto)
+    この操作を行ったときにGASが自動でdirty状態になることを示す。

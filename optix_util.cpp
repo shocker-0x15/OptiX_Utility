@@ -10,24 +10,6 @@ namespace optix {
         OutputDebugString(str);
     }
 
-    static std::runtime_error make_runtime_error(const char* fmt, ...) {
-        va_list args;
-        va_start(args, fmt);
-        char str[4096];
-        vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
-        va_end(args);
-
-        return std::runtime_error(str);
-    }
-
-#define THROW_RUNTIME_ERROR(expr, fmt, ...) do { if (!(expr)) throw make_runtime_error(fmt, ##__VA_ARGS__); } while (0)
-
-
-
-    static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
-        optixPrintf("[%2u][%12s]: %s\n", level, tag, message);
-    }
-
 
 
     Context Context::create() {
@@ -83,7 +65,7 @@ namespace optix {
         THROW_RUNTIME_ERROR(_pipeline, "Invalid pipeline.");
 
         _Material::Key key{ _pipeline, rayType };
-        m->infos[key] = _Material::Info(extract(hitGroup), sbtRecordData, size, alignment);
+        m->infos[key].update(extract(hitGroup), sbtRecordData, size, alignment);
     }
 
 
@@ -100,11 +82,12 @@ namespace optix {
     void Scene::Priv::fillSBTRecords(const _Pipeline* pipeline, uint8_t* records, uint32_t stride) const {
         for (_GeometryAccelerationStructure* gas : geomASs) {
             for (int j = 0; j < gas->getNumMaterialSets(); ++j) {
-                records += gas->fillSBTRecords(pipeline, j, records, stride);
+                uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records, stride);
+                records += numRecords * stride;
             }
         }
     }
-    
+
     void Scene::destroy() {
         delete m;
         m = nullptr;
@@ -139,7 +122,38 @@ namespace optix {
             }
         }
         m->numSBTRecords = sbtOffset;
-        m->sbtOffsetsAreDirty = false;
+        m->sbtLayoutIsUpToDate = true;
+    }
+
+    void Scene::setupASsAndSBTLayout(CUstream stream) const {
+        for (_GeometryAccelerationStructure* _gas : m->geomASs) {
+            if (!_gas->isReady()) {
+                GeometryAccelerationStructure gas = _gas->getPublicType();
+                gas.rebuild(stream);
+                gas.compaction(stream, stream);
+                gas.removeUncompacted(stream);
+            }
+        }
+
+        generateSBTLayout();
+
+        for (_InstanceAccelerationStructure* _ias : m->instASs) {
+            if (!_ias->isReady()) {
+                InstanceAccelerationStructure ias = _ias->getPublicType();
+                ias.rebuild(stream);
+                ias.compaction(stream, stream);
+                ias.removeUncompacted(stream);
+            }
+        }
+    }
+
+    void Scene::markSBTLayoutDirty() const {
+        m->sbtLayoutIsUpToDate = false;
+
+        for (_InstanceAccelerationStructure* _ias : m->instASs) {
+            InstanceAccelerationStructure ias = _ias->getPublicType();
+            ias.markDirty();
+        }
     }
 
 
@@ -210,7 +224,7 @@ namespace optix {
 
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
                                                     uint8_t* records, size_t stride) const {
-        const uint8_t* orgHead = records;
+        uint32_t numRecords = 0;
 
         MaterialKey key{ matSetIdx, -1 };
         for (int matIdx = 0; matIdx < buildInputFlags.size(); ++matIdx) {
@@ -236,10 +250,11 @@ namespace optix {
                 std::memcpy(records + offset, matInfo.recordData, matInfo.sizeAlign.size);
 
                 records += stride;
+                ++numRecords;
             }
         }
 
-        return static_cast<uint32_t>(records - orgHead);
+        return numRecords;
     }
 
     void GeometryInstance::destroy() {
@@ -256,20 +271,17 @@ namespace optix {
         m->triangleBuffer = triangleBuffer;
     }
 
-    void GeometryInstance::setMaterialIndexOffsetBuffer(Buffer* matIdxOffsetBufferX) const {
-        m->materialIndexOffsetBuffer = matIdxOffsetBufferX;
+    void GeometryInstance::setNumMaterials(uint32_t numMaterials, Buffer* matIdxOffsetBuffer) const {
+        THROW_RUNTIME_ERROR(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
+        THROW_RUNTIME_ERROR((numMaterials == 1) != (matIdxOffsetBuffer != nullptr),
+                            "Material index offset buffer must be provided when multiple materials are used, otherwise, must not be provided.");
+        m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
+        m->materialIndexOffsetBuffer = matIdxOffsetBuffer;
     }
 
     void GeometryInstance::setData(const void* sbtRecordData, size_t size, size_t alignment) const {
         std::memcpy(m->recordData, sbtRecordData, size);
         m->sizeAlign = SizeAlign(size, alignment);
-    }
-
-    void GeometryInstance::setNumMaterials(uint32_t numMaterials) const {
-        THROW_RUNTIME_ERROR(m->buildInputFlags.size() == 0,
-                            "Number of hit groups has been already set.");
-
-        m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
@@ -323,11 +335,15 @@ namespace optix {
                             "Material set index %u is out of bound [0, %u).",
                             matSetIdx, static_cast<uint32_t>(numRayTypesValues.size()));
 
-        const uint8_t* orgHead = records;
-        for (int i = 0; i < children.size(); ++i)
-            records += children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypesValues[matSetIdx], records, stride);
+        uint32_t sumRecords = 0;
+        for (int i = 0; i < children.size(); ++i) {
+            uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypesValues[matSetIdx],
+                                                              records, stride);
+            records += numRecords * stride;
+            sumRecords += numRecords;
+        }
 
-        return static_cast<uint32_t>(records - orgHead);
+        return sumRecords;
     }
     
     void GeometryAccelerationStructure::destroy() {
@@ -349,14 +365,14 @@ namespace optix {
         changed |= m->allowCompaction != allowCompaction;
         m->allowCompaction == allowCompaction;
 
-        if (changed) {
-            m->available = false;
-            m->compactedAvailable = false;
-        }
+        if (changed)
+            markDirty();
     }
 
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
         m->numRayTypesValues.resize(numMatSets, 0);
+
+        m->scene->getPublicType().markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
@@ -364,6 +380,8 @@ namespace optix {
                             "Material set index %u is out of bounds [0, %u).",
                             matSetIdx, static_cast<uint32_t>(m->numRayTypesValues.size()));
         m->numRayTypesValues[matSetIdx] = numRayTypes;
+
+        m->scene->getPublicType().markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::addChild(const GeometryInstance &geomInst) const {
@@ -372,8 +390,7 @@ namespace optix {
 
         m->children.push_back(_geomInst);
 
-        m->available = false;
-        m->compactedAvailable = false;
+        markDirty();
     }
 
     void GeometryAccelerationStructure::rebuild(CUstream stream) const {
@@ -479,10 +496,17 @@ namespace optix {
         return m->getHandle();
     }
 
+    void GeometryAccelerationStructure::markDirty() const {
+        m->available = false;
+        m->compactedAvailable = false;
+
+        m->scene->getPublicType().markSBTLayoutDirty();
+    }
+
 
 
     void InstanceAccelerationStructure::Priv::setupInstances() {
-        THROW_RUNTIME_ERROR(scene->sbtOffsetsGenerationIsDone(),
+        THROW_RUNTIME_ERROR(scene->sbtLayoutGenerationDone(),
                             "SBT layout generation should be done before.");
 
         instanceBuffer.finalize();
@@ -536,10 +560,8 @@ namespace optix {
         changed |= m->allowCompaction != allowCompaction;
         m->allowCompaction == allowCompaction;
 
-        if (changed) {
-            m->available = false;
-            m->compactedAvailable = false;
-        }
+        if (changed)
+            markDirty();
     }
 
     void InstanceAccelerationStructure::addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx, const float instantTransform[12]) const {
@@ -552,8 +574,7 @@ namespace optix {
 
         m->children.push_back(inst);
 
-        m->available = false;
-        m->compactedAvailable = false;
+        markDirty();
     }
 
     void InstanceAccelerationStructure::rebuild(CUstream stream) const {
@@ -659,6 +680,11 @@ namespace optix {
         return m->getHandle();
     }
 
+    void InstanceAccelerationStructure::markDirty() const {
+        m->available = false;
+        m->compactedAvailable = false;
+    }
+
 
 
     void Pipeline::Priv::createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group) {
@@ -679,7 +705,22 @@ namespace optix {
     }
     
     void Pipeline::Priv::setupShaderBindingTable() {
-        if (!sbtSetup) {
+        if (!sbtAllocDone) {
+            rayGenRecord.finalize();
+            rayGenRecord.initialize(BufferType::Device, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+
+            missRecords.finalize();
+            missRecords.initialize(BufferType::Device, numMissRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+
+            SizeAlign hitGroupRecordStride = scene->calcHitGroupRecordStride(this);
+            uint32_t numHitGroupRecords = scene->getNumSBTRecords();
+            hitGroupRecords.finalize();
+            hitGroupRecords.initialize(BufferType::Device, numHitGroupRecords, hitGroupRecordStride.size, 0);
+
+            sbtAllocDone = true;
+        }
+
+        if (!sbtIsUpToDate) {
             THROW_RUNTIME_ERROR(rayGenProgram, "Ray generation program is not set.");
 
             for (int i = 0; i < numMissRayTypes; ++i)
@@ -687,24 +728,17 @@ namespace optix {
 
             sbt = OptixShaderBindingTable{};
             {
-                rayGenRecord.initialize(BufferType::Device, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
                 auto rayGenRecordOnHost = reinterpret_cast<uint8_t*>(rayGenRecord.map());
                 rayGenProgram->packHeader(rayGenRecordOnHost);
                 rayGenRecord.unmap();
 
-                missRecords.initialize(BufferType::Device, numMissRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
                 auto missRecordsOnHost = reinterpret_cast<uint8_t*>(missRecords.map());
-                for (int i = 0; i < numMissRayTypes; ++i) {
+                for (int i = 0; i < numMissRayTypes; ++i)
                     missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-                }
                 missRecords.unmap();
 
-                SizeAlign hitGroupRecordStride = scene->calcHitGroupRecordStride(this);
-                uint32_t numHitGroupRecords = scene->getNumSBTRecords();
-                hitGroupRecords.initialize(BufferType::Device, numHitGroupRecords, hitGroupRecordStride.size, 0);
-
                 auto hitGroupRecordsOnHost = reinterpret_cast<uint8_t*>(hitGroupRecords.map());
-                scene->fillSBTRecords(this, hitGroupRecordsOnHost, hitGroupRecordStride.size);
+                scene->fillSBTRecords(this, hitGroupRecordsOnHost, hitGroupRecords.stride());
                 hitGroupRecords.unmap();
 
 
@@ -718,14 +752,14 @@ namespace optix {
                 sbt.missRecordCount = numMissRayTypes;
 
                 sbt.hitgroupRecordBase = hitGroupRecords.getDevicePointer();
-                sbt.hitgroupRecordStrideInBytes = hitGroupRecordStride.size;
-                sbt.hitgroupRecordCount = numHitGroupRecords;
+                sbt.hitgroupRecordStrideInBytes = hitGroupRecords.stride();
+                sbt.hitgroupRecordCount = hitGroupRecords.numElements();
 
                 sbt.callablesRecordBase = 0;
                 sbt.callablesRecordCount = 0;
             }
 
-            sbtSetup = true;
+            sbtIsUpToDate = true;
         }
     }
 

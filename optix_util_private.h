@@ -36,6 +36,24 @@
     } while (0)
 
 namespace optix {
+    static std::runtime_error make_runtime_error(const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        char str[4096];
+        vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
+        va_end(args);
+
+        return std::runtime_error(str);
+    }
+
+#define THROW_RUNTIME_ERROR(expr, fmt, ...) do { if (!(expr)) throw make_runtime_error(fmt, ##__VA_ARGS__); } while (0)
+
+    static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
+        optixPrintf("[%2u][%12s]: %s\n", level, tag, message);
+    }
+
+
+
 #define OPTIX_ALIAS_PIMPL(Name) using _ ## Name = Name::Priv
 
     OPTIX_ALIAS_PIMPL(Context);
@@ -142,7 +160,7 @@ namespace optix {
             SizeAlign sizeAlign;
 
             Info() : program(nullptr), sizeAlign(0, 0) {}
-            Info(const _ProgramGroup* _program, const void* data, size_t size, size_t align) {
+            void update(const _ProgramGroup* _program, const void* data, size_t size, size_t align) {
                 program = _program;
                 std::memcpy(recordData, data, size);
                 sizeAlign.size = size;
@@ -195,11 +213,13 @@ namespace optix {
         std::set<_GeometryAccelerationStructure*> geomASs;
         std::map<SBTOffsetKey, uint32_t> sbtOffsets;
         uint32_t numSBTRecords;
-        bool sbtOffsetsAreDirty;
         std::set<_InstanceAccelerationStructure*> instASs;
+        struct {
+            unsigned int sbtLayoutIsUpToDate : 1;
+        };
 
     public:
-        Priv(const _Context* ctxt) : context(ctxt), sbtOffsetsAreDirty(true) {}
+        Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {}
 
         OPTIX_OPAQUE_BRIDGE(Scene);
 
@@ -217,8 +237,8 @@ namespace optix {
             instASs.erase(ias);
         }
 
-        bool sbtOffsetsGenerationIsDone() const {
-            return !sbtOffsetsAreDirty;
+        bool sbtLayoutGenerationDone() const {
+            return sbtLayoutIsUpToDate;
         }
 
         uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
@@ -370,7 +390,7 @@ namespace optix {
         }
 
         OptixTraversableHandle getHandle() const {
-            optixAssert(isReady(), "Traversable handle is not ready.");
+            THROW_RUNTIME_ERROR(isReady(), "Traversable handle is not ready.");
             if (compactedAvailable)
                 return compactedHandle;
             if (available)
@@ -482,7 +502,7 @@ namespace optix {
         }
 
         OptixTraversableHandle getHandle() const {
-            optixAssert(isReady(), "Traversable handle is not ready.");
+            THROW_RUNTIME_ERROR(isReady(), "Traversable handle is not ready.");
             if (compactedAvailable)
                 return compactedHandle;
             if (available)
@@ -503,7 +523,7 @@ namespace optix {
         size_t sizeOfPipelineLaunchParams;
         std::set<OptixProgramGroup> programGroups;
 
-        const _Scene* scene;
+        _Scene* scene;
         uint32_t numMissRayTypes;
 
         _ProgramGroup* rayGenProgram;
@@ -517,7 +537,8 @@ namespace optix {
 
         struct {
             unsigned int pipelineLinked : 1;
-            unsigned int sbtSetup : 1;
+            unsigned int sbtAllocDone : 1;
+            unsigned int sbtIsUpToDate : 1;
         };
 
         void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
@@ -529,7 +550,7 @@ namespace optix {
             maxTraceDepth(0),
             scene(nullptr), numMissRayTypes(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr),
-            pipelineLinked(false), sbtSetup(false) {
+            pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
         }
 
         OPTIX_OPAQUE_BRIDGE(Pipeline);

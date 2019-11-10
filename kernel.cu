@@ -2,11 +2,19 @@
 
 #include "shared.h"
 
-#define RT_FUNCTION __forceinline__ __device__
-#define RT_PROGRAM extern "C" __global__
+#define M_PI 3.14159265
 
+RT_FUNCTION float3 operator-(const float3 &v) {
+    return make_float3(-v.x, -v.y, -v.z);
+}
 RT_FUNCTION float3 operator+(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
+}
+RT_FUNCTION float3 operator-(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z);
+}
+RT_FUNCTION float3 operator*(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z);
 }
 RT_FUNCTION float3 operator*(float s, const float3 &v) {
     return make_float3(s * v.x, s * v.y, s * v.z);
@@ -19,6 +27,9 @@ RT_FUNCTION float3 operator/(const float3 &v, float s) {
     return r * v;
 }
 
+RT_FUNCTION float dot(const float3 &v0, const float3 &v1) {
+    return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+}
 RT_FUNCTION float length(const float3 &v) {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
@@ -127,6 +138,7 @@ struct Ray {
 };
 
 struct SearchRayPayload {
+    PCG32RNG rng;
     float3 contribution;
 };
 
@@ -160,8 +172,10 @@ RT_PROGRAM void __raygen__fill() {
     uint3 launchIndex = optixGetLaunchIndex();
     int32_t index = plp.imageSize.x * launchIndex.y + launchIndex.x;
 
-    float x = (float)(launchIndex.x + 0.5f) / plp.imageSize.x;
-    float y = (float)(launchIndex.y + 0.5f) / plp.imageSize.y;
+    PCG32RNG rng = plp.rngBuffer[index];
+
+    float x = (float)(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
+    float y = (float)(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
@@ -169,11 +183,17 @@ RT_PROGRAM void __raygen__fill() {
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
 
     PayloadAccessor<SearchRayPayload> payload;
+    payload.raw.rng = rng;
     optixTrace(plp.topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                RayType_Search, NumRayTypes, RayType_Search,
-               payload[0], payload[1], payload[2]);
+               payload[0], payload[1], payload[2], payload[3], payload[4]);
 
-    plp.outputBuffer[index] = make_float4(payload.raw.contribution, 1.0f);
+    float4 cumResultF4 = plp.outputBuffer[index];
+    float3 cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
+    float3 result = ((plp.numAccumFrames - 1) * cumResult + payload.raw.contribution) / plp.numAccumFrames;
+
+    plp.rngBuffer[index] = rng;
+    plp.outputBuffer[index] = make_float4(result, 1.0f);
 }
 
 RT_PROGRAM void __miss__searchRay() {
@@ -190,22 +210,46 @@ RT_PROGRAM void __closesthit__shading() {
     auto hitPointParam = HitPointParameter::get();
 
     PayloadAccessor<SearchRayPayload> payload;
+    payload.getAll();
 
-    payload.raw.contribution = sbtrData.mat.albedo;
+    PCG32RNG &rng = payload.raw.rng;
 
-    //payload.raw.contribution = make_float3(hitPointParam.b0,
-    //                                       hitPointParam.b1,
-    //                                       0.0f);
+    const Triangle &tri = sbtrData.geom.triangleBuffer[hitPointParam.primIndex];
+    float3 p0 = sbtrData.geom.vertexBuffer[tri.index0].position;
+    float3 p1 = sbtrData.geom.vertexBuffer[tri.index1].position;
+    float3 p2 = sbtrData.geom.vertexBuffer[tri.index2].position;
+    float3 n0 = sbtrData.geom.vertexBuffer[tri.index0].normal;
+    float3 n1 = sbtrData.geom.vertexBuffer[tri.index1].normal;
+    float3 n2 = sbtrData.geom.vertexBuffer[tri.index2].normal;
+    float b0 = hitPointParam.b0;
+    float b1 = hitPointParam.b1;
+    float b2 = 1 - (b0 + b1);
+    float3 p = b0 * p0 + b1 * p1 + b2 * p2;
+    float3 sn = normalize(b0 * n0 + b1 * n1 + b2 * n2);
+    p = p + sn * 0.0001f;
 
-    //const Triangle &tri = sbtrData.geom.triangleBuffer[hitPointParam.primIndex];
-    //float3 n0 = sbtrData.geom.vertexBuffer[tri.index0].normal;
-    //float3 n1 = sbtrData.geom.vertexBuffer[tri.index1].normal;
-    //float3 n2 = sbtrData.geom.vertexBuffer[tri.index2].normal;
-    //float b0 = hitPointParam.b0;
-    //float b1 = hitPointParam.b1;
-    //float b2 = 1 - (b0 + b1);
-    //float3 sn = normalize(b0 * n0 + b1 * n1 + b2 * n2);
-    //payload.raw.contribution = 0.5f * sn + make_float3(0.5f, 0.5f, 0.5f);
+    float3 lp = make_float3(-0.5f, 0.99f, -0.5f) +
+        rng.getFloat0cTo1o() * make_float3(1, 0, 0) + 
+        rng.getFloat0cTo1o() * make_float3(0, 0, 1);
+    float areaPDF = 1.0f;
+    float3 lpn = make_float3(0, -1, 0);
+
+    float3 shadowRayDir = lp - p;
+    float dist2 = dot(shadowRayDir, shadowRayDir);
+    float dist = std::sqrt(dist2);
+    shadowRayDir = shadowRayDir / dist;
+    float cosLight = dot(lpn, -shadowRayDir);
+    float3 Le = cosLight > 0 ? make_float3(5, 5, 5) : make_float3(0, 0, 0);
+
+    PayloadAccessor<VisibilityRayPayload> shadowPayload;
+    shadowPayload.raw.visibility = 1.0f;
+    optixTrace(plp.topGroup, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+               RayType_Visibility, NumRayTypes, RayType_Visibility,
+               shadowPayload[0]);
+
+    float G = shadowPayload.raw.visibility * dot(sn, shadowRayDir) * cosLight / dist2;
+    float3 contribution = (sbtrData.mat.albedo / M_PI) * G * Le / areaPDF;
+    payload.raw.contribution = contribution;
 
     payload.setAll();
 }

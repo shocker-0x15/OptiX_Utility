@@ -141,6 +141,10 @@ private: \
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
 
         void generateSBTLayout() const;
+
+        void setupASsAndSBTLayout(CUstream stream) const;
+
+        void markSBTLayoutDirty() const;
     };
 
 
@@ -151,16 +155,18 @@ private: \
     public:
         void destroy();
 
+        // After the program calls either of these methods or updates the contents of vertex/index buffers,
+        // the program should call markDirty() of GASs to which the GeometryInstance is belonging.
         void setVertexBuffer(Buffer* vertexBuffer) const;
         void setTriangleBuffer(Buffer* triangleBuffer) const;
-        void setMaterialIndexOffsetBuffer(Buffer* matIdxOffsetBuffer) const;
+        void setNumMaterials(uint32_t numMaterials, Buffer* matIdxOffsetBuffer) const;
+
         void setData(const void* sbtRecordData, size_t size, size_t alignment) const;
         template <typename RecordDataType>
         void setData(const RecordDataType &sbtRecordData) const {
             setData(&sbtRecordData, sizeof(RecordDataType), alignof(RecordDataType));
         }
 
-        void setNumMaterials(uint32_t numMaterials) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
     };
@@ -186,6 +192,8 @@ private: \
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
+
+        void markDirty() const;
     };
 
 
@@ -207,6 +215,8 @@ private: \
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
+
+        void markDirty() const;
     };
 
 
