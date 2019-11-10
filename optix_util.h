@@ -173,11 +173,13 @@ private: \
     public:
         void destroy();
 
+        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction);
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
+
         void addChild(const GeometryInstance &geomInst) const;
 
-        void rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const;
+        void rebuild(CUstream stream) const;
         void compaction(CUstream rebuildOrUpdateStream, CUstream stream) const;
         void removeUncompacted(CUstream compactionStream) const;
         void update(CUstream stream) const;
@@ -194,9 +196,11 @@ private: \
     public:
         void destroy();
 
+        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction);
+
         void addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0, const float instantTransform[12] = nullptr) const;
 
-        void rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const;
+        void rebuild(CUstream stream) const;
         void compaction(CUstream rebuildOrUpdateStream, CUstream stream) const;
         void removeUncompacted(CUstream compactionStream) const;
         void update(CUstream stream) const;

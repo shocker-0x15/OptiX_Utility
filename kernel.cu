@@ -5,14 +5,30 @@
 #define RT_FUNCTION __forceinline__ __device__
 #define RT_PROGRAM extern "C" __global__
 
+RT_FUNCTION float3 operator+(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
+}
+RT_FUNCTION float3 operator*(float s, const float3 &v) {
+    return make_float3(s * v.x, s * v.y, s * v.z);
+}
+RT_FUNCTION float3 operator*(const float3 &v, float s) {
+    return make_float3(s * v.x, s * v.y, s * v.z);
+}
+RT_FUNCTION float3 operator/(const float3 &v, float s) {
+    float r = 1 / s;
+    return r * v;
+}
+
+RT_FUNCTION float length(const float3 &v) {
+    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+RT_FUNCTION float3 normalize(const float3 &v) {
+    return v / length(v);
+}
+
 namespace Sample {
 
 using namespace Shared;
-
-RT_FUNCTION float3 normalize(const float3 &v) {
-    float rl = 1.0f / norm3df(v.x, v.y, v.z);
-    return make_float3(v.x * rl, v.y * rl, v.z * rl);
-}
 
 RT_FUNCTION float4 make_float4(const float3 &v, float w) {
     return ::make_float4(v.x, v.y, v.z, w);
@@ -174,7 +190,22 @@ RT_PROGRAM void __closesthit__shading() {
     auto hitPointParam = HitPointParameter::get();
 
     PayloadAccessor<SearchRayPayload> payload;
+
     payload.raw.contribution = sbtrData.mat.albedo;
+
+    //payload.raw.contribution = make_float3(hitPointParam.b0,
+    //                                       hitPointParam.b1,
+    //                                       0.0f);
+
+    //const Triangle &tri = sbtrData.geom.triangleBuffer[hitPointParam.primIndex];
+    //float3 n0 = sbtrData.geom.vertexBuffer[tri.index0].normal;
+    //float3 n1 = sbtrData.geom.vertexBuffer[tri.index1].normal;
+    //float3 n2 = sbtrData.geom.vertexBuffer[tri.index2].normal;
+    //float b0 = hitPointParam.b0;
+    //float b1 = hitPointParam.b1;
+    //float b2 = 1 - (b0 + b1);
+    //float3 sn = normalize(b0 * n0 + b1 * n1 + b2 * n2);
+    //payload.raw.contribution = 0.5f * sn + make_float3(0.5f, 0.5f, 0.5f);
 
     payload.setAll();
 }

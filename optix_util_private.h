@@ -192,11 +192,11 @@ namespace optix {
         };
 
         const _Context* context;
-        std::set<const _GeometryAccelerationStructure*> geomASs;
+        std::set<_GeometryAccelerationStructure*> geomASs;
         std::map<SBTOffsetKey, uint32_t> sbtOffsets;
         uint32_t numSBTRecords;
         bool sbtOffsetsAreDirty;
-        std::set<const _InstanceAccelerationStructure*> instASs;
+        std::set<_InstanceAccelerationStructure*> instASs;
 
     public:
         Priv(const _Context* ctxt) : context(ctxt), sbtOffsetsAreDirty(true) {}
@@ -209,11 +209,11 @@ namespace optix {
 
 
 
-        void removeGAS(const _GeometryAccelerationStructure* gas) {
+        void removeGAS(_GeometryAccelerationStructure* gas) {
             geomASs.erase(gas);
         }
 
-        void removeIAS(const _InstanceAccelerationStructure* ias) {
+        void removeIAS(_InstanceAccelerationStructure* ias) {
             instASs.erase(ias);
         }
 
@@ -315,6 +315,9 @@ namespace optix {
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
         struct {
+            unsigned int preferFastTrace : 1;
+            unsigned int allowUpdate : 1;
+            unsigned int allowCompaction : 1;
             unsigned int available : 1;
             unsigned int compactedAvailable : 1;
         };
@@ -328,6 +331,10 @@ namespace optix {
             propertyCompactedSize = OptixAccelEmitDesc{};
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
             propertyCompactedSize.result = compactedSizeOnDevice.getDevicePointer();
+
+            preferFastTrace = true;
+            allowUpdate = false;
+            allowCompaction = false;
 
             available = false;
             compactedAvailable = false;
@@ -430,6 +437,9 @@ namespace optix {
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
         struct {
+            unsigned int preferFastTrace : 1;
+            unsigned int allowUpdate : 1;
+            unsigned int allowCompaction : 1;
             unsigned int available : 1;
             unsigned int compactedAvailable : 1;
         };
@@ -445,6 +455,10 @@ namespace optix {
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
             propertyCompactedSize.result = compactedSizeOnDevice.getDevicePointer();
+
+            preferFastTrace = true;
+            allowUpdate = false;
+            allowCompaction = false;
 
             available = false;
             compactedAvailable = false;
@@ -465,27 +479,6 @@ namespace optix {
 
         bool isReady() const {
             return available || compactedAvailable;
-        }
-
-        bool isReadyRecursive() const {
-            if (!isReady())
-                return false;
-
-            for (int i = 0; i < children.size(); ++i) {
-                const _Instance &inst = children[i];
-
-                uint32_t cNumSBTRecords = 0;
-                size_t cMaxSize = 0;
-                if (inst.type == InstanceType::GAS) {
-                    if (!inst.gas->isReady())
-                        return false;
-                }
-                else {
-                    optixAssert_NotImplemented();
-                }
-            }
-
-            return true;
         }
 
         OptixTraversableHandle getHandle() const {

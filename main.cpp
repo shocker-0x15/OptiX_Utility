@@ -333,9 +333,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
-    //     OptiXが定義する構造体(例：OptixPipelineCompileOptions)は将来の拡張に備えてゼロで初期化しておく必要がある。
     // EN: Settings for OptiX context and pipeline.
-    //     Structs (e.g. OptixPipelineCompileOptions) defined by OptiX should be initialized with zeroes for future extensions.
     
     optix::Context optixContext = optix::Context::create();
 
@@ -486,26 +484,29 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     
     optix::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
+    gasCornellBox.setConfiguration(true, false, true);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
 
-    gasCornellBox.rebuild(true, false, true, stream);
+    gasCornellBox.rebuild(stream);
     gasCornellBox.compaction(stream, stream);
     gasCornellBox.removeUncompacted(stream);
 
     optix::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
+    gasAreaLight.setConfiguration(true, false, true);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
 
-    gasAreaLight.rebuild(true, false, true, stream);
+    gasAreaLight.rebuild(stream);
     gasAreaLight.compaction(stream, stream);
     gasAreaLight.removeUncompacted(stream);
 
     scene.generateSBTLayout();
 
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
+    iasScene.setConfiguration(false, true, true);
     iasScene.addChild(gasCornellBox);
     float tfAreaLight[] = {
         1, 0, 0, 0,
@@ -514,7 +515,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     iasScene.addChild(gasAreaLight, 0, tfAreaLight);
 
-    iasScene.rebuild(false, true, true, stream);
+    iasScene.rebuild(stream);
     iasScene.compaction(stream, stream);
     iasScene.removeUncompacted(stream);
 
@@ -627,8 +628,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         plp.outputBuffer = (float4*)outputBufferCUDA.beginCUDAAccess(stream);
 
         CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
-        pipeline.launch(stream, plpOnDevice,
-                        renderTargetSizeX, renderTargetSizeY, 1);
+        pipeline.launch(stream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
 
         outputBufferCUDA.endCUDAAccess(stream);
 

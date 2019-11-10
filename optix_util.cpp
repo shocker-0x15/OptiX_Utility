@@ -10,7 +10,7 @@ namespace optix {
         OutputDebugString(str);
     }
 
-    std::runtime_error make_runtime_error(const char* fmt, ...) {
+    static std::runtime_error make_runtime_error(const char* fmt, ...) {
         va_list args;
         va_start(args, fmt);
         char str[4096];
@@ -19,6 +19,8 @@ namespace optix {
 
         return std::runtime_error(str);
     }
+
+#define THROW_RUNTIME_ERROR(expr, fmt, ...) do { if (!(expr)) throw make_runtime_error(fmt, ##__VA_ARGS__); } while (0)
 
 
 
@@ -78,8 +80,7 @@ namespace optix {
     void Material::setData(uint32_t rayType, const ProgramGroup &hitGroup,
                            const void* sbtRecordData, size_t size, size_t alignment) const {
         auto _pipeline = extract(hitGroup)->getPipeline();
-        if (_pipeline == nullptr)
-            throw make_runtime_error("Invalid pipeline.");
+        THROW_RUNTIME_ERROR(_pipeline, "Invalid pipeline.");
 
         _Material::Key key{ _pipeline, rayType };
         m->infos[key] = _Material::Info(extract(hitGroup), sbtRecordData, size, alignment);
@@ -89,7 +90,7 @@ namespace optix {
 
     SizeAlign Scene::Priv::calcHitGroupRecordStride(const _Pipeline* pipeline) const {
         SizeAlign maxSizeAlign;
-        for (auto gas : geomASs) {
+        for (_GeometryAccelerationStructure* gas : geomASs) {
             SizeAlign sizeAlign = gas->calcHitGroupRecordStride(pipeline);
             maxSizeAlign = max(maxSizeAlign, sizeAlign);
         }
@@ -97,7 +98,7 @@ namespace optix {
     }
 
     void Scene::Priv::fillSBTRecords(const _Pipeline* pipeline, uint8_t* records, uint32_t stride) const {
-        for (auto gas : geomASs) {
+        for (_GeometryAccelerationStructure* gas : geomASs) {
             for (int j = 0; j < gas->getNumMaterialSets(); ++j) {
                 records += gas->fillSBTRecords(pipeline, j, records, stride);
             }
@@ -129,7 +130,7 @@ namespace optix {
     void Scene::generateSBTLayout() const {
         uint32_t sbtOffset = 0;
         m->sbtOffsets.clear();
-        for (auto gas : m->geomASs) {
+        for (_GeometryAccelerationStructure* gas : m->geomASs) {
             for (int matSetIdx = 0; matSetIdx < gas->getNumMaterialSets(); ++matSetIdx) {
                 uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
                 _Scene::SBTOffsetKey key = { gas, matSetIdx };
@@ -183,8 +184,8 @@ namespace optix {
         MaterialKey key{ matSetIdx, -1 };
         for (int matIdx = 0; matIdx < buildInputFlags.size(); ++matIdx) {
             key.matIndex = matIdx;
-            if (materials.count(key) == 0)
-                throw make_runtime_error("No material registered for Material set: %u, Material: %u", matSetIdx, matIdx);
+            THROW_RUNTIME_ERROR(materials.count(key) > 0,
+                                "No material registered for Material set: %u, Material: %u", matSetIdx, matIdx);
 
             const _Material* mat = materials.at(key);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
@@ -214,8 +215,8 @@ namespace optix {
         MaterialKey key{ matSetIdx, -1 };
         for (int matIdx = 0; matIdx < buildInputFlags.size(); ++matIdx) {
             key.matIndex = matIdx;
-            if (materials.count(key) == 0)
-                throw make_runtime_error("No material registered for Material set: %u, Material: %u", matSetIdx, matIdx);
+            THROW_RUNTIME_ERROR(materials.count(key) > 0,
+                                "No material registered for Material set: %u, Material: %u", matSetIdx, matIdx);
 
             const _Material* mat = materials.at(key);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
@@ -265,24 +266,24 @@ namespace optix {
     }
 
     void GeometryInstance::setNumMaterials(uint32_t numMaterials) const {
-        if (m->buildInputFlags.size() != 0)
-            throw make_runtime_error("Number of hit groups has been already set.");
+        THROW_RUNTIME_ERROR(m->buildInputFlags.size() == 0,
+                            "Number of hit groups has been already set.");
 
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
         size_t numMaterials = m->buildInputFlags.size();
-        if (matIdx >= numMaterials)
-            throw make_runtime_error("Out of material bounds [0, %u).", (uint32_t)numMaterials);
+        THROW_RUNTIME_ERROR(matIdx < numMaterials,
+                            "Out of material bounds [0, %u).", (uint32_t)numMaterials);
 
         m->buildInputFlags[matIdx] = flags;
     }
 
     void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const {
         size_t numMaterials = m->buildInputFlags.size();
-        if (matIdx >= numMaterials)
-            throw make_runtime_error("Out of material bounds [0, %u).", (uint32_t)numMaterials);
+        THROW_RUNTIME_ERROR(matIdx < numMaterials,
+                            "Out of material bounds [0, %u).", (uint32_t)numMaterials);
 
         _GeometryInstance::MaterialKey key{ matSetIdx, matIdx };
         m->materials[key] = extract(mat);
@@ -318,9 +319,9 @@ namespace optix {
     }
 
     uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records, uint32_t stride) const {
-        if (matSetIdx >= numRayTypesValues.size())
-            throw make_runtime_error("Material set index %u is out of bound [0, %u).",
-                                     matSetIdx, static_cast<uint32_t>(numRayTypesValues.size()));
+        THROW_RUNTIME_ERROR(matSetIdx < numRayTypesValues.size(),
+                            "Material set index %u is out of bound [0, %u).",
+                            matSetIdx, static_cast<uint32_t>(numRayTypesValues.size()));
 
         const uint8_t* orgHead = records;
         for (int i = 0; i < children.size(); ++i)
@@ -339,21 +340,35 @@ namespace optix {
         m = nullptr;
     }
 
+    void GeometryAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) {
+        bool changed = false;
+        changed |= m->preferFastTrace != preferFastTrace;
+        m->preferFastTrace == preferFastTrace;
+        changed |= m->allowUpdate != allowUpdate;
+        m->allowUpdate == allowUpdate;
+        changed |= m->allowCompaction != allowCompaction;
+        m->allowCompaction == allowCompaction;
+
+        if (changed) {
+            m->available = false;
+            m->compactedAvailable = false;
+        }
+    }
+
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
         m->numRayTypesValues.resize(numMatSets, 0);
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
-        if (matSetIdx >= m->numRayTypesValues.size())
-            throw make_runtime_error("Material set index %u is out of bounds [0, %u).",
-                                     matSetIdx, static_cast<uint32_t>(m->numRayTypesValues.size()));
+        THROW_RUNTIME_ERROR(matSetIdx < m->numRayTypesValues.size(),
+                            "Material set index %u is out of bounds [0, %u).",
+                            matSetIdx, static_cast<uint32_t>(m->numRayTypesValues.size()));
         m->numRayTypesValues[matSetIdx] = numRayTypes;
     }
 
     void GeometryAccelerationStructure::addChild(const GeometryInstance &geomInst) const {
         auto _geomInst = extract(geomInst);
-        if (_geomInst == nullptr)
-            throw make_runtime_error("Invalid geometry instance %p.", _geomInst);
+        THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
 
         m->children.push_back(_geomInst);
 
@@ -361,7 +376,7 @@ namespace optix {
         m->compactedAvailable = false;
     }
 
-    void GeometryAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const {
+    void GeometryAccelerationStructure::rebuild(CUstream stream) const {
         m->fillBuildInputs();
 
         {
@@ -369,9 +384,9 @@ namespace optix {
             m->accelTempBuffer.finalize();
 
             std::memset(&m->buildOptions, 0, sizeof(m->buildOptions));
-            m->buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
-                                          (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                          (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+            m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
+                                          (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                          (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
             //buildOptions.motionOptions
 
             OptixAccelBufferSizes bufferSizes;
@@ -467,8 +482,8 @@ namespace optix {
 
 
     void InstanceAccelerationStructure::Priv::setupInstances() {
-        if (!scene->sbtOffsetsGenerationIsDone())
-            throw make_runtime_error("SBT layout generation should be done before.");
+        THROW_RUNTIME_ERROR(scene->sbtOffsetsGenerationIsDone(),
+                            "SBT layout generation should be done before.");
 
         instanceBuffer.finalize();
 
@@ -479,8 +494,7 @@ namespace optix {
             _Instance &inst = children[i];
 
             if (inst.type == InstanceType::GAS) {
-                if (!inst.gas->isReady())
-                    throw make_runtime_error("GAS %p is not ready.", inst.gas);
+                THROW_RUNTIME_ERROR(inst.gas->isReady(), "GAS %p is not ready.", inst.gas);
 
                 inst.rawInstance.traversableHandle = inst.gas->getHandle();
                 inst.rawInstance.sbtOffset = scene->getSBTOffset(inst.gas, inst.matSetIndex);
@@ -513,12 +527,26 @@ namespace optix {
         m = nullptr;
     }
 
+    void InstanceAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) {
+        bool changed = false;
+        changed |= m->preferFastTrace != preferFastTrace;
+        m->preferFastTrace == preferFastTrace;
+        changed |= m->allowUpdate != allowUpdate;
+        m->allowUpdate == allowUpdate;
+        changed |= m->allowCompaction != allowCompaction;
+        m->allowCompaction == allowCompaction;
+
+        if (changed) {
+            m->available = false;
+            m->compactedAvailable = false;
+        }
+    }
+
     void InstanceAccelerationStructure::addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx, const float instantTransform[12]) const {
         auto _gas = extract(gas);
-        if (_gas == nullptr)
-            throw make_runtime_error("Invalid GAS %p.", _gas);
-        if (matSetIdx >= _gas->getNumMaterialSets())
-            throw make_runtime_error("Material set index %u is out of bound [0, %u).", matSetIdx, _gas->getNumMaterialSets());
+        THROW_RUNTIME_ERROR(_gas, "Invalid GAS %p.", _gas);
+        THROW_RUNTIME_ERROR(matSetIdx < _gas->getNumMaterialSets(),
+                            "Material set index %u is out of bound [0, %u).", matSetIdx, _gas->getNumMaterialSets());
 
         _Instance inst = _Instance(_gas, matSetIdx, instantTransform);
 
@@ -528,7 +556,7 @@ namespace optix {
         m->compactedAvailable = false;
     }
 
-    void InstanceAccelerationStructure::rebuild(bool preferFastTrace, bool allowUpdate, bool enableCompaction, CUstream stream) const {
+    void InstanceAccelerationStructure::rebuild(CUstream stream) const {
         m->setupInstances();
         m->fillBuildInput();
 
@@ -537,9 +565,9 @@ namespace optix {
             m->accelTempBuffer.finalize();
 
             std::memset(&m->buildOptions, 0, sizeof(m->buildOptions));
-            m->buildOptions.buildFlags = ((preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : 0) |
-                                          (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                          (enableCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+            m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
+                                          (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                          (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
             //buildOptions.motionOptions
 
             OptixAccelBufferSizes bufferSizes;
@@ -652,15 +680,10 @@ namespace optix {
     
     void Pipeline::Priv::setupShaderBindingTable() {
         if (!sbtSetup) {
-            if (scene == nullptr)
-                throw make_runtime_error("Scene is not set.");
-
-            if (rayGenProgram == nullptr)
-                throw make_runtime_error("Ray generation program is not set.");
+            THROW_RUNTIME_ERROR(rayGenProgram, "Ray generation program is not set.");
 
             for (int i = 0; i < numMissRayTypes; ++i)
-                if (missPrograms[i] == nullptr)
-                    throw make_runtime_error("Miss program is not set for some ray types.");
+                THROW_RUNTIME_ERROR(missPrograms[i], "Miss program is not set for ray type %d.", i);
 
             sbt = OptixShaderBindingTable{};
             {
@@ -758,8 +781,7 @@ namespace optix {
 
     ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        if (_module->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module->getPipeline() == m, "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -776,8 +798,7 @@ namespace optix {
 
     ProgramGroup Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        if (_module->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module->getPipeline() == m, "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
@@ -794,8 +815,8 @@ namespace optix {
 
     ProgramGroup Pipeline::createMissProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        if (_module && _module->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module == nullptr || _module->getPipeline() == m,
+                            "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
@@ -817,17 +838,18 @@ namespace optix {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         _Module* _module_IS = extract(module_IS);
-        if (entryFunctionNameCH && _module_CH && _module_CH->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given CH module.");
-        if (entryFunctionNameAH && _module_AH && _module_AH->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given AH module.");
-        if (entryFunctionNameIS && _module_IS && _module_IS->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given IS module.");
+        THROW_RUNTIME_ERROR(entryFunctionNameCH == nullptr || _module_CH == nullptr ||
+                            _module_CH->getPipeline() == m,
+                            "Pipeline mismatch for the given CH module.");
+        THROW_RUNTIME_ERROR(entryFunctionNameAH == nullptr || _module_AH == nullptr ||
+                            _module_AH->getPipeline() == m,
+                            "Pipeline mismatch for the given AH module.");
+        THROW_RUNTIME_ERROR(entryFunctionNameIS == nullptr || _module_IS == nullptr ||
+                            _module_IS->getPipeline() == m,
+                            "Pipeline mismatch for the given IS module.");
 
-        if (entryFunctionNameCH == nullptr &&
-            entryFunctionNameAH == nullptr &&
-            entryFunctionNameIS == nullptr)
-            throw make_runtime_error("Either of CH/AH/IS entry function name should be provided.");
+        THROW_RUNTIME_ERROR(entryFunctionNameCH || entryFunctionNameAH || entryFunctionNameIS,
+                            "Either of CH/AH/IS entry function name should be provided.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
@@ -856,13 +878,15 @@ namespace optix {
                                                Module module_CC, const char* entryFunctionNameCC) const {
         _Module* _module_DC = extract(module_DC);
         _Module* _module_CC = extract(module_CC);
-        if (entryFunctionNameDC && _module_DC && _module_DC->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given DC module.");
-        if (entryFunctionNameCC && _module_CC && _module_CC->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given CC module.");
+        THROW_RUNTIME_ERROR(entryFunctionNameDC == nullptr || _module_DC == nullptr ||
+                            _module_DC->getPipeline() == m,
+                            "Pipeline mismatch for the given DC module.");
+        THROW_RUNTIME_ERROR(entryFunctionNameCC == nullptr || _module_CC == nullptr ||
+                            _module_CC->getPipeline() == m,
+                            "Pipeline mismatch for the given CC module.");
 
-        if (entryFunctionNameDC == nullptr && entryFunctionNameCC == nullptr)
-            throw make_runtime_error("Either of CC/DC entry function name should be provided.");
+        THROW_RUNTIME_ERROR(entryFunctionNameDC || entryFunctionNameCC,
+                            "Either of CC/DC entry function name should be provided.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
@@ -886,8 +910,7 @@ namespace optix {
 
 
     void Pipeline::link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const {
-        if (m->pipelineLinked)
-            throw make_runtime_error("This pipeline has been already linked.");
+        THROW_RUNTIME_ERROR(!m->pipelineLinked, "This pipeline has been already linked.");
 
         if (!m->pipelineLinked) {
             OptixPipelineLinkOptions pipelineLinkOptions = {};
@@ -925,37 +948,32 @@ namespace optix {
     
     void Pipeline::setRayGenerationProgram(ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        if (_program == nullptr)
-            throw make_runtime_error("Invalid program %p.", _program);
-        if (_program->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given program (group).");
+        THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
+        THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->rayGenProgram = _program;
     }
 
     void Pipeline::setExceptionProgram(ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        if (_program == nullptr)
-            throw make_runtime_error("Invalid program %p.", _program);
-        if (_program->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given program (group).");
+        THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
+        THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->exceptionProgram = _program;
     }
 
     void Pipeline::setMissProgram(uint32_t rayType, ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        if (rayType >= m->numMissRayTypes)
-            throw make_runtime_error("Invalid ray type.");
-        if (_program == nullptr)
-            throw make_runtime_error("Invalid program %p.", _program);
-        if (_program->getPipeline() != m)
-            throw make_runtime_error("Pipeline mismatch for the given program (group).");
+        THROW_RUNTIME_ERROR(rayType < m->numMissRayTypes, "Invalid ray type.");
+        THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
+        THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->missPrograms[rayType] = _program;
     }
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) {
+        THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
+
         m->setupShaderBindingTable();
 
         OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
