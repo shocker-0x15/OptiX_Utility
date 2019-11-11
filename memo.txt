@@ -25,6 +25,7 @@ GeometryInstance
   実際のMaterialはマテリアルのインデックスだけでなく、マテリアルセットのインデックスを併せて登録する。
 
 - TraversableHandleをユーザーが直接扱う現状の実装では、ローンチ前にGAS, SBT Layout, IASのセットアップをユーザー側で終えておく必要がある。
+  逆に言えばWrapper側ではSBTLayoutの生成まではローンチ時には終わっているとみなすことができる。
 
 GASのDirty化条件:
 1. GASに対するGeomInstの追加・削除 (Auto)

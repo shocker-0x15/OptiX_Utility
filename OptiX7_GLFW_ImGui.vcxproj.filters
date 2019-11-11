@@ -107,5 +107,6 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="post_process.cu" />
   </ItemGroup>
 </Project>

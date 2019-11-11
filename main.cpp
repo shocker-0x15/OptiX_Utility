@@ -365,6 +365,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
+    CUresult cudaResult;
+    CUmodule modulePostProcess;
+    cudaResult = cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str());
+    CUfunction kernelPostProcess;
+    cudaResult = cuModuleGetFunction(&kernelPostProcess, modulePostProcess, "postProcess");
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -596,6 +602,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         rngBuffer.unmap();
     }
 
+    CUDAHelper::Buffer outputBuffer;
+    outputBuffer.initialize(CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(float4), 0);
+
 
 
     Shared::PipelineLaunchParameters plp;
@@ -604,7 +613,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
     plp.rngBuffer = (Shared::PCG32RNG*)rngBuffer.getDevicePointer();
-    plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
+    plp.outputBuffer = (float4*)outputBuffer.getDevicePointer();
     plp.camera.fovY = 60 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
@@ -651,13 +660,27 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-        plp.outputBuffer = (float4*)outputBufferCUDA.beginCUDAAccess(stream);
-
         CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
         pipeline.launch(stream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-        ++plp.numAccumFrames;
+        {
+            const uint32_t blockSize = 8;
+            uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
+            uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
 
-        outputBufferCUDA.endCUDAAccess(stream);
+            CUdeviceptr arg_rawOutputBuffer = outputBuffer.getDevicePointer();
+            CUdeviceptr arg_outputBuffer = outputBufferCUDA.beginCUDAAccess(stream);
+            void* args[] = {
+                &arg_rawOutputBuffer, &renderTargetSizeX, &renderTargetSizeY, &plp.numAccumFrames,
+                &arg_outputBuffer
+            };
+
+            cudaResult = cuLaunchKernel(kernelPostProcess,
+                                        dimX, dimY, 1, blockSize, blockSize, 1,
+                                        0, stream, args, nullptr);
+
+            outputBufferCUDA.endCUDAAccess(stream);
+        }
+        ++plp.numAccumFrames;
 
 
 
@@ -739,6 +762,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    outputBuffer.finalize();
     rngBuffer.finalize();
     
     scaleSampler.finalize();

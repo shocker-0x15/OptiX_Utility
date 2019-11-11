@@ -4,48 +4,9 @@
 
 #define M_PI 3.14159265
 
-RT_FUNCTION float3 operator-(const float3 &v) {
-    return make_float3(-v.x, -v.y, -v.z);
-}
-RT_FUNCTION float3 operator+(const float3 &v0, const float3 &v1) {
-    return make_float3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
-}
-RT_FUNCTION float3 operator-(const float3 &v0, const float3 &v1) {
-    return make_float3(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z);
-}
-RT_FUNCTION float3 operator*(const float3 &v0, const float3 &v1) {
-    return make_float3(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z);
-}
-RT_FUNCTION float3 operator*(float s, const float3 &v) {
-    return make_float3(s * v.x, s * v.y, s * v.z);
-}
-RT_FUNCTION float3 operator*(const float3 &v, float s) {
-    return make_float3(s * v.x, s * v.y, s * v.z);
-}
-RT_FUNCTION float3 operator/(const float3 &v, float s) {
-    float r = 1 / s;
-    return r * v;
-}
-
-RT_FUNCTION float dot(const float3 &v0, const float3 &v1) {
-    return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
-}
-RT_FUNCTION float length(const float3 &v) {
-    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-RT_FUNCTION float3 normalize(const float3 &v) {
-    return v / length(v);
-}
-
 namespace Sample {
 
 using namespace Shared;
-
-RT_FUNCTION float4 make_float4(const float3 &v, float w) {
-    return ::make_float4(v.x, v.y, v.z, w);
-}
-
-
 
 extern "C" __constant__ PipelineLaunchParameters plp;
 
@@ -188,12 +149,14 @@ RT_PROGRAM void __raygen__fill() {
                RayType_Search, NumRayTypes, RayType_Search,
                payload[0], payload[1], payload[2], payload[3], payload[4]);
 
-    float4 cumResultF4 = plp.outputBuffer[index];
-    float3 cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
-    float3 result = ((plp.numAccumFrames - 1) * cumResult + payload.raw.contribution) / plp.numAccumFrames;
 
     plp.rngBuffer[index] = rng;
-    plp.outputBuffer[index] = make_float4(result, 1.0f);
+    float3 cumResult = make_float3(0.0f, 0.0f, 0.0f);
+    if (plp.numAccumFrames > 1) {
+        float4 cumResultF4 = plp.outputBuffer[index];
+        cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
+    }
+    plp.outputBuffer[index] = make_float4(cumResult + payload.raw.contribution, 1.0f);
 }
 
 RT_PROGRAM void __miss__searchRay() {
@@ -226,7 +189,7 @@ RT_PROGRAM void __closesthit__shading() {
     float b2 = 1 - (b0 + b1);
     float3 p = b0 * p0 + b1 * p1 + b2 * p2;
     float3 sn = normalize(b0 * n0 + b1 * n1 + b2 * n2);
-    p = p + sn * 0.0001f;
+    p = p + sn * 0.001f;
 
     float3 lp = make_float3(-0.5f, 0.99f, -0.5f) +
         rng.getFloat0cTo1o() * make_float3(1, 0, 0) + 

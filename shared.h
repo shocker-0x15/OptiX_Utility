@@ -10,6 +10,49 @@
 #   define RT_FUNCTION
 #endif
 
+RT_FUNCTION float3 getXYZ(const float4 &v) {
+    return make_float3(v.x, v.y, v.z);
+}
+
+RT_FUNCTION float4 make_float4(const float3 &v, float w) {
+    return make_float4(v.x, v.y, v.z, w);
+}
+
+RT_FUNCTION float3 operator-(const float3 &v) {
+    return make_float3(-v.x, -v.y, -v.z);
+}
+RT_FUNCTION float3 operator+(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
+}
+RT_FUNCTION float3 operator-(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z);
+}
+RT_FUNCTION float3 operator*(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z);
+}
+RT_FUNCTION float3 operator*(float s, const float3 &v) {
+    return make_float3(s * v.x, s * v.y, s * v.z);
+}
+RT_FUNCTION float3 operator*(const float3 &v, float s) {
+    return make_float3(s * v.x, s * v.y, s * v.z);
+}
+RT_FUNCTION float3 operator/(const float3 &v, float s) {
+    float r = 1 / s;
+    return r * v;
+}
+
+RT_FUNCTION float dot(const float3 &v0, const float3 &v1) {
+    return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+}
+RT_FUNCTION float length(const float3 &v) {
+    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+RT_FUNCTION float3 normalize(const float3 &v) {
+    return v / length(v);
+}
+
+
+
 namespace Shared {
     enum RayType {
         RayType_Search = 0,

@@ -192,6 +192,10 @@ namespace optix {
 
 
 
+    struct HitGroupSBT {
+        Buffer records;
+    };
+    
     class Scene::Priv {
         struct SBTOffsetKey {
             const _GeometryAccelerationStructure* gas;
@@ -217,6 +221,8 @@ namespace optix {
         struct {
             unsigned int sbtLayoutIsUpToDate : 1;
         };
+
+        std::map<const _Pipeline*, HitGroupSBT*> hitGroupSBTs;
 
     public:
         Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {}
@@ -247,11 +253,11 @@ namespace optix {
 
         SizeAlign calcHitGroupRecordStride(const _Pipeline* pipeline) const;
 
-        uint32_t getNumSBTRecords() const {
-            return numSBTRecords;
-        }
+        void registerPipeline(const _Pipeline* pipeline);
 
-        void fillSBTRecords(const _Pipeline* pipeline, uint8_t* records, uint32_t stride) const;
+        void setupHitGroupSBT(const _Pipeline* pipeline);
+
+        const HitGroupSBT* getHitGroupSBT(const _Pipeline* pipeline);
     };
 
 
@@ -531,7 +537,6 @@ namespace optix {
         std::vector<_ProgramGroup*> missPrograms;
         Buffer rayGenRecord;
         Buffer missRecords;
-        Buffer hitGroupRecords;
 
         OptixShaderBindingTable sbt;
 

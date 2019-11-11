@@ -79,16 +79,39 @@ namespace optix {
         return maxSizeAlign;
     }
 
-    void Scene::Priv::fillSBTRecords(const _Pipeline* pipeline, uint8_t* records, uint32_t stride) const {
+    void Scene::Priv::registerPipeline(const _Pipeline* pipeline) {
+        THROW_RUNTIME_ERROR(hitGroupSBTs.count(pipeline) == 0, "This pipeline %p has been already registered.", pipeline);
+        auto hitGroupSBT = new HitGroupSBT();
+        if (sbtLayoutIsUpToDate) {
+            SizeAlign stride = calcHitGroupRecordStride(pipeline);
+            hitGroupSBT->records.initialize(BufferType::Device, numSBTRecords, stride.size, 0);
+        }
+
+        hitGroupSBTs[pipeline] = hitGroupSBT;
+    }
+
+    void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
+        HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
+        auto records = reinterpret_cast<uint8_t*>(hitGroupSBT->records.map());
+        uint32_t stride = hitGroupSBT->records.stride();
+
         for (_GeometryAccelerationStructure* gas : geomASs) {
             for (int j = 0; j < gas->getNumMaterialSets(); ++j) {
                 uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records, stride);
                 records += numRecords * stride;
             }
         }
+
+        hitGroupSBT->records.unmap();
+    }
+
+    const HitGroupSBT* Scene::Priv::getHitGroupSBT(const _Pipeline* pipeline) {
+        return hitGroupSBTs.at(pipeline);
     }
 
     void Scene::destroy() {
+        for (auto it = m->hitGroupSBTs.crbegin(); it != m->hitGroupSBTs.crend(); ++it)
+            delete it->second;
         delete m;
         m = nullptr;
     }
@@ -111,6 +134,9 @@ namespace optix {
     }
 
     void Scene::generateSBTLayout() const {
+        if (m->sbtLayoutIsUpToDate)
+            return;
+
         uint32_t sbtOffset = 0;
         m->sbtOffsets.clear();
         for (_GeometryAccelerationStructure* gas : m->geomASs) {
@@ -123,6 +149,13 @@ namespace optix {
         }
         m->numSBTRecords = sbtOffset;
         m->sbtLayoutIsUpToDate = true;
+
+        for (auto it = m->hitGroupSBTs.begin(); it != m->hitGroupSBTs.end(); ++it) {
+            HitGroupSBT* hitGroupSBT = it->second;
+            hitGroupSBT->records.finalize();
+            SizeAlign stride = m->calcHitGroupRecordStride(it->first);
+            hitGroupSBT->records.initialize(BufferType::Device, m->numSBTRecords, stride.size, 0);
+        }
     }
 
     void Scene::setupASsAndSBTLayout(CUstream stream) const {
@@ -712,11 +745,6 @@ namespace optix {
             missRecords.finalize();
             missRecords.initialize(BufferType::Device, numMissRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
 
-            SizeAlign hitGroupRecordStride = scene->calcHitGroupRecordStride(this);
-            uint32_t numHitGroupRecords = scene->getNumSBTRecords();
-            hitGroupRecords.finalize();
-            hitGroupRecords.initialize(BufferType::Device, numHitGroupRecords, hitGroupRecordStride.size, 0);
-
             sbtAllocDone = true;
         }
 
@@ -737,9 +765,8 @@ namespace optix {
                     missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
                 missRecords.unmap();
 
-                auto hitGroupRecordsOnHost = reinterpret_cast<uint8_t*>(hitGroupRecords.map());
-                scene->fillSBTRecords(this, hitGroupRecordsOnHost, hitGroupRecords.stride());
-                hitGroupRecords.unmap();
+                scene->setupHitGroupSBT(this);
+                const HitGroupSBT* hitGroupSBT = scene->getHitGroupSBT(this);
 
 
 
@@ -751,9 +778,9 @@ namespace optix {
                 sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
                 sbt.missRecordCount = numMissRayTypes;
 
-                sbt.hitgroupRecordBase = hitGroupRecords.getDevicePointer();
-                sbt.hitgroupRecordStrideInBytes = hitGroupRecords.stride();
-                sbt.hitgroupRecordCount = hitGroupRecords.numElements();
+                sbt.hitgroupRecordBase = hitGroupSBT->records.getDevicePointer();
+                sbt.hitgroupRecordStrideInBytes = hitGroupSBT->records.stride();
+                sbt.hitgroupRecordCount = hitGroupSBT->records.numElements();
 
                 sbt.callablesRecordBase = 0;
                 sbt.callablesRecordCount = 0;
@@ -973,11 +1000,13 @@ namespace optix {
 
     void Pipeline::setScene(Scene scene) const {
         m->scene = extract(scene);
+        m->scene->registerPipeline(m);
     }
 
     void Pipeline::setNumMissRayTypes(uint32_t numMissRayTypes) const {
         m->numMissRayTypes = numMissRayTypes;
         m->missPrograms.resize(m->numMissRayTypes);
+        m->sbtAllocDone = false;
     }
     
     void Pipeline::setRayGenerationProgram(ProgramGroup program) const {
