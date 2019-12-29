@@ -43,6 +43,7 @@
 #include "cuda_helper.h"
 
 #include "optix_util.h"
+#include <cuda_runtime.h>
 
 #include "shared.h"
 
@@ -114,24 +115,37 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 class TriangleMesh {
+    CUcontext m_cudaContext;
     optix::Scene m_scene;
 
     struct MaterialGroup {
-        CUDAHelper::Buffer* triangleBuffer;
+        CUDAHelper::TypedBuffer<Shared::Triangle>* triangleBuffer;
         optix::Material material;
         optix::GeometryInstance geometryInstance;
     };
 
-    CUDAHelper::Buffer m_vertexBuffer;
+    CUDAHelper::TypedBuffer<Shared::Vertex> m_vertexBuffer;
     std::vector<MaterialGroup> m_materialGroups;
 
     TriangleMesh(const TriangleMesh &) = delete;
     TriangleMesh &operator=(const TriangleMesh &) = delete;
 public:
-    TriangleMesh(optix::Scene scene) : m_scene(scene) {}
+    TriangleMesh(CUcontext cudaContext, optix::Scene scene) : m_cudaContext(cudaContext), m_scene(scene) {}
+
+    void destroy() {
+        for (auto it = m_materialGroups.rbegin(); it != m_materialGroups.rend(); ++it) {
+            MaterialGroup &matGroup = *it;
+            matGroup.geometryInstance.destroy();
+            matGroup.triangleBuffer->finalize();
+            delete matGroup.triangleBuffer;
+        }
+        m_materialGroups.clear();
+
+        m_vertexBuffer.finalize();
+    }
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
-        m_vertexBuffer.initialize(CUDAHelper::BufferType::Device, numVertices, sizeof(vertices[0]), 0);
+        m_vertexBuffer.initialize(m_cudaContext, CUDAHelper::BufferType::Device, numVertices);
         auto verticesD = (Shared::Vertex*)m_vertexBuffer.map();
         std::copy_n(vertices, numVertices, verticesD);
         m_vertexBuffer.unmap();
@@ -142,9 +156,9 @@ public:
 
         MaterialGroup &group = m_materialGroups.back();
 
-        auto triangleBuffer = new CUDAHelper::Buffer();
+        auto triangleBuffer = new CUDAHelper::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
-        triangleBuffer->initialize(CUDAHelper::BufferType::Device, numTriangles, sizeof(triangles[0]), 0);
+        triangleBuffer->initialize(m_cudaContext, CUDAHelper::BufferType::Device, numTriangles);
         auto trianglesD = (Shared::Triangle*)triangleBuffer->map();
         std::copy_n(triangles, numTriangles, trianglesD);
         triangleBuffer->unmap();
@@ -335,8 +349,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
+
+    CUcontext cuContext;
+    int32_t cuDeviceCount;
+    CUstream cuStream;
+    CUDADRV_CHECK(cuInit(0));
+    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
+    CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
+    CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
+    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
     
-    optix::Context optixContext = optix::Context::create();
+    optix::Context optixContext = optix::Context::create(cuContext);
 
     optix::Pipeline pipeline = optixContext.createPipeline();
 
@@ -345,17 +368,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernel.ptx");
-    optix::Module module = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-                                                              OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
+    optix::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+                                                                   OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 
     optix::Module emptyModule;
 
-    optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, "__raygen__fill");
-    optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(module, "__miss__searchRay");
+    optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__fill");
+    optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
     optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optix::ProgramGroup searchRayHitProgramGroup = pipeline.createHitProgramGroup(module, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
-    optix::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, module, "__anyhit__visibility", emptyModule, nullptr);
+    optix::ProgramGroup searchRayHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
+    optix::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
@@ -365,21 +388,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
-    CUresult cudaResult;
     CUmodule modulePostProcess;
-    cudaResult = cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str());
+    CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str()));
     CUfunction kernelPostProcess;
-    cudaResult = cuModuleGetFunction(&kernelPostProcess, modulePostProcess, "postProcess");
+    CUDADRV_CHECK(cuModuleGetFunction(&kernelPostProcess, modulePostProcess, "postProcess"));
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
-
-
-
-    // JP: デフォルトストリーム
-    // EN: default stream
-    CUstream stream = 0;
-    //CUDA_CHECK(cudaStreamCreate(&stream));
 
 
 
@@ -412,7 +427,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matLight.setData(Shared::RayType_Search, searchRayHitProgramGroup, matLightData);
     matLight.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matLightData);
     
-    TriangleMesh meshCornellBox(scene);
+    TriangleMesh meshCornellBox(cuContext, scene);
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -469,7 +484,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         meshCornellBox.addMaterialGroup(triangles + 8, 2, matRight);
     }
 
-    TriangleMesh meshAreaLight(scene);
+    TriangleMesh meshAreaLight(cuContext, scene);
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -514,7 +529,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 #if 1
     // High-level control
-    scene.setupASsAndSBTLayout(stream);
+    scene.setupASsAndSBTLayout(cuStream);
 #else
     // Fine detail control
 
@@ -535,7 +550,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     pipeline.setScene(scene);
 
-    CUDA_CHECK(cudaStreamSynchronize(stream));
+    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     // END: 
     // ----------------------------------------------------------------
@@ -549,14 +564,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUDAHelper::Buffer outputBufferCUDA;
     outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
     outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-    outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+    outputBufferCUDA.initialize(cuContext, CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
 
     
     // JP: Hi-DPIディスプレイで過剰なレンダリング負荷になってしまうため低解像度フレームバッファーを作成する。
     // EN: Create a low-resolution frame buffer to avoid too much rendering load caused by Hi-DPI display.
     GLTK::FrameBuffer frameBuffer;
-    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
+    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
+    // sRGB8を指定しないとなぜか精度問題が発生したが、むしろRGB8が本来なら正しい気がする。
 
 
 
@@ -589,21 +605,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     CUDAHelper::Buffer rngBuffer;
-    rngBuffer.initialize(CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(Shared::PCG32RNG), 0);
-    {
+    rngBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(Shared::PCG32RNG), 0);
+    const auto initializeRNGSeeds = [](CUDAHelper::Buffer &buffer) {
         std::mt19937_64 rng(591842031321323413);
 
-        auto seeds = reinterpret_cast<uint64_t*>(rngBuffer.map());
-        for (int y = 0; y < renderTargetSizeY; ++y) {
-            for (int x = 0; x < renderTargetSizeX; ++x) {
-                seeds[y * renderTargetSizeX + x] = rng();
-            }
-        }
-        rngBuffer.unmap();
-    }
+        auto seeds = reinterpret_cast<uint64_t*>(buffer.map());
+        for (int i = 0; i < buffer.numElements(); ++i)
+            seeds[i] = rng();
+        buffer.unmap();
+    };
+    initializeRNGSeeds(rngBuffer);
 
-    CUDAHelper::Buffer outputBuffer;
-    outputBuffer.initialize(CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(float4), 0);
+    CUDAHelper::Buffer accumBuffer;
+    accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(float4), 0);
 
 
 
@@ -613,12 +627,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
     plp.rngBuffer = (Shared::PCG32RNG*)rngBuffer.getDevicePointer();
-    plp.outputBuffer = (float4*)outputBuffer.getDevicePointer();
+    plp.accumBuffer = (float4*)accumBuffer.getDevicePointer();
     plp.camera.fovY = 60 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     CUdeviceptr plpOnDevice;
-    CUDA_CHECK(cudaMalloc((void**)&plpOnDevice, sizeof(plp)));
+    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
 
 
 
@@ -645,41 +659,39 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             outputBufferGL.finalize();
             outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
             outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-            outputBufferCUDA.initialize(CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+            outputBufferCUDA.initialize(cuContext, CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
             frameBuffer.finalize();
-            frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_RGBA8, GL_DEPTH_COMPONENT32);
+            frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
+
+            accumBuffer.finalize();
+            accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(float4), 0);
+            rngBuffer.finalize();
+            rngBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(Shared::PCG32RNG), 0);
+            initializeRNGSeeds(rngBuffer);
 
             // EN: update the pipeline parameters.
             plp.imageSize.x = renderTargetSizeX;
             plp.imageSize.y = renderTargetSizeY;
-            plp.outputBuffer = (float4*)outputBufferCUDA.getDevicePointer();
+            plp.numAccumFrames = 1;
+            plp.rngBuffer = (Shared::PCG32RNG*)rngBuffer.getDevicePointer();
+            plp.accumBuffer = (float4*)accumBuffer.getDevicePointer();
+            plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
             resized = true;
         }
 
 
 
-        CUDA_CHECK(cudaMemcpyAsync((void*)plpOnDevice, &plp, sizeof(plp), cudaMemcpyHostToDevice, stream));
-        pipeline.launch(stream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-        {
-            const uint32_t blockSize = 8;
-            uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
-            uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
-
-            CUdeviceptr arg_rawOutputBuffer = outputBuffer.getDevicePointer();
-            CUdeviceptr arg_outputBuffer = outputBufferCUDA.beginCUDAAccess(stream);
-            void* args[] = {
-                &arg_rawOutputBuffer, &renderTargetSizeX, &renderTargetSizeY, &plp.numAccumFrames,
-                &arg_outputBuffer
-            };
-
-            cudaResult = cuLaunchKernel(kernelPostProcess,
-                                        dimX, dimY, 1, blockSize, blockSize, 1,
-                                        0, stream, args, nullptr);
-
-            outputBufferCUDA.endCUDAAccess(stream);
-        }
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        const uint32_t blockSize = 8;
+        uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
+        uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
+        CUDAHelper::callKernel(cuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
+                               accumBuffer.getDevicePointer(), renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
+                               outputBufferCUDA.beginCUDAAccess(cuStream));
+        outputBufferCUDA.endCUDAAccess(cuStream);
         ++plp.numAccumFrames;
 
 
@@ -758,11 +770,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    CUDA_CHECK(cudaFree((void*)plpOnDevice));
+    CUDADRV_CHECK(cuMemFree(plpOnDevice));
 
 
 
-    outputBuffer.finalize();
+    accumBuffer.finalize();
     rngBuffer.finalize();
     
     scaleSampler.finalize();
@@ -781,12 +793,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasAreaLight.destroy();
     gasCornellBox.destroy();
 
+    meshAreaLight.destroy();
+    meshCornellBox.destroy();
+
     matLight.destroy();
     matRight.destroy();
     matLeft.destroy();
     matGray.destroy();
 
     scene.destroy();
+
+    CUDADRV_CHECK(cuModuleUnload(modulePostProcess));
 
     visibilityRayHitProgramGroup.destroy();
     searchRayHitProgramGroup.destroy();
@@ -795,11 +812,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     searchRayMissProgram.destroy();
     rayGenProgram.destroy();
 
-    module.destroy();
+    moduleOptiX.destroy();
 
     pipeline.destroy();
 
     optixContext.destroy();
+
+    CUDADRV_CHECK(cuStreamDestroy(cuStream));
+    CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

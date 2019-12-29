@@ -153,10 +153,10 @@ RT_PROGRAM void __raygen__fill() {
     plp.rngBuffer[index] = rng;
     float3 cumResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
-        float4 cumResultF4 = plp.outputBuffer[index];
+        float4 cumResultF4 = plp.accumBuffer[index];
         cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
     }
-    plp.outputBuffer[index] = make_float4(cumResult + payload.raw.contribution, 1.0f);
+    plp.accumBuffer[index] = make_float4(cumResult + payload.raw.contribution, 1.0f);
 }
 
 RT_PROGRAM void __miss__searchRay() {

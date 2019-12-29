@@ -126,7 +126,7 @@ namespace Shared {
         int2 imageSize;
         uint32_t numAccumFrames;
         PCG32RNG* rngBuffer;
-        float4* outputBuffer;
+        float4* accumBuffer;
         PerspectiveCamera camera;
     };
 }

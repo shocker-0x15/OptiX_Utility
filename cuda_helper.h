@@ -4,6 +4,15 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <vector>
+#include <sstream>
+
+#include <GL/gl3w.h>
+
+#include <cuda.h>
+#include <cudaGL.h>
+#include <vector_types.h>
+
 
 
 // Platform defines
@@ -40,6 +49,20 @@
 #define CUDAHAssert_ShouldNotBeCalled() CUDAHAssert(false, "Should not be called!")
 #define CUDAHAssert_NotImplemented() CUDAHAssert(false, "Not implemented yet!")
 
+#define CUDADRV_CHECK(call) \
+    do { \
+        CUresult error = call; \
+        if (error != CUDA_SUCCESS) { \
+            std::stringstream ss; \
+            const char* errMsg = "failed to get an error message."; \
+            cuGetErrorString(error, &errMsg); \
+            ss << "CUDA call (" << #call << " ) failed with error: '" \
+               << errMsg \
+               << "' (" __FILE__ << ":" << __LINE__ << ")\n"; \
+            throw std::runtime_error(ss.str().c_str()); \
+        } \
+    } while (0)
+
 #define CUDA_CHECK(call) \
     do { \
         cudaError_t error = call; \
@@ -54,20 +77,68 @@
 
 
 
-#include <sstream>
-
-
-
-#include <GL/gl3w.h>
-
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
-
-
-
 namespace CUDAHelper {
     void devPrintf(const char* fmt, ...);
+
+
+
+    using ConstVoidPtr = const void*;
+    
+    inline void addArgPointer(ConstVoidPtr* pointer) {}
+
+    template <typename HeadType, typename... TailTypes>
+    void addArgPointer(ConstVoidPtr* pointer, HeadType &&head, TailTypes&&... tails) {
+        *pointer = &head;
+        addArgPointer(pointer + 1, std::forward<TailTypes>(tails)...);
+    }
+
+    template <typename... ArgTypes>
+    void callKernel(CUstream stream, CUfunction kernel, const dim3 &gridDim, const dim3 &blockDim, uint32_t sharedMemSize,
+                    ArgTypes&&... args) {
+        ConstVoidPtr argPointers[30];
+        addArgPointer(argPointers, std::forward<ArgTypes>(args)...);
+
+        CUDADRV_CHECK(cuLaunchKernel(kernel,
+                                     gridDim.x, gridDim.y, gridDim.z,
+                                     blockDim.x, blockDim.y, blockDim.z,
+                                     sharedMemSize, stream, const_cast<void**>(argPointers), nullptr));
+    }
+
+
+
+    class Timer {
+        CUcontext m_context;
+        CUevent m_startEvent;
+        CUevent m_endEvent;
+
+    public:
+        void initialize(CUcontext context) {
+            m_context = context;
+            CUDADRV_CHECK(cuCtxSetCurrent(m_context));
+            CUDADRV_CHECK(cuEventCreate(&m_startEvent, CU_EVENT_BLOCKING_SYNC));
+            CUDADRV_CHECK(cuEventCreate(&m_endEvent, CU_EVENT_BLOCKING_SYNC));
+        }
+        void finalize() {
+            CUDADRV_CHECK(cuCtxSetCurrent(m_context));
+            CUDADRV_CHECK(cuEventDestroy(m_endEvent));
+            CUDADRV_CHECK(cuEventDestroy(m_startEvent));
+            m_context = nullptr;
+        }
+
+        void start(CUstream stream) const {
+            CUDADRV_CHECK(cuEventRecord(m_startEvent, stream));
+        }
+        void stop(CUstream stream) const {
+            CUDADRV_CHECK(cuEventRecord(m_endEvent, stream));
+        }
+
+        float report() const {
+            float ret = 0.0f;
+            CUDADRV_CHECK(cuEventSynchronize(m_endEvent));
+            CUDADRV_CHECK(cuEventElapsedTime(&ret, m_startEvent, m_endEvent));
+            return ret;
+        }
+    };
 
 
 
@@ -85,38 +156,39 @@ namespace CUDAHelper {
         int32_t m_stride;
 
         void* m_hostPointer;
-        void* m_devicePointer;
+        CUdeviceptr m_devicePointer;
         void* m_mappedPointer;
 
-        GLuint m_GLBufferID;
-        cudaGraphicsResource* m_cudaGfxResource;
+        uint32_t m_GLBufferID;
+        CUgraphicsResource m_cudaGfxResource;
 
-        int32_t m_deviceIndex;
+        CUcontext m_cudaContext;
 
         struct {
             unsigned int m_initialized : 1;
             unsigned int m_mapped : 1;
         };
 
-        void makeCurrent();
-
         Buffer(const Buffer &) = delete;
         Buffer &operator=(const Buffer &) = delete;
 
     public:
         Buffer();
+        Buffer(CUcontext context, BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID = 0) : Buffer() {
+            initialize(context, type, numElements, stride, glBufferID);
+        }
         ~Buffer();
 
-        Buffer(Buffer &&b) = default;
-        Buffer &operator=(Buffer &&b) = default;
+        Buffer(Buffer &&b);
+        Buffer &operator=(Buffer &&b);
 
-        void initialize(BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID);
+        void initialize(CUcontext context, BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID);
         void finalize();
 
         CUdeviceptr getDevicePointer() const {
             return (CUdeviceptr)m_devicePointer;
         }
-        size_t size() const {
+        size_t sizeInBytes() const {
             return (size_t)m_numElements * m_stride;
         }
         size_t stride() const {
@@ -134,5 +206,92 @@ namespace CUDAHelper {
 
         void* map();
         void unmap();
+    };
+
+
+
+    template <typename T>
+    class TypedBuffer : public Buffer {
+    public:
+        TypedBuffer() {}
+        TypedBuffer(CUcontext context, BufferType type, int32_t numElements) {
+            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+        }
+        TypedBuffer(CUcontext context, BufferType type, int32_t numElements, const T &value) {
+            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+            T* values = (T*)map();
+            for (int i = 0; i < numElements; ++i)
+                values[i] = value;
+            unmap();
+        }
+
+        void initialize(CUcontext context, BufferType type, int32_t numElements) {
+            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+        }
+        void initialize(CUcontext context, BufferType type, int32_t numElements, const T &value) {
+            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+            T* values = (T*)Buffer::map();
+            for (int i = 0; i < numElements; ++i)
+                values[i] = value;
+            Buffer::unmap();
+        }
+        void initialize(CUcontext context, BufferType type, const T* v, uint32_t numElements) {
+            initialize(context, type, numElements);
+            CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getDevicePointer(), v, numElements * sizeof(T)));
+        }
+        void initialize(CUcontext context, BufferType type, const std::vector<T> &v) {
+            initialize(context, type, v.size());
+            CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getDevicePointer(), v.data(), v.size() * sizeof(T)));
+        }
+        void finalize() {
+            Buffer::finalize();
+        }
+
+        T* getDevicePointer() const {
+            return reinterpret_cast<T*>(Buffer::getDevicePointer());
+        }
+        T* getDevicePointerAt(uint32_t idx) const {
+            CUdeviceptr ptr = Buffer::getDevicePointer();
+            return reinterpret_cast<T*>(ptr + sizeof(T) * idx);
+        }
+
+        T* map() {
+            return reinterpret_cast<T*>(Buffer::map());
+        }
+
+        T operator[](uint32_t idx) {
+            const T* values = map();
+            T ret = values[idx];
+            unmap();
+            return ret;
+        }
+    };
+
+    template <typename T>
+    class TypedHostBuffer {
+        std::vector<T> m_values;
+
+    public:
+        TypedHostBuffer() {}
+        TypedHostBuffer(TypedBuffer<T> &b) {
+            m_values.resize(b.numElements());
+            auto srcValues = b.map();
+            std::copy_n(srcValues, b.numElements(), m_values.data());
+            b.unmap();
+        }
+
+        T* getPointer() {
+            return m_values.data();
+        }
+        size_t numElements() const {
+            return m_values.size();
+        }
+
+        const T &operator[](uint32_t idx) const {
+            return m_values[idx];
+        }
+        T &operator[](uint32_t idx) {
+            return m_values[idx];
+        }
     };
 }

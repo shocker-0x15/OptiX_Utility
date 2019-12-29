@@ -12,18 +12,12 @@ namespace optix {
 
 
 
-    Context Context::create() {
-        // JP: CUDAの初期化。
-        //     ゼロは現在のCUDAコンテキストを意味する。
-        // EN: initialize CUDA.
-        //     Zero means taking the current CUDA ontext.
-        CUDA_CHECK(cudaFree(0));
-        CUcontext cudaContext = 0;
-
+    Context Context::create(CUcontext cudaContext) {
         OPTIX_CHECK(optixInit());
 
         Context ret;
         ret.m = new _Context();
+        ret.m->cudaContext = cudaContext;
         OptixDeviceContextOptions options = {};
         options.logCallbackFunction = &logCallBack;
         options.logCallbackLevel = 4;
@@ -84,7 +78,7 @@ namespace optix {
         auto hitGroupSBT = new HitGroupSBT();
         if (sbtLayoutIsUpToDate) {
             SizeAlign stride = calcHitGroupRecordStride(pipeline);
-            hitGroupSBT->records.initialize(BufferType::Device, numSBTRecords, stride.size, 0);
+            hitGroupSBT->records.initialize(getCUDAContext(), BufferType::Device, numSBTRecords, stride.size, 0);
         }
 
         hitGroupSBTs[pipeline] = hitGroupSBT;
@@ -154,7 +148,7 @@ namespace optix {
             HitGroupSBT* hitGroupSBT = it->second;
             hitGroupSBT->records.finalize();
             SizeAlign stride = m->calcHitGroupRecordStride(it->first);
-            hitGroupSBT->records.initialize(BufferType::Device, m->numSBTRecords, stride.size, 0);
+            hitGroupSBT->records.initialize(m->getCUDAContext(), BufferType::Device, m->numSBTRecords, stride.size, 0);
         }
     }
 
@@ -211,7 +205,7 @@ namespace optix {
         triArray.numSbtRecords = buildInputFlags.size();
         if (triArray.numSbtRecords > 1) {
             optixAssert_NotImplemented();
-            triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getDevicePointer();
+            triArray.sbtIndexOffsetBuffer = reinterpret_cast<CUdeviceptr>(materialIndexOffsetBuffer->getDevicePointer());
             triArray.sbtIndexOffsetSizeInBytes = 4;
             triArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
         }
@@ -304,7 +298,7 @@ namespace optix {
         m->triangleBuffer = triangleBuffer;
     }
 
-    void GeometryInstance::setNumMaterials(uint32_t numMaterials, Buffer* matIdxOffsetBuffer) const {
+    void GeometryInstance::setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const {
         THROW_RUNTIME_ERROR(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
         THROW_RUNTIME_ERROR((numMaterials == 1) != (matIdxOffsetBuffer != nullptr),
                             "Material index offset buffer must be provided when multiple materials are used, otherwise, must not be provided.");
@@ -445,9 +439,9 @@ namespace optix {
                                                      &bufferSizes));
 
             m->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m->accelTempBuffer.initialize(BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+            m->accelTempBuffer.initialize(m->getCUDAContext(), BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
 
-            m->accelBuffer.initialize(BufferType::Device, m->accelBufferSize, 1, 0);
+            m->accelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->accelBufferSize, 1, 0);
         }
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
@@ -455,8 +449,8 @@ namespace optix {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
-                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.size(),
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
+                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.sizeInBytes(),
                                     &m->handle,
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
@@ -472,16 +466,16 @@ namespace optix {
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
-        CUDA_CHECK(cudaStreamSynchronize(rebuildOrUpdateStream));
-        CUDA_CHECK(cudaMemcpy(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost));
+        CUDADRV_CHECK(cuStreamSynchronize(rebuildOrUpdateStream));
+        CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
         // JP: 以下になるべき？
         // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
-        if (m->compactedSize < m->accelBuffer.size()) {
-            m->compactedAccelBuffer.initialize(BufferType::Device, m->compactedSize, 1, 0);
+        if (m->compactedSize < m->accelBuffer.sizeInBytes()) {
+            m->compactedAccelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->compactedSize, 1, 0);
 
             OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.size(),
+                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.sizeInBytes(),
                                           &m->compactedHandle));
 
             m->compactedAvailable = true;
@@ -495,7 +489,7 @@ namespace optix {
             return;
 
         // JP: コンパクションの完了を待ってバッファーを解放。
-        CUDA_CHECK(cudaStreamSynchronize(compactionStream));
+        CUDADRV_CHECK(cuStreamSynchronize(compactionStream));
         m->accelBuffer.finalize();
 
         m->handle = 0;
@@ -515,8 +509,8 @@ namespace optix {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
-                                    accelBuffer.getDevicePointer(), accelBuffer.size(),
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
+                                    accelBuffer.getDevicePointer(), accelBuffer.sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
     }
@@ -544,7 +538,7 @@ namespace optix {
 
         instanceBuffer.finalize();
 
-        instanceBuffer.initialize(BufferType::Device, children.size(), sizeof(OptixInstance), 0);
+        instanceBuffer.initialize(getCUDAContext(), BufferType::Device, children.size(), sizeof(OptixInstance), 0);
         auto instancesD = (OptixInstance*)instanceBuffer.map();
 
         for (int i = 0; i < children.size(); ++i) {
@@ -630,17 +624,17 @@ namespace optix {
                                                      &bufferSizes));
 
             m->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m->accelTempBuffer.initialize(BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+            m->accelTempBuffer.initialize(m->getCUDAContext(), BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
 
-            m->accelBuffer.initialize(BufferType::Device, m->accelBufferSize, 1, 0);
+            m->accelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->accelBufferSize, 1, 0);
         }
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
-                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.size(),
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
+                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.sizeInBytes(),
                                     &m->handle,
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
@@ -656,16 +650,16 @@ namespace optix {
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
-        CUDA_CHECK(cudaStreamSynchronize(rebuildOrUpdateStream));
-        CUDA_CHECK(cudaMemcpy(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost));
+        CUDADRV_CHECK(cuStreamSynchronize(rebuildOrUpdateStream));
+        CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
         // JP: 以下になるべき？
         // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
-        if (m->compactedSize < m->accelBuffer.size()) {
-            m->compactedAccelBuffer.initialize(BufferType::Device, m->compactedSize, 1, 0);
+        if (m->compactedSize < m->accelBuffer.sizeInBytes()) {
+            m->compactedAccelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->compactedSize, 1, 0);
 
             OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.size(),
+                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.sizeInBytes(),
                                           &m->compactedHandle));
 
             m->compactedAvailable = true;
@@ -679,7 +673,7 @@ namespace optix {
             return;
 
         // JP: コンパクションの完了を待ってバッファーを解放。
-        CUDA_CHECK(cudaStreamSynchronize(compactionStream));
+        CUDADRV_CHECK(cuStreamSynchronize(compactionStream));
         m->accelBuffer.finalize();
 
         m->handle = 0;
@@ -699,8 +693,8 @@ namespace optix {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, &m->buildInput, 1,
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.size(),
-                                    accelBuffer.getDevicePointer(), accelBuffer.size(),
+                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
+                                    accelBuffer.getDevicePointer(), accelBuffer.sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
     }
@@ -740,10 +734,10 @@ namespace optix {
     void Pipeline::Priv::setupShaderBindingTable() {
         if (!sbtAllocDone) {
             rayGenRecord.finalize();
-            rayGenRecord.initialize(BufferType::Device, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            rayGenRecord.initialize(getCUDAContext(), BufferType::Device, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
 
             missRecords.finalize();
-            missRecords.initialize(BufferType::Device, numMissRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            missRecords.initialize(getCUDAContext(), BufferType::Device, numMissRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
 
             sbtAllocDone = true;
         }

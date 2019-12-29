@@ -101,7 +101,7 @@ private: \
         OPTIX_PIMPL();
 
     public:
-        static Context create();
+        static Context create(CUcontext cudaContext);
         void destroy();
 
         Material createMaterial() const;
@@ -159,7 +159,7 @@ private: \
         // the program should call markDirty() of GASs to which the GeometryInstance is belonging.
         void setVertexBuffer(Buffer* vertexBuffer) const;
         void setTriangleBuffer(Buffer* triangleBuffer) const;
-        void setNumMaterials(uint32_t numMaterials, Buffer* matIdxOffsetBuffer) const;
+        void setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
 
         void setData(const void* sbtRecordData, size_t size, size_t alignment) const;
         template <typename RecordDataType>

@@ -121,6 +121,7 @@ namespace optix {
 
 
     class Context::Priv {
+        CUcontext cudaContext;
         OptixDeviceContext rawContext;
 
     public:
@@ -129,6 +130,9 @@ namespace optix {
 
         OPTIX_OPAQUE_BRIDGE(Context);
 
+        CUcontext getCUDAContext() const {
+            return cudaContext;
+        }
         OptixDeviceContext getRawContext() const {
             return rawContext;
         }
@@ -229,6 +233,9 @@ namespace optix {
 
         OPTIX_OPAQUE_BRIDGE(Scene);
 
+        CUcontext getCUDAContext() const {
+            return context->getCUDAContext();
+        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
@@ -287,7 +294,7 @@ namespace optix {
         CUdeviceptr vertexBufferArray[1];
         Buffer* vertexBuffer;
         Buffer* triangleBuffer;
-        Buffer* materialIndexOffsetBuffer;
+        TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 
         uint8_t recordData[128];
@@ -333,7 +340,7 @@ namespace optix {
         Buffer accelBuffer;
         Buffer accelTempBuffer;
 
-        Buffer compactedSizeOnDevice;
+        TypedBuffer<size_t> compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
         Buffer compactedAccelBuffer;
@@ -352,11 +359,11 @@ namespace optix {
 
     public:
         Priv(_Scene* _scene) : scene(_scene) {
-            compactedSizeOnDevice.initialize(BufferType::Device, 1, sizeof(size_t), 0);
+            compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
 
             propertyCompactedSize = OptixAccelEmitDesc{};
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = compactedSizeOnDevice.getDevicePointer();
+            propertyCompactedSize.result = reinterpret_cast<CUdeviceptr>(compactedSizeOnDevice.getDevicePointer());
 
             preferFastTrace = true;
             allowUpdate = false;
@@ -371,6 +378,9 @@ namespace optix {
 
         OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
+        CUcontext getCUDAContext() const {
+            return scene->getCUDAContext();
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
@@ -455,7 +465,7 @@ namespace optix {
         Buffer accelBuffer;
         Buffer accelTempBuffer;
 
-        Buffer compactedSizeOnDevice;
+        TypedBuffer<size_t> compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
         Buffer compactedAccelBuffer;
@@ -476,11 +486,11 @@ namespace optix {
 
     public:
         Priv(_Scene* _scene) : scene(_scene) {
-            compactedSizeOnDevice.initialize(BufferType::Device, 1, sizeof(size_t), 0);
+            compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = compactedSizeOnDevice.getDevicePointer();
+            propertyCompactedSize.result = reinterpret_cast<CUdeviceptr>(compactedSizeOnDevice.getDevicePointer());
 
             preferFastTrace = true;
             allowUpdate = false;
@@ -497,6 +507,9 @@ namespace optix {
 
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
+        CUcontext getCUDAContext() const {
+            return scene->getCUDAContext();
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
@@ -560,6 +573,9 @@ namespace optix {
 
         OPTIX_OPAQUE_BRIDGE(Pipeline);
 
+        CUcontext getCUDAContext() const {
+            return context->getCUDAContext();
+        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
