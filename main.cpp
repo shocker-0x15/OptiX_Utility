@@ -534,17 +534,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // Fine detail control
 
     gasCornellBox.rebuild(stream);
-    gasCornellBox.compaction(stream, stream);
+    gasCornellBox.compact(stream, stream);
     gasCornellBox.removeUncompacted(stream);
 
     gasAreaLight.rebuild(stream);
-    gasAreaLight.compaction(stream, stream);
+    gasAreaLight.compact(stream, stream);
     gasAreaLight.removeUncompacted(stream);
 
     scene.generateSBTLayout();
 
     iasScene.rebuild(stream);
-    iasScene.compaction(stream, stream);
+    iasScene.compact(stream, stream);
     iasScene.removeUncompacted(stream);
 #endif
 

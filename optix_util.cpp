@@ -157,7 +157,7 @@ namespace optix {
             if (!_gas->isReady()) {
                 GeometryAccelerationStructure gas = _gas->getPublicType();
                 gas.rebuild(stream);
-                gas.compaction(stream, stream);
+                gas.compact(stream, stream);
                 gas.removeUncompacted(stream);
             }
         }
@@ -168,7 +168,7 @@ namespace optix {
             if (!_ias->isReady()) {
                 InstanceAccelerationStructure ias = _ias->getPublicType();
                 ias.rebuild(stream);
-                ias.compaction(stream, stream);
+                ias.compact(stream, stream);
                 ias.removeUncompacted(stream);
             }
         }
@@ -338,8 +338,8 @@ namespace optix {
     
     SizeAlign GeometryAccelerationStructure::Priv::calcHitGroupRecordStride(const _Pipeline* pipeline) const {
         SizeAlign maxSizeAlign;
-        for (int matSetIdx = 0; matSetIdx < numRayTypesValues.size(); ++matSetIdx) {
-            uint32_t numRayTypes = numRayTypesValues[matSetIdx];
+        for (int matSetIdx = 0; matSetIdx < numRayTypesPerMaterialSet.size(); ++matSetIdx) {
+            uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
             for (int i = 0; i < children.size(); ++i) {
                 SizeAlign sizeAlign = children[i]->calcHitGroupRecordStride(pipeline, matSetIdx, numRayTypes);
                 maxSizeAlign = max(maxSizeAlign, sizeAlign);
@@ -352,19 +352,19 @@ namespace optix {
         uint32_t numSBTRecords = 0;
         for (int i = 0; i < children.size(); ++i)
             numSBTRecords += children[i]->getNumSBTRecords();
-        numSBTRecords *= numRayTypesValues[matSetIdx];
+        numSBTRecords *= numRayTypesPerMaterialSet[matSetIdx];
 
         return numSBTRecords;
     }
 
     uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records, uint32_t stride) const {
-        THROW_RUNTIME_ERROR(matSetIdx < numRayTypesValues.size(),
+        THROW_RUNTIME_ERROR(matSetIdx < numRayTypesPerMaterialSet.size(),
                             "Material set index %u is out of bound [0, %u).",
-                            matSetIdx, static_cast<uint32_t>(numRayTypesValues.size()));
+                            matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
 
         uint32_t sumRecords = 0;
         for (int i = 0; i < children.size(); ++i) {
-            uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypesValues[matSetIdx],
+            uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypesPerMaterialSet[matSetIdx],
                                                               records, stride);
             records += numRecords * stride;
             sumRecords += numRecords;
@@ -397,16 +397,16 @@ namespace optix {
     }
 
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
-        m->numRayTypesValues.resize(numMatSets, 0);
+        m->numRayTypesPerMaterialSet.resize(numMatSets, 0);
 
         m->scene->getPublicType().markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
-        THROW_RUNTIME_ERROR(matSetIdx < m->numRayTypesValues.size(),
+        THROW_RUNTIME_ERROR(matSetIdx < m->numRayTypesPerMaterialSet.size(),
                             "Material set index %u is out of bounds [0, %u).",
-                            matSetIdx, static_cast<uint32_t>(m->numRayTypesValues.size()));
-        m->numRayTypesValues[matSetIdx] = numRayTypes;
+                            matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
+        m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
 
         m->scene->getPublicType().markSBTLayoutDirty();
     }
@@ -459,7 +459,7 @@ namespace optix {
         m->compactedAvailable = false;
     }
 
-    void GeometryAccelerationStructure::compaction(CUstream rebuildOrUpdateStream, CUstream stream) const {
+    void GeometryAccelerationStructure::compact(CUstream rebuildOrUpdateStream, CUstream stream) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         if (!m->available || m->compactedAvailable || !compactionEnabled)
@@ -643,7 +643,7 @@ namespace optix {
         m->compactedAvailable = false;
     }
 
-    void InstanceAccelerationStructure::compaction(CUstream rebuildOrUpdateStream, CUstream stream) const {
+    void InstanceAccelerationStructure::compact(CUstream rebuildOrUpdateStream, CUstream stream) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         if (!m->available || m->compactedAvailable || !compactionEnabled)

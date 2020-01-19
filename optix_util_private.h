@@ -329,7 +329,7 @@ namespace optix {
     class GeometryAccelerationStructure::Priv {
         _Scene* scene;
 
-        std::vector<uint32_t> numRayTypesValues;
+        std::vector<uint32_t> numRayTypesPerMaterialSet;
 
         std::vector<_GeometryInstance*> children;
         std::vector<OptixBuildInput> buildInputs;
@@ -388,11 +388,11 @@ namespace optix {
 
 
         uint32_t getNumMaterialSets() const {
-            return static_cast<uint32_t>(numRayTypesValues.size());
+            return static_cast<uint32_t>(numRayTypesPerMaterialSet.size());
         }
 
         uint32_t getNumRayTypes(uint32_t matSetIdx) const {
-            return numRayTypesValues[matSetIdx];
+            return numRayTypesPerMaterialSet[matSetIdx];
         }
 
         SizeAlign calcHitGroupRecordStride(const _Pipeline* pipeline) const;

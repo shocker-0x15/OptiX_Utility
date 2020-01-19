@@ -186,7 +186,7 @@ private: \
         void addChild(const GeometryInstance &geomInst) const;
 
         void rebuild(CUstream stream) const;
-        void compaction(CUstream rebuildOrUpdateStream, CUstream stream) const;
+        void compact(CUstream rebuildOrUpdateStream, CUstream stream) const;
         void removeUncompacted(CUstream compactionStream) const;
         void update(CUstream stream) const;
 
@@ -209,7 +209,7 @@ private: \
         void addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0, const float instantTransform[12] = nullptr) const;
 
         void rebuild(CUstream stream) const;
-        void compaction(CUstream rebuildOrUpdateStream, CUstream stream) const;
+        void compact(CUstream rebuildOrUpdateStream, CUstream stream) const;
         void removeUncompacted(CUstream compactionStream) const;
         void update(CUstream stream) const;
 
