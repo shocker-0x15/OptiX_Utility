@@ -1,11 +1,11 @@
 #include "cuda_helper.h"
 
 #ifdef CUDAHPlatform_Windows_MSVC
-#   define NOMINMAX
-#   define _USE_MATH_DEFINES
 #   include <Windows.h>
 #   undef near
 #   undef far
+#   undef min
+#   undef max
 #endif
 
 
@@ -147,6 +147,37 @@ namespace CUDAHelper {
         m_numElements = 0;
 
         m_initialized = false;
+    }
+
+    void Buffer::resize(int32_t numElements, int32_t stride) {
+        if (!m_initialized)
+            throw std::runtime_error("Buffer is not initialized.");
+        if (m_type == BufferType::GL_Interop)
+            throw std::runtime_error("Resize for GL-interop buffer is not supported.");
+        if (stride < m_stride)
+            throw std::runtime_error("New stride must be >= the current stride.");
+
+        if (numElements == m_numElements && stride == m_stride)
+            return;
+
+        Buffer newBuffer;
+        newBuffer.initialize(m_cudaContext, m_type, numElements, stride, m_GLBufferID);
+
+        if (stride == m_stride) {
+            cuMemcpyDtoD(newBuffer.m_devicePointer, m_devicePointer, static_cast<uint64_t>(numElements) * m_stride);
+        }
+        else {
+            auto src = map<const uint8_t>();
+            auto dst = newBuffer.map<uint8_t>();
+            for (int i = 0; i < std::min(numElements, m_numElements); ++i) {
+                std::memset(dst, 0, stride);
+                std::memcpy(dst, src, m_stride);
+            }
+            newBuffer.unmap();
+            unmap();
+        }
+
+        *this = std::move(newBuffer);
     }
 
 

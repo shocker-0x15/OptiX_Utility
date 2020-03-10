@@ -1,20 +1,5 @@
 #pragma once
 
-#include <cstdio>
-#include <cstdint>
-#include <cstdlib>
-
-#include <vector>
-#include <sstream>
-
-#include <GL/gl3w.h>
-
-#include <cuda.h>
-#include <cudaGL.h>
-#include <vector_types.h>
-
-
-
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
 #   define CUDAHPlatform_Windows
@@ -30,6 +15,20 @@
 #elif defined(__OpenBSD__)
 #   define CUDAHPlatform_OpenBSD
 #endif
+
+#include <cstdio>
+#include <cstdint>
+#include <cstdlib>
+
+#include <algorithm>
+#include <vector>
+#include <sstream>
+
+#include <GL/gl3w.h>
+
+#include <cuda.h>
+#include <cudaGL.h>
+#include <vector_types.h>
 
 #ifdef _DEBUG
 #   define CUDAH_ENABLE_ASSERT
@@ -185,6 +184,8 @@ namespace CUDAHelper {
         void initialize(CUcontext context, BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID);
         void finalize();
 
+        void resize(int32_t numElements, int32_t stride);
+
         CUdeviceptr getDevicePointer() const {
             return (CUdeviceptr)m_devicePointer;
         }
@@ -205,6 +206,10 @@ namespace CUDAHelper {
         void endCUDAAccess(CUstream stream);
 
         void* map();
+        template <typename T>
+        T* map() {
+            return reinterpret_cast<T*>(map());
+        }
         void unmap();
     };
 
@@ -245,6 +250,10 @@ namespace CUDAHelper {
         }
         void finalize() {
             Buffer::finalize();
+        }
+
+        void resize(int32_t numElements) {
+            Buffer::resize(numElements, sizeof(T));
         }
 
         T* getDevicePointer() const {

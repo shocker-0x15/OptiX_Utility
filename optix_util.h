@@ -118,12 +118,11 @@ private: \
     public:
         void destroy();
 
-        void setData(uint32_t rayType, const ProgramGroup &hitGroup,
-                     const void* sbtRecordData, size_t size, size_t alignment) const;
+        void setHitGroup(uint32_t rayType, const ProgramGroup &hitGroup);
+        void setData(const void* data, size_t size, size_t alignment) const;
         template <typename RecordDataType>
-        void setData(uint32_t rayType, const ProgramGroup &hitGroup,
-                     const RecordDataType &sbtRecordData) const {
-            setData(rayType, hitGroup, &sbtRecordData, sizeof(RecordDataType), alignof(RecordDataType));
+        void setData(const RecordDataType &data) const {
+            setData(&data, sizeof(RecordDataType), alignof(RecordDataType));
         }
     };
 
@@ -136,13 +135,8 @@ private: \
         void destroy();
 
         GeometryInstance createGeometryInstance() const;
-
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
-
-        void generateSBTLayout() const;
-
-        void setupASsAndSBTLayout(CUstream stream) const;
 
         void markSBTLayoutDirty() const;
     };
@@ -161,10 +155,10 @@ private: \
         void setTriangleBuffer(Buffer* triangleBuffer) const;
         void setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
 
-        void setData(const void* sbtRecordData, size_t size, size_t alignment) const;
+        void setData(const void* data, size_t size, size_t alignment) const;
         template <typename RecordDataType>
-        void setData(const RecordDataType &sbtRecordData) const {
-            setData(&sbtRecordData, sizeof(RecordDataType), alignof(RecordDataType));
+        void setData(const RecordDataType &data) const {
+            setData(&data, sizeof(RecordDataType), alignof(RecordDataType));
         }
 
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;

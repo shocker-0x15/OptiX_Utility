@@ -9,6 +9,8 @@
 #include <map>
 #include <algorithm>
 
+#include <intrin.h>
+
 #include <stdexcept>
 
 #define OPTIX_CHECK(call) \
@@ -35,6 +37,8 @@
         } \
     } while (0)
 
+
+
 namespace optix {
     static std::runtime_error make_runtime_error(const char* fmt, ...) {
         va_list args;
@@ -51,6 +55,115 @@ namespace optix {
     static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
         optixPrintf("[%2u][%12s]: %s\n", level, tag, message);
     }
+
+
+
+    class SlotFinder {
+        uint32_t m_numLayers;
+        uint32_t m_numLowestFlagBins;
+        uint32_t m_numTotalCompiledFlagBins;
+        uint32_t* m_flagBins;
+        uint32_t* m_offsetsToOR_AND;
+        uint32_t* m_numUsedFlagsUnderBinList;
+        uint32_t* m_offsetsToNumUsedFlags;
+        uint32_t* m_numFlagsInLayerList;
+
+        SlotFinder(const SlotFinder &) = delete;
+        SlotFinder &operator=(const SlotFinder &) = delete;
+
+        void aggregate();
+    public:
+        static constexpr uint32_t InvalidSlotIndex = 0xFFFFFFFF;
+
+        SlotFinder() :
+            m_numLayers(0), m_numLowestFlagBins(0), m_numTotalCompiledFlagBins(0),
+            m_flagBins(nullptr), m_offsetsToOR_AND(nullptr),
+            m_numUsedFlagsUnderBinList(nullptr), m_offsetsToNumUsedFlags(nullptr),
+            m_numFlagsInLayerList(nullptr) {
+        }
+        ~SlotFinder() {
+        }
+
+        void initialize(uint32_t numSlots);
+
+        void finalize();
+
+        SlotFinder &operator=(SlotFinder &&inst) {
+            finalize();
+
+            m_numLayers = inst.m_numLayers;
+            m_numLowestFlagBins = inst.m_numLowestFlagBins;
+            m_numTotalCompiledFlagBins = inst.m_numTotalCompiledFlagBins;
+            m_flagBins = inst.m_flagBins;
+            m_offsetsToOR_AND = inst.m_offsetsToOR_AND;
+            m_numUsedFlagsUnderBinList = inst.m_numUsedFlagsUnderBinList;
+            m_offsetsToNumUsedFlags = inst.m_offsetsToNumUsedFlags;
+            m_numFlagsInLayerList = inst.m_numFlagsInLayerList;
+            inst.m_flagBins = nullptr;
+            inst.m_offsetsToOR_AND = nullptr;
+            inst.m_numUsedFlagsUnderBinList = nullptr;
+            inst.m_offsetsToNumUsedFlags = nullptr;
+            inst.m_numFlagsInLayerList = nullptr;
+
+            return *this;
+        }
+        SlotFinder(SlotFinder &&inst) {
+            *this = std::move(inst);
+        }
+
+        void resize(uint32_t numSlots);
+
+        void reset() {
+            std::fill_n(m_flagBins, m_numLowestFlagBins + m_numTotalCompiledFlagBins, 0);
+            std::fill_n(m_numUsedFlagsUnderBinList, m_numLowestFlagBins + m_numTotalCompiledFlagBins / 2, 0);
+        }
+
+        uint32_t getNumLayers() const {
+            return m_numLayers;
+        }
+
+        const uint32_t* getOffsetsToOR_AND() const {
+            return m_offsetsToOR_AND;
+        }
+
+        const uint32_t* getOffsetsToNumUsedFlags() const {
+            return m_offsetsToNumUsedFlags;
+        }
+
+        const uint32_t* getNumFlagsInLayerList() const {
+            return m_numFlagsInLayerList;
+        }
+
+
+
+        void setInUse(uint32_t slotIdx);
+
+        void setNotInUse(uint32_t slotIdx);
+
+        bool getUsage(uint32_t slotIdx) const {
+            uint32_t binIdx = slotIdx / 32;
+            uint32_t flagIdxInBin = slotIdx % 32;
+            uint32_t flagBin = m_flagBins[binIdx];
+
+            return (bool)((flagBin >> flagIdxInBin) & 0x1);
+        }
+
+        uint32_t getFirstAvailableSlot() const;
+
+        uint32_t getFirstUsedSlot() const;
+
+        uint32_t find_nthUsedSlot(uint32_t n) const;
+
+        uint32_t getNumSlots() const {
+            return m_numFlagsInLayerList[0];
+        }
+
+        uint32_t getNumUsed() const {
+            return m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[m_numLayers - 1]];
+        }
+
+        void debugPrint() const;
+    };
 
 
 
@@ -120,15 +233,35 @@ namespace optix {
 
 
 
+    struct HitGroupSBTRecord {
+        uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
+        uint32_t matSlotIndex;
+        uint32_t geomInstSlotIndex;
+    };
+
+    struct HitGroupSBT {
+        TypedBuffer<HitGroupSBTRecord> records;
+    };
+
+
+
     class Context::Priv {
         CUcontext cudaContext;
         OptixDeviceContext rawContext;
+        Buffer materialDataBuffer;
+        SlotFinder materialDataSlotFinder;
 
     public:
-        Priv() :
-            rawContext(nullptr) {}
-
         OPTIX_OPAQUE_BRIDGE(Context);
+
+        Priv() :
+            rawContext(nullptr) {
+            constexpr uint32_t InitialMaterialDataStride = 16;
+            constexpr uint32_t NumInitialMaterialData = 2;
+
+            materialDataBuffer.initialize(cudaContext, BufferType::Device, NumInitialMaterialData, InitialMaterialDataStride, 0);
+            materialDataSlotFinder.initialize(NumInitialMaterialData);
+        }
 
         CUcontext getCUDAContext() const {
             return cudaContext;
@@ -136,12 +269,15 @@ namespace optix {
         OptixDeviceContext getRawContext() const {
             return rawContext;
         }
+
+        uint32_t requestMaterialDataSlot();
+        void releaseMaterialDataSlot(uint32_t index);
+        void setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment);
     };
 
 
 
     class Material::Priv {
-    public:
         struct Key {
             const _Pipeline* pipeline;
             uint32_t rayType;
@@ -158,47 +294,28 @@ namespace optix {
             }
         };
 
-        struct Info {
-            const _ProgramGroup* program;
-            uint8_t recordData[128];
-            SizeAlign sizeAlign;
+        _Context* context;
+        uint32_t slotIndex;
 
-            Info() : program(nullptr), sizeAlign(0, 0) {}
-            void update(const _ProgramGroup* _program, const void* data, size_t size, size_t align) {
-                program = _program;
-                std::memcpy(recordData, data, size);
-                sizeAlign.size = size;
-                sizeAlign.alignment = align;
-            }
-        };
-
-    private:
-        const _Context* context;
-
-        std::map<Key, Info> infos;
+        std::map<Key, const _ProgramGroup*> programs;
 
     public:
-        Priv(const _Context* ctxt) : context(ctxt) {}
-
         OPTIX_OPAQUE_BRIDGE(Material);
+
+        Priv(_Context* ctxt) :
+            context(ctxt), slotIndex(context->requestMaterialDataSlot()) {}
+        ~Priv() {
+            context->releaseMaterialDataSlot(slotIndex);
+        }
 
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
 
-
-
-        const Info &getSBTRecord(const _Pipeline* pipeline, uint32_t rayTypeIdx) const {
-            Key key{ pipeline, rayTypeIdx };
-            return infos.at(key);
-        }
+        void setRecordData(const _Pipeline* pipeline, uint32_t rayType, HitGroupSBTRecord* record) const;
     };
 
 
-
-    struct HitGroupSBT {
-        Buffer records;
-    };
     
     class Scene::Priv {
         struct SBTOffsetKey {
@@ -218,6 +335,8 @@ namespace optix {
         };
 
         const _Context* context;
+        Buffer geomInstDataBuffer;
+        SlotFinder geomInstDataSlotFinder;
         std::set<_GeometryAccelerationStructure*> geomASs;
         std::map<SBTOffsetKey, uint32_t> sbtOffsets;
         uint32_t numSBTRecords;
@@ -229,9 +348,16 @@ namespace optix {
         std::map<const _Pipeline*, HitGroupSBT*> hitGroupSBTs;
 
     public:
-        Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {}
-
         OPTIX_OPAQUE_BRIDGE(Scene);
+
+        Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {
+            constexpr uint32_t InitialGeomInstDataStride = 16;
+            constexpr uint32_t NumInitialGeomInstData = 16;
+
+            CUcontext cudaContext = context->getCUDAContext();
+            geomInstDataBuffer.initialize(cudaContext, BufferType::Device, NumInitialGeomInstData, InitialGeomInstDataStride, 0);
+            geomInstDataSlotFinder.initialize(NumInitialGeomInstData);
+        }
 
         CUcontext getCUDAContext() const {
             return context->getCUDAContext();
@@ -242,53 +368,43 @@ namespace optix {
 
 
 
+        uint32_t requestGeometryInstanceDataSlot();
+        void releaseGeometryInstanceDataSlot(uint32_t index);
+        void setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment);
+
+
+
+        void addGAS(_GeometryAccelerationStructure* gas) {
+            geomASs.insert(gas);
+        }
         void removeGAS(_GeometryAccelerationStructure* gas) {
             geomASs.erase(gas);
         }
-
+        void addIAS(_InstanceAccelerationStructure* ias) {
+            instASs.insert(ias);
+        }
         void removeIAS(_InstanceAccelerationStructure* ias) {
             instASs.erase(ias);
         }
 
+        void registerPipeline(const _Pipeline* pipeline);
+        void generateSBTLayout(const _Pipeline* pipeline);
         bool sbtLayoutGenerationDone() const {
             return sbtLayoutIsUpToDate;
         }
-
         uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
             return sbtOffsets.at(SBTOffsetKey{ gas, matSetIdx });
         }
 
-        SizeAlign calcHitGroupRecordStride(const _Pipeline* pipeline) const;
-
-        void registerPipeline(const _Pipeline* pipeline);
-
         void setupHitGroupSBT(const _Pipeline* pipeline);
-
         const HitGroupSBT* getHitGroupSBT(const _Pipeline* pipeline);
     };
 
 
 
     class GeometryInstance::Priv {
-    public:
-        struct MaterialKey {
-            uint32_t matSetIndex;
-            uint32_t matIndex;
-
-            bool operator<(const MaterialKey &rKey) const {
-                if (matSetIndex < rKey.matSetIndex) {
-                    return true;
-                }
-                else if (matSetIndex == rKey.matSetIndex) {
-                    if (matIndex < rKey.matIndex)
-                        return true;
-                }
-                return false;
-            }
-        };
-
-    private:
         _Scene* scene;
+        uint32_t slotIndex;
 
         // TODO: support deformation blur (multiple vertex buffers)
         CUdeviceptr vertexBufferArray[1];
@@ -297,18 +413,19 @@ namespace optix {
         TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 
-        uint8_t recordData[128];
-        SizeAlign sizeAlign;
-
-        std::map<MaterialKey, const _Material*> materials;
+        std::vector<std::vector<const _Material*>> materials;
 
     public:
+        OPTIX_OPAQUE_BRIDGE(GeometryInstance);
+
         Priv(_Scene* _scene) :
             scene(_scene),
+            slotIndex(scene->requestGeometryInstanceDataSlot()),
             vertexBuffer(nullptr), triangleBuffer(nullptr), materialIndexOffsetBuffer(nullptr) {
         }
-
-        OPTIX_OPAQUE_BRIDGE(GeometryInstance);
+        ~Priv() {
+            scene->releaseGeometryInstanceDataSlot(slotIndex);
+        }
 
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
@@ -318,10 +435,9 @@ namespace optix {
 
         void fillBuildInput(OptixBuildInput* input) const;
 
-        SizeAlign calcHitGroupRecordStride(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes) const;
         uint32_t getNumSBTRecords() const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
-                                uint8_t* records, size_t stride) const;
+                                HitGroupSBTRecord* records) const;
     };
 
 
@@ -358,7 +474,11 @@ namespace optix {
         void fillBuildInputs();
 
     public:
+        OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
+
         Priv(_Scene* _scene) : scene(_scene) {
+            scene->addGAS(this);
+
             compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
 
             propertyCompactedSize = OptixAccelEmitDesc{};
@@ -374,9 +494,9 @@ namespace optix {
         }
         ~Priv() {
             compactedSizeOnDevice.finalize();
-        }
 
-        OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
+            scene->removeGAS(this);
+        }
 
         CUcontext getCUDAContext() const {
             return scene->getCUDAContext();
@@ -395,11 +515,9 @@ namespace optix {
             return numRayTypesPerMaterialSet[matSetIdx];
         }
 
-        SizeAlign calcHitGroupRecordStride(const _Pipeline* pipeline) const;
-
         uint32_t calcNumSBTRecords(uint32_t matSetIdx) const;
 
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records, uint32_t stride) const;
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, HitGroupSBTRecord* records) const;
 
         bool isReady() const {
             return available || compactedAvailable;
@@ -485,7 +603,11 @@ namespace optix {
         void fillBuildInput();
 
     public:
+        OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
+
         Priv(_Scene* _scene) : scene(_scene) {
+            scene->addIAS(this);
+
             compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
@@ -503,9 +625,9 @@ namespace optix {
             instanceBuffer.finalize();
 
             compactedSizeOnDevice.finalize();
-        }
 
-        OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
+            scene->removeIAS(this);
+        }
 
         CUcontext getCUDAContext() const {
             return scene->getCUDAContext();
@@ -559,19 +681,17 @@ namespace optix {
             unsigned int sbtIsUpToDate : 1;
         };
 
-        void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
-
         void setupShaderBindingTable();
 
     public:
+        OPTIX_OPAQUE_BRIDGE(Pipeline);
+
         Priv(const _Context* ctxt) : context(ctxt),
             maxTraceDepth(0),
             scene(nullptr), numMissRayTypes(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr),
             pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
         }
-
-        OPTIX_OPAQUE_BRIDGE(Pipeline);
 
         CUcontext getCUDAContext() const {
             return context->getCUDAContext();
@@ -582,6 +702,7 @@ namespace optix {
 
 
 
+        void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
         void destroyProgram(OptixProgramGroup group);
     };
 
@@ -592,9 +713,9 @@ namespace optix {
         OptixModule rawModule;
 
     public:
-        Priv(const _Pipeline* pl, OptixModule module) : pipeline(pl), rawModule(module) {}
-
         OPTIX_OPAQUE_BRIDGE(Module);
+
+        Priv(const _Pipeline* pl, OptixModule _rawModule) : pipeline(pl), rawModule(_rawModule) {}
 
 
 
@@ -614,9 +735,9 @@ namespace optix {
         OptixProgramGroup rawGroup;
 
     public:
-        Priv(_Pipeline* pl, OptixProgramGroup group) : pipeline(pl), rawGroup(group) {}
-
         OPTIX_OPAQUE_BRIDGE(ProgramGroup);
+
+        Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) : pipeline(pl), rawGroup(_rawGroup) {}
 
 
 

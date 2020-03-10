@@ -12,6 +12,442 @@ namespace optix {
 
 
 
+    static inline uint32_t tzcnt(uint32_t x) {
+        return _tzcnt_u32(x);
+    }
+
+    static inline uint32_t lzcnt(uint32_t x) {
+        return _lzcnt_u32(x);
+    }
+
+    static inline int32_t popcnt(uint32_t x) {
+        return _mm_popcnt_u32(x);
+    }
+
+    static inline uint32_t nextPowOf2Exponent(uint32_t x) {
+        if (x == 0)
+            return 0;
+        return 32 - lzcnt(x - 1);
+    }
+
+    static inline uint32_t nextPowOf2(uint32_t x) {
+        return 1 << nextPowOf2Exponent(x);
+    }
+
+    static inline uint32_t nextMultiplesForPowOf2(uint32_t x, uint32_t exponent) {
+        uint32_t mask = (1 << exponent) - 1;
+        return (x + mask) & ~mask;
+    }
+
+    static inline uint32_t nextMultiplierForPowOf2(uint32_t x, uint32_t exponent) {
+        return nextMultiplesForPowOf2(x, exponent) >> exponent;
+    }
+
+    static inline uint32_t nthSetBit(uint32_t value, uint32_t n) {
+        uint32_t idx = 0;
+        int32_t count;
+        if (n >= popcnt(value))
+            return 0xFFFFFFFF;
+
+        for (uint32_t width = 16; width >= 1; width >>= 1) {
+            if (value == 0)
+                return 0xFFFFFFFF;
+
+            uint32_t mask = (1 << width) - 1;
+            count = popcnt(value & mask);
+            if (n >= count) {
+                value >>= width;
+                n -= count;
+                idx += width;
+            }
+        }
+
+        return idx;
+    }
+
+
+
+    void SlotFinder::initialize(uint32_t numSlots) {
+        m_numLayers = 1;
+        m_numLowestFlagBins = nextMultiplierForPowOf2(numSlots, 5);
+
+        // e.g. factor 4
+        // 0 | 1101 | 0011 | 1001 | 1011 | 0010 | 1010 | 0000 | 1011 | 1110 | 0101 | 111* | **** | **** | **** | **** | **** | 43 flags
+        // OR bins:
+        // 1 | 1      1      1      1    | 1      1      0      1    | 1      1      1      *    | *      *      *      *    | 11
+        // 2 | 1                           1                           1                           *                         | 3
+        // AND bins
+        // 1 | 0      0      0      0    | 0      0      0      0    | 0      0      1      *    | *      *      *      *    | 11
+        // 2 | 0                           0                           0                           *                         | 3
+        //
+        // numSlots: 43
+        // numLowestFlagBins: 11
+        // numLayers: 3
+        //
+        // Memory Order
+        // LowestFlagBins (layer 0) | OR, AND Bins (layer 1) | ... | OR, AND Bins (layer n-1)
+        // Offset Pair to OR, AND (layer 0) | ... | Offset Pair to OR, AND (layer n-1)
+        // NumUsedFlags (layer 0) | ... | NumUsedFlags (layer n-1)
+        // Offset to NumUsedFlags (layer 0) | ... | Offset to NumUsedFlags (layer n-1)
+        // NumFlags (layer 0) | ... | NumFlags (layer n-1)
+
+        uint32_t numFlagBinsInLayer = m_numLowestFlagBins;
+        m_numTotalCompiledFlagBins = 0;
+        while (numFlagBinsInLayer > 1) {
+            ++m_numLayers;
+            numFlagBinsInLayer = nextMultiplierForPowOf2(numFlagBinsInLayer, 5);
+            m_numTotalCompiledFlagBins += 2 * numFlagBinsInLayer; // OR bins and AND bins
+        }
+
+        size_t memSize = sizeof(uint32_t) *
+            ((m_numLowestFlagBins + m_numTotalCompiledFlagBins) +
+             m_numLayers * 2 +
+             (m_numLowestFlagBins + m_numTotalCompiledFlagBins / 2) +
+             m_numLayers +
+             m_numLayers);
+        void* mem = malloc(memSize);
+
+        uintptr_t memHead = (uintptr_t)mem;
+        m_flagBins = (uint32_t*)memHead;
+        memHead += sizeof(uint32_t) * (m_numLowestFlagBins + m_numTotalCompiledFlagBins);
+
+        m_offsetsToOR_AND = (uint32_t*)memHead;
+        memHead += sizeof(uint32_t) * m_numLayers * 2;
+
+        m_numUsedFlagsUnderBinList = (uint32_t*)memHead;
+        memHead += sizeof(uint32_t) * (m_numLowestFlagBins + m_numTotalCompiledFlagBins / 2);
+
+        m_offsetsToNumUsedFlags = (uint32_t*)memHead;
+        memHead += sizeof(uint32_t) * m_numLayers;
+
+        m_numFlagsInLayerList = (uint32_t*)memHead;
+
+        uint32_t layer = 0;
+        uint32_t offsetToOR_AND = 0;
+        uint32_t offsetToNumUsedFlags = 0;
+        {
+            m_numFlagsInLayerList[layer] = numSlots;
+
+            numFlagBinsInLayer = nextMultiplierForPowOf2(numSlots, 5);
+
+            m_offsetsToOR_AND[2 * layer + 0] = offsetToOR_AND;
+            m_offsetsToOR_AND[2 * layer + 1] = offsetToOR_AND;
+            m_offsetsToNumUsedFlags[layer] = offsetToNumUsedFlags;
+
+            offsetToOR_AND += numFlagBinsInLayer;
+            offsetToNumUsedFlags += numFlagBinsInLayer;
+        }
+        while (numFlagBinsInLayer > 1) {
+            ++layer;
+            m_numFlagsInLayerList[layer] = numFlagBinsInLayer;
+
+            numFlagBinsInLayer = nextMultiplierForPowOf2(numFlagBinsInLayer, 5);
+
+            m_offsetsToOR_AND[2 * layer + 0] = offsetToOR_AND;
+            m_offsetsToOR_AND[2 * layer + 1] = offsetToOR_AND + numFlagBinsInLayer;
+            m_offsetsToNumUsedFlags[layer] = offsetToNumUsedFlags;
+
+            offsetToOR_AND += 2 * numFlagBinsInLayer;
+            offsetToNumUsedFlags += numFlagBinsInLayer;
+        }
+
+        std::fill_n(m_flagBins, m_numLowestFlagBins + m_numTotalCompiledFlagBins, 0);
+        std::fill_n(m_numUsedFlagsUnderBinList, m_numLowestFlagBins + m_numTotalCompiledFlagBins / 2, 0);
+    }
+
+    void SlotFinder::finalize() {
+        if (m_flagBins)
+            free(m_flagBins);
+        m_flagBins = nullptr;
+    }
+
+    void SlotFinder::aggregate() {
+        uint32_t offsetToOR_last = m_offsetsToOR_AND[2 * 0 + 0];
+        uint32_t offsetToAND_last = m_offsetsToOR_AND[2 * 0 + 1];
+        uint32_t offsetToNumUsedFlags_last = m_offsetsToNumUsedFlags[0];
+        for (int layer = 1; layer < m_numLayers; ++layer) {
+            uint32_t numFlagBinsInLayer = nextMultiplierForPowOf2(m_numFlagsInLayerList[layer], 5);
+            uint32_t offsetToOR = m_offsetsToOR_AND[2 * layer + 0];
+            uint32_t offsetToAND = m_offsetsToOR_AND[2 * layer + 1];
+            uint32_t offsetToNumUsedFlags = m_offsetsToNumUsedFlags[layer];
+            for (int binIdx = 0; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t &ORFlagBin = m_flagBins[offsetToOR + binIdx];
+                uint32_t &ANDFlagBin = m_flagBins[offsetToAND + binIdx];
+                uint32_t &numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[offsetToNumUsedFlags + binIdx];
+
+                uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
+                for (int bit = 0; bit < numFlagsInBin; ++bit) {
+                    uint32_t lBinIdx = 32 * binIdx + bit;
+                    uint32_t lORFlagBin = m_flagBins[offsetToOR_last + lBinIdx];
+                    uint32_t lANDFlagBin = m_flagBins[offsetToAND_last + lBinIdx];
+                    uint32_t lNumFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer - 1] - 32 * lBinIdx);
+                    if (lORFlagBin != 0)
+                        ORFlagBin |= 1 << bit;
+                    if (popcnt(lANDFlagBin) == lNumFlagsInBin)
+                        ANDFlagBin |= 1 << bit;
+                    numUsedFlagsUnderBin += m_numUsedFlagsUnderBinList[offsetToNumUsedFlags_last + lBinIdx];
+                }
+            }
+
+            offsetToOR_last = offsetToOR;
+            offsetToAND_last = offsetToAND;
+            offsetToNumUsedFlags_last = offsetToNumUsedFlags;
+        }
+    }
+
+    void SlotFinder::resize(uint32_t numSlots) {
+        if (numSlots == m_numFlagsInLayerList[0])
+            return;
+
+        SlotFinder newFinder;
+        newFinder.initialize(numSlots);
+
+        uint32_t numLowestFlagBins = std::min(m_numLowestFlagBins, newFinder.m_numLowestFlagBins);
+        for (int binIdx = 0; binIdx < numLowestFlagBins; ++binIdx) {
+            uint32_t numFlagsInBin = std::min(32u, numSlots - 32 * binIdx);
+            uint32_t mask = numFlagsInBin >= 32 ? 0xFFFFFFFF : ((1 << numFlagsInBin) - 1);
+            uint32_t value = m_flagBins[0 + binIdx] & mask;
+            newFinder.m_flagBins[0 + binIdx] = value;
+            newFinder.m_numUsedFlagsUnderBinList[0 + binIdx] = popcnt(value);
+        }
+
+        newFinder.aggregate();
+
+        *this = std::move(newFinder);
+    }
+
+    void SlotFinder::setInUse(uint32_t slotIdx) {
+        if (getUsage(slotIdx))
+            return;
+
+        bool setANDFlag = false;
+        uint32_t flagIdxInLayer = slotIdx;
+        for (int layer = 0; layer < m_numLayers; ++layer) {
+            uint32_t binIdx = flagIdxInLayer / 32;
+            uint32_t flagIdxInBin = flagIdxInLayer % 32;
+
+            // JP: 最下層ではOR/ANDは同じ実体だがsetANDFlagが初期値falseであるので設定は1回きり。
+            uint32_t &ORFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 0] + binIdx];
+            uint32_t &ANDFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 1] + binIdx];
+            uint32_t &numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[layer] + binIdx];
+            ORFlagBin |= (1 << flagIdxInBin);
+            if (setANDFlag)
+                ANDFlagBin |= (1 << flagIdxInBin);
+            ++numUsedFlagsUnderBin;
+
+            // JP: このビンに利用可能なスロットが無くなった場合は次のANDレイヤーもフラグを立てる。
+            uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
+            setANDFlag = popcnt(ANDFlagBin) == numFlagsInBin;
+
+            flagIdxInLayer = binIdx;
+        }
+    }
+
+    void SlotFinder::setNotInUse(uint32_t slotIdx) {
+        if (!getUsage(slotIdx))
+            return;
+
+        bool resetORFlag = false;
+        uint32_t flagIdxInLayer = slotIdx;
+        for (int layer = 0; layer < m_numLayers; ++layer) {
+            uint32_t binIdx = flagIdxInLayer / 32;
+            uint32_t flagIdxInBin = flagIdxInLayer % 32;
+
+            // JP: 最下層ではOR/ANDは同じ実体だがresetORFlagが初期値falseであるので設定は1回きり。
+            uint32_t &ORFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 0] + binIdx];
+            uint32_t &ANDFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 1] + binIdx];
+            uint32_t &numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[layer] + binIdx];
+            if (resetORFlag)
+                ORFlagBin &= ~(1 << flagIdxInBin);
+            ANDFlagBin &= ~(1 << flagIdxInBin);
+            --numUsedFlagsUnderBin;
+
+            // JP: このビンに使用中スロットが無くなった場合は次のORレイヤーのフラグを下げる。
+            uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
+            resetORFlag = ORFlagBin == 0;
+
+            flagIdxInLayer = binIdx;
+        }
+    }
+
+    uint32_t SlotFinder::getFirstAvailableSlot() const {
+        uint32_t binIdx = 0;
+        for (int layer = m_numLayers - 1; layer >= 0; --layer) {
+            uint32_t ANDFlagBinOffset = m_offsetsToOR_AND[2 * layer + 1];
+            uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
+            uint32_t numFlagBinsInLayer = nextMultiplierForPowOf2(m_numFlagsInLayerList[layer], 5);
+            uint32_t ANDFlagBin = m_flagBins[ANDFlagBinOffset + binIdx];
+
+            if (popcnt(ANDFlagBin) != numFlagsInBin) {
+                // JP: このビンに利用可能なスロットを発見。
+                binIdx = tzcnt(~ANDFlagBin) + 32 * binIdx;
+            }
+            else {
+                // JP: 利用可能なスロットが見つからなかった。
+                return 0xFFFFFFFF;
+            }
+        }
+
+        optixAssert(binIdx < m_numFlagsInLayerList[0], "Invalid value.");
+        return binIdx;
+    }
+
+    uint32_t SlotFinder::getFirstUsedSlot() const {
+        uint32_t binIdx = 0;
+        for (int layer = m_numLayers - 1; layer >= 0; --layer) {
+            uint32_t ORFlagBinOffset = m_offsetsToOR_AND[2 * layer + 0];
+            uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
+            uint32_t numFlagBinsInLayer = nextMultiplierForPowOf2(m_numFlagsInLayerList[layer], 5);
+            uint32_t ORFlagBin = m_flagBins[ORFlagBinOffset + binIdx];
+
+            if (ORFlagBin != 0) {
+                // JP: このビンに使用中のスロットを発見。
+                binIdx = tzcnt(ORFlagBin) + 32 * binIdx;
+            }
+            else {
+                // JP: 使用中スロットが見つからなかった。
+                return 0xFFFFFFFF;
+            }
+        }
+
+        optixAssert(binIdx < m_numFlagsInLayerList[0], "Invalid value.");
+        return binIdx;
+    }
+
+    uint32_t SlotFinder::find_nthUsedSlot(uint32_t n) const {
+        if (n >= getNumUsed())
+            return 0xFFFFFFFF;
+
+        uint32_t startBinIdx = 0;
+        uint32_t accNumUsed = 0;
+        for (int layer = m_numLayers - 1; layer >= 0; --layer) {
+            uint32_t numUsedFlagsOffset = m_offsetsToNumUsedFlags[layer];
+            uint32_t numFlagBinsInLayer = nextMultiplierForPowOf2(m_numFlagsInLayerList[layer], 5);
+            for (int binIdx = startBinIdx; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[numUsedFlagsOffset + binIdx];
+
+                // JP: 現在のビンの配下にインデックスnの使用中スロットがある。
+                if (accNumUsed + numUsedFlagsUnderBin > n) {
+                    startBinIdx = 32 * binIdx;
+                    if (layer == 0) {
+                        uint32_t flagBin = m_flagBins[binIdx];
+                        startBinIdx += nthSetBit(flagBin, n - accNumUsed);
+                    }
+                    break;
+                }
+
+                accNumUsed += numUsedFlagsUnderBin;
+            }
+        }
+
+        optixAssert(startBinIdx < m_numFlagsInLayerList[0], "Invalid value.");
+        return startBinIdx;
+    }
+
+    void SlotFinder::debugPrint() const {
+        uint32_t numLowestFlagBins = nextMultiplierForPowOf2(m_numFlagsInLayerList[0], 5);
+        devPrintf("----");
+        for (int binIdx = 0; binIdx < numLowestFlagBins; ++binIdx) {
+            devPrintf("------------------------------------");
+        }
+        devPrintf("\n");
+        for (int layer = m_numLayers - 1; layer > 0; --layer) {
+            devPrintf("layer %u (%u):\n", layer, m_numFlagsInLayerList[layer]);
+            uint32_t numFlagBinsInLayer = nextMultiplierForPowOf2(m_numFlagsInLayerList[layer], 5);
+            devPrintf(" OR:");
+            for (int binIdx = 0; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t ORFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 0] + binIdx];
+                for (int i = 0; i < 32; ++i) {
+                    if (i % 8 == 0)
+                        devPrintf(" ");
+
+                    bool valid = binIdx * 32 + i < m_numFlagsInLayerList[layer];
+                    if (!valid)
+                        continue;
+
+                    bool b = (ORFlagBin >> i) & 0x1;
+                    devPrintf("%c", b ? '|' : '_');
+                }
+            }
+            devPrintf("\n");
+            devPrintf("AND:");
+            for (int binIdx = 0; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t ANDFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 1] + binIdx];
+                for (int i = 0; i < 32; ++i) {
+                    if (i % 8 == 0)
+                        devPrintf(" ");
+
+                    bool valid = binIdx * 32 + i < m_numFlagsInLayerList[layer];
+                    if (!valid)
+                        continue;
+
+                    bool b = (ANDFlagBin >> i) & 0x1;
+                    devPrintf("%c", b ? '|' : '_');
+                }
+            }
+            devPrintf("\n");
+            devPrintf("    ");
+            for (int binIdx = 0; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[layer] + binIdx];
+                devPrintf("                            %8u", numUsedFlagsUnderBin);
+            }
+            devPrintf("\n");
+        }
+        {
+            devPrintf("layer 0 (%u):\n", m_numFlagsInLayerList[0]);
+            uint32_t numFlagBinsInLayer = nextMultiplierForPowOf2(m_numFlagsInLayerList[0], 5);
+            devPrintf("   :");
+            for (int binIdx = 0; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t ORFlagBin = m_flagBins[binIdx];
+                for (int i = 0; i < 32; ++i) {
+                    if (i % 8 == 0)
+                        devPrintf(" ");
+
+                    bool valid = binIdx * 32 + i < m_numFlagsInLayerList[0];
+                    if (!valid)
+                        continue;
+
+                    bool b = (ORFlagBin >> i) & 0x1;
+                    devPrintf("%c", b ? '|' : '_');
+                }
+            }
+            devPrintf("\n");
+            devPrintf("    ");
+            for (int binIdx = 0; binIdx < numFlagBinsInLayer; ++binIdx) {
+                uint32_t numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[binIdx];
+                devPrintf("                            %8u", numUsedFlagsUnderBin);
+            }
+            devPrintf("\n");
+        }
+    }
+
+
+
+    uint32_t Context::Priv::requestMaterialDataSlot() {
+        uint32_t slotIdx = materialDataSlotFinder.getFirstAvailableSlot();
+        if (slotIdx == SlotFinder::InvalidSlotIndex) {
+            uint32_t newSize = static_cast<uint32_t>(materialDataBuffer.numElements() * 1.5f);
+            materialDataBuffer.resize(newSize, materialDataBuffer.stride());
+            materialDataSlotFinder.resize(newSize);
+        }
+        slotIdx = materialDataSlotFinder.getFirstAvailableSlot();
+        THROW_RUNTIME_ERROR(slotIdx != SlotFinder::InvalidSlotIndex, "Unable to allocate a slot index.");
+        materialDataSlotFinder.setInUse(slotIdx);
+        return slotIdx;
+    }
+
+    void Context::Priv::releaseMaterialDataSlot(uint32_t slotIdx) {
+        materialDataSlotFinder.setNotInUse(slotIdx);
+    }
+
+    void Context::Priv::setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment) {
+        materialDataBuffer.resize(materialDataBuffer.numElements(), nextMultiplesForPowOf2(size, alignment));
+        auto ptr = reinterpret_cast<uint8_t*>(materialDataBuffer.map());
+        size_t curStride = materialDataBuffer.stride();
+        std::memcpy(ptr + curStride * index, data, size);
+        materialDataBuffer.unmap();
+    }
+    
     Context Context::create(CUcontext cudaContext) {
         OPTIX_CHECK(optixInit());
 
@@ -48,51 +484,96 @@ namespace optix {
 
 
 
+    void Material::Priv::setRecordData(const _Pipeline* pipeline, uint32_t rayType, HitGroupSBTRecord* record) const {
+        Key key{ pipeline, rayType };
+        const _ProgramGroup* hitGroup = programs.at(key);
+        hitGroup->packHeader(record->header);
+        record->matSlotIndex = slotIndex;
+    }
+    
     void Material::destroy() {
         delete m;
         m = nullptr;
     }
-    
-    void Material::setData(uint32_t rayType, const ProgramGroup &hitGroup,
-                           const void* sbtRecordData, size_t size, size_t alignment) const {
+
+    void Material::setHitGroup(uint32_t rayType, const ProgramGroup &hitGroup) {
         auto _pipeline = extract(hitGroup)->getPipeline();
         THROW_RUNTIME_ERROR(_pipeline, "Invalid pipeline.");
 
         _Material::Key key{ _pipeline, rayType };
-        m->infos[key].update(extract(hitGroup), sbtRecordData, size, alignment);
+        m->programs[key] = extract(hitGroup);
+    }
+    
+    void Material::setData(const void* data, size_t size, size_t alignment) const {
+        m->context->setMaterialData(m->slotIndex, data, size, alignment);
     }
 
 
 
-    SizeAlign Scene::Priv::calcHitGroupRecordStride(const _Pipeline* pipeline) const {
-        SizeAlign maxSizeAlign;
-        for (_GeometryAccelerationStructure* gas : geomASs) {
-            SizeAlign sizeAlign = gas->calcHitGroupRecordStride(pipeline);
-            maxSizeAlign = max(maxSizeAlign, sizeAlign);
+    
+    uint32_t Scene::Priv::requestGeometryInstanceDataSlot() {
+        uint32_t slotIdx = geomInstDataSlotFinder.getFirstAvailableSlot();
+        if (slotIdx == SlotFinder::InvalidSlotIndex) {
+            uint32_t newSize = static_cast<uint32_t>(geomInstDataBuffer.numElements() * 1.5f);
+            geomInstDataBuffer.resize(newSize, geomInstDataBuffer.stride());
+            geomInstDataSlotFinder.resize(newSize);
         }
-        return maxSizeAlign;
+        slotIdx = geomInstDataSlotFinder.getFirstAvailableSlot();
+        THROW_RUNTIME_ERROR(slotIdx != SlotFinder::InvalidSlotIndex, "Unable to allocate a slot index.");
+        geomInstDataSlotFinder.setInUse(slotIdx);
+        return slotIdx;
+    }
+
+    void Scene::Priv::releaseGeometryInstanceDataSlot(uint32_t slotIdx) {
+        geomInstDataSlotFinder.setNotInUse(slotIdx);
+    }
+
+    void Scene::Priv::setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment) {
+        geomInstDataBuffer.resize(geomInstDataBuffer.numElements(), nextMultiplesForPowOf2(size, alignment));
+        auto ptr = reinterpret_cast<uint8_t*>(geomInstDataBuffer.map());
+        size_t curStride = geomInstDataBuffer.stride();
+        std::memcpy(ptr + curStride * index, data, size);
+        geomInstDataBuffer.unmap();
     }
 
     void Scene::Priv::registerPipeline(const _Pipeline* pipeline) {
         THROW_RUNTIME_ERROR(hitGroupSBTs.count(pipeline) == 0, "This pipeline %p has been already registered.", pipeline);
         auto hitGroupSBT = new HitGroupSBT();
-        if (sbtLayoutIsUpToDate) {
-            SizeAlign stride = calcHitGroupRecordStride(pipeline);
-            hitGroupSBT->records.initialize(getCUDAContext(), BufferType::Device, numSBTRecords, stride.size, 0);
-        }
-
+        hitGroupSBT->records.initialize(getCUDAContext(), BufferType::Device, 1);
         hitGroupSBTs[pipeline] = hitGroupSBT;
     }
 
-    void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
+    void Scene::Priv::generateSBTLayout(const _Pipeline* pipeline) {
+        if (sbtLayoutIsUpToDate)
+            return;
+
+        uint32_t sbtOffset = 0;
+        sbtOffsets.clear();
+        for (_GeometryAccelerationStructure* gas : geomASs) {
+            for (int matSetIdx = 0; matSetIdx < gas->getNumMaterialSets(); ++matSetIdx) {
+                uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
+                _Scene::SBTOffsetKey key = { gas, matSetIdx };
+                sbtOffsets[key] = sbtOffset;
+                sbtOffset += gasNumSBTRecords;
+            }
+        }
+        numSBTRecords = sbtOffset;
+        sbtLayoutIsUpToDate = true;
+
         HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
-        auto records = reinterpret_cast<uint8_t*>(hitGroupSBT->records.map());
-        uint32_t stride = hitGroupSBT->records.stride();
+        hitGroupSBT->records.resize(numSBTRecords);
+    }
+
+    void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
+        generateSBTLayout(pipeline);
+
+        HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
+        HitGroupSBTRecord* records = hitGroupSBT->records.map();
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             for (int j = 0; j < gas->getNumMaterialSets(); ++j) {
-                uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records, stride);
-                records += numRecords * stride;
+                uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records);
+                records += numRecords;
             }
         }
 
@@ -111,67 +592,15 @@ namespace optix {
     }
     
     GeometryInstance Scene::createGeometryInstance() const {
-        auto _geomInst = new _GeometryInstance(m);
-        return _geomInst->getPublicType();
+        return (new _GeometryInstance(m))->getPublicType();
     }
 
     GeometryAccelerationStructure Scene::createGeometryAccelerationStructure() const {
-        auto _geomAS = new _GeometryAccelerationStructure(m);
-        m->geomASs.insert(_geomAS);
-        return _geomAS->getPublicType();
+        return (new _GeometryAccelerationStructure(m))->getPublicType();
     }
 
     InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
-        auto _instAS = new _InstanceAccelerationStructure(m);
-        m->instASs.insert(_instAS);
-        return _instAS->getPublicType();
-    }
-
-    void Scene::generateSBTLayout() const {
-        if (m->sbtLayoutIsUpToDate)
-            return;
-
-        uint32_t sbtOffset = 0;
-        m->sbtOffsets.clear();
-        for (_GeometryAccelerationStructure* gas : m->geomASs) {
-            for (int matSetIdx = 0; matSetIdx < gas->getNumMaterialSets(); ++matSetIdx) {
-                uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
-                _Scene::SBTOffsetKey key = { gas, matSetIdx };
-                m->sbtOffsets[key] = sbtOffset;
-                sbtOffset += gasNumSBTRecords;
-            }
-        }
-        m->numSBTRecords = sbtOffset;
-        m->sbtLayoutIsUpToDate = true;
-
-        for (auto it = m->hitGroupSBTs.begin(); it != m->hitGroupSBTs.end(); ++it) {
-            HitGroupSBT* hitGroupSBT = it->second;
-            hitGroupSBT->records.finalize();
-            SizeAlign stride = m->calcHitGroupRecordStride(it->first);
-            hitGroupSBT->records.initialize(m->getCUDAContext(), BufferType::Device, m->numSBTRecords, stride.size, 0);
-        }
-    }
-
-    void Scene::setupASsAndSBTLayout(CUstream stream) const {
-        for (_GeometryAccelerationStructure* _gas : m->geomASs) {
-            if (!_gas->isReady()) {
-                GeometryAccelerationStructure gas = _gas->getPublicType();
-                gas.rebuild(stream);
-                gas.compact(stream, stream);
-                gas.removeUncompacted(stream);
-            }
-        }
-
-        generateSBTLayout();
-
-        for (_InstanceAccelerationStructure* _ias : m->instASs) {
-            if (!_ias->isReady()) {
-                InstanceAccelerationStructure ias = _ias->getPublicType();
-                ias.rebuild(stream);
-                ias.compact(stream, stream);
-                ias.removeUncompacted(stream);
-            }
-        }
+        return (new _InstanceAccelerationStructure(m))->getPublicType();
     }
 
     void Scene::markSBTLayoutDirty() const {
@@ -220,68 +649,27 @@ namespace optix {
         triArray.flags = buildInputFlags.data();
     }
 
-    SizeAlign GeometryInstance::Priv::calcHitGroupRecordStride(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes) const {
-        SizeAlign maxSizeAlign;
-        MaterialKey key{ matSetIdx, -1 };
-        for (int matIdx = 0; matIdx < buildInputFlags.size(); ++matIdx) {
-            key.matIndex = matIdx;
-            THROW_RUNTIME_ERROR(materials.count(key) > 0,
-                                "No material registered for Material set: %u, Material: %u", matSetIdx, matIdx);
-
-            const _Material* mat = materials.at(key);
-            for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
-                // Header Region
-                SizeAlign stride(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
-                // GeometryInstance Region
-                stride += sizeAlign;
-                // Material Region
-                stride += mat->getSBTRecord(pipeline, rIdx).sizeAlign;
-                stride.alignUp();
-
-                maxSizeAlign = max(maxSizeAlign, stride);
-            }
-        }
-
-        return maxSizeAlign;
-    }
-
     uint32_t GeometryInstance::Priv::getNumSBTRecords() const {
         return static_cast<uint32_t>(buildInputFlags.size());
     }
 
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
-                                                    uint8_t* records, size_t stride) const {
-        uint32_t numRecords = 0;
+                                                    HitGroupSBTRecord* records) const {
+        THROW_RUNTIME_ERROR(matSetIdx < materials.size(),
+                            "Out of material set bound: [0, %u)", static_cast<uint32_t>(materials.size()));
 
-        MaterialKey key{ matSetIdx, -1 };
+        HitGroupSBTRecord* recordPtr = records;
         for (int matIdx = 0; matIdx < buildInputFlags.size(); ++matIdx) {
-            key.matIndex = matIdx;
-            THROW_RUNTIME_ERROR(materials.count(key) > 0,
-                                "No material registered for Material set: %u, Material: %u", matSetIdx, matIdx);
-
-            const _Material* mat = materials.at(key);
+            const _Material* mat = materials[matSetIdx][matIdx];
+            THROW_RUNTIME_ERROR(mat, "No material set for %u-%u.", matSetIdx, matIdx);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
-                const Material::Priv::Info &matInfo = mat->getSBTRecord(pipeline, rIdx);
-
-                SizeAlign sa;
-                uint32_t offset;
-                constexpr SizeAlign saHeader(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
-                // Header Region
-                sa.add(saHeader, &offset);
-                matInfo.program->packHeader(records + offset);
-                // GeometryInstance Region
-                sa.add(sizeAlign, &offset);
-                std::memcpy(records + offset, recordData, sizeAlign.size);
-                // Material Region
-                sa.add(matInfo.sizeAlign, &offset);
-                std::memcpy(records + offset, matInfo.recordData, matInfo.sizeAlign.size);
-
-                records += stride;
-                ++numRecords;
+                mat->setRecordData(pipeline, rIdx, recordPtr);
+                recordPtr->geomInstSlotIndex = slotIndex;
+                ++recordPtr;
             }
         }
 
-        return numRecords;
+        return buildInputFlags.size() * numRayTypes;
     }
 
     void GeometryInstance::destroy() {
@@ -306,9 +694,8 @@ namespace optix {
         m->materialIndexOffsetBuffer = matIdxOffsetBuffer;
     }
 
-    void GeometryInstance::setData(const void* sbtRecordData, size_t size, size_t alignment) const {
-        std::memcpy(m->recordData, sbtRecordData, size);
-        m->sizeAlign = SizeAlign(size, alignment);
+    void GeometryInstance::setData(const void* data, size_t size, size_t alignment) const {
+        m->scene->setGeometryInstanceData(m->slotIndex, data, size, alignment);
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
@@ -324,8 +711,13 @@ namespace optix {
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
                             "Out of material bounds [0, %u).", (uint32_t)numMaterials);
 
-        _GeometryInstance::MaterialKey key{ matSetIdx, matIdx };
-        m->materials[key] = extract(mat);
+        uint32_t prevNumMatSets = m->materials.size();
+        if (matSetIdx >= prevNumMatSets) {
+            m->materials.resize(matSetIdx + 1);
+            for (int i = prevNumMatSets; i < m->materials.size(); ++i)
+                m->materials[i].resize(numMaterials, nullptr);
+        }
+        m->materials[matSetIdx][matIdx] = extract(mat);
     }
 
 
@@ -336,18 +728,6 @@ namespace optix {
             children[i]->fillBuildInput(&buildInputs[i]);
     }
     
-    SizeAlign GeometryAccelerationStructure::Priv::calcHitGroupRecordStride(const _Pipeline* pipeline) const {
-        SizeAlign maxSizeAlign;
-        for (int matSetIdx = 0; matSetIdx < numRayTypesPerMaterialSet.size(); ++matSetIdx) {
-            uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
-            for (int i = 0; i < children.size(); ++i) {
-                SizeAlign sizeAlign = children[i]->calcHitGroupRecordStride(pipeline, matSetIdx, numRayTypes);
-                maxSizeAlign = max(maxSizeAlign, sizeAlign);
-            }
-        }
-        return maxSizeAlign;
-    }
-
     uint32_t GeometryAccelerationStructure::Priv::calcNumSBTRecords(uint32_t matSetIdx) const {
         uint32_t numSBTRecords = 0;
         for (int i = 0; i < children.size(); ++i)
@@ -357,7 +737,7 @@ namespace optix {
         return numSBTRecords;
     }
 
-    uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records, uint32_t stride) const {
+    uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, HitGroupSBTRecord* records) const {
         THROW_RUNTIME_ERROR(matSetIdx < numRayTypesPerMaterialSet.size(),
                             "Material set index %u is out of bound [0, %u).",
                             matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
@@ -365,8 +745,8 @@ namespace optix {
         uint32_t sumRecords = 0;
         for (int i = 0; i < children.size(); ++i) {
             uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypesPerMaterialSet[matSetIdx],
-                                                              records, stride);
-            records += numRecords * stride;
+                                                              records);
+            records += numRecords;
             sumRecords += numRecords;
         }
 
@@ -374,8 +754,6 @@ namespace optix {
     }
     
     void GeometryAccelerationStructure::destroy() {
-        m->scene->removeGAS(m);
-
         m->accelBuffer.finalize();
         m->accelTempBuffer.finalize();
 
@@ -569,8 +947,6 @@ namespace optix {
     }
     
     void InstanceAccelerationStructure::destroy() {
-        m->scene->removeIAS(m);
-
         m->accelBuffer.finalize();
         m->accelTempBuffer.finalize();
 
@@ -772,7 +1148,7 @@ namespace optix {
                 sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
                 sbt.missRecordCount = numMissRayTypes;
 
-                sbt.hitgroupRecordBase = hitGroupSBT->records.getDevicePointer();
+                sbt.hitgroupRecordBase = reinterpret_cast<CUdeviceptr>(hitGroupSBT->records.getDevicePointer());
                 sbt.hitgroupRecordStrideInBytes = hitGroupSBT->records.stride();
                 sbt.hitgroupRecordCount = hitGroupSBT->records.numElements();
 
@@ -787,6 +1163,7 @@ namespace optix {
     void Pipeline::destroy() {
         if (m->pipelineLinked)
             OPTIX_CHECK(optixPipelineDestroy(m->rawPipeline));
+
         delete m;
         m = nullptr;
     }
@@ -1041,6 +1418,7 @@ namespace optix {
 
     void Module::destroy() {
         OPTIX_CHECK(optixModuleDestroy(m->rawModule));
+
         delete m;
         m = nullptr;
     }
@@ -1049,6 +1427,7 @@ namespace optix {
 
     void ProgramGroup::destroy() {
         m->pipeline->destroyProgram(m->rawGroup);
+
         delete m;
         m = nullptr;
     }
