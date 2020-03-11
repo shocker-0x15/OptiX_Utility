@@ -262,6 +262,10 @@ namespace optix {
             materialDataBuffer.initialize(cudaContext, BufferType::Device, NumInitialMaterialData, InitialMaterialDataStride, 0);
             materialDataSlotFinder.initialize(NumInitialMaterialData);
         }
+        ~Priv() {
+            materialDataSlotFinder.finalize();
+            materialDataBuffer.finalize();
+        }
 
         CUcontext getCUDAContext() const {
             return cudaContext;
@@ -337,6 +341,8 @@ namespace optix {
         const _Context* context;
         Buffer geomInstDataBuffer;
         SlotFinder geomInstDataSlotFinder;
+        TypedBuffer<OptixTraversableHandle> traversableHandleBuffer;
+        SlotFinder traversableSlotFinder;
         std::set<_GeometryAccelerationStructure*> geomASs;
         std::map<SBTOffsetKey, uint32_t> sbtOffsets;
         uint32_t numSBTRecords;
@@ -355,8 +361,22 @@ namespace optix {
             constexpr uint32_t NumInitialGeomInstData = 16;
 
             CUcontext cudaContext = context->getCUDAContext();
-            geomInstDataBuffer.initialize(cudaContext, BufferType::Device, NumInitialGeomInstData, InitialGeomInstDataStride, 0);
+            geomInstDataBuffer.initialize(cudaContext, BufferType::Device,
+                                          NumInitialGeomInstData, InitialGeomInstDataStride, 0);
             geomInstDataSlotFinder.initialize(NumInitialGeomInstData);
+
+            constexpr uint32_t NumInitialTraversableSlots = 128;
+
+            traversableHandleBuffer.initialize(cudaContext, BufferType::Device,
+                                               NumInitialTraversableSlots);
+            traversableSlotFinder.initialize(NumInitialTraversableSlots);
+        }
+        ~Priv() {
+            traversableSlotFinder.finalize();
+            traversableHandleBuffer.finalize();
+
+            geomInstDataSlotFinder.finalize();
+            geomInstDataBuffer.finalize();
         }
 
         CUcontext getCUDAContext() const {
@@ -371,6 +391,10 @@ namespace optix {
         uint32_t requestGeometryInstanceDataSlot();
         void releaseGeometryInstanceDataSlot(uint32_t index);
         void setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment);
+
+        uint32_t requestTraversableSlot();
+        void releaseTraversableSlot(uint32_t index);
+        void setTraversableHandle(uint32_t index, const OptixTraversableHandle &handle);
 
 
 
@@ -463,6 +487,7 @@ namespace optix {
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
+        uint32_t travID;
         struct {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
@@ -477,6 +502,7 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
         Priv(_Scene* _scene) : scene(_scene) {
+            travID = scene->requestTraversableSlot();
             scene->addGAS(this);
 
             compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
@@ -496,6 +522,7 @@ namespace optix {
             compactedSizeOnDevice.finalize();
 
             scene->removeGAS(this);
+            scene->releaseTraversableSlot(travID);
         }
 
         CUcontext getCUDAContext() const {
@@ -590,6 +617,7 @@ namespace optix {
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
+        uint32_t travID;
         struct {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
@@ -606,6 +634,7 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
         Priv(_Scene* _scene) : scene(_scene) {
+            travID = scene->requestTraversableSlot();
             scene->addIAS(this);
 
             compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
@@ -627,6 +656,7 @@ namespace optix {
             compactedSizeOnDevice.finalize();
 
             scene->removeIAS(this);
+            scene->releaseTraversableSlot(travID);
         }
 
         CUcontext getCUDAContext() const {

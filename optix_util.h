@@ -185,7 +185,7 @@ private: \
         void update(CUstream stream) const;
 
         bool isReady() const;
-        OptixTraversableHandle getHandle() const;
+        uint32_t getID() const;
 
         void markDirty() const;
     };
@@ -208,7 +208,7 @@ private: \
         void update(CUstream stream) const;
 
         bool isReady() const;
-        OptixTraversableHandle getHandle() const;
+        uint32_t getID() const;
 
         void markDirty() const;
     };

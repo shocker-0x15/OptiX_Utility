@@ -440,6 +440,7 @@ namespace optix {
         materialDataSlotFinder.setNotInUse(slotIdx);
     }
 
+    // TODO: Consider double buffering or asynchronous transfer.
     void Context::Priv::setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment) {
         materialDataBuffer.resize(materialDataBuffer.numElements(), nextMultiplesForPowOf2(size, alignment));
         auto ptr = reinterpret_cast<uint8_t*>(materialDataBuffer.map());
@@ -528,12 +529,36 @@ namespace optix {
         geomInstDataSlotFinder.setNotInUse(slotIdx);
     }
 
+    // TODO: Consider double buffering or asynchronous transfer.
     void Scene::Priv::setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment) {
         geomInstDataBuffer.resize(geomInstDataBuffer.numElements(), nextMultiplesForPowOf2(size, alignment));
         auto ptr = reinterpret_cast<uint8_t*>(geomInstDataBuffer.map());
         size_t curStride = geomInstDataBuffer.stride();
         std::memcpy(ptr + curStride * index, data, size);
         geomInstDataBuffer.unmap();
+    }
+
+    uint32_t Scene::Priv::requestTraversableSlot() {
+        uint32_t slotIdx = traversableSlotFinder.getFirstAvailableSlot();
+        if (slotIdx == SlotFinder::InvalidSlotIndex) {
+            uint32_t newSize = static_cast<uint32_t>(traversableSlotFinder.getNumSlots() * 1.5f);
+            traversableSlotFinder.resize(newSize);
+        }
+        slotIdx = traversableSlotFinder.getFirstAvailableSlot();
+        THROW_RUNTIME_ERROR(slotIdx != SlotFinder::InvalidSlotIndex, "Unable to allocate a slot index.");
+        traversableSlotFinder.setInUse(slotIdx);
+        return slotIdx;
+    }
+
+    void Scene::Priv::releaseTraversableSlot(uint32_t slotIdx) {
+        traversableSlotFinder.setNotInUse(slotIdx);
+    }
+
+    // TODO: Consider double buffering or asynchronous transfer.
+    void Scene::Priv::setTraversableHandle(uint32_t index, const OptixTraversableHandle &handle) {
+        auto handles = traversableHandleBuffer.map();
+        handles[index] = handle;
+        traversableHandleBuffer.unmap();
     }
 
     void Scene::Priv::registerPipeline(const _Pipeline* pipeline) {
@@ -897,8 +922,8 @@ namespace optix {
         return m->isReady();
     }
 
-    OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
-        return m->getHandle();
+    uint32_t GeometryAccelerationStructure::getID() const {
+        return m->travID;
     }
 
     void GeometryAccelerationStructure::markDirty() const {
@@ -1079,8 +1104,8 @@ namespace optix {
         return m->isReady();
     }
 
-    OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {
-        return m->getHandle();
+    uint32_t InstanceAccelerationStructure::getID() const {
+        return m->travID;
     }
 
     void InstanceAccelerationStructure::markDirty() const {

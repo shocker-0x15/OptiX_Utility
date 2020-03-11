@@ -406,26 +406,30 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optix::Material matGray = optixContext.createMaterial();
     Shared::MaterialData matGrayData;
     matGrayData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-    matGray.setData(Shared::RayType_Search, searchRayHitProgramGroup, matGrayData);
-    matGray.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matGrayData);
+    matGray.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matGray.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matGray.setData(matGrayData);
 
     optix::Material matLeft = optixContext.createMaterial();
     Shared::MaterialData matLeftData;
     matLeftData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
-    matLeft.setData(Shared::RayType_Search, searchRayHitProgramGroup, matLeftData);
-    matLeft.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matLeftData);
+    matLeft.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matLeft.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matLeft.setData(matLeftData);
 
     optix::Material matRight = optixContext.createMaterial();
     Shared::MaterialData matRightData;
     matRightData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
-    matRight.setData(Shared::RayType_Search, searchRayHitProgramGroup, matRightData);
-    matRight.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matRightData);
+    matRight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matRight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matRight.setData(matRightData);
 
     optix::Material matLight = optixContext.createMaterial();
     Shared::MaterialData matLightData;
     matLightData.albedo = make_float3(1, 1, 1);
-    matLight.setData(Shared::RayType_Search, searchRayHitProgramGroup, matLightData);
-    matLight.setData(Shared::RayType_Visibility, visibilityRayHitProgramGroup, matLightData);
+    matLight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matLight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matLight.setData(matLightData);
     
     TriangleMesh meshCornellBox(cuContext, scene);
     {
@@ -527,26 +531,26 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     iasScene.addChild(gasAreaLight, 0, tfAreaLight);
 
-#if 1
-    // High-level control
-    scene.setupASsAndSBTLayout(cuStream);
-#else
-    // Fine detail control
-
-    gasCornellBox.rebuild(stream);
-    gasCornellBox.compact(stream, stream);
-    gasCornellBox.removeUncompacted(stream);
-
-    gasAreaLight.rebuild(stream);
-    gasAreaLight.compact(stream, stream);
-    gasAreaLight.removeUncompacted(stream);
-
-    scene.generateSBTLayout();
-
-    iasScene.rebuild(stream);
-    iasScene.compact(stream, stream);
-    iasScene.removeUncompacted(stream);
-#endif
+//#if 1
+//    // High-level control
+//    scene.setupASsAndSBTLayout(cuStream);
+//#else
+//    // Fine detail control
+//
+//    gasCornellBox.rebuild(stream);
+//    gasCornellBox.compact(stream, stream);
+//    gasCornellBox.removeUncompacted(stream);
+//
+//    gasAreaLight.rebuild(stream);
+//    gasAreaLight.compact(stream, stream);
+//    gasAreaLight.removeUncompacted(stream);
+//
+//    scene.generateSBTLayout();
+//
+//    iasScene.rebuild(stream);
+//    iasScene.compact(stream, stream);
+//    iasScene.removeUncompacted(stream);
+//#endif
 
     pipeline.setScene(scene);
 
@@ -622,7 +626,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     Shared::PipelineLaunchParameters plp;
-    plp.topGroup = iasScene.getHandle();
+    //plp.utilParams = 
+    plp.topGroupIndex = iasScene.getID();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;

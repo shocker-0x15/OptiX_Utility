@@ -143,9 +143,11 @@ RT_PROGRAM void __raygen__fill() {
     float3 origin = make_float3(0, 0, 3);
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
 
+    OptixTraversableHandle topGroup = plp.utilParams.handles[plp.topGroupIndex];
+
     PayloadAccessor<SearchRayPayload> payload;
     payload.raw.rng = rng;
-    optixTrace(plp.topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+    optixTrace(topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                RayType_Search, NumRayTypes, RayType_Search,
                payload[0], payload[1], payload[2], payload[3], payload[4]);
 
@@ -168,7 +170,14 @@ RT_PROGRAM void __miss__searchRay() {
 }
 
 RT_PROGRAM void __closesthit__shading() {
-    const auto &sbtrData = *(HitGroupData*)optixGetSbtDataPointer();
+    auto &sbtr = *reinterpret_cast<const OptixUtilHitGroupSBTRecord*>(optixGetSbtDataPointer());
+    auto matData = reinterpret_cast<const MaterialData *>(plp.utilParams.materialData);
+    auto geomInstData = reinterpret_cast<const GeometryData *>(plp.utilParams.geomInstData);
+
+    const MaterialData &mat = matData[sbtr.materialDataIndex];
+    const GeometryData &geom = geomInstData[sbtr.geomInstDataIndex];
+
+    OptixTraversableHandle topGroup = plp.utilParams.handles[plp.topGroupIndex];
 
     auto hitPointParam = HitPointParameter::get();
 
@@ -177,13 +186,13 @@ RT_PROGRAM void __closesthit__shading() {
 
     PCG32RNG &rng = payload.raw.rng;
 
-    const Triangle &tri = sbtrData.geom.triangleBuffer[hitPointParam.primIndex];
-    float3 p0 = sbtrData.geom.vertexBuffer[tri.index0].position;
-    float3 p1 = sbtrData.geom.vertexBuffer[tri.index1].position;
-    float3 p2 = sbtrData.geom.vertexBuffer[tri.index2].position;
-    float3 n0 = sbtrData.geom.vertexBuffer[tri.index0].normal;
-    float3 n1 = sbtrData.geom.vertexBuffer[tri.index1].normal;
-    float3 n2 = sbtrData.geom.vertexBuffer[tri.index2].normal;
+    const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
+    float3 p0 = geom.vertexBuffer[tri.index0].position;
+    float3 p1 = geom.vertexBuffer[tri.index1].position;
+    float3 p2 = geom.vertexBuffer[tri.index2].position;
+    float3 n0 = geom.vertexBuffer[tri.index0].normal;
+    float3 n1 = geom.vertexBuffer[tri.index1].normal;
+    float3 n2 = geom.vertexBuffer[tri.index2].normal;
     float b0 = hitPointParam.b0;
     float b1 = hitPointParam.b1;
     float b2 = 1 - (b0 + b1);
@@ -206,12 +215,12 @@ RT_PROGRAM void __closesthit__shading() {
 
     PayloadAccessor<VisibilityRayPayload> shadowPayload;
     shadowPayload.raw.visibility = 1.0f;
-    optixTrace(plp.topGroup, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+    optixTrace(topGroup, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                RayType_Visibility, NumRayTypes, RayType_Visibility,
                shadowPayload[0]);
 
     float G = shadowPayload.raw.visibility * dot(sn, shadowRayDir) * cosLight / dist2;
-    float3 contribution = (sbtrData.mat.albedo / M_PI) * G * Le / areaPDF;
+    float3 contribution = (mat.albedo / M_PI) * G * Le / areaPDF;
     payload.raw.contribution = contribution;
 
     payload.setAll();

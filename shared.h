@@ -54,6 +54,19 @@ RT_FUNCTION float3 normalize(const float3 &v) {
 
 
 namespace Shared {
+    struct OptixUtilLaunchParameters {
+        uint8_t* materialData;
+        uint8_t* geomInstData;
+        OptixTraversableHandle* handles;
+    };
+
+    struct OptixUtilHitGroupSBTRecord {
+        uint32_t materialDataIndex;
+        uint32_t geomInstDataIndex;
+    };
+
+
+
     enum RayType {
         RayType_Search = 0,
         RayType_Visibility,
@@ -122,7 +135,9 @@ namespace Shared {
 
 
     struct PipelineLaunchParameters {
-        OptixTraversableHandle topGroup;
+        OptixUtilLaunchParameters utilParams;
+
+        uint32_t topGroupIndex;
         int2 imageSize;
         uint32_t numAccumFrames;
         PCG32RNG* rngBuffer;
