@@ -19,19 +19,32 @@
 #   undef RGB
 #endif
 
+#if !defined(__CUDA_ARCH__)
 #include "cuda_helper.h"
+#endif
 
 #include <optix.h>
+#if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
+#endif
+#include <cstdint>
+
+#if defined(__CUDA_ARCH__)
+#   define RT_FUNCTION __forceinline__ __device__
+#   define RT_PROGRAM extern "C" __global__
+#else
+#   define RT_FUNCTION
+#endif
 
 
 
 namespace optix {
+
 #ifdef _DEBUG
 #   define OPTIX_ENABLE_ASSERT
 #endif
 
-#ifdef OPTIX_Platform_Windows_MSVC
+#if defined(OPTIX_Platform_Windows_MSVC)
     void devPrintf(const char* fmt, ...);
 #else
 #   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
@@ -43,8 +56,12 @@ namespace optix {
 #   define optixPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
-#ifdef OPTIX_ENABLE_ASSERT
+#if defined(OPTIX_ENABLE_ASSERT)
+#   if defined(__CUDA_ARCH__)
+#   define optixAssert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); } 0
+#   else
 #   define optixAssert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
+#   endif
 #else
 #   define optixAssert(expr, fmt, ...)
 #endif
@@ -52,6 +69,29 @@ namespace optix {
 #define optixAssert_ShouldNotBeCalled() optixAssert(false, "Should not be called!")
 #define optixAssert_NotImplemented() optixAssert(false, "Not implemented yet!")
 
+
+
+    struct BaseLaunchParameters {
+        uint8_t* materialData;
+        uint8_t* geomInstData;
+        OptixTraversableHandle* handles;
+    };
+
+    struct HitGroupSBTRecordData {
+        uint32_t materialDataIndex;
+        uint32_t geomInstDataIndex;
+    };
+
+#if defined(__CUDA_ARCH__)
+    RT_FUNCTION HitGroupSBTRecordData &getHitGroupSBTRecordData() {
+        *reinterpret_cast<const optix::HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    }
+#endif
+
+
+
+
+#if !defined(__CUDA_ARCH__)
     using namespace CUDAHelper;
 
 
@@ -245,7 +285,8 @@ private: \
         void setExceptionProgram(ProgramGroup program) const;
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
 
-        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ);
+        void fillLaunchParameters(BaseLaunchParameters* params) const;
+        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
     };
 
 
@@ -265,4 +306,6 @@ private: \
     public:
         void destroy();
     };
+
+#endif // #if !defined(__CUDA_ARCH__)
 }

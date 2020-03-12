@@ -143,7 +143,7 @@ RT_PROGRAM void __raygen__fill() {
     float3 origin = make_float3(0, 0, 3);
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
 
-    OptixTraversableHandle topGroup = plp.utilParams.handles[plp.topGroupIndex];
+    OptixTraversableHandle topGroup = plp.baseParams.handles[plp.topGroupIndex];
 
     PayloadAccessor<SearchRayPayload> payload;
     payload.raw.rng = rng;
@@ -170,14 +170,14 @@ RT_PROGRAM void __miss__searchRay() {
 }
 
 RT_PROGRAM void __closesthit__shading() {
-    auto &sbtr = *reinterpret_cast<const OptixUtilHitGroupSBTRecord*>(optixGetSbtDataPointer());
-    auto matData = reinterpret_cast<const MaterialData *>(plp.utilParams.materialData);
-    auto geomInstData = reinterpret_cast<const GeometryData *>(plp.utilParams.geomInstData);
+    auto &sbtr = optix::getHitGroupSBTRecordData();
+    auto matData = reinterpret_cast<const MaterialData *>(plp.baseParams.materialData);
+    auto geomInstData = reinterpret_cast<const GeometryData *>(plp.baseParams.geomInstData);
 
     const MaterialData &mat = matData[sbtr.materialDataIndex];
     const GeometryData &geom = geomInstData[sbtr.geomInstDataIndex];
 
-    OptixTraversableHandle topGroup = plp.utilParams.handles[plp.topGroupIndex];
+    OptixTraversableHandle topGroup = plp.baseParams.handles[plp.topGroupIndex];
 
     auto hitPointParam = HitPointParameter::get();
 

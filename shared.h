@@ -1,14 +1,6 @@
 #pragma once
 
-#include <optix.h>
-#include <cstdint>
-
-#if defined(__CUDA_ARCH__)
-#   define RT_FUNCTION __forceinline__ __device__
-#   define RT_PROGRAM extern "C" __global__
-#else
-#   define RT_FUNCTION
-#endif
+#include "optix_util.h"
 
 RT_FUNCTION float3 getXYZ(const float4 &v) {
     return make_float3(v.x, v.y, v.z);
@@ -54,19 +46,6 @@ RT_FUNCTION float3 normalize(const float3 &v) {
 
 
 namespace Shared {
-    struct OptixUtilLaunchParameters {
-        uint8_t* materialData;
-        uint8_t* geomInstData;
-        OptixTraversableHandle* handles;
-    };
-
-    struct OptixUtilHitGroupSBTRecord {
-        uint32_t materialDataIndex;
-        uint32_t geomInstDataIndex;
-    };
-
-
-
     enum RayType {
         RayType_Search = 0,
         RayType_Visibility,
@@ -135,7 +114,7 @@ namespace Shared {
 
 
     struct PipelineLaunchParameters {
-        OptixUtilLaunchParameters utilParams;
+        optix::BaseLaunchParameters baseParams;
 
         uint32_t topGroupIndex;
         int2 imageSize;

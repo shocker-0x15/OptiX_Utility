@@ -235,8 +235,7 @@ namespace optix {
 
     struct HitGroupSBTRecord {
         uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
-        uint32_t matSlotIndex;
-        uint32_t geomInstSlotIndex;
+        HitGroupSBTRecordData data;
     };
 
     struct HitGroupSBT {
@@ -254,8 +253,14 @@ namespace optix {
     public:
         OPTIX_OPAQUE_BRIDGE(Context);
 
-        Priv() :
-            rawContext(nullptr) {
+        Priv(CUcontext cuContext) : cudaContext(cuContext) {
+            OPTIX_CHECK(optixInit());
+
+            OptixDeviceContextOptions options = {};
+            options.logCallbackFunction = &logCallBack;
+            options.logCallbackLevel = 4;
+            OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
+
             constexpr uint32_t InitialMaterialDataStride = 16;
             constexpr uint32_t NumInitialMaterialData = 2;
 
@@ -265,6 +270,8 @@ namespace optix {
         ~Priv() {
             materialDataSlotFinder.finalize();
             materialDataBuffer.finalize();
+
+            OPTIX_CHECK(optixDeviceContextDestroy(rawContext));
         }
 
         CUcontext getCUDAContext() const {
@@ -277,6 +284,9 @@ namespace optix {
         uint32_t requestMaterialDataSlot();
         void releaseMaterialDataSlot(uint32_t index);
         void setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment);
+        uint8_t* getMaterialDataBufferAddress() const {
+            return reinterpret_cast<uint8_t*>(materialDataBuffer.getDevicePointer());
+        }
     };
 
 
@@ -391,10 +401,16 @@ namespace optix {
         uint32_t requestGeometryInstanceDataSlot();
         void releaseGeometryInstanceDataSlot(uint32_t index);
         void setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment);
+        uint8_t* getGeometryInstanceDataBufferAddress() const {
+            return reinterpret_cast<uint8_t*>(geomInstDataBuffer.getDevicePointer());
+        }
 
         uint32_t requestTraversableSlot();
         void releaseTraversableSlot(uint32_t index);
         void setTraversableHandle(uint32_t index, const OptixTraversableHandle &handle);
+        OptixTraversableHandle* getTraversableHandleBufferAddress() const {
+            return traversableHandleBuffer.getDevicePointer();
+        }
 
 
 

@@ -159,15 +159,15 @@ public:
         auto triangleBuffer = new CUDAHelper::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
         triangleBuffer->initialize(m_cudaContext, CUDAHelper::BufferType::Device, numTriangles);
-        auto trianglesD = (Shared::Triangle*)triangleBuffer->map();
+        Shared::Triangle* trianglesD = triangleBuffer->map();
         std::copy_n(triangles, numTriangles, trianglesD);
         triangleBuffer->unmap();
 
         group.material = material;
 
         Shared::GeometryData recordData;
-        recordData.vertexBuffer = (Shared::Vertex*)m_vertexBuffer.getDevicePointer();
-        recordData.triangleBuffer = (Shared::Triangle*)triangleBuffer->getDevicePointer();
+        recordData.vertexBuffer = m_vertexBuffer.getDevicePointer();
+        recordData.triangleBuffer = triangleBuffer->getDevicePointer();
 
         optix::GeometryInstance geomInst = m_scene.createGeometryInstance();
         geomInst.setVertexBuffer(&m_vertexBuffer);
@@ -554,7 +554,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     pipeline.setScene(scene);
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    //CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     // END: 
     // ----------------------------------------------------------------
@@ -626,7 +626,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     Shared::PipelineLaunchParameters plp;
-    //plp.utilParams = 
+    pipeline.fillLaunchParameters(&plp.baseParams);
     plp.topGroupIndex = iasScene.getID();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;

@@ -442,7 +442,9 @@ namespace optix {
 
     // TODO: Consider double buffering or asynchronous transfer.
     void Context::Priv::setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment) {
-        materialDataBuffer.resize(materialDataBuffer.numElements(), nextMultiplesForPowOf2(size, alignment));
+        size_t requiredStride = nextMultiplesForPowOf2(size, tzcnt(alignment));
+        materialDataBuffer.resize(materialDataBuffer.numElements(),
+                                  std::max(materialDataBuffer.stride(), requiredStride));
         auto ptr = reinterpret_cast<uint8_t*>(materialDataBuffer.map());
         size_t curStride = materialDataBuffer.stride();
         std::memcpy(ptr + curStride * index, data, size);
@@ -450,21 +452,10 @@ namespace optix {
     }
     
     Context Context::create(CUcontext cudaContext) {
-        OPTIX_CHECK(optixInit());
-
-        Context ret;
-        ret.m = new _Context();
-        ret.m->cudaContext = cudaContext;
-        OptixDeviceContextOptions options = {};
-        options.logCallbackFunction = &logCallBack;
-        options.logCallbackLevel = 4;
-        OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &ret.m->rawContext));
-
-        return ret;
+        return (new _Context(cudaContext))->getPublicType();
     }
 
     void Context::destroy() {
-        OPTIX_CHECK(optixDeviceContextDestroy(m->rawContext));
         delete m;
         m = nullptr;
     }
@@ -489,7 +480,7 @@ namespace optix {
         Key key{ pipeline, rayType };
         const _ProgramGroup* hitGroup = programs.at(key);
         hitGroup->packHeader(record->header);
-        record->matSlotIndex = slotIndex;
+        record->data.materialDataIndex = slotIndex;
     }
     
     void Material::destroy() {
@@ -531,7 +522,9 @@ namespace optix {
 
     // TODO: Consider double buffering or asynchronous transfer.
     void Scene::Priv::setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment) {
-        geomInstDataBuffer.resize(geomInstDataBuffer.numElements(), nextMultiplesForPowOf2(size, alignment));
+        size_t requiredStride = nextMultiplesForPowOf2(size, tzcnt(alignment));
+        geomInstDataBuffer.resize(geomInstDataBuffer.numElements(),
+                                  std::max(geomInstDataBuffer.stride(), requiredStride));
         auto ptr = reinterpret_cast<uint8_t*>(geomInstDataBuffer.map());
         size_t curStride = geomInstDataBuffer.stride();
         std::memcpy(ptr + curStride * index, data, size);
@@ -689,7 +682,7 @@ namespace optix {
             THROW_RUNTIME_ERROR(mat, "No material set for %u-%u.", matSetIdx, matIdx);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 mat->setRecordData(pipeline, rIdx, recordPtr);
-                recordPtr->geomInstSlotIndex = slotIndex;
+                recordPtr->data.geomInstDataIndex = slotIndex;
                 ++recordPtr;
             }
         }
@@ -830,7 +823,7 @@ namespace optix {
             m->accelBuffer.finalize();
             m->accelTempBuffer.finalize();
 
-            std::memset(&m->buildOptions, 0, sizeof(m->buildOptions));
+            m->buildOptions = {};
             m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
                                           (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                           (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
@@ -1013,7 +1006,7 @@ namespace optix {
             m->accelBuffer.finalize();
             m->accelTempBuffer.finalize();
 
-            std::memset(&m->buildOptions, 0, sizeof(m->buildOptions));
+            m->buildOptions = {};
             m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
                                           (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                           (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
@@ -1201,7 +1194,7 @@ namespace optix {
                                       bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
         // EN: Set a pipeline compile options common among modules in the pipeline and the pipeline itself.
-        std::memset(&m->pipelineCompileOptions, 0, sizeof(m->pipelineCompileOptions));
+        m->pipelineCompileOptions = {};
         m->pipelineCompileOptions.numPayloadValues = numPayloadValues;
         m->pipelineCompileOptions.numAttributeValues = numAttributeValues;
         m->pipelineCompileOptions.pipelineLaunchParamsVariableName = launchParamsVariableName;
@@ -1430,7 +1423,13 @@ namespace optix {
         m->missPrograms[rayType] = _program;
     }
 
-    void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) {
+    void Pipeline::fillLaunchParameters(BaseLaunchParameters* params) const {
+        params->materialData = m->context->getMaterialDataBufferAddress();
+        params->geomInstData = m->scene->getGeometryInstanceDataBufferAddress();
+        params->handles = m->scene->getTraversableHandleBufferAddress();
+    }
+
+    void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
 
         m->setupShaderBindingTable();
