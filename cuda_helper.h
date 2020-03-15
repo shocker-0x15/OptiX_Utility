@@ -186,8 +186,11 @@ namespace CUDAHelper {
 
         void resize(int32_t numElements, int32_t stride);
 
-        CUdeviceptr getDevicePointer() const {
-            return (CUdeviceptr)m_devicePointer;
+        CUdeviceptr getCUdeviceptr() const {
+            return m_devicePointer;
+        }
+        CUdeviceptr getCUdeviceptrAt(uint32_t idx) const {
+            return m_devicePointer + m_stride * idx;
         }
         size_t sizeInBytes() const {
             return (size_t)m_numElements * m_stride;
@@ -257,11 +260,10 @@ namespace CUDAHelper {
         }
 
         T* getDevicePointer() const {
-            return reinterpret_cast<T*>(Buffer::getDevicePointer());
+            return reinterpret_cast<T*>(getCUdeviceptr());
         }
         T* getDevicePointerAt(uint32_t idx) const {
-            CUdeviceptr ptr = Buffer::getDevicePointer();
-            return reinterpret_cast<T*>(ptr + sizeof(T) * idx);
+            return reinterpret_cast<T*>(getCUdeviceptrAt(idx));
         }
 
         T* map() {

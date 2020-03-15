@@ -115,8 +115,8 @@ namespace Shared {
 
     struct PipelineLaunchParameters {
         const OptixTraversableHandle* travHandles;
-        const uint8_t* materialData;
-        const uint8_t* geomInstData;
+        const MaterialData* materialData;
+        const GeometryData* geomInstData;
         uint32_t topGroupIndex;
         int2 imageSize;
         uint32_t numAccumFrames;

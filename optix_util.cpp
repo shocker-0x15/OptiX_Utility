@@ -611,7 +611,7 @@ namespace optix {
         triArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
         triArray.vertexStrideInBytes = vertexBuffer->stride();
 
-        triArray.indexBuffer = triangleBuffer->getDevicePointer();
+        triArray.indexBuffer = triangleBuffer->getCUdeviceptr();
         triArray.numIndexTriplets = triangleBuffer->numElements();
         triArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
         triArray.indexStrideInBytes = triangleBuffer->stride();
@@ -620,7 +620,7 @@ namespace optix {
         triArray.numSbtRecords = buildInputFlags.size();
         if (triArray.numSbtRecords > 1) {
             optixAssert_NotImplemented();
-            triArray.sbtIndexOffsetBuffer = reinterpret_cast<CUdeviceptr>(materialIndexOffsetBuffer->getDevicePointer());
+            triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
             triArray.sbtIndexOffsetSizeInBytes = 4;
             triArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
         }
@@ -667,7 +667,7 @@ namespace optix {
 
     void GeometryInstance::setVertexBuffer(Buffer* vertexBuffer) const {
         m->vertexBuffer = vertexBuffer;
-        m->vertexBufferArray[0] = vertexBuffer->getDevicePointer();
+        m->vertexBufferArray[0] = vertexBuffer->getCUdeviceptr();
     }
 
     void GeometryInstance::setTriangleBuffer(Buffer* triangleBuffer) const {
@@ -813,8 +813,8 @@ namespace optix {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
-                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.sizeInBytes(),
+                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
+                                    m->accelBuffer.getCUdeviceptr(), m->accelBuffer.sizeInBytes(),
                                     &m->handle,
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
@@ -841,7 +841,7 @@ namespace optix {
             m->compactedAccelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->compactedSize, 1, 0);
 
             OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.sizeInBytes(),
+                                          m->handle, m->compactedAccelBuffer.getCUdeviceptr(), m->compactedAccelBuffer.sizeInBytes(),
                                           &m->compactedHandle));
 
             m->compactedAvailable = true;
@@ -877,8 +877,8 @@ namespace optix {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
-                                    accelBuffer.getDevicePointer(), accelBuffer.sizeInBytes(),
+                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
+                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
 
@@ -971,7 +971,7 @@ namespace optix {
             m->buildInput = OptixBuildInput{};
             m->buildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
             OptixBuildInputInstanceArray &instArray = m->buildInput.instanceArray;
-            instArray.instances = reinterpret_cast<CUdeviceptr>(m->instanceBuffer.getDevicePointer());
+            instArray.instances = m->instanceBuffer.getCUdeviceptr();
             instArray.numInstances = static_cast<uint32_t>(m->children.size());
         }
 
@@ -1001,8 +1001,8 @@ namespace optix {
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
-                                    m->accelBuffer.getDevicePointer(), m->accelBuffer.sizeInBytes(),
+                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
+                                    m->accelBuffer.getCUdeviceptr(), m->accelBuffer.sizeInBytes(),
                                     &m->handle,
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
@@ -1029,7 +1029,7 @@ namespace optix {
             m->compactedAccelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->compactedSize, 1, 0);
 
             OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                          m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.sizeInBytes(),
+                                          m->handle, m->compactedAccelBuffer.getCUdeviceptr(), m->compactedAccelBuffer.sizeInBytes(),
                                           &m->compactedHandle));
 
             m->compactedAvailable = true;
@@ -1065,8 +1065,8 @@ namespace optix {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, &m->buildInput, 1,
-                                    m->accelTempBuffer.getDevicePointer(), m->accelTempBuffer.sizeInBytes(),
-                                    accelBuffer.getDevicePointer(), accelBuffer.sizeInBytes(),
+                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
+                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
 
@@ -1139,15 +1139,15 @@ namespace optix {
 
 
 
-                sbt.raygenRecord = rayGenRecord.getDevicePointer();
+                sbt.raygenRecord = rayGenRecord.getCUdeviceptr();
 
-                sbt.exceptionRecord = exceptionProgram ? exceptionRecord.getDevicePointer() : 0;
+                sbt.exceptionRecord = exceptionProgram ? exceptionRecord.getCUdeviceptr() : 0;
 
-                sbt.missRecordBase = missRecords.getDevicePointer();
+                sbt.missRecordBase = missRecords.getCUdeviceptr();
                 sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
                 sbt.missRecordCount = numMissRayTypes;
 
-                sbt.hitgroupRecordBase = reinterpret_cast<CUdeviceptr>(hitGroupSBT->records.getDevicePointer());
+                sbt.hitgroupRecordBase = hitGroupSBT->records.getCUdeviceptr();
                 sbt.hitgroupRecordStrideInBytes = hitGroupSBT->records.stride();
                 sbt.hitgroupRecordCount = hitGroupSBT->records.numElements();
 

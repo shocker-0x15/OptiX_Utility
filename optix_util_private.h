@@ -263,9 +263,6 @@ namespace optix {
         uint32_t requestTraversableSlot();
         void releaseTraversableSlot(uint32_t index);
         void setTraversableHandle(uint32_t index, const OptixTraversableHandle &handle);
-        OptixTraversableHandle* getTraversableHandleBufferAddress() const {
-            return traversableHandleBuffer.getDevicePointer();
-        }
 
 
 
@@ -378,7 +375,7 @@ namespace optix {
 
             propertyCompactedSize = OptixAccelEmitDesc{};
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = reinterpret_cast<CUdeviceptr>(compactedSizeOnDevice.getDevicePointer());
+            propertyCompactedSize.result = compactedSizeOnDevice.getCUdeviceptr();
 
             preferFastTrace = true;
             allowUpdate = false;
@@ -506,7 +503,7 @@ namespace optix {
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = reinterpret_cast<CUdeviceptr>(compactedSizeOnDevice.getDevicePointer());
+            propertyCompactedSize.result = compactedSizeOnDevice.getCUdeviceptr();
 
             preferFastTrace = true;
             allowUpdate = false;

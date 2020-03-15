@@ -1,5 +1,17 @@
 #pragma once
 
+/*
+
+現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
+
+TODO:
+- ASのダブルバッファリングの運用方法を考える。
+- update()の運用方法を考える。
+- SBTのダブルバッファリングの運用方法を考える。
+- SlotFinderはこのまま必要ないなら削除する。
+
+*/
+
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
 #    define OPTIX_Platform_Windows

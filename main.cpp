@@ -363,12 +363,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     CUcontext cuContext;
     int32_t cuDeviceCount;
-    CUstream cuStream;
+    CUstream cuStream[2];
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
+    CUDADRV_CHECK(cuStreamCreate(&cuStream[0], 0));
+    CUDADRV_CHECK(cuStreamCreate(&cuStream[1], 0));
     
     optix::Context optixContext = optix::Context::create(cuContext);
 
@@ -423,37 +424,41 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     Shared::MaterialData* matData = materialDataBuffer.map();
 
+    uint32_t matGrayWallIndex = materialID++;
     optix::Material matGray = optixContext.createMaterial();
     matGray.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matGray.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matGray.setUserData(materialID);
-    Shared::MaterialData &matGrayData = matData[materialID];
-    matGrayData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-    ++materialID;
+    matGray.setUserData(matGrayWallIndex);
+    Shared::MaterialData matGrayWallData;
+    matGrayWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    matData[matGrayWallIndex] = matGrayWallData;
 
+    uint32_t matLeftWallIndex = materialID++;
     optix::Material matLeft = optixContext.createMaterial();
     matLeft.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matLeft.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matLeft.setUserData(materialID);
-    Shared::MaterialData &matLeftData = matData[materialID];
-    matLeftData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
-    ++materialID;
+    matLeft.setUserData(matLeftWallIndex);
+    Shared::MaterialData matLeftWallData;
+    matLeftWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
+    matData[matLeftWallIndex] = matLeftWallData;
 
+    uint32_t matRightWallIndex = materialID++;
     optix::Material matRight = optixContext.createMaterial();
     matRight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matRight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matRight.setUserData(materialID);
-    Shared::MaterialData &matRightData = matData[materialID];
-    matRightData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
-    ++materialID;
+    matRight.setUserData(matRightWallIndex);
+    Shared::MaterialData matRightWallData;
+    matRightWallData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
+    matData[matRightWallIndex] = matRightWallData;
 
+    uint32_t matLightIndex = materialID++;
     optix::Material matLight = optixContext.createMaterial();
     matLight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matLight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matLight.setUserData(materialID);
-    Shared::MaterialData &matLightData = matData[materialID];
+    matLight.setUserData(matLightIndex);
+    Shared::MaterialData matLightData;
     matLightData.albedo = make_float3(1, 1, 1);
-    ++materialID;
+    matData[matLightIndex] = matLightData;
 
     materialDataBuffer.unmap();
 
@@ -566,27 +571,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     iasScene.addChild(gasAreaLight, 0, tfAreaLight);
 
-//#if 1
-//    // High-level control
-//    scene.setupASsAndSBTLayout(cuStream);
-//#else
-//    // Fine detail control
-//
-//    gasCornellBox.rebuild(stream);
-//    gasCornellBox.compact(stream, stream);
-//    gasCornellBox.removeUncompacted(stream);
-//
-//    gasAreaLight.rebuild(stream);
-//    gasAreaLight.compact(stream, stream);
-//    gasAreaLight.removeUncompacted(stream);
-//
-//    scene.generateSBTLayout();
-//
-//    iasScene.rebuild(stream);
-//    iasScene.compact(stream, stream);
-//    iasScene.removeUncompacted(stream);
-//#endif
-
     pipeline.setScene(scene);
 
     //CUDADRV_CHECK(cuStreamSynchronize(cuStream));
@@ -662,8 +646,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandles = scene.getTraversableHandles();
-    plp.materialData = reinterpret_cast<const uint8_t*>(materialDataBuffer.getDevicePointer());
-    plp.geomInstData = reinterpret_cast<const uint8_t*>(sceneContext.geometryDataBuffer.getDevicePointer());
+    plp.materialData = materialDataBuffer.getDevicePointer();
+    plp.geomInstData = sceneContext.geometryDataBuffer.getDevicePointer();
     plp.topGroupIndex = iasScene.getID();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
@@ -681,6 +665,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint64_t frameIndex = 0;
     int32_t requestedSize[2];
     while (!glfwWindowShouldClose(window)) {
+        uint32_t bufferIndex = frameIndex % 2;
+
         glfwPollEvents();
 
         bool resized = false;
@@ -714,34 +700,77 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             plp.imageSize.x = renderTargetSizeX;
             plp.imageSize.y = renderTargetSizeY;
             plp.numAccumFrames = 1;
-            plp.rngBuffer = (Shared::PCG32RNG*)rngBuffer.getDevicePointer();
-            plp.accumBuffer = (float4*)accumBuffer.getDevicePointer();
+            plp.rngBuffer = rngBuffer.getDevicePointer();
+            plp.accumBuffer = accumBuffer.getDevicePointer();
             plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
             resized = true;
         }
 
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
 
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+
+        CUstream &curCuStream = cuStream[bufferIndex];
+        
+        // JP: 前フレームの処理が完了するのを待つ。
+        // EN: Wait the previous frame processing to finish.
+        CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
+
+        bool sceneEdited = false;
+        {
+            ImGui::Begin("Materials", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            if (ImGui::ColorEdit3("Left Wall", reinterpret_cast<float*>(&matLeftWallData.albedo),
+                                  ImGuiColorEditFlags_DisplayHSV |
+                                  ImGuiColorEditFlags_Float)) {
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matLeftWallIndex),
+                                                &matLeftWallData, sizeof(matLeftWallData),
+                                                curCuStream));
+                sceneEdited = true;
+            }
+            if (ImGui::ColorEdit3("Right Wall", reinterpret_cast<float*>(&matRightWallData.albedo),
+                                  ImGuiColorEditFlags_DisplayHSV |
+                                  ImGuiColorEditFlags_Float)) {
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matRightWallIndex),
+                                                &matRightWallData, sizeof(matRightWallData),
+                                                curCuStream));
+                sceneEdited = true;
+            }
+            if (ImGui::ColorEdit3("Other Walls", reinterpret_cast<float*>(&matGrayWallData.albedo),
+                                  ImGuiColorEditFlags_DisplayHSV |
+                                  ImGuiColorEditFlags_Float)) {
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matGrayWallIndex),
+                                                &matGrayWallData, sizeof(matGrayWallData),
+                                                curCuStream));
+                sceneEdited = true;
+            }
+
+            ImGui::End();
+        }
+
+        if (sceneEdited)
+            plp.numAccumFrames = 1;
+
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
+
+        pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+
         const uint32_t blockSize = 8;
         uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
         uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
-        CUDAHelper::callKernel(cuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
+        CUDAHelper::callKernel(curCuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
                                accumBuffer.getDevicePointer(), renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
-                               outputBufferCUDA.beginCUDAAccess(cuStream));
-        outputBufferCUDA.endCUDAAccess(cuStream);
+                               outputBufferCUDA.beginCUDAAccess(curCuStream));
+        outputBufferCUDA.endCUDAAccess(curCuStream);
         ++plp.numAccumFrames;
 
 
 
         {
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
-
-            ImGui::ShowDemoWindow();
+            ImGui::Render();
 
             // ----------------------------------------------------------------
             // JP: OptiXの出力とImGuiの描画。
@@ -768,7 +797,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                 outputTexture.unbind();
             }
 
-            ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
             frameBuffer.unbind();
@@ -862,7 +890,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixContext.destroy();
 
-    CUDADRV_CHECK(cuStreamDestroy(cuStream));
+    CUDADRV_CHECK(cuStreamDestroy(cuStream[1]));
+    CUDADRV_CHECK(cuStreamDestroy(cuStream[0]));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();
