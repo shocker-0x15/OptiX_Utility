@@ -60,115 +60,6 @@ namespace optix {
 
 
 
-    class SlotFinder {
-        uint32_t m_numLayers;
-        uint32_t m_numLowestFlagBins;
-        uint32_t m_numTotalCompiledFlagBins;
-        uint32_t* m_flagBins;
-        uint32_t* m_offsetsToOR_AND;
-        uint32_t* m_numUsedFlagsUnderBinList;
-        uint32_t* m_offsetsToNumUsedFlags;
-        uint32_t* m_numFlagsInLayerList;
-
-        SlotFinder(const SlotFinder &) = delete;
-        SlotFinder &operator=(const SlotFinder &) = delete;
-
-        void aggregate();
-    public:
-        static constexpr uint32_t InvalidSlotIndex = 0xFFFFFFFF;
-
-        SlotFinder() :
-            m_numLayers(0), m_numLowestFlagBins(0), m_numTotalCompiledFlagBins(0),
-            m_flagBins(nullptr), m_offsetsToOR_AND(nullptr),
-            m_numUsedFlagsUnderBinList(nullptr), m_offsetsToNumUsedFlags(nullptr),
-            m_numFlagsInLayerList(nullptr) {
-        }
-        ~SlotFinder() {
-        }
-
-        void initialize(uint32_t numSlots);
-
-        void finalize();
-
-        SlotFinder &operator=(SlotFinder &&inst) {
-            finalize();
-
-            m_numLayers = inst.m_numLayers;
-            m_numLowestFlagBins = inst.m_numLowestFlagBins;
-            m_numTotalCompiledFlagBins = inst.m_numTotalCompiledFlagBins;
-            m_flagBins = inst.m_flagBins;
-            m_offsetsToOR_AND = inst.m_offsetsToOR_AND;
-            m_numUsedFlagsUnderBinList = inst.m_numUsedFlagsUnderBinList;
-            m_offsetsToNumUsedFlags = inst.m_offsetsToNumUsedFlags;
-            m_numFlagsInLayerList = inst.m_numFlagsInLayerList;
-            inst.m_flagBins = nullptr;
-            inst.m_offsetsToOR_AND = nullptr;
-            inst.m_numUsedFlagsUnderBinList = nullptr;
-            inst.m_offsetsToNumUsedFlags = nullptr;
-            inst.m_numFlagsInLayerList = nullptr;
-
-            return *this;
-        }
-        SlotFinder(SlotFinder &&inst) {
-            *this = std::move(inst);
-        }
-
-        void resize(uint32_t numSlots);
-
-        void reset() {
-            std::fill_n(m_flagBins, m_numLowestFlagBins + m_numTotalCompiledFlagBins, 0);
-            std::fill_n(m_numUsedFlagsUnderBinList, m_numLowestFlagBins + m_numTotalCompiledFlagBins / 2, 0);
-        }
-
-        uint32_t getNumLayers() const {
-            return m_numLayers;
-        }
-
-        const uint32_t* getOffsetsToOR_AND() const {
-            return m_offsetsToOR_AND;
-        }
-
-        const uint32_t* getOffsetsToNumUsedFlags() const {
-            return m_offsetsToNumUsedFlags;
-        }
-
-        const uint32_t* getNumFlagsInLayerList() const {
-            return m_numFlagsInLayerList;
-        }
-
-
-
-        void setInUse(uint32_t slotIdx);
-
-        void setNotInUse(uint32_t slotIdx);
-
-        bool getUsage(uint32_t slotIdx) const {
-            uint32_t binIdx = slotIdx / 32;
-            uint32_t flagIdxInBin = slotIdx % 32;
-            uint32_t flagBin = m_flagBins[binIdx];
-
-            return (bool)((flagBin >> flagIdxInBin) & 0x1);
-        }
-
-        uint32_t getFirstAvailableSlot() const;
-
-        uint32_t getFirstUsedSlot() const;
-
-        uint32_t find_nthUsedSlot(uint32_t n) const;
-
-        uint32_t getNumSlots() const {
-            return m_numFlagsInLayerList[0];
-        }
-
-        uint32_t getNumUsed() const {
-            return m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[m_numLayers - 1]];
-        }
-
-        void debugPrint() const;
-    };
-
-
-
 #define OPTIX_ALIAS_PIMPL(Name) using _ ## Name = Name::Priv
 
     OPTIX_ALIAS_PIMPL(Context);
@@ -249,8 +140,6 @@ namespace optix {
     class Context::Priv {
         CUcontext cudaContext;
         OptixDeviceContext rawContext;
-        Buffer materialDataBuffer;
-        SlotFinder materialDataSlotFinder;
 
     public:
         OPTIX_OPAQUE_BRIDGE(Context);
@@ -262,17 +151,8 @@ namespace optix {
             options.logCallbackFunction = &logCallBack;
             options.logCallbackLevel = 4;
             OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
-
-            constexpr uint32_t InitialMaterialDataStride = 1;
-            constexpr uint32_t NumInitialMaterialData = 2;
-
-            materialDataBuffer.initialize(cudaContext, s_BufferType, NumInitialMaterialData, InitialMaterialDataStride, 0);
-            materialDataSlotFinder.initialize(NumInitialMaterialData);
         }
         ~Priv() {
-            materialDataSlotFinder.finalize();
-            materialDataBuffer.finalize();
-
             OPTIX_CHECK(optixDeviceContextDestroy(rawContext));
         }
 
@@ -281,13 +161,6 @@ namespace optix {
         }
         OptixDeviceContext getRawContext() const {
             return rawContext;
-        }
-
-        uint32_t requestMaterialDataSlot();
-        void releaseMaterialDataSlot(uint32_t index);
-        void setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment);
-        uint8_t* getMaterialDataBufferAddress() const {
-            return reinterpret_cast<uint8_t*>(materialDataBuffer.getDevicePointer());
         }
     };
 
@@ -311,7 +184,7 @@ namespace optix {
         };
 
         _Context* context;
-        uint32_t slotIndex;
+        uint32_t userData;
 
         std::map<Key, const _ProgramGroup*> programs;
 
@@ -319,10 +192,8 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(Material);
 
         Priv(_Context* ctxt) :
-            context(ctxt), slotIndex(context->requestMaterialDataSlot()) {}
-        ~Priv() {
-            context->releaseMaterialDataSlot(slotIndex);
-        }
+            context(ctxt), userData(0) {}
+        ~Priv() {}
 
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
@@ -351,8 +222,6 @@ namespace optix {
         };
 
         const _Context* context;
-        Buffer geomInstDataBuffer;
-        SlotFinder geomInstDataSlotFinder;
         TypedBuffer<OptixTraversableHandle> traversableHandleBuffer;
         SlotFinder traversableSlotFinder;
         std::set<_GeometryAccelerationStructure*> geomASs;
@@ -369,13 +238,7 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(Scene);
 
         Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {
-            constexpr uint32_t InitialGeomInstDataStride = 1;
-            constexpr uint32_t NumInitialGeomInstData = 16;
-
             CUcontext cudaContext = context->getCUDAContext();
-            geomInstDataBuffer.initialize(cudaContext, s_BufferType,
-                                          NumInitialGeomInstData, InitialGeomInstDataStride, 0);
-            geomInstDataSlotFinder.initialize(NumInitialGeomInstData);
 
             constexpr uint32_t NumInitialTraversableSlots = 128;
 
@@ -386,9 +249,6 @@ namespace optix {
         ~Priv() {
             traversableSlotFinder.finalize();
             traversableHandleBuffer.finalize();
-
-            geomInstDataSlotFinder.finalize();
-            geomInstDataBuffer.finalize();
         }
 
         CUcontext getCUDAContext() const {
@@ -399,13 +259,6 @@ namespace optix {
         }
 
 
-
-        uint32_t requestGeometryInstanceDataSlot();
-        void releaseGeometryInstanceDataSlot(uint32_t index);
-        void setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment);
-        uint8_t* getGeometryInstanceDataBufferAddress() const {
-            return reinterpret_cast<uint8_t*>(geomInstDataBuffer.getDevicePointer());
-        }
 
         uint32_t requestTraversableSlot();
         void releaseTraversableSlot(uint32_t index);
@@ -448,7 +301,7 @@ namespace optix {
 
     class GeometryInstance::Priv {
         _Scene* scene;
-        uint32_t slotIndex;
+        uint32_t userData;
 
         // TODO: support deformation blur (multiple vertex buffers)
         CUdeviceptr vertexBufferArray[1];
@@ -464,12 +317,10 @@ namespace optix {
 
         Priv(_Scene* _scene) :
             scene(_scene),
-            slotIndex(scene->requestGeometryInstanceDataSlot()),
+            userData(0),
             vertexBuffer(nullptr), triangleBuffer(nullptr), materialIndexOffsetBuffer(nullptr) {
         }
-        ~Priv() {
-            scene->releaseGeometryInstanceDataSlot(slotIndex);
-        }
+        ~Priv() {}
 
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();

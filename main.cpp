@@ -114,9 +114,15 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 
+struct SceneContext {
+    optix::Scene optixScene;
+    CUDAHelper::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
+    uint32_t geometryID;
+};
+
 class TriangleMesh {
     CUcontext m_cudaContext;
-    optix::Scene m_scene;
+    SceneContext* m_sceneContext;
 
     struct MaterialGroup {
         CUDAHelper::TypedBuffer<Shared::Triangle>* triangleBuffer;
@@ -130,7 +136,8 @@ class TriangleMesh {
     TriangleMesh(const TriangleMesh &) = delete;
     TriangleMesh &operator=(const TriangleMesh &) = delete;
 public:
-    TriangleMesh(CUcontext cudaContext, optix::Scene scene) : m_cudaContext(cudaContext), m_scene(scene) {}
+    TriangleMesh(CUcontext cudaContext, SceneContext* sceneContext) :
+        m_cudaContext(cudaContext), m_sceneContext(sceneContext) {}
 
     void destroy() {
         for (auto it = m_materialGroups.rbegin(); it != m_materialGroups.rend(); ++it) {
@@ -146,8 +153,8 @@ public:
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
         m_vertexBuffer.initialize(m_cudaContext, CUDAHelper::BufferType::Device, numVertices);
-        auto verticesD = m_vertexBuffer.map();
-        std::copy_n(vertices, numVertices, verticesD);
+        auto verticesOnHost = m_vertexBuffer.map();
+        std::copy_n(vertices, numVertices, verticesOnHost);
         m_vertexBuffer.unmap();
     }
 
@@ -159,23 +166,26 @@ public:
         auto triangleBuffer = new CUDAHelper::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
         triangleBuffer->initialize(m_cudaContext, CUDAHelper::BufferType::Device, numTriangles);
-        Shared::Triangle* trianglesD = triangleBuffer->map();
-        std::copy_n(triangles, numTriangles, trianglesD);
+        Shared::Triangle* trianglesOnHost = triangleBuffer->map();
+        std::copy_n(triangles, numTriangles, trianglesOnHost);
         triangleBuffer->unmap();
 
         group.material = material;
 
-        Shared::GeometryData recordData;
+        Shared::GeometryData* geomDataPtr = m_sceneContext->geometryDataBuffer.map();
+        Shared::GeometryData &recordData = geomDataPtr[m_sceneContext->geometryID];
         recordData.vertexBuffer = m_vertexBuffer.getDevicePointer();
         recordData.triangleBuffer = triangleBuffer->getDevicePointer();
+        m_sceneContext->geometryDataBuffer.unmap();
 
-        optix::GeometryInstance geomInst = m_scene.createGeometryInstance();
+        optix::GeometryInstance geomInst = m_sceneContext->optixScene.createGeometryInstance();
         geomInst.setVertexBuffer(&m_vertexBuffer);
         geomInst.setTriangleBuffer(triangleBuffer);
-        geomInst.setData(recordData);
+        geomInst.setUserData(m_sceneContext->geometryID);
         geomInst.setNumMaterials(1, nullptr);
         geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInst.setMaterial(0, 0, material);
+        ++m_sceneContext->geometryID;
 
         group.geometryInstance = geomInst;
     }
@@ -375,7 +385,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optix::Module emptyModule;
 
-    optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__fill");
+    optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__pathtracing");
     //optix::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
     optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
@@ -404,39 +414,59 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     // ----------------------------------------------------------------
-    // JP: 
+    // JP: シーンのセットアップ。
+    // EN: Setup a scene.
 
-    optix::Scene scene = optixContext.createScene();
+    CUDAHelper::TypedBuffer<Shared::MaterialData> materialDataBuffer;
+    materialDataBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    uint32_t materialID = 0;
+
+    Shared::MaterialData* matData = materialDataBuffer.map();
 
     optix::Material matGray = optixContext.createMaterial();
-    Shared::MaterialData matGrayData;
-    matGrayData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
     matGray.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matGray.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matGray.setData(matGrayData);
+    matGray.setUserData(materialID);
+    Shared::MaterialData &matGrayData = matData[materialID];
+    matGrayData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    ++materialID;
 
     optix::Material matLeft = optixContext.createMaterial();
-    Shared::MaterialData matLeftData;
-    matLeftData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
     matLeft.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matLeft.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matLeft.setData(matLeftData);
+    matLeft.setUserData(materialID);
+    Shared::MaterialData &matLeftData = matData[materialID];
+    matLeftData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
+    ++materialID;
 
     optix::Material matRight = optixContext.createMaterial();
-    Shared::MaterialData matRightData;
-    matRightData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
     matRight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matRight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matRight.setData(matRightData);
+    matRight.setUserData(materialID);
+    Shared::MaterialData &matRightData = matData[materialID];
+    matRightData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
+    ++materialID;
 
     optix::Material matLight = optixContext.createMaterial();
-    Shared::MaterialData matLightData;
-    matLightData.albedo = make_float3(1, 1, 1);
     matLight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
     matLight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
-    matLight.setData(matLightData);
+    matLight.setUserData(materialID);
+    Shared::MaterialData &matLightData = matData[materialID];
+    matLightData.albedo = make_float3(1, 1, 1);
+    ++materialID;
+
+    materialDataBuffer.unmap();
+
+
+
+    optix::Scene scene = optixContext.createScene();
     
-    TriangleMesh meshCornellBox(cuContext, scene);
+    SceneContext sceneContext;
+    sceneContext.optixScene = scene;
+    sceneContext.geometryDataBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    sceneContext.geometryID = 0;
+    
+    TriangleMesh meshCornellBox(cuContext, &sceneContext);
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -493,7 +523,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         meshCornellBox.addMaterialGroup(triangles + 8, 2, matRight);
     }
 
-    TriangleMesh meshAreaLight(cuContext, scene);
+    TriangleMesh meshAreaLight(cuContext, &sceneContext);
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -631,14 +661,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     Shared::PipelineLaunchParameters plp;
-    pipeline.fillLaunchParameters(&plp.baseParams);
+    plp.travHandles = scene.getTraversableHandles();
+    plp.materialData = reinterpret_cast<const uint8_t*>(materialDataBuffer.getDevicePointer());
+    plp.geomInstData = reinterpret_cast<const uint8_t*>(sceneContext.geometryDataBuffer.getDevicePointer());
     plp.topGroupIndex = iasScene.getID();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
     plp.rngBuffer = rngBuffer.getDevicePointer();
     plp.accumBuffer = accumBuffer.getDevicePointer();
-    plp.camera.fovY = 60 * M_PI / 180;
+    plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     CUdeviceptr plpOnDevice;
@@ -804,12 +836,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     meshAreaLight.destroy();
     meshCornellBox.destroy();
 
+    sceneContext.geometryDataBuffer.finalize();
+
+    scene.destroy();
+
     matLight.destroy();
     matRight.destroy();
     matLeft.destroy();
     matGray.destroy();
 
-    scene.destroy();
+    materialDataBuffer.finalize();
 
     CUDADRV_CHECK(cuModuleUnload(modulePostProcess));
 

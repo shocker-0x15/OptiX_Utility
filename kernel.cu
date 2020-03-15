@@ -14,10 +14,13 @@ extern "C" __constant__ PipelineLaunchParameters plp;
 
 // JP: このクラスのようにシステマティックにuint32_t&にせずに、
 //     個別に適切なペイロードの渡し方を考えたほうが性能は良いかもしれない。
+// EN: It is possibly better to individually tune how to pass a payload
+//     unlike this class which systematically uses uint32_t &.
 template <typename PayloadType>
 union PayloadAccessor {
     PayloadType raw;
     uint32_t asUInt[(sizeof(PayloadType) + 3) / 4];
+    static_assert(sizeof(PayloadType) <= 8 * 4, "sizeof(PayloadType) must be within 8 DWords.");
 
     RT_FUNCTION PayloadAccessor() {
         for (int i = 0; i < sizeof(asUInt) / 4; ++i)
@@ -100,7 +103,14 @@ struct Ray {
 
 struct SearchRayPayload {
     PCG32RNG rng;
+    float3 alpha;
     float3 contribution;
+    float3 origin;
+    float3 direction;
+    struct {
+        uint32_t pathLength;
+        bool terminate : 1;
+    };
 };
 
 struct VisibilityRayPayload {
@@ -129,7 +139,7 @@ struct HitPointParameter {
 
 
 
-RT_PROGRAM void __raygen__fill() {
+RT_PROGRAM void __raygen__pathtracing() {
     uint3 launchIndex = optixGetLaunchIndex();
     int32_t index = plp.imageSize.x * launchIndex.y + launchIndex.x;
 
@@ -140,50 +150,68 @@ RT_PROGRAM void __raygen__fill() {
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
-    float3 origin = make_float3(0, 0, 3);
+    float3 origin = make_float3(0, 0, 3.2f);
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
 
-    OptixTraversableHandle topGroup = plp.baseParams.handles[plp.topGroupIndex];
+    OptixTraversableHandle topGroup = plp.travHandles[plp.topGroupIndex];
 
-    PayloadAccessor<SearchRayPayload> payload;
-    payload.raw.rng = rng;
-    optixTrace(topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
-               RayType_Search, NumRayTypes, RayType_Search,
-               payload[0], payload[1], payload[2], payload[3], payload[4]);
+    PayloadAccessor<SearchRayPayload*> payloadPtr;
+    SearchRayPayload payload;
+    payload.alpha = make_float3(1.0f, 1.0f, 1.0f);
+    payload.contribution = make_float3(0.0f, 0.0f, 0.0f);
+    payload.rng = rng;
+    payload.pathLength = 1;
+    payload.terminate = false;
+    payloadPtr.raw = &payload;
+    while (true) {
+        optixTrace(topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+                   RayType_Search, NumRayTypes, RayType_Search,
+                   payloadPtr[0], payloadPtr[1]);
+        if (payload.terminate || payload.pathLength >= 3)
+            break;
 
-    plp.rngBuffer[index] = rng;
+        origin = payload.origin;
+        direction = payload.direction;
+        ++payload.pathLength;
+    }
+
+    plp.rngBuffer[index] = payload.rng;
     float3 cumResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
         float4 cumResultF4 = plp.accumBuffer[index];
         cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
     }
-    plp.accumBuffer[index] = make_float4(cumResult + payload.raw.contribution, 1.0f);
+    plp.accumBuffer[index] = make_float4(cumResult + payload.contribution, 1.0f);
 }
 
 RT_PROGRAM void __miss__searchRay() {
-    PayloadAccessor<SearchRayPayload> payload;
+    PayloadAccessor<SearchRayPayload*> payloadPtr;
+    payloadPtr.getAll();
+    SearchRayPayload &payload = *payloadPtr.raw;
 
-    payload.raw.contribution = make_float3(0.0f, 0.0f, 0.05f);
+    payload.contribution = payload.contribution + make_float3(0.01f, 0.01f, 0.01f);
+    payload.terminate = true;
     
-    payload.setAll();
+    //payload.setAll();
 }
 
 RT_PROGRAM void __closesthit__shading() {
     auto sbtr = optix::getHitGroupSBTRecordData();
-    auto matData = reinterpret_cast<const MaterialData*>(plp.baseParams.materialData);
-    auto geomInstData = reinterpret_cast<const GeometryData*>(plp.baseParams.geomInstData);
+    auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
+    auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
 
-    const MaterialData &mat = matData[sbtr.materialDataIndex];
-    const GeometryData &geom = geomInstData[sbtr.geomInstDataIndex];
+    const MaterialData &mat = matData[sbtr.materialData];
+    const GeometryData &geom = geomInstData[sbtr.geomInstData];
 
-    OptixTraversableHandle topGroup = plp.baseParams.handles[plp.topGroupIndex];
+    OptixTraversableHandle topGroup = plp.travHandles[plp.topGroupIndex];
 
     auto hitPointParam = HitPointParameter::get();
 
-    PayloadAccessor<SearchRayPayload> payload;
-    payload.getAll();
+    PayloadAccessor<SearchRayPayload*> payloadPtr;
+    payloadPtr.getAll();
+    SearchRayPayload &payload = *payloadPtr.raw;
 
-    PCG32RNG &rng = payload.raw.rng;
+    PCG32RNG &rng = payload.rng;
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     float3 p0 = geom.vertexBuffer[tri.index0].position;
@@ -199,30 +227,65 @@ RT_PROGRAM void __closesthit__shading() {
     float3 sn = normalize(b0 * n0 + b1 * n1 + b2 * n2);
     p = p + sn * 0.001f;
 
-    float3 lp = make_float3(-0.5f, 0.99f, -0.5f) +
-        rng.getFloat0cTo1o() * make_float3(1, 0, 0) + 
-        rng.getFloat0cTo1o() * make_float3(0, 0, 1);
-    float areaPDF = 1.0f;
-    float3 lpn = make_float3(0, -1, 0);
+    const float3 LightRadiance = make_float3(5, 5, 5);
+    // Hard-coded directly visible light
+    if (sbtr.materialData == 3 && dot(optixGetWorldRayDirection(), sn) < 0 && payload.pathLength == 1) {
+        payload.contribution = payload.contribution + payload.alpha * LightRadiance;
+    }
 
-    float3 shadowRayDir = lp - p;
-    float dist2 = dot(shadowRayDir, shadowRayDir);
-    float dist = std::sqrt(dist2);
-    shadowRayDir = shadowRayDir / dist;
-    float cosLight = dot(lpn, -shadowRayDir);
-    float3 Le = cosLight > 0 ? make_float3(5, 5, 5) : make_float3(0, 0, 0);
+    // Next Event Estimation
+    {
+        // Use hard-coded area light for simplicity.
+        float3 lp = make_float3(-0.5f, 0.99f, -0.5f) +
+            rng.getFloat0cTo1o() * make_float3(1, 0, 0) +
+            rng.getFloat0cTo1o() * make_float3(0, 0, 1);
+        float areaPDF = 1.0f;
+        float3 lpn = make_float3(0, -1, 0);
 
-    PayloadAccessor<VisibilityRayPayload> shadowPayload;
-    shadowPayload.raw.visibility = 1.0f;
-    optixTrace(topGroup, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
-               RayType_Visibility, NumRayTypes, RayType_Visibility,
-               shadowPayload[0]);
+        float3 shadowRayDir = lp - p;
+        float dist2 = dot(shadowRayDir, shadowRayDir);
+        float dist = std::sqrt(dist2);
+        shadowRayDir = shadowRayDir / dist;
+        float cosLight = dot(lpn, -shadowRayDir);
+        float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
-    float G = shadowPayload.raw.visibility * dot(sn, shadowRayDir) * cosLight / dist2;
-    float3 contribution = (mat.albedo / M_PI) * G * Le / areaPDF;
-    payload.raw.contribution = contribution;
+        PayloadAccessor<VisibilityRayPayload> shadowPayload;
+        shadowPayload.raw.visibility = 1.0f;
+        optixTrace(topGroup, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+                   RayType_Visibility, NumRayTypes, RayType_Visibility,
+                   shadowPayload[0]);
 
-    payload.setAll();
+        float G = shadowPayload.raw.visibility * dot(sn, shadowRayDir) * cosLight / dist2;
+        float3 contribution = payload.alpha * (mat.albedo / M_PI) * G * Le / areaPDF;
+        payload.contribution = payload.contribution + contribution;
+    }
+
+    const auto makeCoordinateSystem = [](const float3 &n, float3* s, float3* t) {
+        float sign = n.z >= 0 ? 1 : -1;
+        float a = -1 / (sign + n.z);
+        float b = n.x * n.y * a;
+        *s = make_float3(1 + sign * n.x * n.x * a, sign * b, -sign * n.x);
+        *t = make_float3(b, sign + n.y * n.y * a, -n.y);
+    };
+
+    float3 s;
+    float3 t;
+    makeCoordinateSystem(sn, &s, &t);
+
+    // Sampling incoming direction.
+    float phi = 2 * M_PI * rng.getFloat0cTo1o();
+    float theta = std::asin(std::sqrt(rng.getFloat0cTo1o()));
+    float sinTheta = std::sin(theta);
+    float3 vIn = make_float3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, std::cos(theta));
+    vIn = make_float3(dot(make_float3(s.x, t.x, sn.x), vIn),
+                      dot(make_float3(s.y, t.y, sn.y), vIn),
+                      dot(make_float3(s.z, t.z, sn.z), vIn));
+    payload.alpha = payload.alpha * mat.albedo;
+    payload.origin = p;
+    payload.direction = vIn;
+    payload.terminate = false;
+
+    //payload.setAll();
 }
 
 RT_PROGRAM void __anyhit__visibility() {

@@ -423,34 +423,6 @@ namespace optix {
 
 
 
-    uint32_t Context::Priv::requestMaterialDataSlot() {
-        uint32_t slotIdx = materialDataSlotFinder.getFirstAvailableSlot();
-        if (slotIdx == SlotFinder::InvalidSlotIndex) {
-            uint32_t newSize = static_cast<uint32_t>(materialDataBuffer.numElements() * 1.5f);
-            materialDataBuffer.resize(newSize, materialDataBuffer.stride());
-            materialDataSlotFinder.resize(newSize);
-        }
-        slotIdx = materialDataSlotFinder.getFirstAvailableSlot();
-        THROW_RUNTIME_ERROR(slotIdx != SlotFinder::InvalidSlotIndex, "Unable to allocate a slot index.");
-        materialDataSlotFinder.setInUse(slotIdx);
-        return slotIdx;
-    }
-
-    void Context::Priv::releaseMaterialDataSlot(uint32_t slotIdx) {
-        materialDataSlotFinder.setNotInUse(slotIdx);
-    }
-
-    // TODO: Consider double buffering or asynchronous transfer.
-    void Context::Priv::setMaterialData(uint32_t index, const void* data, size_t size, size_t alignment) {
-        size_t requiredStride = nextMultiplesForPowOf2(size, tzcnt(alignment));
-        materialDataBuffer.resize(materialDataBuffer.numElements(),
-                                  std::max(materialDataBuffer.stride(), requiredStride));
-        auto ptr = materialDataBuffer.map<uint8_t>();
-        size_t curStride = materialDataBuffer.stride();
-        std::memcpy(ptr + curStride * index, data, size);
-        materialDataBuffer.unmap();
-    }
-    
     Context Context::create(CUcontext cudaContext) {
         return (new _Context(cudaContext))->getPublicType();
     }
@@ -480,7 +452,7 @@ namespace optix {
         Key key{ pipeline, rayType };
         const _ProgramGroup* hitGroup = programs.at(key);
         hitGroup->packHeader(record->header);
-        record->data.materialDataIndex = slotIndex;
+        record->data.materialData = userData;
     }
     
     void Material::destroy() {
@@ -496,41 +468,13 @@ namespace optix {
         m->programs[key] = extract(hitGroup);
     }
     
-    void Material::setData(const void* data, size_t size, size_t alignment) const {
-        m->context->setMaterialData(m->slotIndex, data, size, alignment);
+    void Material::setUserData(uint32_t data) const {
+        m->userData = data;
     }
 
 
 
     
-    uint32_t Scene::Priv::requestGeometryInstanceDataSlot() {
-        uint32_t slotIdx = geomInstDataSlotFinder.getFirstAvailableSlot();
-        if (slotIdx == SlotFinder::InvalidSlotIndex) {
-            uint32_t newSize = static_cast<uint32_t>(geomInstDataBuffer.numElements() * 1.5f);
-            geomInstDataBuffer.resize(newSize, geomInstDataBuffer.stride());
-            geomInstDataSlotFinder.resize(newSize);
-        }
-        slotIdx = geomInstDataSlotFinder.getFirstAvailableSlot();
-        THROW_RUNTIME_ERROR(slotIdx != SlotFinder::InvalidSlotIndex, "Unable to allocate a slot index.");
-        geomInstDataSlotFinder.setInUse(slotIdx);
-        return slotIdx;
-    }
-
-    void Scene::Priv::releaseGeometryInstanceDataSlot(uint32_t slotIdx) {
-        geomInstDataSlotFinder.setNotInUse(slotIdx);
-    }
-
-    // TODO: Consider double buffering or asynchronous transfer.
-    void Scene::Priv::setGeometryInstanceData(uint32_t index, const void* data, size_t size, size_t alignment) {
-        size_t requiredStride = nextMultiplesForPowOf2(size, tzcnt(alignment));
-        geomInstDataBuffer.resize(geomInstDataBuffer.numElements(),
-                                  std::max(geomInstDataBuffer.stride(), requiredStride));
-        auto ptr = geomInstDataBuffer.map<uint8_t>();
-        size_t curStride = geomInstDataBuffer.stride();
-        std::memcpy(ptr + curStride * index, data, size);
-        geomInstDataBuffer.unmap();
-    }
-
     uint32_t Scene::Priv::requestTraversableSlot() {
         uint32_t slotIdx = traversableSlotFinder.getFirstAvailableSlot();
         if (slotIdx == SlotFinder::InvalidSlotIndex) {
@@ -650,6 +594,10 @@ namespace optix {
         return (new _InstanceAccelerationStructure(m))->getPublicType();
     }
 
+    const OptixTraversableHandle* Scene::getTraversableHandles() const {
+        return m->traversableHandleBuffer.getDevicePointer();
+    }
+
 
 
     void GeometryInstance::Priv::fillBuildInput(OptixBuildInput* input) const {
@@ -704,7 +652,7 @@ namespace optix {
             THROW_RUNTIME_ERROR(mat, "No material set for %u-%u.", matSetIdx, matIdx);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 mat->setRecordData(pipeline, rIdx, recordPtr);
-                recordPtr->data.geomInstDataIndex = slotIndex;
+                recordPtr->data.geomInstData = userData;
                 ++recordPtr;
             }
         }
@@ -734,8 +682,8 @@ namespace optix {
         m->materialIndexOffsetBuffer = matIdxOffsetBuffer;
     }
 
-    void GeometryInstance::setData(const void* data, size_t size, size_t alignment) const {
-        m->scene->setGeometryInstanceData(m->slotIndex, data, size, alignment);
+    void GeometryInstance::setUserData(uint32_t data) const {
+        m->userData = data;
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
@@ -1454,12 +1402,6 @@ namespace optix {
 
         m->missPrograms[rayType] = _program;
         m->sbtIsUpToDate = false;
-    }
-
-    void Pipeline::fillLaunchParameters(BaseLaunchParameters* params) const {
-        params->materialData = m->context->getMaterialDataBufferAddress();
-        params->geomInstData = m->scene->getGeometryInstanceDataBufferAddress();
-        params->handles = m->scene->getTraversableHandleBufferAddress();
     }
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {

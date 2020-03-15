@@ -114,8 +114,9 @@ namespace Shared {
 
 
     struct PipelineLaunchParameters {
-        optix::BaseLaunchParameters baseParams;
-
+        const OptixTraversableHandle* travHandles;
+        const uint8_t* materialData;
+        const uint8_t* geomInstData;
         uint32_t topGroupIndex;
         int2 imageSize;
         uint32_t numAccumFrames;
