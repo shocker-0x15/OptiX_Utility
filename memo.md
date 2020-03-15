@@ -81,6 +81,7 @@ GASとMaterialSetの組み合わせごとに以下の例のようなデータの
  <--- #SBTRecords -> <------------- #SBTRecords -> <------->
 ```
 さらにそれぞれのMaterialごとに複数個のレコードが並ぶ。この個数は上記のGAS-MatSetごとに同一の値。
+この個数は典型的にはレイタイプ数になる。現状のMaterialの実装ではレイタイプごとにデータを区別しないため、各レコードの違いはヘッダー部分(HitGroupの違い)のみ。
 ```
 | Mat       |
 | 0 | 1 | 2 |
@@ -101,6 +102,7 @@ sbt-index = sbt-instance-offset +
 - 典型的にはsbt-stride-from-trace-callはレイタイプ数、sbt-offset-from-trace-callがレイタイプ(に対応するインデックス)を表す。
 - レイアウトはIASには依存しない。逆にIASはレイアウトに依存する。\
   関連するGASごとのSBTレイアウトに関する情報が確定した時点でレイアウトを計算できる。
+- MaterialSetの概念はインスタンシングに使用するが、レイタイプ数をGASのMaterialSetごとに変えられるため、同じシーン中で異なるレイのセットを対象とするトレースを複数個使い分けられる。
 
 
 

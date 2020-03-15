@@ -56,6 +56,8 @@ namespace optix {
         optixPrintf("[%2u][%12s]: %s\n", level, tag, message);
     }
 
+    static BufferType s_BufferType = BufferType::Device;
+
 
 
     class SlotFinder {
@@ -233,7 +235,7 @@ namespace optix {
 
 
 
-    struct HitGroupSBTRecord {
+    struct alignas(OPTIX_SBT_RECORD_ALIGNMENT) HitGroupSBTRecord {
         uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
         HitGroupSBTRecordData data;
     };
@@ -261,10 +263,10 @@ namespace optix {
             options.logCallbackLevel = 4;
             OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
 
-            constexpr uint32_t InitialMaterialDataStride = 16;
+            constexpr uint32_t InitialMaterialDataStride = 1;
             constexpr uint32_t NumInitialMaterialData = 2;
 
-            materialDataBuffer.initialize(cudaContext, BufferType::Device, NumInitialMaterialData, InitialMaterialDataStride, 0);
+            materialDataBuffer.initialize(cudaContext, s_BufferType, NumInitialMaterialData, InitialMaterialDataStride, 0);
             materialDataSlotFinder.initialize(NumInitialMaterialData);
         }
         ~Priv() {
@@ -367,17 +369,17 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(Scene);
 
         Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {
-            constexpr uint32_t InitialGeomInstDataStride = 16;
+            constexpr uint32_t InitialGeomInstDataStride = 1;
             constexpr uint32_t NumInitialGeomInstData = 16;
 
             CUcontext cudaContext = context->getCUDAContext();
-            geomInstDataBuffer.initialize(cudaContext, BufferType::Device,
+            geomInstDataBuffer.initialize(cudaContext, s_BufferType,
                                           NumInitialGeomInstData, InitialGeomInstDataStride, 0);
             geomInstDataSlotFinder.initialize(NumInitialGeomInstData);
 
             constexpr uint32_t NumInitialTraversableSlots = 128;
 
-            traversableHandleBuffer.initialize(cudaContext, BufferType::Device,
+            traversableHandleBuffer.initialize(cudaContext, s_BufferType,
                                                NumInitialTraversableSlots);
             traversableSlotFinder.initialize(NumInitialTraversableSlots);
         }
@@ -432,12 +434,14 @@ namespace optix {
         bool sbtLayoutGenerationDone() const {
             return sbtLayoutIsUpToDate;
         }
+        void markSBTLayoutDirty();
         uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
             return sbtOffsets.at(SBTOffsetKey{ gas, matSetIdx });
         }
 
-        void setupHitGroupSBT(const _Pipeline* pipeline);
-        const HitGroupSBT* getHitGroupSBT(const _Pipeline* pipeline);
+        const HitGroupSBT* setupHitGroupSBT(const _Pipeline* pipeline);
+
+        void buildAccelerationStructures(CUstream stream);
     };
 
 
@@ -453,7 +457,7 @@ namespace optix {
         TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 
-        std::vector<std::vector<const _Material*>> materials;
+        std::vector<std::vector<const _Material*>> materialSets;
 
     public:
         OPTIX_OPAQUE_BRIDGE(GeometryInstance);
@@ -512,8 +516,6 @@ namespace optix {
             unsigned int compactedAvailable : 1;
         };
 
-        void fillBuildInputs();
-
     public:
         OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
@@ -521,7 +523,7 @@ namespace optix {
             travID = scene->requestTraversableSlot();
             scene->addGAS(this);
 
-            compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
+            compactedSizeOnDevice.initialize(scene->getCUDAContext(), s_BufferType, 1);
 
             propertyCompactedSize = OptixAccelEmitDesc{};
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
@@ -618,7 +620,7 @@ namespace optix {
 
         std::vector<_Instance> children;
         OptixBuildInput buildInput;
-        Buffer instanceBuffer;
+        TypedBuffer<OptixInstance> instanceBuffer;
 
         OptixAccelBuildOptions buildOptions;
 
@@ -642,10 +644,6 @@ namespace optix {
             unsigned int compactedAvailable : 1;
         };
 
-        void setupInstances();
-
-        void fillBuildInput();
-
     public:
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
@@ -653,7 +651,7 @@ namespace optix {
             travID = scene->requestTraversableSlot();
             scene->addIAS(this);
 
-            compactedSizeOnDevice.initialize(scene->getCUDAContext(), BufferType::Device, 1);
+            compactedSizeOnDevice.initialize(scene->getCUDAContext(), s_BufferType, 1);
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
@@ -717,6 +715,7 @@ namespace optix {
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
         Buffer rayGenRecord;
+        Buffer exceptionRecord;
         Buffer missRecords;
 
         OptixShaderBindingTable sbt;
@@ -737,6 +736,17 @@ namespace optix {
             scene(nullptr), numMissRayTypes(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr),
             pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
+            rayGenRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            exceptionRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            missRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+        }
+        ~Priv() {
+            if (pipelineLinked)
+                OPTIX_CHECK(optixPipelineDestroy(rawPipeline));
+
+            missRecords.finalize();
+            exceptionRecord.finalize();
+            rayGenRecord.finalize();
         }
 
         CUcontext getCUDAContext() const {

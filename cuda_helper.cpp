@@ -60,6 +60,8 @@ namespace CUDAHelper {
     }
 
     Buffer &Buffer::operator=(Buffer &&b) {
+        finalize();
+
         m_type = b.m_type;
         m_numElements = b.m_numElements;
         m_stride = b.m_stride;
@@ -163,13 +165,15 @@ namespace CUDAHelper {
         Buffer newBuffer;
         newBuffer.initialize(m_cudaContext, m_type, numElements, stride, m_GLBufferID);
 
+        int32_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
-            cuMemcpyDtoD(newBuffer.m_devicePointer, m_devicePointer, static_cast<uint64_t>(numElements) * m_stride);
+            size_t numBytesToCopy = static_cast<size_t>(numElementsToCopy) * m_stride;
+            CUDADRV_CHECK(cuMemcpyDtoD(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy));
         }
         else {
             auto src = map<const uint8_t>();
             auto dst = newBuffer.map<uint8_t>();
-            for (int i = 0; i < std::min(numElements, m_numElements); ++i) {
+            for (int i = 0; i < numElementsToCopy; ++i) {
                 std::memset(dst, 0, stride);
                 std::memcpy(dst, src, m_stride);
             }

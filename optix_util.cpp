@@ -445,7 +445,7 @@ namespace optix {
         size_t requiredStride = nextMultiplesForPowOf2(size, tzcnt(alignment));
         materialDataBuffer.resize(materialDataBuffer.numElements(),
                                   std::max(materialDataBuffer.stride(), requiredStride));
-        auto ptr = reinterpret_cast<uint8_t*>(materialDataBuffer.map());
+        auto ptr = materialDataBuffer.map<uint8_t>();
         size_t curStride = materialDataBuffer.stride();
         std::memcpy(ptr + curStride * index, data, size);
         materialDataBuffer.unmap();
@@ -525,7 +525,7 @@ namespace optix {
         size_t requiredStride = nextMultiplesForPowOf2(size, tzcnt(alignment));
         geomInstDataBuffer.resize(geomInstDataBuffer.numElements(),
                                   std::max(geomInstDataBuffer.stride(), requiredStride));
-        auto ptr = reinterpret_cast<uint8_t*>(geomInstDataBuffer.map());
+        auto ptr = geomInstDataBuffer.map<uint8_t>();
         size_t curStride = geomInstDataBuffer.stride();
         std::memcpy(ptr + curStride * index, data, size);
         geomInstDataBuffer.unmap();
@@ -557,7 +557,7 @@ namespace optix {
     void Scene::Priv::registerPipeline(const _Pipeline* pipeline) {
         THROW_RUNTIME_ERROR(hitGroupSBTs.count(pipeline) == 0, "This pipeline %p has been already registered.", pipeline);
         auto hitGroupSBT = new HitGroupSBT();
-        hitGroupSBT->records.initialize(getCUDAContext(), BufferType::Device, 1);
+        hitGroupSBT->records.initialize(getCUDAContext(), s_BufferType, 1);
         hitGroupSBTs[pipeline] = hitGroupSBT;
     }
 
@@ -568,7 +568,8 @@ namespace optix {
         uint32_t sbtOffset = 0;
         sbtOffsets.clear();
         for (_GeometryAccelerationStructure* gas : geomASs) {
-            for (int matSetIdx = 0; matSetIdx < gas->getNumMaterialSets(); ++matSetIdx) {
+            uint32_t numMatSets = gas->getNumMaterialSets();
+            for (int matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
                 uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
                 _Scene::SBTOffsetKey key = { gas, matSetIdx };
                 sbtOffsets[key] = sbtOffset;
@@ -582,24 +583,52 @@ namespace optix {
         hitGroupSBT->records.resize(numSBTRecords);
     }
 
-    void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
+    void Scene::Priv::markSBTLayoutDirty() {
+        sbtLayoutIsUpToDate = false;
+
+        for (_InstanceAccelerationStructure* _ias : instASs) {
+            InstanceAccelerationStructure ias = _ias->getPublicType();
+            ias.markDirty();
+        }
+    }
+
+    const HitGroupSBT* Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
         generateSBTLayout(pipeline);
 
         HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
         HitGroupSBTRecord* records = hitGroupSBT->records.map();
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
-            for (int j = 0; j < gas->getNumMaterialSets(); ++j) {
+            uint32_t numMatSets = gas->getNumMaterialSets();
+            for (int j = 0; j < numMatSets; ++j) {
                 uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records);
                 records += numRecords;
             }
         }
 
         hitGroupSBT->records.unmap();
+
+        return hitGroupSBT;
     }
 
-    const HitGroupSBT* Scene::Priv::getHitGroupSBT(const _Pipeline* pipeline) {
-        return hitGroupSBTs.at(pipeline);
+    void Scene::Priv::buildAccelerationStructures(CUstream stream) {
+        for (_GeometryAccelerationStructure* _gas : geomASs) {
+            if (!_gas->isReady()) {
+                GeometryAccelerationStructure gas = _gas->getPublicType();
+                gas.rebuild(stream);
+                gas.compact(stream, stream);
+                gas.removeUncompacted(stream);
+            }
+        }
+
+        for (_InstanceAccelerationStructure* _ias : instASs) {
+            if (!_ias->isReady()) {
+                InstanceAccelerationStructure ias = _ias->getPublicType();
+                ias.rebuild(stream);
+                ias.compact(stream, stream);
+                ias.removeUncompacted(stream);
+            }
+        }
     }
 
     void Scene::destroy() {
@@ -619,15 +648,6 @@ namespace optix {
 
     InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
         return (new _InstanceAccelerationStructure(m))->getPublicType();
-    }
-
-    void Scene::markSBTLayoutDirty() const {
-        m->sbtLayoutIsUpToDate = false;
-
-        for (_InstanceAccelerationStructure* _ias : m->instASs) {
-            InstanceAccelerationStructure ias = _ias->getPublicType();
-            ias.markDirty();
-        }
     }
 
 
@@ -673,12 +693,14 @@ namespace optix {
 
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
                                                     HitGroupSBTRecord* records) const {
-        THROW_RUNTIME_ERROR(matSetIdx < materials.size(),
-                            "Out of material set bound: [0, %u)", static_cast<uint32_t>(materials.size()));
+        THROW_RUNTIME_ERROR(matSetIdx < materialSets.size(),
+                            "Out of material set bound: [0, %u)", static_cast<uint32_t>(materialSets.size()));
 
+        const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
         HitGroupSBTRecord* recordPtr = records;
-        for (int matIdx = 0; matIdx < buildInputFlags.size(); ++matIdx) {
-            const _Material* mat = materials[matSetIdx][matIdx];
+        uint32_t numMaterials = buildInputFlags.size();
+        for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
+            const _Material* mat = materialSet[matIdx];
             THROW_RUNTIME_ERROR(mat, "No material set for %u-%u.", matSetIdx, matIdx);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 mat->setRecordData(pipeline, rIdx, recordPtr);
@@ -687,7 +709,7 @@ namespace optix {
             }
         }
 
-        return buildInputFlags.size() * numRayTypes;
+        return numMaterials * numRayTypes;
     }
 
     void GeometryInstance::destroy() {
@@ -729,23 +751,17 @@ namespace optix {
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
                             "Out of material bounds [0, %u).", (uint32_t)numMaterials);
 
-        uint32_t prevNumMatSets = m->materials.size();
+        uint32_t prevNumMatSets = m->materialSets.size();
         if (matSetIdx >= prevNumMatSets) {
-            m->materials.resize(matSetIdx + 1);
-            for (int i = prevNumMatSets; i < m->materials.size(); ++i)
-                m->materials[i].resize(numMaterials, nullptr);
+            m->materialSets.resize(matSetIdx + 1);
+            for (int i = prevNumMatSets; i < m->materialSets.size(); ++i)
+                m->materialSets[i].resize(numMaterials, nullptr);
         }
-        m->materials[matSetIdx][matIdx] = extract(mat);
+        m->materialSets[matSetIdx][matIdx] = extract(mat);
     }
 
 
 
-    void GeometryAccelerationStructure::Priv::fillBuildInputs() {
-        buildInputs.resize(children.size(), OptixBuildInput{});
-        for (int i = 0; i < children.size(); ++i)
-            children[i]->fillBuildInput(&buildInputs[i]);
-    }
-    
     uint32_t GeometryAccelerationStructure::Priv::calcNumSBTRecords(uint32_t matSetIdx) const {
         uint32_t numSBTRecords = 0;
         for (int i = 0; i < children.size(); ++i)
@@ -760,10 +776,10 @@ namespace optix {
                             "Material set index %u is out of bound [0, %u).",
                             matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
 
+        uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
         uint32_t sumRecords = 0;
         for (int i = 0; i < children.size(); ++i) {
-            uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypesPerMaterialSet[matSetIdx],
-                                                              records);
+            uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypes, records);
             records += numRecords;
             sumRecords += numRecords;
         }
@@ -795,7 +811,7 @@ namespace optix {
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
         m->numRayTypesPerMaterialSet.resize(numMatSets, 0);
 
-        m->scene->getPublicType().markSBTLayoutDirty();
+        m->scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
@@ -804,7 +820,7 @@ namespace optix {
                             matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
         m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
 
-        m->scene->getPublicType().markSBTLayoutDirty();
+        m->scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::addChild(const GeometryInstance &geomInst) const {
@@ -817,7 +833,10 @@ namespace optix {
     }
 
     void GeometryAccelerationStructure::rebuild(CUstream stream) const {
-        m->fillBuildInputs();
+        // Fill build inputs.
+        m->buildInputs.resize(m->children.size(), OptixBuildInput{});
+        for (int i = 0; i < m->children.size(); ++i)
+            m->children[i]->fillBuildInput(&m->buildInputs[i]);
 
         {
             m->accelBuffer.finalize();
@@ -834,10 +853,11 @@ namespace optix {
                                                      m->buildInputs.data(), m->buildInputs.size(),
                                                      &bufferSizes));
 
+            // TODO: Share the temporary buffer among acceleration structures.
             m->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m->accelTempBuffer.initialize(m->getCUDAContext(), BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+            m->accelTempBuffer.initialize(m->getCUDAContext(), s_BufferType, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
 
-            m->accelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->accelBufferSize, 1, 0);
+            m->accelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->accelBufferSize, 1, 0);
         }
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
@@ -853,6 +873,8 @@ namespace optix {
         m->available = true;
         m->compactedHandle = 0;
         m->compactedAvailable = false;
+
+        m->scene->setTraversableHandle(m->travID, m->handle);
     }
 
     void GeometryAccelerationStructure::compact(CUstream rebuildOrUpdateStream, CUstream stream) const {
@@ -868,13 +890,15 @@ namespace optix {
         // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
         if (m->compactedSize < m->accelBuffer.sizeInBytes()) {
-            m->compactedAccelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->compactedSize, 1, 0);
+            m->compactedAccelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->compactedSize, 1, 0);
 
             OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
                                           m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.sizeInBytes(),
                                           &m->compactedHandle));
 
             m->compactedAvailable = true;
+
+            m->scene->setTraversableHandle(m->travID, m->compactedHandle);
         }
     }
 
@@ -909,6 +933,8 @@ namespace optix {
                                     accelBuffer.getDevicePointer(), accelBuffer.sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
+
+        m->scene->setTraversableHandle(m->travID, handle);
     }
 
     bool GeometryAccelerationStructure::isReady() const {
@@ -923,47 +949,11 @@ namespace optix {
         m->available = false;
         m->compactedAvailable = false;
 
-        m->scene->getPublicType().markSBTLayoutDirty();
+        m->scene->markSBTLayoutDirty();
     }
 
 
 
-    void InstanceAccelerationStructure::Priv::setupInstances() {
-        THROW_RUNTIME_ERROR(scene->sbtLayoutGenerationDone(),
-                            "SBT layout generation should be done before.");
-
-        instanceBuffer.finalize();
-
-        instanceBuffer.initialize(getCUDAContext(), BufferType::Device, children.size(), sizeof(OptixInstance), 0);
-        auto instancesD = (OptixInstance*)instanceBuffer.map();
-
-        for (int i = 0; i < children.size(); ++i) {
-            _Instance &inst = children[i];
-
-            if (inst.type == InstanceType::GAS) {
-                THROW_RUNTIME_ERROR(inst.gas->isReady(), "GAS %p is not ready.", inst.gas);
-
-                inst.rawInstance.traversableHandle = inst.gas->getHandle();
-                inst.rawInstance.sbtOffset = scene->getSBTOffset(inst.gas, inst.matSetIndex);
-            }
-            else {
-                optixAssert_NotImplemented();
-            }
-
-            instancesD[i] = inst.rawInstance;
-        }
-
-        instanceBuffer.unmap();
-    }
-
-    void InstanceAccelerationStructure::Priv::fillBuildInput() {
-        buildInput = OptixBuildInput{};
-        buildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
-        OptixBuildInputInstanceArray &instArray = buildInput.instanceArray;
-        instArray.instances = instanceBuffer.getDevicePointer();
-        instArray.numInstances = static_cast<uint32_t>(children.size());
-    }
-    
     void InstanceAccelerationStructure::destroy() {
         m->accelBuffer.finalize();
         m->accelTempBuffer.finalize();
@@ -999,8 +989,43 @@ namespace optix {
     }
 
     void InstanceAccelerationStructure::rebuild(CUstream stream) const {
-        m->setupInstances();
-        m->fillBuildInput();
+        // Setup instances.
+        {
+            THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
+                                "SBT layout generation should be done before.");
+
+            m->instanceBuffer.finalize();
+
+            m->instanceBuffer.initialize(m->getCUDAContext(), s_BufferType, m->children.size());
+            auto instancesD = m->instanceBuffer.map();
+
+            for (int i = 0; i < m->children.size(); ++i) {
+                _Instance &inst = m->children[i];
+
+                if (inst.type == InstanceType::GAS) {
+                    THROW_RUNTIME_ERROR(inst.gas->isReady(), "GAS %p is not ready.", inst.gas);
+
+                    inst.rawInstance.traversableHandle = inst.gas->getHandle();
+                    inst.rawInstance.sbtOffset = m->scene->getSBTOffset(inst.gas, inst.matSetIndex);
+                }
+                else {
+                    optixAssert_NotImplemented();
+                }
+
+                instancesD[i] = inst.rawInstance;
+            }
+
+            m->instanceBuffer.unmap();
+        }
+        
+        // Fill the build input.
+        {
+            m->buildInput = OptixBuildInput{};
+            m->buildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+            OptixBuildInputInstanceArray &instArray = m->buildInput.instanceArray;
+            instArray.instances = reinterpret_cast<CUdeviceptr>(m->instanceBuffer.getDevicePointer());
+            instArray.numInstances = static_cast<uint32_t>(m->children.size());
+        }
 
         {
             m->accelBuffer.finalize();
@@ -1017,10 +1042,11 @@ namespace optix {
                                                      &m->buildInput, 1,
                                                      &bufferSizes));
 
+            // TODO: Share the temporary buffer among acceleration structures.
             m->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m->accelTempBuffer.initialize(m->getCUDAContext(), BufferType::Device, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
+            m->accelTempBuffer.initialize(m->getCUDAContext(), s_BufferType, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
 
-            m->accelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->accelBufferSize, 1, 0);
+            m->accelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->accelBufferSize, 1, 0);
         }
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
@@ -1035,6 +1061,8 @@ namespace optix {
         m->available = true;
         m->compactedHandle = 0;
         m->compactedAvailable = false;
+
+        m->scene->setTraversableHandle(m->travID, m->handle);
     }
 
     void InstanceAccelerationStructure::compact(CUstream rebuildOrUpdateStream, CUstream stream) const {
@@ -1050,13 +1078,15 @@ namespace optix {
         // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
         if (m->compactedSize < m->accelBuffer.sizeInBytes()) {
-            m->compactedAccelBuffer.initialize(m->getCUDAContext(), BufferType::Device, m->compactedSize, 1, 0);
+            m->compactedAccelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->compactedSize, 1, 0);
 
             OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
                                           m->handle, m->compactedAccelBuffer.getDevicePointer(), m->compactedAccelBuffer.sizeInBytes(),
                                           &m->compactedHandle));
 
             m->compactedAvailable = true;
+
+            m->scene->setTraversableHandle(m->travID, m->compactedHandle);
         }
     }
 
@@ -1091,6 +1121,8 @@ namespace optix {
                                     accelBuffer.getDevicePointer(), accelBuffer.sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
+
+        m->scene->setTraversableHandle(m->travID, handle);
     }
 
     bool InstanceAccelerationStructure::isReady() const {
@@ -1127,11 +1159,7 @@ namespace optix {
     
     void Pipeline::Priv::setupShaderBindingTable() {
         if (!sbtAllocDone) {
-            rayGenRecord.finalize();
-            rayGenRecord.initialize(getCUDAContext(), BufferType::Device, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
-
-            missRecords.finalize();
-            missRecords.initialize(getCUDAContext(), BufferType::Device, numMissRayTypes, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            missRecords.resize(numMissRayTypes, missRecords.stride());
 
             sbtAllocDone = true;
         }
@@ -1142,25 +1170,30 @@ namespace optix {
             for (int i = 0; i < numMissRayTypes; ++i)
                 THROW_RUNTIME_ERROR(missPrograms[i], "Miss program is not set for ray type %d.", i);
 
-            sbt = OptixShaderBindingTable{};
+            sbt = {};
             {
-                auto rayGenRecordOnHost = reinterpret_cast<uint8_t*>(rayGenRecord.map());
+                auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>();
                 rayGenProgram->packHeader(rayGenRecordOnHost);
                 rayGenRecord.unmap();
 
-                auto missRecordsOnHost = reinterpret_cast<uint8_t*>(missRecords.map());
+                if (exceptionProgram) {
+                    auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>();
+                    exceptionProgram->packHeader(exceptionRecordOnHost);
+                    exceptionRecord.unmap();
+                }
+
+                auto missRecordsOnHost = missRecords.map<uint8_t>();
                 for (int i = 0; i < numMissRayTypes; ++i)
                     missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
                 missRecords.unmap();
 
-                scene->setupHitGroupSBT(this);
-                const HitGroupSBT* hitGroupSBT = scene->getHitGroupSBT(this);
+                const HitGroupSBT* hitGroupSBT = scene->setupHitGroupSBT(this);
 
 
 
                 sbt.raygenRecord = rayGenRecord.getDevicePointer();
 
-                sbt.exceptionRecord = 0;
+                sbt.exceptionRecord = exceptionProgram ? exceptionRecord.getDevicePointer() : 0;
 
                 sbt.missRecordBase = missRecords.getDevicePointer();
                 sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
@@ -1179,9 +1212,6 @@ namespace optix {
     }
 
     void Pipeline::destroy() {
-        if (m->pipelineLinked)
-            OPTIX_CHECK(optixPipelineDestroy(m->rawPipeline));
-
         delete m;
         m = nullptr;
     }
@@ -1404,6 +1434,7 @@ namespace optix {
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->rayGenProgram = _program;
+        m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setExceptionProgram(ProgramGroup program) const {
@@ -1412,6 +1443,7 @@ namespace optix {
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->exceptionProgram = _program;
+        m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setMissProgram(uint32_t rayType, ProgramGroup program) const {
@@ -1421,6 +1453,7 @@ namespace optix {
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->missPrograms[rayType] = _program;
+        m->sbtIsUpToDate = false;
     }
 
     void Pipeline::fillLaunchParameters(BaseLaunchParameters* params) const {
@@ -1433,6 +1466,8 @@ namespace optix {
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
 
         m->setupShaderBindingTable();
+
+        m->scene->buildAccelerationStructures(stream);
 
         OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
                                 &m->sbt, dimX, dimY, dimZ));

@@ -146,7 +146,7 @@ public:
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
         m_vertexBuffer.initialize(m_cudaContext, CUDAHelper::BufferType::Device, numVertices);
-        auto verticesD = (Shared::Vertex*)m_vertexBuffer.map();
+        auto verticesD = m_vertexBuffer.map();
         std::copy_n(vertices, numVertices, verticesD);
         m_vertexBuffer.unmap();
     }
@@ -174,6 +174,7 @@ public:
         geomInst.setTriangleBuffer(triangleBuffer);
         geomInst.setData(recordData);
         geomInst.setNumMaterials(1, nullptr);
+        geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInst.setMaterial(0, 0, material);
 
         group.geometryInstance = geomInst;
@@ -365,7 +366,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     pipeline.setPipelineOptions(6, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH);
+                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+                                OPTIX_EXCEPTION_FLAG_DEBUG);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernel.ptx");
     optix::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
@@ -374,6 +376,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optix::Module emptyModule;
 
     optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__fill");
+    //optix::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
     optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
@@ -384,6 +387,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
+    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
@@ -608,20 +613,20 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    CUDAHelper::Buffer rngBuffer;
-    rngBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(Shared::PCG32RNG), 0);
+    CUDAHelper::TypedBuffer<Shared::PCG32RNG> rngBuffer;
+    rngBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
     const auto initializeRNGSeeds = [](CUDAHelper::Buffer &buffer) {
         std::mt19937_64 rng(591842031321323413);
 
-        auto seeds = reinterpret_cast<uint64_t*>(buffer.map());
+        auto seeds = buffer.map<uint64_t>();
         for (int i = 0; i < buffer.numElements(); ++i)
             seeds[i] = rng();
         buffer.unmap();
     };
     initializeRNGSeeds(rngBuffer);
 
-    CUDAHelper::Buffer accumBuffer;
-    accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(float4), 0);
+    CUDAHelper::TypedBuffer<float4> accumBuffer;
+    accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
 
 
 
@@ -631,8 +636,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
-    plp.rngBuffer = (Shared::PCG32RNG*)rngBuffer.getDevicePointer();
-    plp.accumBuffer = (float4*)accumBuffer.getDevicePointer();
+    plp.rngBuffer = rngBuffer.getDevicePointer();
+    plp.accumBuffer = accumBuffer.getDevicePointer();
     plp.camera.fovY = 60 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
@@ -669,10 +674,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
 
-            accumBuffer.finalize();
-            accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(float4), 0);
-            rngBuffer.finalize();
-            rngBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY, sizeof(Shared::PCG32RNG), 0);
+            accumBuffer.resize(renderTargetSizeX * renderTargetSizeY);
+            rngBuffer.resize(renderTargetSizeX * renderTargetSizeY);
             initializeRNGSeeds(rngBuffer);
 
             // EN: update the pipeline parameters.

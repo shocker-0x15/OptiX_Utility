@@ -83,8 +83,8 @@ namespace optix {
     };
 
 #if defined(__CUDA_ARCH__)
-    RT_FUNCTION HitGroupSBTRecordData &getHitGroupSBTRecordData() {
-        *reinterpret_cast<const optix::HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    RT_FUNCTION HitGroupSBTRecordData getHitGroupSBTRecordData() {
+        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
 #endif
 
@@ -177,8 +177,6 @@ private: \
         GeometryInstance createGeometryInstance() const;
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
-
-        void markSBTLayoutDirty() const;
     };
 
 

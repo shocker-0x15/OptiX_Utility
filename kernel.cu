@@ -151,7 +151,6 @@ RT_PROGRAM void __raygen__fill() {
                RayType_Search, NumRayTypes, RayType_Search,
                payload[0], payload[1], payload[2], payload[3], payload[4]);
 
-
     plp.rngBuffer[index] = rng;
     float3 cumResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
@@ -170,9 +169,9 @@ RT_PROGRAM void __miss__searchRay() {
 }
 
 RT_PROGRAM void __closesthit__shading() {
-    auto &sbtr = optix::getHitGroupSBTRecordData();
-    auto matData = reinterpret_cast<const MaterialData *>(plp.baseParams.materialData);
-    auto geomInstData = reinterpret_cast<const GeometryData *>(plp.baseParams.geomInstData);
+    auto sbtr = optix::getHitGroupSBTRecordData();
+    auto matData = reinterpret_cast<const MaterialData*>(plp.baseParams.materialData);
+    auto geomInstData = reinterpret_cast<const GeometryData*>(plp.baseParams.geomInstData);
 
     const MaterialData &mat = matData[sbtr.materialDataIndex];
     const GeometryData &geom = geomInstData[sbtr.geomInstDataIndex];
@@ -233,6 +232,12 @@ RT_PROGRAM void __anyhit__visibility() {
     payload.setAll();
 
     optixTerminateRay();
+}
+
+RT_PROGRAM void __exception__print() {
+    uint3 launchIndex = optixGetLaunchIndex();
+    int32_t code = optixGetExceptionCode();
+    printf("(%u, %u, %u): Exception: %u\n", launchIndex.x, launchIndex.y, launchIndex.z, code);
 }
 
 }
