@@ -153,7 +153,7 @@ namespace optix {
             OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
         }
         ~Priv() {
-            OPTIX_CHECK(optixDeviceContextDestroy(rawContext));
+            optixDeviceContextDestroy(rawContext);
         }
 
         CUcontext getCUDAContext() const {
@@ -222,8 +222,6 @@ namespace optix {
         };
 
         const _Context* context;
-        TypedBuffer<OptixTraversableHandle> traversableHandleBuffer;
-        SlotFinder traversableSlotFinder;
         std::set<_GeometryAccelerationStructure*> geomASs;
         std::map<SBTOffsetKey, uint32_t> sbtOffsets;
         uint32_t numSBTRecords;
@@ -237,19 +235,8 @@ namespace optix {
     public:
         OPTIX_OPAQUE_BRIDGE(Scene);
 
-        Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {
-            CUcontext cudaContext = context->getCUDAContext();
-
-            constexpr uint32_t NumInitialTraversableSlots = 128;
-
-            traversableHandleBuffer.initialize(cudaContext, s_BufferType,
-                                               NumInitialTraversableSlots);
-            traversableSlotFinder.initialize(NumInitialTraversableSlots);
-        }
-        ~Priv() {
-            traversableSlotFinder.finalize();
-            traversableHandleBuffer.finalize();
-        }
+        Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {}
+        ~Priv() {}
 
         CUcontext getCUDAContext() const {
             return context->getCUDAContext();
@@ -257,12 +244,6 @@ namespace optix {
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
-
-
-
-        uint32_t requestTraversableSlot();
-        void releaseTraversableSlot(uint32_t index);
-        void setTraversableHandle(uint32_t index, const OptixTraversableHandle &handle);
 
 
 
@@ -280,7 +261,7 @@ namespace optix {
         }
 
         void registerPipeline(const _Pipeline* pipeline);
-        void generateSBTLayout(const _Pipeline* pipeline);
+        void generateSBTLayout();
         bool sbtLayoutGenerationDone() const {
             return sbtLayoutIsUpToDate;
         }
@@ -291,7 +272,7 @@ namespace optix {
 
         const HitGroupSBT* setupHitGroupSBT(const _Pipeline* pipeline);
 
-        void buildAccelerationStructures(CUstream stream);
+        bool isReady();
     };
 
 
@@ -343,19 +324,16 @@ namespace optix {
         std::vector<OptixBuildInput> buildInputs;
 
         OptixAccelBuildOptions buildOptions;
-
-        size_t accelBufferSize;
-        Buffer accelBuffer;
-        Buffer accelTempBuffer;
+        OptixAccelBufferSizes memoryRequirement;
 
         TypedBuffer<size_t> compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
-        Buffer compactedAccelBuffer;
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
-        uint32_t travID;
+        const Buffer* accelBuffer;
+        const Buffer* compactedAccelBuffer;
         struct {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
@@ -368,7 +346,6 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
         Priv(_Scene* _scene) : scene(_scene) {
-            travID = scene->requestTraversableSlot();
             scene->addGAS(this);
 
             compactedSizeOnDevice.initialize(scene->getCUDAContext(), s_BufferType, 1);
@@ -388,7 +365,6 @@ namespace optix {
             compactedSizeOnDevice.finalize();
 
             scene->removeGAS(this);
-            scene->releaseTraversableSlot(travID);
         }
 
         CUcontext getCUDAContext() const {
@@ -471,19 +447,16 @@ namespace optix {
         TypedBuffer<OptixInstance> instanceBuffer;
 
         OptixAccelBuildOptions buildOptions;
-
-        size_t accelBufferSize;
-        Buffer accelBuffer;
-        Buffer accelTempBuffer;
+        OptixAccelBufferSizes memoryRequirement;
 
         TypedBuffer<size_t> compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
-        Buffer compactedAccelBuffer;
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
-        uint32_t travID;
+        const Buffer* accelBuffer;
+        const Buffer* compactedAccelBuffer;
         struct {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
@@ -496,7 +469,6 @@ namespace optix {
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
         Priv(_Scene* _scene) : scene(_scene) {
-            travID = scene->requestTraversableSlot();
             scene->addIAS(this);
 
             compactedSizeOnDevice.initialize(scene->getCUDAContext(), s_BufferType, 1);
@@ -518,7 +490,6 @@ namespace optix {
             compactedSizeOnDevice.finalize();
 
             scene->removeIAS(this);
-            scene->releaseTraversableSlot(travID);
         }
 
         CUcontext getCUDAContext() const {
@@ -590,7 +561,7 @@ namespace optix {
         }
         ~Priv() {
             if (pipelineLinked)
-                OPTIX_CHECK(optixPipelineDestroy(rawPipeline));
+                optixPipelineDestroy(rawPipeline);
 
             missRecords.finalize();
             exceptionRecord.finalize();

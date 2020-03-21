@@ -548,20 +548,51 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
 
 
+
+    uint32_t travID = 0;
+    size_t maxSizeOfScratchBuffer = 0;
+    OptixAccelBufferSizes asMemReqs;
+
+    CUDAHelper::Buffer asBuildScratchMem;
+    CUDAHelper::TypedBuffer<OptixTraversableHandle> travHandleBuffer;
+    travHandleBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    OptixTraversableHandle* travHandles = travHandleBuffer.map();
     
+    uint32_t gasCornellBoxIndex = travID++;
     optix::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
+    CUDAHelper::Buffer gasCornellBoxMem;
     gasCornellBox.setConfiguration(true, false, true);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
+    gasCornellBox.prepareForBuild(&asMemReqs);
+    gasCornellBoxMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+    uint32_t gasAreaLightIndex = travID++;
     optix::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
+    CUDAHelper::Buffer gasAreaLightMem;
     gasAreaLight.setConfiguration(true, false, true);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
+    gasAreaLight.prepareForBuild(&asMemReqs);
+    gasAreaLightMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+    // JP: Geometry Acceleration Structureをビルドする。
+    //     スクラッチバッファーは共用する。
+    // EN: Build geometry acceleration structures.
+    //     Share the scratch buffer among them.
+    asBuildScratchMem.initialize(cuContext, CUDAHelper::BufferType::Device, maxSizeOfScratchBuffer, 1, 0);
+    travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
+    travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
+
+
+
+    uint32_t iasSceneIndex = travID++;
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
+    CUDAHelper::Buffer iasSceneMem;
     iasScene.setConfiguration(false, true, true);
     iasScene.addChild(gasCornellBox);
     float tfAreaLight[] = {
@@ -570,10 +601,24 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         0, 0, 1, 0
     };
     iasScene.addChild(gasAreaLight, 0, tfAreaLight);
+    iasScene.prepareForBuild(&asMemReqs);
+    iasSceneMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    if (asMemReqs.tempSizeInBytes >= asBuildScratchMem.sizeInBytes()) {
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
+    }
+
+    // JP: Instance Acceleration Structureをビルドする。
+    // EN: Build the instance acceleration structure.
+    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream[0], iasSceneMem, asBuildScratchMem);
+
+    travHandleBuffer.unmap();
+    CUDADRV_CHECK(cuStreamSynchronize(cuStream[0]));
+    asBuildScratchMem.finalize();
+
+
 
     pipeline.setScene(scene);
-
-    //CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     // END: 
     // ----------------------------------------------------------------
@@ -645,10 +690,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     Shared::PipelineLaunchParameters plp;
-    plp.travHandles = scene.getTraversableHandles();
+    plp.travHandles = travHandleBuffer.getDevicePointer();
     plp.materialData = materialDataBuffer.getDevicePointer();
     plp.geomInstData = sceneContext.geometryDataBuffer.getDevicePointer();
-    plp.topGroupIndex = iasScene.getID();
+    plp.topGroupIndex = iasSceneIndex;
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
@@ -856,9 +901,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     outputTexture.finalize();
     outputBufferGL.finalize();
 
+    travHandleBuffer.finalize();
+
+    iasSceneMem.finalize();
     iasScene.destroy();
 
+    gasAreaLightMem.finalize();
     gasAreaLight.destroy();
+    gasCornellBoxMem.finalize();
     gasCornellBox.destroy();
 
     meshAreaLight.destroy();

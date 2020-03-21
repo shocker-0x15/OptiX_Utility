@@ -9,6 +9,7 @@ TODO:
 - update()の運用方法を考える。
 - SBTのダブルバッファリングの運用方法を考える。
 - SlotFinderはこのまま必要ないなら削除する。
+- Assertとexceptionの整理。
 
 */
 
@@ -283,8 +284,6 @@ private: \
         GeometryInstance createGeometryInstance() const;
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
-
-        const OptixTraversableHandle* getTraversableHandles() const;
     };
 
 
@@ -321,13 +320,14 @@ private: \
 
         void addChild(const GeometryInstance &geomInst) const;
 
-        void rebuild(CUstream stream) const;
-        void compact(CUstream rebuildOrUpdateStream, CUstream stream) const;
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
+        OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
+        void prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const;
+        OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted(CUstream compactionStream) const;
-        void update(CUstream stream) const;
+        OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
-        uint32_t getID() const;
 
         void markDirty() const;
     };
@@ -344,13 +344,14 @@ private: \
 
         void addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0, const float instantTransform[12] = nullptr) const;
 
-        void rebuild(CUstream stream) const;
-        void compact(CUstream rebuildOrUpdateStream, CUstream stream) const;
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
+        OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
+        void prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const;
+        OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted(CUstream compactionStream) const;
-        void update(CUstream stream) const;
+        OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
-        uint32_t getID() const;
 
         void markDirty() const;
     };

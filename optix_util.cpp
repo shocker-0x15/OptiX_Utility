@@ -475,29 +475,6 @@ namespace optix {
 
 
     
-    uint32_t Scene::Priv::requestTraversableSlot() {
-        uint32_t slotIdx = traversableSlotFinder.getFirstAvailableSlot();
-        if (slotIdx == SlotFinder::InvalidSlotIndex) {
-            uint32_t newSize = static_cast<uint32_t>(traversableSlotFinder.getNumSlots() * 1.5f);
-            traversableSlotFinder.resize(newSize);
-        }
-        slotIdx = traversableSlotFinder.getFirstAvailableSlot();
-        THROW_RUNTIME_ERROR(slotIdx != SlotFinder::InvalidSlotIndex, "Unable to allocate a slot index.");
-        traversableSlotFinder.setInUse(slotIdx);
-        return slotIdx;
-    }
-
-    void Scene::Priv::releaseTraversableSlot(uint32_t slotIdx) {
-        traversableSlotFinder.setNotInUse(slotIdx);
-    }
-
-    // TODO: Consider double buffering or asynchronous transfer.
-    void Scene::Priv::setTraversableHandle(uint32_t index, const OptixTraversableHandle &handle) {
-        auto handles = traversableHandleBuffer.map();
-        handles[index] = handle;
-        traversableHandleBuffer.unmap();
-    }
-
     void Scene::Priv::registerPipeline(const _Pipeline* pipeline) {
         THROW_RUNTIME_ERROR(hitGroupSBTs.count(pipeline) == 0, "This pipeline %p has been already registered.", pipeline);
         auto hitGroupSBT = new HitGroupSBT();
@@ -505,7 +482,7 @@ namespace optix {
         hitGroupSBTs[pipeline] = hitGroupSBT;
     }
 
-    void Scene::Priv::generateSBTLayout(const _Pipeline* pipeline) {
+    void Scene::Priv::generateSBTLayout() {
         if (sbtLayoutIsUpToDate)
             return;
 
@@ -522,9 +499,6 @@ namespace optix {
         }
         numSBTRecords = sbtOffset;
         sbtLayoutIsUpToDate = true;
-
-        HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
-        hitGroupSBT->records.resize(numSBTRecords);
     }
 
     void Scene::Priv::markSBTLayoutDirty() {
@@ -537,9 +511,9 @@ namespace optix {
     }
 
     const HitGroupSBT* Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
-        generateSBTLayout(pipeline);
-
         HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
+        hitGroupSBT->records.resize(numSBTRecords);
+
         HitGroupSBTRecord* records = hitGroupSBT->records.map();
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
@@ -555,24 +529,20 @@ namespace optix {
         return hitGroupSBT;
     }
 
-    void Scene::Priv::buildAccelerationStructures(CUstream stream) {
+    bool Scene::Priv::isReady() {
         for (_GeometryAccelerationStructure* _gas : geomASs) {
             if (!_gas->isReady()) {
-                GeometryAccelerationStructure gas = _gas->getPublicType();
-                gas.rebuild(stream);
-                gas.compact(stream, stream);
-                gas.removeUncompacted(stream);
+                return false;
             }
         }
 
         for (_InstanceAccelerationStructure* _ias : instASs) {
             if (!_ias->isReady()) {
-                InstanceAccelerationStructure ias = _ias->getPublicType();
-                ias.rebuild(stream);
-                ias.compact(stream, stream);
-                ias.removeUncompacted(stream);
+                return false;
             }
         }
+
+        return true;
     }
 
     void Scene::destroy() {
@@ -592,10 +562,6 @@ namespace optix {
 
     InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
         return (new _InstanceAccelerationStructure(m))->getPublicType();
-    }
-
-    const OptixTraversableHandle* Scene::getTraversableHandles() const {
-        return m->traversableHandleBuffer.getDevicePointer();
     }
 
 
@@ -736,9 +702,6 @@ namespace optix {
     }
     
     void GeometryAccelerationStructure::destroy() {
-        m->accelBuffer.finalize();
-        m->accelTempBuffer.finalize();
-
         delete m;
         m = nullptr;
     }
@@ -746,11 +709,11 @@ namespace optix {
     void GeometryAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) {
         bool changed = false;
         changed |= m->preferFastTrace != preferFastTrace;
-        m->preferFastTrace == preferFastTrace;
+        m->preferFastTrace = preferFastTrace;
         changed |= m->allowUpdate != allowUpdate;
-        m->allowUpdate == allowUpdate;
+        m->allowUpdate = allowUpdate;
         changed |= m->allowCompaction != allowCompaction;
-        m->allowCompaction == allowCompaction;
+        m->allowCompaction = allowCompaction;
 
         if (changed)
             markDirty();
@@ -780,55 +743,55 @@ namespace optix {
         markDirty();
     }
 
-    void GeometryAccelerationStructure::rebuild(CUstream stream) const {
+    void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         // Fill build inputs.
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
         for (int i = 0; i < m->children.size(); ++i)
             m->children[i]->fillBuildInput(&m->buildInputs[i]);
 
-        {
-            m->accelBuffer.finalize();
-            m->accelTempBuffer.finalize();
+        m->buildOptions = {};
+        m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
+                                      (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                      (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+        //buildOptions.motionOptions
 
-            m->buildOptions = {};
-            m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
-                                          (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                          (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
-            //buildOptions.motionOptions
+        OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
+                                                 m->buildInputs.data(), m->buildInputs.size(),
+                                                 &m->memoryRequirement));
 
-            OptixAccelBufferSizes bufferSizes;
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
-                                                     m->buildInputs.data(), m->buildInputs.size(),
-                                                     &bufferSizes));
+        *memoryRequirement = m->memoryRequirement;
+    }
 
-            // TODO: Share the temporary buffer among acceleration structures.
-            m->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m->accelTempBuffer.initialize(m->getCUDAContext(), s_BufferType, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
-
-            m->accelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->accelBufferSize, 1, 0);
-        }
+    OptixTraversableHandle GeometryAccelerationStructure::rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
+        THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+                            "Size of the given buffer is not enough.");
+        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+                            "Size of the given scratch buffer is not enough.");
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
-                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
-                                    m->accelBuffer.getCUdeviceptr(), m->accelBuffer.sizeInBytes(),
+                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &m->handle,
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
+        m->accelBuffer = &accelBuffer;
         m->available = true;
         m->compactedHandle = 0;
         m->compactedAvailable = false;
 
-        m->scene->setTraversableHandle(m->travID, m->handle);
+        return m->handle;
     }
 
-    void GeometryAccelerationStructure::compact(CUstream rebuildOrUpdateStream, CUstream stream) const {
+    void GeometryAccelerationStructure::prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        THROW_RUNTIME_ERROR(compactionEnabled, "This AS does not allow compaction.");
+        THROW_RUNTIME_ERROR(m->available, "Uncompacted AS has not been built yet.");
 
-        if (!m->available || m->compactedAvailable || !compactionEnabled)
+        if (m->compactedAvailable)
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
@@ -837,17 +800,24 @@ namespace optix {
         // JP: 以下になるべき？
         // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
-        if (m->compactedSize < m->accelBuffer.sizeInBytes()) {
-            m->compactedAccelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->compactedSize, 1, 0);
+        *compactedAccelBufferSize = m->compactedSize;
+    }
 
-            OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                          m->handle, m->compactedAccelBuffer.getCUdeviceptr(), m->compactedAccelBuffer.sizeInBytes(),
-                                          &m->compactedHandle));
+    OptixTraversableHandle GeometryAccelerationStructure::compact(CUstream stream, const Buffer &compactedAccelBuffer) const {
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        THROW_RUNTIME_ERROR(compactionEnabled, "This AS does not allow compaction.");
+        THROW_RUNTIME_ERROR(m->available, "Uncompacted AS has not been built yet.");
+        THROW_RUNTIME_ERROR(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
+                            "Size of the given buffer is not enough.");
 
-            m->compactedAvailable = true;
+        OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
+                                      m->handle, compactedAccelBuffer.getCUdeviceptr(), compactedAccelBuffer.sizeInBytes(),
+                                      &m->compactedHandle));
 
-            m->scene->setTraversableHandle(m->travID, m->compactedHandle);
-        }
+        m->compactedAccelBuffer = &compactedAccelBuffer;
+        m->compactedAvailable = true;
+
+        return m->compactedHandle;
     }
 
     void GeometryAccelerationStructure::removeUncompacted(CUstream compactionStream) const {
@@ -856,41 +826,35 @@ namespace optix {
         if (!m->compactedAvailable || !compactionEnabled)
             return;
 
-        // JP: コンパクションの完了を待ってバッファーを解放。
         CUDADRV_CHECK(cuStreamSynchronize(compactionStream));
-        m->accelBuffer.finalize();
 
         m->handle = 0;
         m->available = false;
     }
 
-    void GeometryAccelerationStructure::update(CUstream stream) const {
+    OptixTraversableHandle GeometryAccelerationStructure::update(CUstream stream, const Buffer &scratchBuffer) const {
         bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+        THROW_RUNTIME_ERROR(updateEnabled, "This AS does not allow update.");
+        THROW_RUNTIME_ERROR(m->available || m->compactedAvailable, "AS has not been built yet.");
+        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
+                            "Size of the given scratch buffer is not enough.");
 
-        // Should this be an assert?
-        if ((!m->available && !m->compactedAvailable) || !updateEnabled)
-            return;
-
-        const Buffer &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
+        const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, m->buildInputs.data(), m->buildInputs.size(),
-                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
-                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
+                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                    accelBuffer->getCUdeviceptr(), accelBuffer->sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
 
-        m->scene->setTraversableHandle(m->travID, handle);
+        return handle;
     }
 
     bool GeometryAccelerationStructure::isReady() const {
         return m->isReady();
-    }
-
-    uint32_t GeometryAccelerationStructure::getID() const {
-        return m->travID;
     }
 
     void GeometryAccelerationStructure::markDirty() const {
@@ -903,9 +867,6 @@ namespace optix {
 
 
     void InstanceAccelerationStructure::destroy() {
-        m->accelBuffer.finalize();
-        m->accelTempBuffer.finalize();
-
         delete m;
         m = nullptr;
     }
@@ -913,11 +874,11 @@ namespace optix {
     void InstanceAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) {
         bool changed = false;
         changed |= m->preferFastTrace != preferFastTrace;
-        m->preferFastTrace == preferFastTrace;
+        m->preferFastTrace = preferFastTrace;
         changed |= m->allowUpdate != allowUpdate;
-        m->allowUpdate == allowUpdate;
+        m->allowUpdate = allowUpdate;
         changed |= m->allowCompaction != allowCompaction;
-        m->allowCompaction == allowCompaction;
+        m->allowCompaction = allowCompaction;
 
         if (changed)
             markDirty();
@@ -936,16 +897,14 @@ namespace optix {
         markDirty();
     }
 
-    void InstanceAccelerationStructure::rebuild(CUstream stream) const {
+    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         // Setup instances.
         {
-            THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
-                                "SBT layout generation should be done before.");
+            m->scene->generateSBTLayout();
 
             m->instanceBuffer.finalize();
-
             m->instanceBuffer.initialize(m->getCUDAContext(), s_BufferType, m->children.size());
-            auto instancesD = m->instanceBuffer.map();
+            auto instances = m->instanceBuffer.map();
 
             for (int i = 0; i < m->children.size(); ++i) {
                 _Instance &inst = m->children[i];
@@ -960,12 +919,12 @@ namespace optix {
                     optixAssert_NotImplemented();
                 }
 
-                instancesD[i] = inst.rawInstance;
+                instances[i] = inst.rawInstance;
             }
 
             m->instanceBuffer.unmap();
         }
-        
+
         // Fill the build input.
         {
             m->buildInput = OptixBuildInput{};
@@ -975,48 +934,43 @@ namespace optix {
             instArray.numInstances = static_cast<uint32_t>(m->children.size());
         }
 
-        {
-            m->accelBuffer.finalize();
-            m->accelTempBuffer.finalize();
+        m->buildOptions = {};
+        m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
+                                      (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
+                                      (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+        //buildOptions.motionOptions
 
-            m->buildOptions = {};
-            m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
-                                          (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                          (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
-            //buildOptions.motionOptions
+        OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
+                                                 &m->buildInput, 1,
+                                                 &m->memoryRequirement));
 
-            OptixAccelBufferSizes bufferSizes;
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
-                                                     &m->buildInput, 1,
-                                                     &bufferSizes));
+        *memoryRequirement = m->memoryRequirement;
+    }
 
-            // TODO: Share the temporary buffer among acceleration structures.
-            m->accelBufferSize = bufferSizes.outputSizeInBytes;
-            m->accelTempBuffer.initialize(m->getCUDAContext(), s_BufferType, std::max(bufferSizes.tempSizeInBytes, bufferSizes.tempUpdateSizeInBytes), 1, 0);
-
-            m->accelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->accelBufferSize, 1, 0);
-        }
-
+    OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
-                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
-                                    m->accelBuffer.getCUdeviceptr(), m->accelBuffer.sizeInBytes(),
+                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &m->handle,
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
 
+        m->accelBuffer = &accelBuffer;
         m->available = true;
         m->compactedHandle = 0;
         m->compactedAvailable = false;
 
-        m->scene->setTraversableHandle(m->travID, m->handle);
+        return m->handle;
     }
 
-    void InstanceAccelerationStructure::compact(CUstream rebuildOrUpdateStream, CUstream stream) const {
+    void InstanceAccelerationStructure::prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        THROW_RUNTIME_ERROR(compactionEnabled, "This AS does not allow compaction.");
+        THROW_RUNTIME_ERROR(m->available, "Uncompacted AS has not been built yet.");
 
-        if (!m->available || m->compactedAvailable || !compactionEnabled)
+        if (m->compactedAvailable)
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
@@ -1025,17 +979,24 @@ namespace optix {
         // JP: 以下になるべき？
         // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
-        if (m->compactedSize < m->accelBuffer.sizeInBytes()) {
-            m->compactedAccelBuffer.initialize(m->getCUDAContext(), s_BufferType, m->compactedSize, 1, 0);
+        *compactedAccelBufferSize = m->compactedSize;
+    }
 
-            OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                          m->handle, m->compactedAccelBuffer.getCUdeviceptr(), m->compactedAccelBuffer.sizeInBytes(),
-                                          &m->compactedHandle));
+    OptixTraversableHandle InstanceAccelerationStructure::compact(CUstream stream, const Buffer &compactedAccelBuffer) const {
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        THROW_RUNTIME_ERROR(compactionEnabled, "This AS does not allow compaction.");
+        THROW_RUNTIME_ERROR(m->available, "Uncompacted AS has not been built yet.");
+        THROW_RUNTIME_ERROR(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
+                            "Size of the given buffer is not enough.");
 
-            m->compactedAvailable = true;
+        OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
+                                      m->handle, compactedAccelBuffer.getCUdeviceptr(), compactedAccelBuffer.sizeInBytes(),
+                                      &m->compactedHandle));
 
-            m->scene->setTraversableHandle(m->travID, m->compactedHandle);
-        }
+        m->compactedAccelBuffer = &compactedAccelBuffer;
+        m->compactedAvailable = true;
+
+        return m->compactedHandle;
     }
 
     void InstanceAccelerationStructure::removeUncompacted(CUstream compactionStream) const {
@@ -1044,41 +1005,35 @@ namespace optix {
         if (!m->compactedAvailable || !compactionEnabled)
             return;
 
-        // JP: コンパクションの完了を待ってバッファーを解放。
         CUDADRV_CHECK(cuStreamSynchronize(compactionStream));
-        m->accelBuffer.finalize();
 
         m->handle = 0;
         m->available = false;
     }
 
-    void InstanceAccelerationStructure::update(CUstream stream) const {
+    OptixTraversableHandle InstanceAccelerationStructure::update(CUstream stream, const Buffer &scratchBuffer) const {
         bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+        THROW_RUNTIME_ERROR(updateEnabled, "This AS does not allow update.");
+        THROW_RUNTIME_ERROR(m->available || m->compactedAvailable, "AS has not been built yet.");
+        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
+                            "Size of the given scratch buffer is not enough.");
 
-        // Should this be an assert?
-        if ((!m->available && !m->compactedAvailable) || !updateEnabled)
-            return;
-
-        const Buffer &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
+        const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
                                     &m->buildOptions, &m->buildInput, 1,
-                                    m->accelTempBuffer.getCUdeviceptr(), m->accelTempBuffer.sizeInBytes(),
-                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
+                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                    accelBuffer->getCUdeviceptr(), accelBuffer->sizeInBytes(),
                                     &handle,
                                     nullptr, 0));
 
-        m->scene->setTraversableHandle(m->travID, handle);
+        return handle;
     }
 
     bool InstanceAccelerationStructure::isReady() const {
         return m->isReady();
-    }
-
-    uint32_t InstanceAccelerationStructure::getID() const {
-        return m->travID;
     }
 
     void InstanceAccelerationStructure::markDirty() const {
@@ -1406,10 +1361,9 @@ namespace optix {
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
+        THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
 
         m->setupShaderBindingTable();
-
-        m->scene->buildAccelerationStructures(stream);
 
         OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
                                 &m->sbt, dimX, dimY, dimZ));
