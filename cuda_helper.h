@@ -245,11 +245,11 @@ namespace CUDAHelper {
         }
         void initialize(CUcontext context, BufferType type, const T* v, uint32_t numElements) {
             initialize(context, type, numElements);
-            CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getDevicePointer(), v, numElements * sizeof(T)));
+            CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getCUdeviceptr(), v, numElements * sizeof(T)));
         }
         void initialize(CUcontext context, BufferType type, const std::vector<T> &v) {
             initialize(context, type, v.size());
-            CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getDevicePointer(), v.data(), v.size() * sizeof(T)));
+            CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getCUdeviceptr(), v.data(), v.size() * sizeof(T)));
         }
         void finalize() {
             Buffer::finalize();

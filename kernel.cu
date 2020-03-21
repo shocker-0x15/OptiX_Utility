@@ -167,7 +167,7 @@ RT_PROGRAM void __raygen__pathtracing() {
         optixTrace(topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                    RayType_Search, NumRayTypes, RayType_Search,
                    payloadPtr[0], payloadPtr[1]);
-        if (payload.terminate || payload.pathLength >= 3)
+        if (payload.terminate || payload.pathLength >= 10)
             break;
 
         origin = payload.origin;

@@ -41,11 +41,11 @@
 
 #include "GLToolkit.h"
 #include "cuda_helper.h"
-
 #include "optix_util.h"
 #include <cuda_runtime.h>
 
 #include "shared.h"
+#include "stopwatch.h"
 
 
 
@@ -364,12 +364,18 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUcontext cuContext;
     int32_t cuDeviceCount;
     CUstream cuStream[2];
+    CUDAHelper::Timer cudaRenderTimer[2];
+    CUDAHelper::Timer cudaPostProcessTimer[2];
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream[0], 0));
     CUDADRV_CHECK(cuStreamCreate(&cuStream[1], 0));
+    cudaRenderTimer[0].initialize(cuContext);
+    cudaRenderTimer[1].initialize(cuContext);
+    cudaPostProcessTimer[0].initialize(cuContext);
+    cudaPostProcessTimer[1].initialize(cuContext);
     
     optix::Context optixContext = optix::Context::create(cuContext);
 
@@ -707,9 +713,21 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    StopWatch<> sw;
+    std::mt19937_64 rng(3092384202);
+    std::uniform_real_distribution u01;
+    
     uint64_t frameIndex = 0;
     int32_t requestedSize[2];
+    float frameTime = 0;
+    float renderCmdTime = 0;
+    float postProcessCmdTime = 0;
+    float syncTime = 0;
+    float swapTime = 0;
+    float dummyTime = 0;
     while (!glfwWindowShouldClose(window)) {
+        sw.start();
+
         uint32_t bufferIndex = frameIndex % 2;
 
         glfwPollEvents();
@@ -759,10 +777,88 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
         CUstream &curCuStream = cuStream[bufferIndex];
+        CUDAHelper::Timer &curRenderTimer = cudaRenderTimer[bufferIndex];
+        CUDAHelper::Timer &curPostProcessTimer = cudaPostProcessTimer[bufferIndex];
         
         // JP: 前フレームの処理が完了するのを待つ。
         // EN: Wait the previous frame processing to finish.
+        sw.start();
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
+        syncTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        {
+            ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            float renderTime = frameIndex >= 2 ? curRenderTimer.report() : 0.0f;
+            float postProcessTime = frameIndex >= 2 ? curPostProcessTimer.report() : 0.0f;
+            //ImGui::SetNextItemWidth(100.0f);
+            ImGui::Text("GPU:");
+            ImGui::Text("  Render: %.2f [ms]", renderTime);
+            ImGui::Text("  Post Process: %.2f [ms]", postProcessTime);
+            {
+                static float times[100];
+                constexpr uint32_t numTimes = lengthof(times);
+                constexpr uint32_t numAccums = 1;
+                static float accTime = 0;
+                static uint32_t plotStartPos = -1;
+                accTime += (renderTime + postProcessTime);
+                if ((frameIndex + 1) % numAccums == 0) {
+                    plotStartPos = (plotStartPos + 1) % numTimes;
+                    times[(plotStartPos + numTimes - 1) % numTimes] = accTime / numAccums;
+                    accTime = 0;
+                }
+                ImGui::PlotLines("GPU Time", times, numTimes, plotStartPos, nullptr, 0, 50.0f, ImVec2(0, 50));
+            }
+
+            ImGui::Text("CPU:");
+            ImGui::Text("  Frame: %.3f [ms]", frameTime);
+            ImGui::Text("  Sync: %.3f [ms]", syncTime);
+            ImGui::Text("  Render: %.3f [ms]", renderCmdTime);
+            ImGui::Text("  Post Process: %.3f [ms]", postProcessCmdTime);
+            ImGui::Text("  Swap: %.3f [ms]", swapTime);
+            ImGui::Text("  Dummy: %.3f [ms]", dummyTime);
+            {
+                static float times[100];
+                constexpr uint32_t numTimes = lengthof(times);
+                constexpr uint32_t numAccums = 1;
+                static float accTime = 0;
+                static uint32_t plotStartPos = -1;
+                accTime += frameTime;
+                if ((frameIndex + 1) % numAccums == 0) {
+                    plotStartPos = (plotStartPos + 1) % numTimes;
+                    times[(plotStartPos + numTimes - 1) % numTimes] = accTime / numAccums;
+                    accTime = 0;
+                }
+                ImGui::PlotLines("CPU Time", times, numTimes, plotStartPos, nullptr, 0, 50.0f, ImVec2(0, 50));
+            }
+            {
+                static float times[100];
+                constexpr uint32_t numTimes = lengthof(times);
+                static uint32_t plotStartPos = -1;
+                plotStartPos = (plotStartPos + 1) % numTimes;
+                times[(plotStartPos + numTimes - 1) % numTimes] = std::sinf(2 * M_PI * (frameIndex % 60) / 60.0f);
+                ImGui::PlotLines("Sin Curve", times, numTimes, plotStartPos, nullptr, -1.0f, 1.0f, ImVec2(0, 50));
+            }
+
+            static float cpuDummyLoad = 0.0f;
+            ImGui::SliderFloat("Dummy CPU Load", &cpuDummyLoad, 0.0f, 33.3333f);
+            static float dummyProb = 0.0f;
+            ImGui::SliderFloat("Probability", &dummyProb, 0.0f, 100.0f);
+            sw.start();
+            if (cpuDummyLoad > 0.0f && u01(rng) < dummyProb * 0.01f)
+                Sleep(cpuDummyLoad);
+            dummyTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+
+            ImGui::End();
+
+            if (frameIndex >= 1 && frameIndex <= 10) {
+                devPrintf("CPU Time Frame %u: %.3f [ms]\n", frameIndex - 1, frameTime);
+                devPrintf("  Sync: %.3f [ms]\n", syncTime);
+                devPrintf("  Render: %.3f [ms]\n", renderCmdTime);
+                devPrintf("  Post Process: %.3f [ms]\n", postProcessCmdTime);
+                devPrintf("  Swap: %.3f [ms]\n", swapTime);
+                devPrintf("  Dummy: %.3f [ms]\n", dummyTime);
+            }
+        }
 
         bool sceneEdited = false;
         {
@@ -801,8 +897,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
 
+        // Render
+        sw.start();
+        curRenderTimer.start(curCuStream);
         pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        curRenderTimer.stop(curCuStream);
+        renderCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
 
+        // Post Process
+        sw.start();
+        curPostProcessTimer.start(curCuStream);
         const uint32_t blockSize = 8;
         uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
         uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
@@ -810,6 +914,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                accumBuffer.getDevicePointer(), renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
                                outputBufferCUDA.beginCUDAAccess(curCuStream));
         outputBufferCUDA.endCUDAAccess(curCuStream);
+        curPostProcessTimer.stop(curCuStream);
+        postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;
 
 
@@ -876,9 +982,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // END: scaling
         // ----------------------------------------------------------------
 
+        sw.start();
         glfwSwapBuffers(window);
+        swapTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
 
         ++frameIndex;
+        frameTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        sw.clearAllMeasurements();
     }
 
 
@@ -940,6 +1050,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixContext.destroy();
 
+    cudaPostProcessTimer[1].finalize();
+    cudaPostProcessTimer[0].finalize();
+    cudaRenderTimer[1].finalize();
+    cudaRenderTimer[0].finalize();
     CUDADRV_CHECK(cuStreamDestroy(cuStream[1]));
     CUDADRV_CHECK(cuStreamDestroy(cuStream[0]));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));

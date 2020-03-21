@@ -169,5 +169,10 @@ HitGroup SBTのDirty化条件:
 - materialのhitgroup変更時のSBT無効化
   materialごとに関与しているsceneとそのカウントを覚えておいて変更時にSBT無効化通知？
 
-GASのダブルバッファリングに関して
 CPUでジオメトリのデータ更新をしたい場合:
+- GeometryInstanceのVertexBufferなどは2ついる。
+  1. CPUで更新したデータを含んだVertex/TriangleBufferをGeometryInstanceにセット。
+  1. GASのprepareForBuildを呼ぶ。
+  1. 新しいバッファーを用意してGASのrebuild/updateを呼ぶ。\
+     ユーザーが持っている古いバッファーのメモリとハンドルは何も影響を受けない。
+  1. 

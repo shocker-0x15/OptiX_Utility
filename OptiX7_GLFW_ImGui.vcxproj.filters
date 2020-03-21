@@ -85,6 +85,7 @@
     <ClInclude Include="shared.h" />
     <ClInclude Include="optix_util.h" />
     <ClInclude Include="optix_util_private.h" />
+    <ClInclude Include="stopwatch.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis">
