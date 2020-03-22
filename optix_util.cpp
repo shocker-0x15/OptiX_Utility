@@ -149,6 +149,10 @@ namespace optix {
         return (new _GeometryAccelerationStructure(m))->getPublicType();
     }
 
+    Instance Scene::createInstance() const {
+        return (new _Instance(m))->getPublicType();
+    }
+
     InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
         return (new _InstanceAccelerationStructure(m))->getPublicType();
     }
@@ -249,7 +253,7 @@ namespace optix {
         m->buildInputFlags[matIdx] = flags;
     }
 
-    void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const {
+    void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, const Material &mat) const {
         size_t numMaterials = m->buildInputFlags.size();
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
                             "Out of material bounds [0, %u).", (uint32_t)numMaterials);
@@ -295,7 +299,7 @@ namespace optix {
         m = nullptr;
     }
 
-    void GeometryAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) {
+    void GeometryAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const {
         bool changed = false;
         changed |= m->preferFastTrace != preferFastTrace;
         m->preferFastTrace = preferFastTrace;
@@ -455,12 +459,58 @@ namespace optix {
 
 
 
+    void Instance::Priv::fillInstance(OptixInstance* instance) {
+        if (type == InstanceType::GAS) {
+            THROW_RUNTIME_ERROR(gas->isReady(), "GAS %p is not ready.", gas);
+
+            *instance = OptixInstance{};
+            instance->instanceId = 0;
+            instance->visibilityMask = 0xFF;
+            std::copy_n(transform, 12, instance->transform);
+            instance->flags = OPTIX_INSTANCE_FLAG_NONE;
+
+            instance->traversableHandle = gas->getHandle();
+            instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
+        }
+        else {
+            optixAssert_NotImplemented();
+        }
+    }
+
+    void Instance::Priv::updateInstance(CUstream stream, CUdeviceptr dst) {
+        OptixInstance inst = {};
+        inst.instanceId = 0;
+        inst.visibilityMask = 0xFF;
+        std::copy_n(transform, 12, inst.transform);
+        inst.flags = OPTIX_INSTANCE_FLAG_NONE;
+        inst.traversableHandle = gas->getHandle();
+        inst.sbtOffset = scene->getSBTOffset(gas, matSetIndex);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(dst, &inst, sizeof(inst), stream));
+    }
+
+    void Instance::destroy() {
+        delete m;
+        m = nullptr;
+    }
+
+    void Instance::setGAS(const GeometryAccelerationStructure &gas, uint32_t matSetIdx) const {
+        m->type = InstanceType::GAS;
+        m->gas = extract(gas);
+        m->matSetIndex = matSetIdx;
+    }
+
+    void Instance::setTransform(const float transform[12]) const {
+        std::copy_n(transform, 12, m->transform);
+    }
+
+
+
     void InstanceAccelerationStructure::destroy() {
         delete m;
         m = nullptr;
     }
 
-    void InstanceAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) {
+    void InstanceAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const {
         bool changed = false;
         changed |= m->preferFastTrace != preferFastTrace;
         m->preferFastTrace = preferFastTrace;
@@ -473,15 +523,11 @@ namespace optix {
             markDirty();
     }
 
-    void InstanceAccelerationStructure::addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx, const float instantTransform[12]) const {
-        auto _gas = extract(gas);
-        THROW_RUNTIME_ERROR(_gas, "Invalid GAS %p.", _gas);
-        THROW_RUNTIME_ERROR(matSetIdx < _gas->getNumMaterialSets(),
-                            "Material set index %u is out of bound [0, %u).", matSetIdx, _gas->getNumMaterialSets());
+    void InstanceAccelerationStructure::addChild(const Instance &instance) const {
+        _Instance* _inst = extract(instance);
+        THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
 
-        _Instance inst = _Instance(_gas, matSetIdx, instantTransform);
-
-        m->children.push_back(inst);
+        m->children.push_back(_inst);
 
         markDirty();
     }
@@ -495,21 +541,8 @@ namespace optix {
             m->instanceBuffer.initialize(m->getCUDAContext(), s_BufferType, m->children.size());
             auto instances = m->instanceBuffer.map();
 
-            for (int i = 0; i < m->children.size(); ++i) {
-                _Instance &inst = m->children[i];
-
-                if (inst.type == InstanceType::GAS) {
-                    THROW_RUNTIME_ERROR(inst.gas->isReady(), "GAS %p is not ready.", inst.gas);
-
-                    inst.rawInstance.traversableHandle = inst.gas->getHandle();
-                    inst.rawInstance.sbtOffset = m->scene->getSBTOffset(inst.gas, inst.matSetIndex);
-                }
-                else {
-                    optixAssert_NotImplemented();
-                }
-
-                instances[i] = inst.rawInstance;
-            }
+            for (int i = 0; i < m->children.size(); ++i)
+                m->children[i]->fillInstance(&instances[i]);
 
             m->instanceBuffer.unmap();
         }
@@ -606,6 +639,9 @@ namespace optix {
         THROW_RUNTIME_ERROR(m->available || m->compactedAvailable, "AS has not been built yet.");
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
+
+        for (int i = 0; i < m->children.size(); ++i)
+            m->children[i]->updateInstance(stream, m->instanceBuffer.getCUdeviceptrAt(i));
 
         const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;

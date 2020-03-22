@@ -122,6 +122,8 @@ sbt-index = sbt-instance-offset +
 
 
 ## 各Dirty化条件
+Dirty化とは:
+ASに関してはリビルド(!=アップデート)しないといけない状態。
 
 GASのDirty化条件:
 1. GASに対するGeomInstの追加・削除 (Auto)

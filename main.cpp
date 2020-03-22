@@ -116,6 +116,113 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 
+struct Matrix3x3 {
+    union {
+        struct { float m00, m10, m20; };
+        float3 c0;
+    };
+    union {
+        struct { float m01, m11, m21; };
+        float3 c1;
+    };
+    union {
+        struct { float m02, m12, m22; };
+        float3 c2;
+    };
+
+    Matrix3x3() :
+        c0(make_float3(1, 0, 0)),
+        c1(make_float3(0, 1, 0)),
+        c2(make_float3(0, 0, 1)) { }
+    Matrix3x3(const float array[9]) :
+        m00(array[0]), m10(array[1]), m20(array[2]),
+        m01(array[3]), m11(array[4]), m21(array[5]),
+        m02(array[6]), m12(array[7]), m22(array[8]) { }
+    Matrix3x3(const float3 &col0, const float3 &col1, const float3 &col2) :
+        c0(col0), c1(col1), c2(col2)
+    { }
+
+    Matrix3x3 operator+() const { return *this; }
+    Matrix3x3 operator-() const { return Matrix3x3(-c0, -c1, -c2); }
+
+    Matrix3x3 operator+(const Matrix3x3 &mat) const { return Matrix3x3(c0 + mat.c0, c1 + mat.c1, c2 + mat.c2); }
+    Matrix3x3 operator-(const Matrix3x3 &mat) const { return Matrix3x3(c0 - mat.c0, c1 - mat.c1, c2 - mat.c2); }
+    Matrix3x3 operator*(const Matrix3x3 &mat) const {
+        const float3 r[] = { row(0), row(1), row(2) };
+        return Matrix3x3(make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0)),
+                         make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1)),
+                         make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2)));
+    }
+
+    Matrix3x3 &operator*=(const Matrix3x3 &mat) {
+        const float3 r[] = { row(0), row(1), row(2) };
+        c0 = make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0));
+        c1 = make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1));
+        c2 = make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2));
+        return *this;
+    }
+
+    float3 row(unsigned int r) const {
+        Assert(r < 3, "\"r\" is out of range [0, 2].");
+        switch (r) {
+        case 0:
+            return make_float3(m00, m01, m02);
+        case 1:
+            return make_float3(m10, m11, m12);
+        case 2:
+            return make_float3(m20, m21, m22);
+        default:
+            return make_float3(0, 0, 0);
+        }
+    }
+
+    Matrix3x3 &transpose() {
+        std::swap(m10, m01); std::swap(m20, m02);
+        std::swap(m21, m12);
+        return *this;
+    }
+};
+
+inline Matrix3x3 scale3x3(const float3 &s) {
+    return Matrix3x3(s.x * make_float3(1, 0, 0),
+                     s.y * make_float3(0, 1, 0),
+                     s.z * make_float3(0, 0, 1));
+}
+inline Matrix3x3 scale3x3(float sx, float sy, float sz) {
+    return scale3x3(make_float3(sx, sy, sz));
+}
+inline Matrix3x3 scale3x3(float s) {
+    return scale3x3(make_float3(s, s, s));
+}
+
+inline Matrix3x3 rotate3x3(float angle, const float3 &axis) {
+    Matrix3x3 matrix;
+    float3 nAxis = normalize(axis);
+    float s = std::sin(angle);
+    float c = std::cos(angle);
+    float oneMinusC = 1 - c;
+
+    matrix.m00 = nAxis.x * nAxis.x * oneMinusC + c;
+    matrix.m10 = nAxis.x * nAxis.y * oneMinusC + nAxis.z * s;
+    matrix.m20 = nAxis.z * nAxis.x * oneMinusC - nAxis.y * s;
+    matrix.m01 = nAxis.x * nAxis.y * oneMinusC - nAxis.z * s;
+    matrix.m11 = nAxis.y * nAxis.y * oneMinusC + c;
+    matrix.m21 = nAxis.y * nAxis.z * oneMinusC + nAxis.x * s;
+    matrix.m02 = nAxis.z * nAxis.x * oneMinusC + nAxis.y * s;
+    matrix.m12 = nAxis.y * nAxis.z * oneMinusC - nAxis.x * s;
+    matrix.m22 = nAxis.z * nAxis.z * oneMinusC + c;
+
+    return matrix;
+}
+inline Matrix3x3 rotate3x3(float angle, float ax, float ay, float az) {
+    return rotate3x3(angle, make_float3(ax, ay, az));
+}
+inline Matrix3x3 rotateX3x3(float angle) { return rotate3x3(angle, make_float3(1, 0, 0)); }
+inline Matrix3x3 rotateY3x3(float angle) { return rotate3x3(angle, make_float3(0, 1, 0)); }
+inline Matrix3x3 rotateZ3x3(float angle) { return rotate3x3(angle, make_float3(0, 0, 1)); }
+
+
+
 struct SceneContext {
     optix::Scene optixScene;
     CUDAHelper::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
@@ -710,29 +817,43 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
 
+    // JP: GASからインスタンスを作成する。
+    // EN: Make instances from GASs.
+    optix::Instance instCornellBox = scene.createInstance();
+    instCornellBox.setGAS(gasCornellBox);
+    optix::Instance instAreaLight = scene.createInstance();
+    instAreaLight.setGAS(gasAreaLight);
+    float tfAreaLight[] = {
+    1, 0, 0, 0,
+    0, 1, 0, 0.99f,
+    0, 0, 1, 0
+    };
+    instAreaLight.setTransform(tfAreaLight);
+    optix::Instance instObject = scene.createInstance();
+    instObject.setGAS(gasObject);
+    float tfObject[] = {
+    1, 0, 0, 0,
+    0, 1, 0, -0.5f,
+    0, 0, 1, 0
+    };
+    instObject.setTransform(tfObject);
 
 
+
+    // JP: Instance Acceleration Structureの準備。
+    // EN: Prepare the instance acceleration structure.
     uint32_t iasSceneIndex = travID++;
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     CUDAHelper::Buffer iasSceneMem;
     iasScene.setConfiguration(false, true, true);
-    iasScene.addChild(gasCornellBox);
-    float tfAreaLight[] = {
-        1, 0, 0, 0,
-        0, 1, 0, 0.99f,
-        0, 0, 1, 0
-    };
-    iasScene.addChild(gasAreaLight, 0, tfAreaLight);
-    float tfObject[] = {
-        1, 0, 0, 0,
-        0, 1, 0, -0.5f,
-        0, 0, 1, 0
-    };
-    iasScene.addChild(gasObject, 0, tfObject);
+    iasScene.addChild(instCornellBox);
+    iasScene.addChild(instAreaLight);
+    iasScene.addChild(instObject);
     iasScene.prepareForBuild(&asMemReqs);
     iasSceneMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
-    if (asMemReqs.tempSizeInBytes >= asBuildScratchMem.sizeInBytes()) {
-        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
+    if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, tempBufferForIAS);
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
     }
 
@@ -742,7 +863,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     travHandleBuffer.unmap();
     CUDADRV_CHECK(cuStreamSynchronize(cuStream[0]));
-    asBuildScratchMem.finalize();
 
 
 
@@ -754,7 +874,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
-    // EN: Create a CUDA buffer from an OpenGL buffer object.
+    // EN: Create a CUDA buffer from an OpenGL buffer instObject.
     GLTK::Buffer outputBufferGL;
     GLTK::BufferTexture outputTexture;
     CUDAHelper::Buffer outputBufferCUDA;
@@ -837,21 +957,29 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     StopWatch<> sw;
     std::mt19937_64 rng(3092384202);
-    std::uniform_real_distribution u01;
+    std::uniform_real_distribution<float> u01;
     
     uint64_t frameIndex = 0;
+    uint64_t animFrameIndex = 0;
     int32_t requestedSize[2];
     float frameTime = 0;
+    float frameBeginTime = 0;
+    float syncTime = 0;
+    float imGuiTime = 0;
     float renderCmdTime = 0;
     float postProcessCmdTime = 0;
-    float syncTime = 0;
+    float updateIASTime = 0;
+    float guiCmdTime = 0;
     float swapTime = 0;
     float dummyTime = 0;
-    while (!glfwWindowShouldClose(window)) {
+    while (true) {
         sw.start();
 
+        sw.start();
         uint32_t bufferIndex = frameIndex % 2;
 
+        if (glfwWindowShouldClose(window))
+            break;
         glfwPollEvents();
 
         bool resized = false;
@@ -896,6 +1024,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        frameBeginTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+
 
 
         CUstream &curCuStream = cuStream[bufferIndex];
@@ -908,6 +1038,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
         syncTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
 
+        static float cpuDummyLoad = 15.0f;
+        static float dummyProb = 0.0f;
+        sw.start();
+        if (cpuDummyLoad > 0.0f && u01(rng) < dummyProb * 0.01f)
+            Sleep(cpuDummyLoad);
+        dummyTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+
+        sw.start();
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -934,9 +1072,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
             ImGui::Text("CPU:");
             ImGui::Text("  Frame: %.3f [ms]", frameTime);
+            ImGui::Text("  Begin: %.3f [ms]", frameBeginTime);
             ImGui::Text("  Sync: %.3f [ms]", syncTime);
+            ImGui::Text("  ImGui: %.3f [ms]", imGuiTime);
+            ImGui::Text("  Update IAS: %.3f [ms]", updateIASTime);
             ImGui::Text("  Render: %.3f [ms]", renderCmdTime);
             ImGui::Text("  Post Process: %.3f [ms]", postProcessCmdTime);
+            ImGui::Text("  GUI: %.3f [ms]", guiCmdTime);
             ImGui::Text("  Swap: %.3f [ms]", swapTime);
             ImGui::Text("  Dummy: %.3f [ms]", dummyTime);
             {
@@ -962,30 +1104,36 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                 ImGui::PlotLines("Sin Curve", times, numTimes, plotStartPos, nullptr, -1.0f, 1.0f, ImVec2(0, 50));
             }
 
-            static float cpuDummyLoad = 0.0f;
             ImGui::SliderFloat("Dummy CPU Load", &cpuDummyLoad, 0.0f, 33.3333f);
-            static float dummyProb = 0.0f;
             ImGui::SliderFloat("Probability", &dummyProb, 0.0f, 100.0f);
-            sw.start();
-            if (cpuDummyLoad > 0.0f && u01(rng) < dummyProb * 0.01f)
-                Sleep(cpuDummyLoad);
-            dummyTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
 
             ImGui::End();
 
-            if (frameIndex >= 1 && frameIndex <= 10) {
-                hpprintf("CPU Time Frame %u: %.3f [ms]\n", frameIndex - 1, frameTime);
-                hpprintf("  Sync: %.3f [ms]\n", syncTime);
-                hpprintf("  Render: %.3f [ms]\n", renderCmdTime);
-                hpprintf("  Post Process: %.3f [ms]\n", postProcessCmdTime);
-                hpprintf("  Swap: %.3f [ms]\n", swapTime);
-                hpprintf("  Dummy: %.3f [ms]\n", dummyTime);
-            }
+            // OutputDebugString itself is heavy!!
+            //if (frameIndex >= 1 && frameIndex <= 60) {
+            //    if (frameIndex >= 2) {
+            //        hpprintf("GPU Time Frame %llu: %.3f [ms]\n", frameIndex - 2, (renderTime + postProcessTime));
+            //    }
+            //    hpprintf("CPU Time Frame %u: %.3f [ms]\n", frameIndex - 1, frameTime);
+            //    hpprintf("  Begin: %.3f [ms]\n", frameBeginTime);
+            //    hpprintf("  Sync: %.3f [ms]\n", syncTime);
+            //    hpprintf("  ImGui: %.3f [ms]\n", imGuiTime);
+            //    hpprintf("  Update IAS: %.3f [ms]\n", updateIASTime);
+            //    hpprintf("  Render: %.3f [ms]\n", renderCmdTime);
+            //    hpprintf("  Post Process: %.3f [ms]\n", postProcessCmdTime);
+            //    hpprintf("  GUI: %.3f [ms]\n", guiCmdTime);
+            //    hpprintf("  Swap: %.3f [ms]\n", swapTime);
+            //    hpprintf("  Dummy: %.3f [ms]\n", dummyTime);
+            //}
         }
 
+        static bool play = true;
         bool sceneEdited = false;
         {
-            ImGui::Begin("Materials", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            if (ImGui::Button(play ? "Stop" : "Play"))
+                play = !play;
 
             if (ImGui::ColorEdit3("Left Wall", reinterpret_cast<float*>(&matLeftWallData.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
@@ -1014,15 +1162,36 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
             ImGui::End();
         }
+        imGuiTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
 
-        if (sceneEdited)
+        sw.start();
+        if (play) {
+            Matrix3x3 sr =
+                scale3x3(1 + 0.75f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
+                rotateY3x3(2 * M_PI * (animFrameIndex % 180) / 180.0f) *
+                rotateX3x3(2 * M_PI * (animFrameIndex % 300) / 300.0f) *
+                rotateZ3x3(2 * M_PI * (animFrameIndex % 420) / 420.0f);
+            tfObject[0] = sr.m00; tfObject[1] = sr.m10; tfObject[2] = sr.m20;
+            tfObject[4] = sr.m01; tfObject[5] = sr.m11; tfObject[6] = sr.m21;
+            tfObject[8] = sr.m02; tfObject[9] = sr.m12; tfObject[10] = sr.m22;
+            tfObject[3] = std::sinf(2 * M_PI * (animFrameIndex % 360) / 360.0f);
+            instObject.setTransform(tfObject);
+            OptixTraversableHandle handle = iasScene.update(curCuStream, asBuildScratchMem);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
+                                            &handle, sizeof(handle),
+                                            curCuStream));
+
+            ++animFrameIndex;
+        }
+        updateIASTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+
+        if (play || sceneEdited)
             plp.numAccumFrames = 1;
-
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
 
         // Render
         sw.start();
         curRenderTimer.start(curCuStream);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
         pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
         curRenderTimer.stop(curCuStream);
         renderCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
@@ -1042,6 +1211,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++plp.numAccumFrames;
 
 
+
+        sw.start();
 
         {
             ImGui::Render();
@@ -1105,6 +1276,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // END: scaling
         // ----------------------------------------------------------------
 
+        guiCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+
         sw.start();
         glfwSwapBuffers(window);
         swapTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
@@ -1138,6 +1311,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     iasSceneMem.finalize();
     iasScene.destroy();
+
+    instObject.destroy();
+    instAreaLight.destroy();
+    instCornellBox.destroy();
+
+    asBuildScratchMem.finalize();
 
     gasObjectMem.finalize();
     gasObject.destroy();

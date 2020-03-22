@@ -67,6 +67,7 @@ namespace optix {
     OPTIX_ALIAS_PIMPL(Scene);
     OPTIX_ALIAS_PIMPL(GeometryInstance);
     OPTIX_ALIAS_PIMPL(GeometryAccelerationStructure);
+    OPTIX_ALIAS_PIMPL(Instance);
     OPTIX_ALIAS_PIMPL(InstanceAccelerationStructure);
     OPTIX_ALIAS_PIMPL(Pipeline);
     OPTIX_ALIAS_PIMPL(Module);
@@ -406,35 +407,40 @@ namespace optix {
 
     enum class InstanceType {
         GAS = 0,
+        //MatrixMotionTransform,
+        //SRTMotionTransform,
+        //StaticTransform,
+        Invalid
     };
 
-    struct _Instance {
-        OptixInstance rawInstance;
-        uint32_t matSetIndex;
-
+    class Instance::Priv {
+        _Scene* scene;
         InstanceType type;
         union {
-            _GeometryAccelerationStructure* gas;
+            struct {
+                _GeometryAccelerationStructure* gas;
+                uint32_t matSetIndex;
+            };
         };
+        float transform[12];
 
-        _Instance(_GeometryAccelerationStructure* _gas, uint32_t matSetIdx, const float transform[12]) :
-            matSetIndex(matSetIdx), type(InstanceType::GAS), gas(_gas) {
-            rawInstance = OptixInstance{};
-            rawInstance.instanceId = 0;
-            rawInstance.visibilityMask = 0xFF;
-            if (transform) {
-                std::copy_n(transform, 12, rawInstance.transform);
-            }
-            else {
-                float identity[] = {
-                    1, 0, 0, 0,
-                    0, 1, 0, 0,
-                    0, 0, 1, 0
-                };
-                std::copy_n(identity, 12, rawInstance.transform);
-            }
-            rawInstance.flags = OPTIX_INSTANCE_FLAG_NONE;
+    public:
+        OPTIX_OPAQUE_BRIDGE(Instance);
+
+        Priv(_Scene* _scene) :
+            scene(_scene),
+            matSetIndex(0xFFFFFFFF), type(InstanceType::Invalid), gas(nullptr) {
+            float identity[] = {
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+            };
+            std::copy_n(identity, 12, transform);
         }
+        ~Priv() {}
+
+        void fillInstance(OptixInstance* instance);
+        void updateInstance(CUstream stream, CUdeviceptr dst);
     };
 
 
@@ -442,7 +448,7 @@ namespace optix {
     class InstanceAccelerationStructure::Priv {
         _Scene* scene;
 
-        std::vector<_Instance> children;
+        std::vector<_Instance*> children;
         OptixBuildInput buildInput;
         TypedBuffer<OptixInstance> instanceBuffer;
 

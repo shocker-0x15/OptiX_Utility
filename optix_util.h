@@ -7,6 +7,9 @@
 TODO:
 - SBTのダブルバッファリングの運用方法を考える。
 - Assertとexceptionの整理。
+- IASのインスタンスを保持するバッファーはユーザー管理にすべき？
+- GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
+  名前を変えるべき？GeometryGroup/InstanceGroup
 
 */
 
@@ -109,6 +112,8 @@ namespace optix {
               |
               +-- Scene --+-- IAS
                           |
+                          +-- Instance
+                          |
                           +-- GAS
                           |
                           +-- GeomInst
@@ -123,6 +128,7 @@ namespace optix {
     class Scene;
     class GeometryInstance;
     class GeometryAccelerationStructure;
+    class Instance;
     class InstanceAccelerationStructure;
     class Pipeline;
     class Module;
@@ -171,6 +177,7 @@ private: \
 
         GeometryInstance createGeometryInstance() const;
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
+        Instance createInstance() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
     };
 
@@ -191,7 +198,7 @@ private: \
         void setUserData(uint32_t data) const;
 
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
-        void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
+        void setMaterial(uint32_t matSetIdx, uint32_t matIdx, const Material &mat) const;
     };
 
 
@@ -202,7 +209,7 @@ private: \
     public:
         void destroy();
 
-        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction);
+        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
@@ -222,15 +229,27 @@ private: \
 
 
 
+    class Instance {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
+
+        void setGAS(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0) const;
+        void setTransform(const float transform[12]) const;
+    };
+
+
+
     class InstanceAccelerationStructure {
         OPTIX_PIMPL();
 
     public:
         void destroy();
 
-        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction);
+        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
 
-        void addChild(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0, const float instantTransform[12] = nullptr) const;
+        void addChild(const Instance &instance) const;
 
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;

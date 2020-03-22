@@ -103,17 +103,12 @@ namespace Shared {
 
 
     struct GeometryData {
-        Vertex* vertexBuffer;
-        Triangle* triangleBuffer;
+        const Vertex* vertexBuffer;
+        const Triangle* triangleBuffer;
     };
 
     struct MaterialData {
         float3 albedo;
-    };
-
-    struct HitGroupData {
-        GeometryData geom;
-        MaterialData mat;
     };
 
 
