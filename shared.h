@@ -36,6 +36,11 @@ RT_FUNCTION float3 operator/(const float3 &v, float s) {
 RT_FUNCTION float dot(const float3 &v0, const float3 &v1) {
     return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }
+RT_FUNCTION float3 cross(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.y * v1.z - v0.z * v1.y,
+                       v0.z * v1.x - v0.x * v1.z,
+                       v0.x * v1.y - v0.y * v1.x);
+}
 RT_FUNCTION float length(const float3 &v) {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }

@@ -47,6 +47,8 @@
 #include "shared.h"
 #include "stopwatch.h"
 
+#include "ext/tiny_obj_loader.h"
+
 
 
 #ifdef _DEBUG
@@ -521,11 +523,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         };
 
         // JP: 頂点バッファーは共通にしてみる。
+        // EN: Share the vertex buffer among walls.
         meshCornellBox.setVertexBuffer(vertices, lengthof(vertices));
 
         Shared::MaterialData mat;
         
         // JP: インデックスバッファーは別々にしてみる。
+        // EN: Use separated index buffers among walls.
         // floor, back wall, ceiling
         meshCornellBox.addMaterialGroup(triangles + 0, 6, matGray);
         // left wall
@@ -537,10 +541,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     TriangleMesh meshAreaLight(cuContext, &sceneContext);
     {
         Shared::Vertex vertices[] = {
-            { make_float3(-0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.5f, 0.0f, 0.5f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(0.5f, 0.0f, 0.5f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(0.5f, 0.0f, -0.5f), make_float3(0, -1, 0), make_float2(1, 0) },
+            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3(0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
         };
 
         Shared::Triangle triangles[] = {
@@ -549,8 +553,104 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         meshAreaLight.setVertexBuffer(vertices, lengthof(vertices));
 
-        Shared::MaterialData mat;
         meshAreaLight.addMaterialGroup(triangles + 0, 2, matLight);
+    }
+
+    TriangleMesh meshObject(cuContext, &sceneContext);
+    std::vector<Shared::Vertex> objectVertices;
+    {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+        std::string warn;
+        std::string err;
+        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "data/subd_cube.obj");
+
+        constexpr float scale = 0.3f;
+        
+        // Record unified unique vertices.
+        std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
+        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+            const tinyobj::shape_t &shape = shapes[sIdx];
+            size_t idxOffset = 0;
+            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+                if (numFaceVertices != 3) {
+                    idxOffset += numFaceVertices;
+                    continue;
+                }
+
+                for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
+                    tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
+                    auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
+                    unifiedVertexMap[key] = Shared::Vertex{
+                        make_float3(scale * attrib.vertices[3 * idx.vertex_index + 0],
+                        scale * attrib.vertices[3 * idx.vertex_index + 1],
+                        scale * attrib.vertices[3 * idx.vertex_index + 2]),
+                        make_float3(0, 0, 0),
+                        make_float2(0, 0)
+                    };
+                }
+
+                idxOffset += numFaceVertices;
+            }
+        }
+
+        // Assign a vertex index to each of unified unique unifiedVertexMap.
+        std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
+        objectVertices.resize(unifiedVertexMap.size());
+        uint32_t vertexIndex = 0;
+        for (const auto &kv : unifiedVertexMap) {
+            objectVertices[vertexIndex] = kv.second;
+            vertexIndices[kv.first] = vertexIndex++;
+        }
+
+        // Calculate triangle index buffer.
+        std::vector<Shared::Triangle> triangles;
+        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+            const tinyobj::shape_t &shape = shapes[sIdx];
+            size_t idxOffset = 0;
+            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+                if (numFaceVertices != 3) {
+                    idxOffset += numFaceVertices;
+                    continue;
+                }
+
+                tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
+                tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
+                tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
+                auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
+                auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
+                auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
+
+                triangles.push_back(Shared::Triangle{
+                    vertexIndices.at(key0),
+                    vertexIndices.at(key1),
+                    vertexIndices.at(key2) });
+
+                idxOffset += numFaceVertices;
+            }
+        }
+
+        for (int tIdx = 0; tIdx < triangles.size(); ++tIdx) {
+            const Shared::Triangle &tri = triangles[tIdx];
+            Shared::Vertex &v0 = objectVertices[tri.index0];
+            Shared::Vertex &v1 = objectVertices[tri.index1];
+            Shared::Vertex &v2 = objectVertices[tri.index2];
+            float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
+            v0.normal = v0.normal + gn;
+            v1.normal = v1.normal + gn;
+            v2.normal = v2.normal + gn;
+        }
+        for (int vIdx = 0; vIdx < objectVertices.size(); ++vIdx) {
+            Shared::Vertex &v = objectVertices[vIdx];
+            v.normal = normalize(v.normal);
+        }
+
+        meshObject.setVertexBuffer(objectVertices.data(), objectVertices.size());
+
+        meshObject.addMaterialGroup(triangles.data(), triangles.size(), matGray);
     }
 
 
@@ -563,11 +663,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUDAHelper::TypedBuffer<OptixTraversableHandle> travHandleBuffer;
     travHandleBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
     OptixTraversableHandle* travHandles = travHandleBuffer.map();
+
+    // JP: コーネルボックスと面光源にサンプルとして敢えて別々のGASを使う。
+    // EN: Use different GAS for the Cornell box and the area light
+    //     on purpose as sample.
     
     uint32_t gasCornellBoxIndex = travID++;
     optix::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
     CUDAHelper::Buffer gasCornellBoxMem;
-    gasCornellBox.setConfiguration(true, false, true);
+    gasCornellBox.setConfiguration(true, false, false);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
@@ -578,12 +682,23 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasAreaLightIndex = travID++;
     optix::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     CUDAHelper::Buffer gasAreaLightMem;
-    gasAreaLight.setConfiguration(true, false, true);
+    gasAreaLight.setConfiguration(true, false, false);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
     gasAreaLight.prepareForBuild(&asMemReqs);
     gasAreaLightMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    uint32_t gasObjectIndex = travID++;
+    optix::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
+    CUDAHelper::Buffer gasObjectMem;
+    gasObject.setConfiguration(false, true, false);
+    gasObject.setNumMaterialSets(1);
+    gasObject.setNumRayTypes(0, Shared::NumRayTypes);
+    meshObject.addToGAS(&gasObject);
+    gasObject.prepareForBuild(&asMemReqs);
+    gasObjectMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
@@ -593,6 +708,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     asBuildScratchMem.initialize(cuContext, CUDAHelper::BufferType::Device, maxSizeOfScratchBuffer, 1, 0);
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
+    travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
 
 
 
@@ -607,6 +723,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         0, 0, 1, 0
     };
     iasScene.addChild(gasAreaLight, 0, tfAreaLight);
+    float tfObject[] = {
+        1, 0, 0, 0,
+        0, 1, 0, -0.5f,
+        0, 0, 1, 0
+    };
+    iasScene.addChild(gasObject, 0, tfObject);
     iasScene.prepareForBuild(&asMemReqs);
     iasSceneMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     if (asMemReqs.tempSizeInBytes >= asBuildScratchMem.sizeInBytes()) {
@@ -785,6 +907,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         sw.start();
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
         syncTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -851,12 +974,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             ImGui::End();
 
             if (frameIndex >= 1 && frameIndex <= 10) {
-                devPrintf("CPU Time Frame %u: %.3f [ms]\n", frameIndex - 1, frameTime);
-                devPrintf("  Sync: %.3f [ms]\n", syncTime);
-                devPrintf("  Render: %.3f [ms]\n", renderCmdTime);
-                devPrintf("  Post Process: %.3f [ms]\n", postProcessCmdTime);
-                devPrintf("  Swap: %.3f [ms]\n", swapTime);
-                devPrintf("  Dummy: %.3f [ms]\n", dummyTime);
+                hpprintf("CPU Time Frame %u: %.3f [ms]\n", frameIndex - 1, frameTime);
+                hpprintf("  Sync: %.3f [ms]\n", syncTime);
+                hpprintf("  Render: %.3f [ms]\n", renderCmdTime);
+                hpprintf("  Post Process: %.3f [ms]\n", postProcessCmdTime);
+                hpprintf("  Swap: %.3f [ms]\n", swapTime);
+                hpprintf("  Dummy: %.3f [ms]\n", dummyTime);
             }
         }
 
@@ -1016,11 +1139,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasSceneMem.finalize();
     iasScene.destroy();
 
+    gasObjectMem.finalize();
+    gasObject.destroy();
     gasAreaLightMem.finalize();
     gasAreaLight.destroy();
     gasCornellBoxMem.finalize();
     gasCornellBox.destroy();
 
+    meshObject.destroy();
     meshAreaLight.destroy();
     meshCornellBox.destroy();
 

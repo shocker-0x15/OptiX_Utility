@@ -189,7 +189,7 @@ RT_PROGRAM void __miss__searchRay() {
     payloadPtr.getAll();
     SearchRayPayload &payload = *payloadPtr.raw;
 
-    payload.contribution = payload.contribution + make_float3(0.01f, 0.01f, 0.01f);
+    payload.contribution = payload.contribution + payload.alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload.terminate = true;
     
     //payload.setAll();
@@ -223,11 +223,16 @@ RT_PROGRAM void __closesthit__shading() {
     float b0 = hitPointParam.b0;
     float b1 = hitPointParam.b1;
     float b2 = 1 - (b0 + b1);
-    float3 p = b0 * p0 + b1 * p1 + b2 * p2;
-    float3 sn = normalize(b0 * n0 + b1 * n1 + b2 * n2);
+    float3 p = optixTransformPointFromObjectToWorldSpace(b0 * p0 + b1 * p1 + b2 * p2);
+    float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * n0 + b1 * n1 + b2 * n2));
     p = p + sn * 0.001f;
 
-    const float3 LightRadiance = make_float3(5, 5, 5);
+    //// Visualize normal
+    //payload.contribution = 0.5f * sn + make_float3(0.5f, 0.5f, 0.5f);
+    //payload.terminate = true;
+    //return;
+
+    const float3 LightRadiance = make_float3(20, 20, 20);
     // Hard-coded directly visible light
     if (sbtr.materialData == 3 && dot(optixGetWorldRayDirection(), sn) < 0 && payload.pathLength == 1) {
         payload.contribution = payload.contribution + payload.alpha * LightRadiance;
@@ -236,10 +241,10 @@ RT_PROGRAM void __closesthit__shading() {
     // Next Event Estimation
     {
         // Use hard-coded area light for simplicity.
-        float3 lp = make_float3(-0.5f, 0.99f, -0.5f) +
-            rng.getFloat0cTo1o() * make_float3(1, 0, 0) +
-            rng.getFloat0cTo1o() * make_float3(0, 0, 1);
-        float areaPDF = 1.0f;
+        float3 lp = make_float3(-0.25f, 0.99f, -0.25f) +
+            rng.getFloat0cTo1o() * make_float3(0.5f, 0, 0) +
+            rng.getFloat0cTo1o() * make_float3(0, 0, 0.5f);
+        float areaPDF = 4.0f;
         float3 lpn = make_float3(0, -1, 0);
 
         float3 shadowRayDir = lp - p;
@@ -255,8 +260,10 @@ RT_PROGRAM void __closesthit__shading() {
                    RayType_Visibility, NumRayTypes, RayType_Visibility,
                    shadowPayload[0]);
 
-        float G = shadowPayload.raw.visibility * dot(sn, shadowRayDir) * cosLight / dist2;
-        float3 contribution = payload.alpha * (mat.albedo / M_PI) * G * Le / areaPDF;
+        float cosSP = dot(sn, shadowRayDir);
+        float G = shadowPayload.raw.visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
+        float3 fs = cosSP > 0 ? mat.albedo / M_PI : make_float3(0, 0, 0);
+        float3 contribution = payload.alpha * fs * G * Le / areaPDF;
         payload.contribution = payload.contribution + contribution;
     }
 

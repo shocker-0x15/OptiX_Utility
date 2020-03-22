@@ -16,6 +16,9 @@
     <Filter Include="shaders">
       <UniqueIdentifier>{fff83bc1-a6dc-4c68-9408-a29a6c4b4d18}</UniqueIdentifier>
     </Filter>
+    <Filter Include="tinyobjloader">
+      <UniqueIdentifier>{ef29170b-59a3-4e67-81f1-d7ae41e6cbec}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ext\imgui\imgui_demo.cpp">
@@ -42,6 +45,9 @@
     </ClCompile>
     <ClCompile Include="cuda_helper.cpp" />
     <ClCompile Include="optix_util.cpp" />
+    <ClCompile Include="ext\tiny_obj_loader.cc">
+      <Filter>tinyobjloader</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ext\imgui\imgui_internal.h">
@@ -86,6 +92,9 @@
     <ClInclude Include="optix_util.h" />
     <ClInclude Include="optix_util_private.h" />
     <ClInclude Include="stopwatch.h" />
+    <ClInclude Include="ext\tiny_obj_loader.h">
+      <Filter>tinyobjloader</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis">
