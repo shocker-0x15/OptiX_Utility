@@ -118,5 +118,6 @@
   <ItemGroup>
     <CudaCompile Include="kernel.cu" />
     <CudaCompile Include="post_process.cu" />
+    <CudaCompile Include="deform.cu" />
   </ItemGroup>
 </Project>

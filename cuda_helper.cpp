@@ -270,4 +270,25 @@ namespace CUDAHelper {
             m_mappedPointer = nullptr;
         }
     }
+
+    Buffer Buffer::copy() const {
+        if (m_GLBufferID != 0)
+            throw std::runtime_error("Copying OpenGL buffer is not supported.");
+
+        Buffer ret;
+        ret.initialize(m_cudaContext, m_type, m_numElements, m_stride, m_GLBufferID);
+
+        size_t size = m_stride * m_numElements;
+        if (m_type == BufferType::Device ||
+            m_type == BufferType::P2P) {
+            CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+            CUDADRV_CHECK(cuMemcpyDtoD(ret.m_devicePointer, m_devicePointer, size));
+        }
+        else {
+            std::memcpy(ret.m_hostPointer, m_hostPointer, size);
+        }
+
+        return ret;
+    }
 }

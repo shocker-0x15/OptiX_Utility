@@ -29,6 +29,8 @@
 #include <vector>
 #include <filesystem>
 #include <random>
+#include <thread>
+#include <chrono>
 
 #include <GL/gl3w.h>
 
@@ -267,6 +269,10 @@ public:
         m_vertexBuffer.unmap();
     }
 
+    const CUDAHelper::TypedBuffer<Shared::Vertex> &getVertexBuffer() const {
+        return m_vertexBuffer;
+    }
+
     void addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, optix::Material &material) {
         m_materialGroups.push_back(MaterialGroup());
 
@@ -470,21 +476,43 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
 
+    hpprintf("Setup OptiX context and pipeline.\n");
+
+    struct GPUTimer {
+        CUDAHelper::Timer deform;
+        CUDAHelper::Timer updateGAS;
+        CUDAHelper::Timer updateIAS;
+        CUDAHelper::Timer render;
+        CUDAHelper::Timer postProcess;
+
+        void initialize(CUcontext context) {
+            deform.initialize(context);
+            updateGAS.initialize(context);
+            updateIAS.initialize(context);
+            render.initialize(context);
+            postProcess.initialize(context);
+        }
+        void finalize() {
+            postProcess.finalize();
+            render.finalize();
+            updateIAS.finalize();
+            updateGAS.finalize();
+            deform.finalize();
+        }
+    };
+
     CUcontext cuContext;
     int32_t cuDeviceCount;
     CUstream cuStream[2];
-    CUDAHelper::Timer cudaRenderTimer[2];
-    CUDAHelper::Timer cudaPostProcessTimer[2];
+    GPUTimer gpuTimer[2];
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream[0], 0));
     CUDADRV_CHECK(cuStreamCreate(&cuStream[1], 0));
-    cudaRenderTimer[0].initialize(cuContext);
-    cudaRenderTimer[1].initialize(cuContext);
-    cudaPostProcessTimer[0].initialize(cuContext);
-    cudaPostProcessTimer[1].initialize(cuContext);
+    gpuTimer[0].initialize(cuContext);
+    gpuTimer[1].initialize(cuContext);
     
     optix::Context optixContext = optix::Context::create(cuContext);
 
@@ -524,6 +552,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUfunction kernelPostProcess;
     CUDADRV_CHECK(cuModuleGetFunction(&kernelPostProcess, modulePostProcess, "postProcess"));
 
+    CUmodule moduleDeform;
+    CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "ptxes/deform.ptx").string().c_str()));
+    CUfunction kernelDeform;
+    CUDADRV_CHECK(cuModuleGetFunction(&kernelDeform, moduleDeform, "deform"));
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -532,6 +565,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // ----------------------------------------------------------------
     // JP: シーンのセットアップ。
     // EN: Setup a scene.
+
+    hpprintf("Setup a scene.\n");
 
     CUDAHelper::TypedBuffer<Shared::MaterialData> materialDataBuffer;
     materialDataBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
@@ -664,7 +699,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
 
     TriangleMesh meshObject(cuContext, &sceneContext);
-    std::vector<Shared::Vertex> objectVertices;
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
@@ -705,10 +739,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         // Assign a vertex index to each of unified unique unifiedVertexMap.
         std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
-        objectVertices.resize(unifiedVertexMap.size());
+        std::vector<Shared::Vertex> orgObjectVertices(unifiedVertexMap.size());
         uint32_t vertexIndex = 0;
         for (const auto &kv : unifiedVertexMap) {
-            objectVertices[vertexIndex] = kv.second;
+            orgObjectVertices[vertexIndex] = kv.second;
             vertexIndices[kv.first] = vertexIndex++;
         }
 
@@ -742,23 +776,24 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         for (int tIdx = 0; tIdx < triangles.size(); ++tIdx) {
             const Shared::Triangle &tri = triangles[tIdx];
-            Shared::Vertex &v0 = objectVertices[tri.index0];
-            Shared::Vertex &v1 = objectVertices[tri.index1];
-            Shared::Vertex &v2 = objectVertices[tri.index2];
+            Shared::Vertex &v0 = orgObjectVertices[tri.index0];
+            Shared::Vertex &v1 = orgObjectVertices[tri.index1];
+            Shared::Vertex &v2 = orgObjectVertices[tri.index2];
             float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
             v0.normal = v0.normal + gn;
             v1.normal = v1.normal + gn;
             v2.normal = v2.normal + gn;
         }
-        for (int vIdx = 0; vIdx < objectVertices.size(); ++vIdx) {
-            Shared::Vertex &v = objectVertices[vIdx];
+        for (int vIdx = 0; vIdx < orgObjectVertices.size(); ++vIdx) {
+            Shared::Vertex &v = orgObjectVertices[vIdx];
             v.normal = normalize(v.normal);
         }
 
-        meshObject.setVertexBuffer(objectVertices.data(), objectVertices.size());
+        meshObject.setVertexBuffer(orgObjectVertices.data(), orgObjectVertices.size());
 
         meshObject.addMaterialGroup(triangles.data(), triangles.size(), matGray);
     }
+    CUDAHelper::TypedBuffer<Shared::Vertex> orgObjectVertexBuffer = meshObject.getVertexBuffer().copy();
 
 
 
@@ -806,7 +841,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
     gasObjectMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, 
+                                      std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
     // JP: Geometry Acceleration Structureをビルドする。
     //     スクラッチバッファーは共用する。
@@ -845,7 +881,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t iasSceneIndex = travID++;
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     CUDAHelper::Buffer iasSceneMem;
-    iasScene.setConfiguration(false, true, true);
+    iasScene.setConfiguration(false, true, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instObject);
@@ -873,6 +909,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    hpprintf("Setup resources for composite.\n");
+    
     // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
     // EN: Create a CUDA buffer from an OpenGL buffer instObject.
     GLTK::Buffer outputBufferGL;
@@ -955,24 +993,44 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    StopWatch<> sw;
+    hpprintf("Render loop.\n");
+    
+    StopWatchHiRes<> sw;
     std::mt19937_64 rng(3092384202);
     std::uniform_real_distribution<float> u01;
     
     uint64_t frameIndex = 0;
     uint64_t animFrameIndex = 0;
     int32_t requestedSize[2];
-    float frameTime = 0;
-    float frameBeginTime = 0;
-    float syncTime = 0;
-    float imGuiTime = 0;
-    float renderCmdTime = 0;
-    float postProcessCmdTime = 0;
-    float updateIASTime = 0;
-    float guiCmdTime = 0;
-    float swapTime = 0;
-    float dummyTime = 0;
+    struct CPUTimeRecord {
+        float frameTime;
+        float frameBeginTime;
+        float syncTime;
+        float imGuiTime;
+        float updateIASTime;
+        float renderCmdTime;
+        float postProcessCmdTime;
+        float guiCmdTime;
+        float swapTime;
+        float dummyTime;
+
+        CPUTimeRecord() :
+            frameTime(0.0f),
+            frameBeginTime(0.0f),
+            syncTime(0.0f),
+            imGuiTime(0.0f),
+            updateIASTime(0.0f),
+            renderCmdTime(0.0f),
+            postProcessCmdTime(0.0f),
+            guiCmdTime(0.0f),
+            swapTime(0.0f),
+            dummyTime(0.0f) {}
+    };
+    CPUTimeRecord cpuTimeRecords[600];
+    uint32_t cpuTimeRecordIndex = 0;
     while (true) {
+        CPUTimeRecord &cpuTimeRecord = cpuTimeRecords[cpuTimeRecordIndex];
+
         sw.start();
 
         sw.start();
@@ -1024,35 +1082,40 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        frameBeginTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.frameBeginTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
 
 
         CUstream &curCuStream = cuStream[bufferIndex];
-        CUDAHelper::Timer &curRenderTimer = cudaRenderTimer[bufferIndex];
-        CUDAHelper::Timer &curPostProcessTimer = cudaPostProcessTimer[bufferIndex];
+        GPUTimer &curGPUTimer = gpuTimer[bufferIndex];
         
         // JP: 前フレームの処理が完了するのを待つ。
         // EN: Wait the previous frame processing to finish.
         sw.start();
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
-        syncTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.syncTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         static float cpuDummyLoad = 15.0f;
         static float dummyProb = 0.0f;
         sw.start();
         if (cpuDummyLoad > 0.0f && u01(rng) < dummyProb * 0.01f)
-            Sleep(cpuDummyLoad);
-        dummyTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+            std::this_thread::sleep_for(std::chrono::microseconds(static_cast<uint64_t>(cpuDummyLoad * 1000)));
+        cpuTimeRecord.dummyTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         sw.start();
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-            float renderTime = frameIndex >= 2 ? curRenderTimer.report() : 0.0f;
-            float postProcessTime = frameIndex >= 2 ? curPostProcessTimer.report() : 0.0f;
+            float deformTime = frameIndex >= 2 ? curGPUTimer.deform.report() : 0.0f;
+            float updateGASTime = frameIndex >= 2 ? curGPUTimer.updateGAS.report() : 0.0f;
+            float updateIASTime = frameIndex >= 2 ? curGPUTimer.updateIAS.report() : 0.0f;
+            float renderTime = frameIndex >= 2 ? curGPUTimer.render.report() : 0.0f;
+            float postProcessTime = frameIndex >= 2 ? curGPUTimer.postProcess.report() : 0.0f;
             //ImGui::SetNextItemWidth(100.0f);
             ImGui::Text("GPU:");
+            ImGui::Text("  Deform: %.2f [ms]", deformTime);
+            ImGui::Text("  Update GAS: %.2f [ms]", updateGASTime);
+            ImGui::Text("  Update IAS: %.2f [ms]", updateIASTime);
             ImGui::Text("  Render: %.2f [ms]", renderTime);
             ImGui::Text("  Post Process: %.2f [ms]", postProcessTime);
             {
@@ -1061,7 +1124,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                 constexpr uint32_t numAccums = 1;
                 static float accTime = 0;
                 static uint32_t plotStartPos = -1;
-                accTime += (renderTime + postProcessTime);
+                accTime += (deformTime + updateGASTime + updateIASTime + renderTime + postProcessTime);
                 if ((frameIndex + 1) % numAccums == 0) {
                     plotStartPos = (plotStartPos + 1) % numTimes;
                     times[(plotStartPos + numTimes - 1) % numTimes] = accTime / numAccums;
@@ -1070,24 +1133,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                 ImGui::PlotLines("GPU Time", times, numTimes, plotStartPos, nullptr, 0, 50.0f, ImVec2(0, 50));
             }
 
+            const CPUTimeRecord prevCpuTimeRecord = cpuTimeRecords[(cpuTimeRecordIndex + lengthof(cpuTimeRecords) - 1) % lengthof(cpuTimeRecords)];
             ImGui::Text("CPU:");
-            ImGui::Text("  Frame: %.3f [ms]", frameTime);
-            ImGui::Text("  Begin: %.3f [ms]", frameBeginTime);
-            ImGui::Text("  Sync: %.3f [ms]", syncTime);
-            ImGui::Text("  ImGui: %.3f [ms]", imGuiTime);
-            ImGui::Text("  Update IAS: %.3f [ms]", updateIASTime);
-            ImGui::Text("  Render: %.3f [ms]", renderCmdTime);
-            ImGui::Text("  Post Process: %.3f [ms]", postProcessCmdTime);
-            ImGui::Text("  GUI: %.3f [ms]", guiCmdTime);
-            ImGui::Text("  Swap: %.3f [ms]", swapTime);
-            ImGui::Text("  Dummy: %.3f [ms]", dummyTime);
+            ImGui::Text("  Frame: %.3f [ms]", prevCpuTimeRecord.frameTime);
+            ImGui::Text("  Begin: %.3f [ms]", prevCpuTimeRecord.frameBeginTime);
+            ImGui::Text("  Sync: %.3f [ms]", prevCpuTimeRecord.syncTime);
+            ImGui::Text("  ImGui: %.3f [ms]", prevCpuTimeRecord.imGuiTime);
+            ImGui::Text("  Update IAS: %.3f [ms]", prevCpuTimeRecord.updateIASTime);
+            ImGui::Text("  Render: %.3f [ms]", prevCpuTimeRecord.renderCmdTime);
+            ImGui::Text("  Post Process: %.3f [ms]", prevCpuTimeRecord.postProcessCmdTime);
+            ImGui::Text("  GUI: %.3f [ms]", prevCpuTimeRecord.guiCmdTime);
+            ImGui::Text("  Swap: %.3f [ms]", prevCpuTimeRecord.swapTime);
+            ImGui::Text("  Dummy: %.3f [ms]", prevCpuTimeRecord.dummyTime);
             {
                 static float times[100];
                 constexpr uint32_t numTimes = lengthof(times);
                 constexpr uint32_t numAccums = 1;
                 static float accTime = 0;
                 static uint32_t plotStartPos = -1;
-                accTime += frameTime;
+                accTime += prevCpuTimeRecord.frameTime;
                 if ((frameIndex + 1) % numAccums == 0) {
                     plotStartPos = (plotStartPos + 1) % numTimes;
                     times[(plotStartPos + numTimes - 1) % numTimes] = accTime / numAccums;
@@ -1103,28 +1167,26 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                 times[(plotStartPos + numTimes - 1) % numTimes] = std::sinf(2 * M_PI * (frameIndex % 60) / 60.0f);
                 ImGui::PlotLines("Sin Curve", times, numTimes, plotStartPos, nullptr, -1.0f, 1.0f, ImVec2(0, 50));
             }
+            if (ImGui::Button("Dump History")) {
+                for (int i = 0; i < lengthof(cpuTimeRecords); ++i) {
+                    const CPUTimeRecord &record = cpuTimeRecords[(cpuTimeRecordIndex + i) % lengthof(cpuTimeRecords)];
+                    hpprintf("CPU Time Frame %llu: %.3f [ms]\n", frameIndex - lengthof(cpuTimeRecords) + i, record.frameTime);
+                    hpprintf("  Begin: %.3f [ms]\n", record.frameBeginTime);
+                    hpprintf("  Sync: %.3f [ms]\n", record.syncTime);
+                    hpprintf("  ImGui: %.3f [ms]\n", record.imGuiTime);
+                    hpprintf("  Update IAS: %.3f [ms]\n", record.updateIASTime);
+                    hpprintf("  Render: %.3f [ms]\n", record.renderCmdTime);
+                    hpprintf("  Post Process: %.3f [ms]\n", record.postProcessCmdTime);
+                    hpprintf("  GUI: %.3f [ms]\n", record.guiCmdTime);
+                    hpprintf("  Swap: %.3f [ms]\n", record.swapTime);
+                    hpprintf("  Dummy: %.3f [ms]\n", record.dummyTime);
+                }
+            }
 
             ImGui::SliderFloat("Dummy CPU Load", &cpuDummyLoad, 0.0f, 33.3333f);
             ImGui::SliderFloat("Probability", &dummyProb, 0.0f, 100.0f);
 
             ImGui::End();
-
-            // OutputDebugString itself is heavy!!
-            //if (frameIndex >= 1 && frameIndex <= 60) {
-            //    if (frameIndex >= 2) {
-            //        hpprintf("GPU Time Frame %llu: %.3f [ms]\n", frameIndex - 2, (renderTime + postProcessTime));
-            //    }
-            //    hpprintf("CPU Time Frame %u: %.3f [ms]\n", frameIndex - 1, frameTime);
-            //    hpprintf("  Begin: %.3f [ms]\n", frameBeginTime);
-            //    hpprintf("  Sync: %.3f [ms]\n", syncTime);
-            //    hpprintf("  ImGui: %.3f [ms]\n", imGuiTime);
-            //    hpprintf("  Update IAS: %.3f [ms]\n", updateIASTime);
-            //    hpprintf("  Render: %.3f [ms]\n", renderCmdTime);
-            //    hpprintf("  Post Process: %.3f [ms]\n", postProcessCmdTime);
-            //    hpprintf("  GUI: %.3f [ms]\n", guiCmdTime);
-            //    hpprintf("  Swap: %.3f [ms]\n", swapTime);
-            //    hpprintf("  Dummy: %.3f [ms]\n", dummyTime);
-            //}
         }
 
         static bool play = true;
@@ -1162,10 +1224,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
             ImGui::End();
         }
-        imGuiTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.imGuiTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         sw.start();
         if (play) {
+            curGPUTimer.deform.start(curCuStream);
+            uint32_t dimDeform = (orgObjectVertexBuffer.numElements() + 31) / 32;
+            CUDAHelper::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
+                                   orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
+                                   0.5f * std::sinf(2 * M_PI * (animFrameIndex % 120) / 120.0f));
+            curGPUTimer.deform.stop(curCuStream);
+
+            instObject.setTransform(tfObject);
+            curGPUTimer.updateGAS.start(curCuStream);
+            OptixTraversableHandle gasHandle = gasObject.update(curCuStream, asBuildScratchMem);
+            curGPUTimer.updateGAS.stop(curCuStream);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
+                                            &gasHandle, sizeof(gasHandle),
+                                            curCuStream));
+
             Matrix3x3 sr =
                 scale3x3(1 + 0.75f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
                 rotateY3x3(2 * M_PI * (animFrameIndex % 180) / 180.0f) *
@@ -1176,29 +1253,31 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             tfObject[8] = sr.m02; tfObject[9] = sr.m12; tfObject[10] = sr.m22;
             tfObject[3] = std::sinf(2 * M_PI * (animFrameIndex % 360) / 360.0f);
             instObject.setTransform(tfObject);
-            OptixTraversableHandle handle = iasScene.update(curCuStream, asBuildScratchMem);
+            curGPUTimer.updateIAS.start(curCuStream);
+            OptixTraversableHandle iasHandle = iasScene.update(curCuStream, asBuildScratchMem);
+            curGPUTimer.updateIAS.stop(curCuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
-                                            &handle, sizeof(handle),
+                                            &iasHandle, sizeof(iasHandle),
                                             curCuStream));
 
             ++animFrameIndex;
         }
-        updateIASTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.updateIASTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         if (play || sceneEdited)
             plp.numAccumFrames = 1;
 
         // Render
         sw.start();
-        curRenderTimer.start(curCuStream);
+        curGPUTimer.render.start(curCuStream);
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
         pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-        curRenderTimer.stop(curCuStream);
-        renderCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        curGPUTimer.render.stop(curCuStream);
+        cpuTimeRecord.renderCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         // Post Process
         sw.start();
-        curPostProcessTimer.start(curCuStream);
+        curGPUTimer.postProcess.start(curCuStream);
         const uint32_t blockSize = 8;
         uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
         uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
@@ -1206,8 +1285,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                accumBuffer.getDevicePointer(), renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
                                outputBufferCUDA.beginCUDAAccess(curCuStream));
         outputBufferCUDA.endCUDAAccess(curCuStream);
-        curPostProcessTimer.stop(curCuStream);
-        postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        curGPUTimer.postProcess.stop(curCuStream);
+        cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;
 
 
@@ -1276,14 +1355,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // END: scaling
         // ----------------------------------------------------------------
 
-        guiCmdTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.guiCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         sw.start();
         glfwSwapBuffers(window);
-        swapTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.swapTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         ++frameIndex;
-        frameTime = sw.getMeasurement(sw.stop(), StopWatch<>::DurationType::Microseconds) * 1e-3f;
+        cpuTimeRecord.frameTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
+
+        cpuTimeRecordIndex = (cpuTimeRecordIndex + 1) % lengthof(cpuTimeRecords);
         sw.clearAllMeasurements();
     }
 
@@ -1307,8 +1388,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     outputTexture.finalize();
     outputBufferGL.finalize();
 
-    travHandleBuffer.finalize();
-
     iasSceneMem.finalize();
     iasScene.destroy();
 
@@ -1325,6 +1404,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasCornellBoxMem.finalize();
     gasCornellBox.destroy();
 
+    travHandleBuffer.finalize();
+
+    orgObjectVertexBuffer.finalize();
+
     meshObject.destroy();
     meshAreaLight.destroy();
     meshCornellBox.destroy();
@@ -1340,6 +1423,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     materialDataBuffer.finalize();
 
+    CUDADRV_CHECK(cuModuleUnload(moduleDeform));
     CUDADRV_CHECK(cuModuleUnload(modulePostProcess));
 
     visibilityRayHitProgramGroup.destroy();
@@ -1355,10 +1439,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixContext.destroy();
 
-    cudaPostProcessTimer[1].finalize();
-    cudaPostProcessTimer[0].finalize();
-    cudaRenderTimer[1].finalize();
-    cudaRenderTimer[0].finalize();
+    gpuTimer[1].finalize();
+    gpuTimer[0].finalize();
     CUDADRV_CHECK(cuStreamDestroy(cuStream[1]));
     CUDADRV_CHECK(cuStreamDestroy(cuStream[0]));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));

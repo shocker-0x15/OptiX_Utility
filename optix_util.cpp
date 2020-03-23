@@ -337,7 +337,6 @@ namespace optix {
     }
 
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
-        // Fill build inputs.
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
         for (int i = 0; i < m->children.size(); ++i)
             m->children[i]->fillBuildInput(&m->buildInputs[i]);
@@ -431,6 +430,9 @@ namespace optix {
         THROW_RUNTIME_ERROR(m->available || m->compactedAvailable, "AS has not been built yet.");
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
+
+        for (int i = 0; i < m->children.size(); ++i)
+            m->children[i]->fillBuildInput(&m->buildInputs[i]);
 
         const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;

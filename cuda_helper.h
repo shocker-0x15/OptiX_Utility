@@ -214,6 +214,8 @@ namespace CUDAHelper {
             return reinterpret_cast<T*>(map());
         }
         void unmap();
+
+        Buffer copy() const;
     };
 
 
@@ -274,6 +276,13 @@ namespace CUDAHelper {
             const T* values = map();
             T ret = values[idx];
             unmap();
+            return ret;
+        }
+
+        TypedBuffer<T> copy() const {
+            TypedBuffer<T> ret;
+            // safe ?
+            *reinterpret_cast<Buffer*>(&ret) = Buffer::copy();
             return ret;
         }
     };
