@@ -2,6 +2,16 @@
 
 #include "optix_util.h"
 
+#if defined(OPTIX_Platform_Windows_MSVC)
+#   define _USE_MATH_DEFINES
+#   include <Windows.h>
+#   undef min
+#   undef max
+#   undef near
+#   undef far
+#   undef RGB
+#endif
+
 #include <optix_function_table_definition.h>
 
 #include <vector>

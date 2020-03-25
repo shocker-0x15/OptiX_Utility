@@ -25,24 +25,13 @@ TODO:
 #    define OPTIX_Platform_macOS
 #endif
 
-#if defined(OPTIX_Platform_Windows_MSVC)
-#   define NOMINMAX
-#   define _USE_MATH_DEFINES
-#   include <Windows.h>
-#   undef near
-#   undef far
-#   undef RGB
-#endif
-
-#if !defined(__CUDA_ARCH__)
-#include "cuda_helper.h"
-#endif
-
 #include <optix.h>
+#include <cstdint>
+
 #if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
+#include "cuda_helper.h"
 #endif
-#include <cstdint>
 
 #if defined(__CUDA_ARCH__)
 #   define RT_FUNCTION __forceinline__ __device__
@@ -108,17 +97,17 @@ namespace optix {
               |              |
               |              +-- ProgramGroup
               |
-              |
               +-- Material
               |
               |
-              +-- Scene --+-- IAS
-                          |
-                          +-- Instance
-                          |
-                          +-- GAS
-                          |
-                          +-- GeomInst
+              |
+              +-- Scene    --+-- IAS
+                             |
+                             +-- Instance
+                             |
+                             +-- GAS
+                             |
+                             +-- GeomInst
 
     JP: 
     EN: 
@@ -191,8 +180,6 @@ private: \
     public:
         void destroy();
 
-        // After the program calls either of these methods or updates the contents of vertex/index buffers,
-        // the program should call markDirty() of GASs to which the GeometryInstance is belonging.
         void setVertexBuffer(Buffer* vertexBuffer) const;
         void setTriangleBuffer(Buffer* triangleBuffer) const;
         void setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;

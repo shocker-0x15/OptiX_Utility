@@ -388,10 +388,9 @@ namespace optix {
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
+        // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         CUDADRV_CHECK(cuStreamSynchronize(rebuildOrUpdateStream));
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
-        // JP: 以下になるべき？
-        // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
         *compactedAccelBufferSize = m->compactedSize;
     }
@@ -605,10 +604,9 @@ namespace optix {
             return;
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
+        // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         CUDADRV_CHECK(cuStreamSynchronize(rebuildOrUpdateStream));
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
-        // JP: 以下になるべき？
-        // CUDA_CHECK(cudaMemcpyAsync(&m->compactedSize, (void*)m->propertyCompactedSize.result, sizeof(m->compactedSize), cudaMemcpyDeviceToHost, rebuildStream));
 
         *compactedAccelBufferSize = m->compactedSize;
     }
@@ -760,7 +758,7 @@ namespace optix {
     void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                       bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
-        // EN: Set a pipeline compile options common among modules in the pipeline and the pipeline itself.
+        // EN: Set pipeline compile options common among modules in the pipeline and the pipeline itself.
         m->pipelineCompileOptions = {};
         m->pipelineCompileOptions.numPayloadValues = numPayloadValues;
         m->pipelineCompileOptions.numAttributeValues = numAttributeValues;
