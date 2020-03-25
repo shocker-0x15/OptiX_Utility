@@ -51,7 +51,7 @@ namespace optix {
 
     void Material::setHitGroup(uint32_t rayType, const ProgramGroup &hitGroup) {
         auto _pipeline = extract(hitGroup)->getPipeline();
-        THROW_RUNTIME_ERROR(_pipeline, "Invalid pipeline.");
+        THROW_RUNTIME_ERROR(_pipeline, "Invalid pipeline: %p.", _pipeline);
 
         _Material::Key key{ _pipeline, rayType };
         m->programs[key] = extract(hitGroup);
@@ -236,7 +236,7 @@ namespace optix {
     void GeometryInstance::setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const {
         THROW_RUNTIME_ERROR(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
         THROW_RUNTIME_ERROR((numMaterials == 1) != (matIdxOffsetBuffer != nullptr),
-                            "Material index offset buffer must be provided when multiple materials are used, otherwise, must not be provided.");
+                            "Material index offset buffer must be provided when multiple materials are used.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         m->materialIndexOffsetBuffer = matIdxOffsetBuffer;
     }
@@ -330,6 +330,7 @@ namespace optix {
     void GeometryAccelerationStructure::addChild(const GeometryInstance &geomInst) const {
         auto _geomInst = extract(geomInst);
         THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
+        THROW_RUNTIME_ERROR(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance.");
 
         m->children.push_back(_geomInst);
 
@@ -528,6 +529,7 @@ namespace optix {
     void InstanceAccelerationStructure::addChild(const Instance &instance) const {
         _Instance* _inst = extract(instance);
         THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
+        THROW_RUNTIME_ERROR(_inst->getScene() == m->scene, "Scene mismatch for the given instance.");
 
         m->children.push_back(_inst);
 
@@ -572,6 +574,11 @@ namespace optix {
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
+        THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+                            "Size of the given buffer is not enough.");
+        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+                            "Size of the given scratch buffer is not enough.");
+
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
@@ -791,7 +798,11 @@ namespace optix {
 
     ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR(_module->getPipeline() == m, "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
+                            "Either of Miss module or entry function name is not provided.");
+        if (_module)
+            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                                "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -808,7 +819,11 @@ namespace optix {
 
     ProgramGroup Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR(_module->getPipeline() == m, "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
+                            "Either of Miss module or entry function name is not provided.");
+        if (_module)
+            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                                "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
@@ -825,8 +840,11 @@ namespace optix {
 
     ProgramGroup Pipeline::createMissProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR(_module == nullptr || _module->getPipeline() == m,
-                            "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
+                            "Either of Miss module or entry function name is not provided.");
+        if (_module)
+            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                                "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
@@ -848,18 +866,23 @@ namespace optix {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         _Module* _module_IS = extract(module_IS);
-        THROW_RUNTIME_ERROR(entryFunctionNameCH == nullptr || _module_CH == nullptr ||
-                            _module_CH->getPipeline() == m,
-                            "Pipeline mismatch for the given CH module.");
-        THROW_RUNTIME_ERROR(entryFunctionNameAH == nullptr || _module_AH == nullptr ||
-                            _module_AH->getPipeline() == m,
-                            "Pipeline mismatch for the given AH module.");
-        THROW_RUNTIME_ERROR(entryFunctionNameIS == nullptr || _module_IS == nullptr ||
-                            _module_IS->getPipeline() == m,
-                            "Pipeline mismatch for the given IS module.");
-
+        THROW_RUNTIME_ERROR((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
+                            "Either of CH module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR((_module_AH != nullptr) == (entryFunctionNameAH != nullptr),
+                            "Either of AH module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR((_module_IS != nullptr) == (entryFunctionNameIS != nullptr),
+                            "Either of IS module or entry function name is not provided.");
         THROW_RUNTIME_ERROR(entryFunctionNameCH || entryFunctionNameAH || entryFunctionNameIS,
-                            "Either of CH/AH/IS entry function name should be provided.");
+                            "Either of CH/AH/IS entry function name must be provided.");
+        if (_module_CH)
+            THROW_RUNTIME_ERROR(_module_CH->getPipeline() == m,
+                                "Pipeline mismatch for the given CH module.");
+        if (_module_AH)
+            THROW_RUNTIME_ERROR(_module_AH->getPipeline() == m,
+                                "Pipeline mismatch for the given AH module.");
+        if (_module_IS)
+            THROW_RUNTIME_ERROR(_module_IS->getPipeline() == m,
+                                "Pipeline mismatch for the given IS module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
@@ -888,15 +911,18 @@ namespace optix {
                                                Module module_CC, const char* entryFunctionNameCC) const {
         _Module* _module_DC = extract(module_DC);
         _Module* _module_CC = extract(module_CC);
-        THROW_RUNTIME_ERROR(entryFunctionNameDC == nullptr || _module_DC == nullptr ||
-                            _module_DC->getPipeline() == m,
-                            "Pipeline mismatch for the given DC module.");
-        THROW_RUNTIME_ERROR(entryFunctionNameCC == nullptr || _module_CC == nullptr ||
-                            _module_CC->getPipeline() == m,
-                            "Pipeline mismatch for the given CC module.");
-
+        THROW_RUNTIME_ERROR((_module_DC != nullptr) == (entryFunctionNameDC != nullptr),
+                            "Either of DC module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR((_module_CC != nullptr) == (entryFunctionNameCC != nullptr),
+                            "Either of CC module or entry function name is not provided.");
         THROW_RUNTIME_ERROR(entryFunctionNameDC || entryFunctionNameCC,
-                            "Either of CC/DC entry function name should be provided.");
+                            "Either of CC/DC entry function name must be provided.");
+        if (_module_DC)
+            THROW_RUNTIME_ERROR(_module_DC->getPipeline() == m,
+                                "Pipeline mismatch for the given DC module.");
+        if (_module_CC)
+            THROW_RUNTIME_ERROR(_module_CC->getPipeline() == m,
+                                "Pipeline mismatch for the given CC module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;

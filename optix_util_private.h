@@ -301,6 +301,9 @@ namespace optix {
         }
         ~Priv() {}
 
+        const _Scene* getScene() const {
+            return scene;
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
@@ -368,6 +371,9 @@ namespace optix {
             scene->removeGAS(this);
         }
 
+        const _Scene* getScene() const {
+            return scene;
+        }
         CUcontext getCUDAContext() const {
             return scene->getCUDAContext();
         }
@@ -439,6 +445,12 @@ namespace optix {
         }
         ~Priv() {}
 
+        const _Scene* getScene() const {
+            return scene;
+        }
+
+
+
         void fillInstance(OptixInstance* instance);
         void updateInstance(CUstream stream, CUdeviceptr dst);
     };
@@ -498,6 +510,9 @@ namespace optix {
             scene->removeIAS(this);
         }
 
+        const _Scene* getScene() const {
+            return scene;
+        }
         CUcontext getCUDAContext() const {
             return scene->getCUDAContext();
         }

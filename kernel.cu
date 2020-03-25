@@ -214,17 +214,14 @@ RT_PROGRAM void __closesthit__shading() {
     PCG32RNG &rng = payload.rng;
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
-    float3 p0 = geom.vertexBuffer[tri.index0].position;
-    float3 p1 = geom.vertexBuffer[tri.index1].position;
-    float3 p2 = geom.vertexBuffer[tri.index2].position;
-    float3 n0 = geom.vertexBuffer[tri.index0].normal;
-    float3 n1 = geom.vertexBuffer[tri.index1].normal;
-    float3 n2 = geom.vertexBuffer[tri.index2].normal;
+    const Vertex &v0 = geom.vertexBuffer[tri.index0];
+    const Vertex &v1 = geom.vertexBuffer[tri.index1];
+    const Vertex &v2 = geom.vertexBuffer[tri.index2];
     float b0 = hitPointParam.b0;
     float b1 = hitPointParam.b1;
     float b2 = 1 - (b0 + b1);
-    float3 p = optixTransformPointFromObjectToWorldSpace(b0 * p0 + b1 * p1 + b2 * p2);
-    float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * n0 + b1 * n1 + b2 * n2));
+    float3 p = optixTransformPointFromObjectToWorldSpace(b0 * v0.position + b1 * v1.position + b2 * v2.position);
+    float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * v0.normal + b1 * v1.normal + b2 * v2.normal));
     p = p + sn * 0.001f;
 
     //// Visualize normal

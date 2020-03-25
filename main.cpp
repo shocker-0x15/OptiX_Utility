@@ -305,6 +305,10 @@ public:
         group.geometryInstance = geomInst;
     }
 
+    const CUDAHelper::TypedBuffer<Shared::Triangle> &getTriangleBuffer(uint32_t matGroupIdx) const {
+        return *m_materialGroups[matGroupIdx].triangleBuffer;
+    }
+
     void addToGAS(optix::GeometryAccelerationStructure* gas) {
         for (int i = 0; i < m_materialGroups.size(); ++i)
             gas->addChild(m_materialGroups[i].geometryInstance);
@@ -556,6 +560,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "ptxes/deform.ptx").string().c_str()));
     CUfunction kernelDeform;
     CUDADRV_CHECK(cuModuleGetFunction(&kernelDeform, moduleDeform, "deform"));
+    CUfunction kernelAccumulateVertexNormals;
+    CUDADRV_CHECK(cuModuleGetFunction(&kernelAccumulateVertexNormals, moduleDeform, "accumulateVertexNormals"));
+    CUfunction kernelNormalizeVertexNormals;
+    CUDADRV_CHECK(cuModuleGetFunction(&kernelNormalizeVertexNormals, moduleDeform, "normalizeVertexNormals"));
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -1233,6 +1241,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             CUDAHelper::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
                                    orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
                                    0.5f * std::sinf(2 * M_PI * (animFrameIndex % 120) / 120.0f));
+            const CUDAHelper::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(0);
+            uint32_t dimAccum = (triangleBuffer.numElements() + 31) / 32;
+            CUDAHelper::callKernel(curCuStream, kernelAccumulateVertexNormals, dim3(dimAccum), dim3(32), 0,
+                                   meshObject.getVertexBuffer().getDevicePointer(),
+                                   triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
+            CUDAHelper::callKernel(curCuStream, kernelNormalizeVertexNormals, dim3(dimDeform), dim3(32), 0,
+                                   meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(curCuStream);
 
             instObject.setTransform(tfObject);
