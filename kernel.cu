@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "shared.h"
 
@@ -12,8 +12,8 @@ extern "C" __constant__ PipelineLaunchParameters plp;
 
 
 
-// JP: ‚±‚ÌƒNƒ‰ƒX‚Ì‚æ‚¤‚ÉƒVƒXƒeƒ}ƒeƒBƒbƒN‚Éuint32_t&‚É‚¹‚¸‚ÉA
-//     ŒÂ•Ê‚É“KØ‚ÈƒyƒCƒ[ƒh‚Ì“n‚µ•û‚ğl‚¦‚½‚Ù‚¤‚ª«”\‚Í—Ç‚¢‚©‚à‚µ‚ê‚È‚¢B
+// JP: ã“ã®ã‚¯ãƒ©ã‚¹ã®ã‚ˆã†ã«ã‚·ã‚¹ãƒ†ãƒãƒ†ã‚£ãƒƒã‚¯ã«uint32_t&ã«ã›ãšã«ã€
+//     å€‹åˆ¥ã«é©åˆ‡ãªãƒšã‚¤ãƒ­ãƒ¼ãƒ‰ã®æ¸¡ã—æ–¹ã‚’è€ƒãˆãŸã»ã†ãŒæ€§èƒ½ã¯è‰¯ã„ã‹ã‚‚ã—ã‚Œãªã„ã€‚
 // EN: It is possibly better to individually tune how to pass a payload
 //     unlike this class which systematically uses uint32_t &.
 template <typename PayloadType>

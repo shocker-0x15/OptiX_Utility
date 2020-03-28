@@ -1,4 +1,4 @@
-#include "optix_util_private.h"
+ï»¿#include "optix_util_private.h"
 
 namespace optix {
     void devPrintf(const char* fmt, ...) {
@@ -386,7 +386,7 @@ namespace optix {
         if (m->compactedAvailable)
             return;
 
-        // JP: ƒŠƒrƒ‹ƒhEƒAƒbƒvƒf[ƒg‚ÌŠ®—¹‚ð‘Ò‚Á‚ÄƒRƒ“ƒpƒNƒVƒ‡ƒ“Œã‚ÌƒTƒCƒYî•ñ‚ðŽæ“¾B
+        // JP: ãƒªãƒ“ãƒ«ãƒ‰ãƒ»ã‚¢ãƒƒãƒ—ãƒ‡ãƒ¼ãƒˆã®å®Œäº†ã‚’å¾…ã£ã¦ã‚³ãƒ³ãƒ‘ã‚¯ã‚·ãƒ§ãƒ³å¾Œã®ã‚µã‚¤ã‚ºæƒ…å ±ã‚’å–å¾—ã€‚
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         CUDADRV_CHECK(cuStreamSynchronize(rebuildOrUpdateStream));
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
@@ -474,7 +474,7 @@ namespace optix {
         instance->instanceId = 0;
         instance->visibilityMask = 0xFF;
         std::copy_n(transform, 12, instance->transform);
-        //instance->flags = OPTIX_INSTANCE_FLAG_NONE; ‚±‚ê‚Í•Ï‚¦‚ç‚ê‚È‚¢H
+        //instance->flags = OPTIX_INSTANCE_FLAG_NONE; ã“ã‚Œã¯å¤‰ãˆã‚‰ã‚Œãªã„ï¼Ÿ
         //instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
     }
 
@@ -599,7 +599,7 @@ namespace optix {
         if (m->compactedAvailable)
             return;
 
-        // JP: ƒŠƒrƒ‹ƒhEƒAƒbƒvƒf[ƒg‚ÌŠ®—¹‚ð‘Ò‚Á‚ÄƒRƒ“ƒpƒNƒVƒ‡ƒ“Œã‚ÌƒTƒCƒYî•ñ‚ðŽæ“¾B
+        // JP: ãƒªãƒ“ãƒ«ãƒ‰ãƒ»ã‚¢ãƒƒãƒ—ãƒ‡ãƒ¼ãƒˆã®å®Œäº†ã‚’å¾…ã£ã¦ã‚³ãƒ³ãƒ‘ã‚¯ã‚·ãƒ§ãƒ³å¾Œã®ã‚µã‚¤ã‚ºæƒ…å ±ã‚’å–å¾—ã€‚
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         CUDADRV_CHECK(cuStreamSynchronize(rebuildOrUpdateStream));
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
@@ -752,7 +752,7 @@ namespace optix {
 
     void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                       bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
-        // JP: ƒpƒCƒvƒ‰ƒCƒ“’†‚Ìƒ‚ƒWƒ…[ƒ‹A‚»‚µ‚ÄƒpƒCƒvƒ‰ƒCƒ“Ž©‘Ì‚É‹¤’Ê‚ÈƒRƒ“ƒpƒCƒ‹ƒIƒvƒVƒ‡ƒ“‚ÌÝ’èB
+        // JP: ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ä¸­ã®ãƒ¢ã‚¸ãƒ¥ãƒ¼ãƒ«ã€ãã—ã¦ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³è‡ªä½“ã«å…±é€šãªã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã®è¨­å®šã€‚
         // EN: Set pipeline compile options common among modules in the pipeline and the pipeline itself.
         m->pipelineCompileOptions = {};
         m->pipelineCompileOptions.numPayloadValues = numPayloadValues;

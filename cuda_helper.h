@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)

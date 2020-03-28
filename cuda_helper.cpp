@@ -1,4 +1,4 @@
-#include "cuda_helper.h"
+﻿#include "cuda_helper.h"
 
 #ifdef CUDAHPlatform_Windows_MSVC
 #   include <Windows.h>

@@ -1,4 +1,4 @@
-# optix_util方針
+﻿# optix_util方針
 
 - GAS/IAS/GeomInstとPipelineを切り離す。
   異なるPipeline間でGAS/IASを再利用できるようにする。

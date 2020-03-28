@@ -490,6 +490,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     hpprintf("Setup OptiX context and pipeline.\n");
 
     struct GPUTimer {
+        CUDAHelper::Timer frame;
         CUDAHelper::Timer deform;
         CUDAHelper::Timer updateGAS;
         CUDAHelper::Timer updateIAS;
@@ -497,6 +498,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         CUDAHelper::Timer postProcess;
 
         void initialize(CUcontext context) {
+            frame.initialize(context);
             deform.initialize(context);
             updateGAS.initialize(context);
             updateIAS.initialize(context);
@@ -509,6 +511,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             updateIAS.finalize();
             updateGAS.finalize();
             deform.finalize();
+            frame.finalize();
         }
     };
 
@@ -1154,36 +1157,36 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
+            float cudaFrameTime = frameIndex >= 2 ? curGPUTimer.frame.report() : 0.0f;
             float deformTime = frameIndex >= 2 ? curGPUTimer.deform.report() : 0.0f;
             float updateGASTime = frameIndex >= 2 ? curGPUTimer.updateGAS.report() : 0.0f;
             float updateIASTime = frameIndex >= 2 ? curGPUTimer.updateIAS.report() : 0.0f;
             float renderTime = frameIndex >= 2 ? curGPUTimer.render.report() : 0.0f;
             float postProcessTime = frameIndex >= 2 ? curGPUTimer.postProcess.report() : 0.0f;
             //ImGui::SetNextItemWidth(100.0f);
-            ImGui::Text("GPU:");
-            ImGui::Text("  Deform: %.2f [ms]", deformTime);
-            ImGui::Text("  Update GAS: %.2f [ms]", updateGASTime);
-            ImGui::Text("  Update IAS: %.2f [ms]", updateIASTime);
-            ImGui::Text("  Render: %.2f [ms]", renderTime);
-            ImGui::Text("  Post Process: %.2f [ms]", postProcessTime);
+            ImGui::Text("CUDA/OptiX GPU %.3f [ms]:", cudaFrameTime);
+            ImGui::Text("  Deform: %.3f [ms]", deformTime);
+            ImGui::Text("  Update GAS: %.3f [ms]", updateGASTime);
+            ImGui::Text("  Update IAS: %.3f [ms]", updateIASTime);
+            ImGui::Text("  Render: %.3f [ms]", renderTime);
+            ImGui::Text("  Post Process: %.3f [ms]", postProcessTime);
             {
                 static float times[100];
                 constexpr uint32_t numTimes = lengthof(times);
                 constexpr uint32_t numAccums = 1;
                 static float accTime = 0;
                 static uint32_t plotStartPos = -1;
-                accTime += (deformTime + updateGASTime + updateIASTime + renderTime + postProcessTime);
+                accTime += cudaFrameTime;
                 if ((frameIndex + 1) % numAccums == 0) {
                     plotStartPos = (plotStartPos + 1) % numTimes;
                     times[(plotStartPos + numTimes - 1) % numTimes] = accTime / numAccums;
                     accTime = 0;
                 }
-                ImGui::PlotLines("GPU Time", times, numTimes, plotStartPos, nullptr, 0, 50.0f, ImVec2(0, 50));
+                ImGui::PlotLines("CUDA/OptiX GPU Time", times, numTimes, plotStartPos, nullptr, 0, 50.0f, ImVec2(0, 50));
             }
 
             const CPUTimeRecord prevCpuTimeRecord = cpuTimeRecords[(cpuTimeRecordIndex + lengthof(cpuTimeRecords) - 1) % lengthof(cpuTimeRecords)];
-            ImGui::Text("CPU:");
-            ImGui::Text("  Frame: %.3f [ms]", prevCpuTimeRecord.frameTime);
+            ImGui::Text("CPU %.3f [ms]:", prevCpuTimeRecord.frameTime);
             ImGui::Text("  Begin: %.3f [ms]", prevCpuTimeRecord.frameBeginTime);
             ImGui::Text("  Sync: %.3f [ms]", prevCpuTimeRecord.syncTime);
             ImGui::Text("  ImGui: %.3f [ms]", prevCpuTimeRecord.imGuiTime);
@@ -1311,6 +1314,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+        curGPUTimer.frame.start(curCuStream);
+
         sw.start();
         if (play) {
             // JP: ジオメトリの非剛体変形。
@@ -1408,6 +1413,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         curGPUTimer.postProcess.stop(curCuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;
+
+        curGPUTimer.frame.stop(curCuStream);
 
 
 

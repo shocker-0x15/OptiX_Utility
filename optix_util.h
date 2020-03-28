@@ -1,28 +1,26 @@
-#pragma once
+﻿#pragma once
 
 /*
 
-JP: ����ł͂�����API�ɔj��I�ύX������\�������ɍ����B
+JP: 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
 EN: It is very likely for now that any API will have breaking changes.
 
 TODO:
-- Callable Program�T�|�[�g�B
+- Callable Programサポート。
 
-- Texture class�̍쐬�BCUDAHelper�ɍs���ׂ��H
+- Texture classの作成。CUDAHelperに行くべき？
 
-- Assert��exception�̐����B
+- Assertとexceptionの整理。
 
-- GAS/IAS�Ɋւ��ă��[�U�[���C�ɂ���Ƃ����AS�]�X�ł͂Ȃ��O���[�v���Ȃ̂�
-  ���O��ς���ׂ��HGeometryGroup/InstanceGroup�̂悤�Ȋ����B
+- GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
+  名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
 
-- IAS�̃C���X�^���X��ێ�����o�b�t�@�[�̓��[�U�[�Ǘ��ɂ��ׂ��H
-  ����̎������ƃC���X�^���X�v�f���Ƃ�MemcpyHtoDAsync�ōX�V����ꍇ�͓��삷�邪�A
-  AS���������̂��_�u���o�b�t�@�����O����ꍇ�Ɋ댯��������H
-  => �r���h�E�A�b�v�f�[�g�ɂ����Ĕ񓯊��ȃ������R�s�[���g�����ƂŊ댯���͉���B
-- HitGroup�ȊO�̃v���O�����̔񓯊��X�V�B
+- IASのインスタンスを保持するバッファーはユーザー管理にすべき？
+  現状の実装だとASメモリ自体をダブルバッファリングする場合に危険性がある？
+- HitGroup以外のプログラムの非同期更新。
 
-- �r���Ŋe�I�u�W�F�N�g�̃p�����^�[��ύX�����ۂ̏����B
-  �p�C�v���C���̃Z�b�g�A�b�v���Ȃǂ�����͈ÖٓI�ɌŒ肳��Ă���B��������R�ȏ��Ԃŕς�����悤�ɂ���B
+- 途中で各オブジェクトのパラメターを変更した際の処理。
+  パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
 
 */
 
@@ -49,6 +47,7 @@ TODO:
 #   define RT_PROGRAM extern "C" __global__
 #else
 #   define RT_FUNCTION
+#   define RT_PROGRAM
 #endif
 
 
