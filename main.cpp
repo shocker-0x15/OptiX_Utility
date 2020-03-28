@@ -273,7 +273,7 @@ public:
         return m_vertexBuffer;
     }
 
-    void addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, optix::Material &material) {
+    uint32_t addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, optix::Material &material) {
         m_materialGroups.push_back(MaterialGroup());
 
         MaterialGroup &group = m_materialGroups.back();
@@ -303,6 +303,13 @@ public:
         ++m_sceneContext->geometryID;
 
         group.geometryInstance = geomInst;
+
+        return static_cast<uint32_t>(m_materialGroups.size()) - 1;
+    }
+
+    void setMatrial(uint32_t matGroupIdx, optix::Material &material) {
+        MaterialGroup &group = m_materialGroups[matGroupIdx];
+        group.geometryInstance.setMaterial(1, 0, material);
     }
 
     const CUDAHelper::TypedBuffer<Shared::Triangle> &getTriangleBuffer(uint32_t matGroupIdx) const {
@@ -618,6 +625,24 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matLightData.albedo = make_float3(1, 1, 1);
     matData[matLightIndex] = matLightData;
 
+    uint32_t matObject0Index = materialID++;
+    optix::Material matObject0 = optixContext.createMaterial();
+    matObject0.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matObject0.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matObject0.setUserData(matObject0Index);
+    Shared::MaterialData matObject0Data;
+    matObject0Data.albedo = make_float3(1, 0.5f, 0);
+    matData[matObject0Index] = matObject0Data;
+
+    uint32_t matObject1Index = materialID++;
+    optix::Material matObject1 = optixContext.createMaterial();
+    matObject1.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matObject1.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matObject1.setUserData(matObject1Index);
+    Shared::MaterialData matObject1Data;
+    matObject1Data.albedo = make_float3(0, 0.5f, 1);
+    matData[matObject1Index] = matObject1Data;
+
     materialDataBuffer.unmap();
 
 
@@ -707,6 +732,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
 
     TriangleMesh meshObject(cuContext, &sceneContext);
+    uint32_t objectMatGroupIndex;
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
@@ -799,7 +825,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         meshObject.setVertexBuffer(orgObjectVertices.data(), orgObjectVertices.size());
 
-        meshObject.addMaterialGroup(triangles.data(), triangles.size(), matGray);
+        objectMatGroupIndex = meshObject.addMaterialGroup(triangles.data(), triangles.size(), matObject0);
+        meshObject.setMatrial(objectMatGroupIndex, matObject1);
     }
     CUDAHelper::TypedBuffer<Shared::Vertex> orgObjectVertexBuffer = meshObject.getVertexBuffer().copy();
 
@@ -844,8 +871,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optix::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
     CUDAHelper::Buffer gasObjectMem;
     gasObject.setConfiguration(false, true, false);
-    gasObject.setNumMaterialSets(1);
+    gasObject.setNumMaterialSets(2);
     gasObject.setNumRayTypes(0, Shared::NumRayTypes);
+    gasObject.setNumRayTypes(1, Shared::NumRayTypes);
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
     gasObjectMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
@@ -870,24 +898,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     
     // JP: GASからインスタンスを作成する。
     // EN: Make instances from GASs.
+
     optix::Instance instCornellBox = scene.createInstance();
     instCornellBox.setGAS(gasCornellBox);
+
     optix::Instance instAreaLight = scene.createInstance();
     instAreaLight.setGAS(gasAreaLight);
+
     float tfAreaLight[] = {
     1, 0, 0, 0,
     0, 1, 0, 0.99f,
     0, 0, 1, 0
     };
     instAreaLight.setTransform(tfAreaLight);
-    optix::Instance instObject = scene.createInstance();
-    instObject.setGAS(gasObject);
-    float tfObject[] = {
-    1, 0, 0, 0,
-    0, 1, 0, -0.5f,
-    0, 0, 1, 0
-    };
-    instObject.setTransform(tfObject);
+
+    optix::Instance instObject0 = scene.createInstance();
+    instObject0.setGAS(gasObject, 0);
+
+    optix::Instance instObject1 = scene.createInstance();
+    instObject1.setGAS(gasObject, 1);
 
 
 
@@ -899,7 +928,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasScene.setConfiguration(false, true, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
-    iasScene.addChild(instObject);
+    iasScene.addChild(instObject0);
+    iasScene.addChild(instObject1);
     iasScene.prepareForBuild(&asMemReqs);
     iasSceneMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
@@ -923,7 +953,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     hpprintf("Setup resources for composite.\n");
     
     // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
-    // EN: Create a CUDA buffer from an OpenGL buffer instObject.
+    // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
     GLTK::Buffer outputBufferGL;
     GLTK::BufferTexture outputTexture;
     CUDAHelper::Buffer outputBufferCUDA;
@@ -1242,12 +1272,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         sw.start();
         if (play) {
+            // JP: ジオメトリの非剛体変形。
+            // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(curCuStream);
             uint32_t dimDeform = (orgObjectVertexBuffer.numElements() + 31) / 32;
             CUDAHelper::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
                                    orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
                                    0.5f * std::sinf(2 * M_PI * (animFrameIndex % 120) / 120.0f));
-            const CUDAHelper::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(0);
+            const CUDAHelper::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             uint32_t dimAccum = (triangleBuffer.numElements() + 31) / 32;
             CUDAHelper::callKernel(curCuStream, kernelAccumulateVertexNormals, dim3(dimAccum), dim3(32), 0,
                                    meshObject.getVertexBuffer().getDevicePointer(),
@@ -1256,7 +1288,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                    meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(curCuStream);
 
-            instObject.setTransform(tfObject);
+            // JP: 変形したジオメトリを基にGASをアップデート。
+            // EN: Update the GAS based on the deformed geometry.
             curGPUTimer.updateGAS.start(curCuStream);
             OptixTraversableHandle gasHandle = gasObject.update(curCuStream, asBuildScratchMem);
             curGPUTimer.updateGAS.stop(curCuStream);
@@ -1264,16 +1297,32 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                             &gasHandle, sizeof(gasHandle),
                                             curCuStream));
 
-            Matrix3x3 sr =
-                scale3x3(1 + 0.75f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
+            // JP: 
+            // EN: 
+            Matrix3x3 sr0 =
+                scale3x3(0.25 + 0.2f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
                 rotateY3x3(2 * M_PI * (animFrameIndex % 180) / 180.0f) *
                 rotateX3x3(2 * M_PI * (animFrameIndex % 300) / 300.0f) *
                 rotateZ3x3(2 * M_PI * (animFrameIndex % 420) / 420.0f);
-            tfObject[0] = sr.m00; tfObject[1] = sr.m10; tfObject[2] = sr.m20;
-            tfObject[4] = sr.m01; tfObject[5] = sr.m11; tfObject[6] = sr.m21;
-            tfObject[8] = sr.m02; tfObject[9] = sr.m12; tfObject[10] = sr.m22;
-            tfObject[3] = std::sinf(2 * M_PI * (animFrameIndex % 360) / 360.0f);
-            instObject.setTransform(tfObject);
+            float tfObject0[] = {
+                sr0.m00, sr0.m10, sr0.m20, 0.75f * std::sinf(2 * M_PI * (animFrameIndex % 360) / 360.0f),
+                sr0.m01, sr0.m11, sr0.m21, 0,
+                sr0.m02, sr0.m12, sr0.m22, 0.75f * std::cosf(2 * M_PI * (animFrameIndex % 360) / 360.0f)
+            };
+            instObject0.setTransform(tfObject0);
+
+            Matrix3x3 sr1 =
+                scale3x3(0.333f + 0.125f * std::sinf(2 * M_PI * (animFrameIndex % 780) / 780.0f + M_PI / 2)) *
+                rotateY3x3(2 * M_PI * (animFrameIndex % 660) / 660.0f) *
+                rotateX3x3(2 * M_PI * (animFrameIndex % 330) / 330.0f) *
+                rotateZ3x3(2 * M_PI * (animFrameIndex % 570) / 570.0f);
+            float tfObject1[] = {
+                sr1.m00, sr1.m10, sr1.m20, 0.5f * std::sinf(2 * M_PI * (animFrameIndex % 180) / 180.0f + M_PI),
+                sr1.m01, sr1.m11, sr1.m21, 0.25f * std::sinf(2 * M_PI * (animFrameIndex % 90) / 90.0f),
+                sr1.m02, sr1.m12, sr1.m22, 0.5f * std::cosf(2 * M_PI * (animFrameIndex % 180) / 180.0f + M_PI)
+            };
+            instObject1.setTransform(tfObject1);
+
             curGPUTimer.updateIAS.start(curCuStream);
             OptixTraversableHandle iasHandle = iasScene.update(curCuStream, asBuildScratchMem);
             curGPUTimer.updateIAS.stop(curCuStream);
@@ -1412,7 +1461,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasSceneMem.finalize();
     iasScene.destroy();
 
-    instObject.destroy();
+    instObject1.destroy();
+    instObject0.destroy();
     instAreaLight.destroy();
     instCornellBox.destroy();
 
@@ -1439,6 +1489,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     scene.destroy();
 
+    matObject0.destroy();
+    matObject1.destroy();
     matLight.destroy();
     matRight.destroy();
     matLeft.destroy();

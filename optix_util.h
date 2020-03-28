@@ -8,9 +8,12 @@ EN: It is very likely for now that any API will have breaking changes.
 TODO:
 - Assertとexceptionの整理。
 - IASのインスタンスを保持するバッファーはユーザー管理にすべき？
+  現状の実装だとインスタンス要素ごとにMemcpyHtoDAsyncで更新する場合は動作するが、
+  ASメモリ自体をダブルバッファリングする場合に危険性がある？
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
+  パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
 
 */
 
