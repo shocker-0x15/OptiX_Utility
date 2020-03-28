@@ -388,15 +388,14 @@ namespace optix {
         uint32_t getNumMaterialSets() const {
             return static_cast<uint32_t>(numRayTypesPerMaterialSet.size());
         }
-
         uint32_t getNumRayTypes(uint32_t matSetIdx) const {
             return numRayTypesPerMaterialSet[matSetIdx];
         }
 
         uint32_t calcNumSBTRecords(uint32_t matSetIdx) const;
-
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, HitGroupSBTRecord* records) const;
-
+        
+        void markDirty();
         bool isReady() const {
             return available || compactedAvailable;
         }
@@ -524,6 +523,7 @@ namespace optix {
 
 
 
+        void markDirty();
         bool isReady() const {
             return available || compactedAvailable;
         }

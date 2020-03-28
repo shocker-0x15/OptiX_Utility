@@ -2,13 +2,14 @@
 
 /*
 
-現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
+JP: 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
+EN: It is very likely for now that any API will have breaking changes.
 
 TODO:
 - Assertとexceptionの整理。
 - IASのインスタンスを保持するバッファーはユーザー管理にすべき？
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
-  名前を変えるべき？GeometryGroup/InstanceGroup
+  名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
 
 */
@@ -212,8 +213,6 @@ private: \
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
-
-        void markDirty() const;
     };
 
 
@@ -248,8 +247,6 @@ private: \
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
-
-        void markDirty() const;
     };
 
 

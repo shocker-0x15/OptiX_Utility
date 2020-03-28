@@ -67,10 +67,8 @@ namespace optix {
     void Scene::Priv::markSBTLayoutDirty() {
         sbtLayoutIsUpToDate = false;
 
-        for (_InstanceAccelerationStructure* _ias : instASs) {
-            InstanceAccelerationStructure ias = _ias->getPublicType();
-            ias.markDirty();
-        }
+        for (_InstanceAccelerationStructure* _ias : instASs)
+            _ias->markDirty();
     }
 
     void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline, Buffer* sbt) {
@@ -286,6 +284,13 @@ namespace optix {
 
         return sumRecords;
     }
+
+    void GeometryAccelerationStructure::Priv::markDirty() {
+        available = false;
+        compactedAvailable = false;
+
+        scene->markSBTLayoutDirty();
+    }
     
     void GeometryAccelerationStructure::destroy() {
         delete m;
@@ -302,7 +307,7 @@ namespace optix {
         m->allowCompaction = allowCompaction;
 
         if (changed)
-            markDirty();
+            m->markDirty();
     }
 
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
@@ -327,7 +332,7 @@ namespace optix {
 
         m->children.push_back(_geomInst);
 
-        markDirty();
+        m->markDirty();
     }
 
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
@@ -445,13 +450,6 @@ namespace optix {
         return m->isReady();
     }
 
-    void GeometryAccelerationStructure::markDirty() const {
-        m->available = false;
-        m->compactedAvailable = false;
-
-        m->scene->markSBTLayoutDirty();
-    }
-
 
 
     void Instance::Priv::fillInstance(OptixInstance* instance) {
@@ -500,6 +498,11 @@ namespace optix {
 
 
 
+    void InstanceAccelerationStructure::Priv::markDirty() {
+        available = false;
+        compactedAvailable = false;
+    }
+    
     void InstanceAccelerationStructure::destroy() {
         delete m;
         m = nullptr;
@@ -515,7 +518,7 @@ namespace optix {
         m->allowCompaction = allowCompaction;
 
         if (changed)
-            markDirty();
+            m->markDirty();
     }
 
     void InstanceAccelerationStructure::addChild(const Instance &instance) const {
@@ -525,7 +528,7 @@ namespace optix {
 
         m->children.push_back(_inst);
 
-        markDirty();
+        m->markDirty();
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
@@ -660,11 +663,6 @@ namespace optix {
 
     bool InstanceAccelerationStructure::isReady() const {
         return m->isReady();
-    }
-
-    void InstanceAccelerationStructure::markDirty() const {
-        m->available = false;
-        m->compactedAvailable = false;
     }
 
 
