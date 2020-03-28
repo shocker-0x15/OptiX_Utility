@@ -144,7 +144,7 @@ namespace CUDAHelper {
             m_devicePointer = 0;
         }
 
-        m_mappedPointer = nullptr;;
+        m_mappedPointer = nullptr;
         m_stride = 0;
         m_numElements = 0;
 

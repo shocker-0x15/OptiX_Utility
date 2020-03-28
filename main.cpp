@@ -861,6 +861,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
 
+
+
+    CUDAHelper::Buffer shaderBindingTable;
+    size_t sbtSize;
+    scene.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, CUDAHelper::BufferType::Device, sbtSize, 1, 0);
+    
     // JP: GASからインスタンスを作成する。
     // EN: Make instances from GASs.
     optix::Instance instCornellBox = scene.createInstance();
@@ -907,10 +914,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     travHandleBuffer.unmap();
     CUDADRV_CHECK(cuStreamSynchronize(cuStream[0]));
-
-
-
-    pipeline.setScene(scene);
 
     // END: 
     // ----------------------------------------------------------------
@@ -995,6 +998,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.accumBuffer = accumBuffer.getDevicePointer();
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
+
+    pipeline.setScene(scene);
+    pipeline.setShaderBindingTable(&shaderBindingTable);
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -1409,6 +1415,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     instObject.destroy();
     instAreaLight.destroy();
     instCornellBox.destroy();
+
+    shaderBindingTable.finalize();
 
     asBuildScratchMem.finalize();
 

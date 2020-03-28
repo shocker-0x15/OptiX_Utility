@@ -124,11 +124,13 @@ sbt-index = sbt-instance-offset +
 ## 各Dirty化条件
 Dirty化とは:
 ASに関してはリビルド(!=アップデート)しないといけない状態。
+HitGroup SBT Layoutに関してはレイアウトが現在のGASと一貫性がなくなっている状態。
+HitGroup SBTに関しては各レコードのヘッダーやデータ部分が古くなっている状態。
 
 GASのDirty化条件:
+1. GASのビルド設定の更新 (Auto)
 1. GASに対するGeomInstの追加・削除 (Auto)
 1. GASに所属するGeomInstのジオメトリ・ジオメトリフラグの更新
-1. GASのビルド設定の更新 (Auto)
 
 HitGroup SBT LayoutのDirty化条件:
 1. Sceneに所属するGASのDirty化 (Auto)
@@ -138,15 +140,17 @@ HitGroup SBT LayoutのDirty化条件:
 IASのDirty化条件:
 1. HitGroup SBT LayoutがDirty化 (Auto)
 1. IASに対するInstanceの追加・削除 (Auto)
-1. IASに所属するInstanceのデータの更新
 1. IASのビルド設定の更新 (Auto)
+1. IASに所属するInstanceのデータの更新
 
 HitGroup SBTのDirty化条件:
 1. HitGroup SBT LayoutのDirty化
 1. ~~GeomInstのデータ更新~~\
    これはレコード内に直接データを記録しないようにしたことで不要になる。
+   ただしレコードへのインデックスを更新する場合はSBTを直接書き換える必要があるためDirty化する。
 1. ~~GeomInstに所属するMaterialのデータ更新~~\
    これはレコード内に直接データを記録しないようにしたことで不要になる。
+   ただしレコードへのインデックスを更新する場合はSBTを直接書き換える必要があるためDirty化する。
 1. GeomInstに所属するMaterial自体の更新、HitGroupのアップデート。
 
 (Auto)は該当の条件によるDirty化が自動で行われることを示す。

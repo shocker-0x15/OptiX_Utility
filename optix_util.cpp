@@ -64,32 +64,6 @@ namespace optix {
 
 
     
-    void Scene::Priv::registerPipeline(const _Pipeline* pipeline) {
-        THROW_RUNTIME_ERROR(hitGroupSBTs.count(pipeline) == 0, "This pipeline %p has been already registered.", pipeline);
-        auto hitGroupSBT = new HitGroupSBT();
-        hitGroupSBT->records.initialize(getCUDAContext(), s_BufferType, 1);
-        hitGroupSBTs[pipeline] = hitGroupSBT;
-    }
-
-    void Scene::Priv::generateSBTLayout() {
-        if (sbtLayoutIsUpToDate)
-            return;
-
-        uint32_t sbtOffset = 0;
-        sbtOffsets.clear();
-        for (_GeometryAccelerationStructure* gas : geomASs) {
-            uint32_t numMatSets = gas->getNumMaterialSets();
-            for (int matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
-                uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
-                _Scene::SBTOffsetKey key = { gas, matSetIdx };
-                sbtOffsets[key] = sbtOffset;
-                sbtOffset += gasNumSBTRecords;
-            }
-        }
-        numSBTRecords = sbtOffset;
-        sbtLayoutIsUpToDate = true;
-    }
-
     void Scene::Priv::markSBTLayoutDirty() {
         sbtLayoutIsUpToDate = false;
 
@@ -99,11 +73,11 @@ namespace optix {
         }
     }
 
-    const HitGroupSBT* Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline) {
-        HitGroupSBT* hitGroupSBT = hitGroupSBTs.at(pipeline);
-        hitGroupSBT->records.resize(numSBTRecords);
+    void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline, Buffer* sbt) {
+        THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= sizeof(HitGroupSBTRecord) * numSBTRecords,
+                            "Shader binding table size is not enough.");
 
-        HitGroupSBTRecord* records = hitGroupSBT->records.map();
+        auto records = sbt->map<HitGroupSBTRecord>();
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
@@ -113,9 +87,7 @@ namespace optix {
             }
         }
 
-        hitGroupSBT->records.unmap();
-
-        return hitGroupSBT;
+        sbt->unmap();
     }
 
     bool Scene::Priv::isReady() {
@@ -135,8 +107,6 @@ namespace optix {
     }
 
     void Scene::destroy() {
-        for (auto it = m->hitGroupSBTs.crbegin(); it != m->hitGroupSBTs.crend(); ++it)
-            delete it->second;
         delete m;
         m = nullptr;
     }
@@ -155,6 +125,29 @@ namespace optix {
 
     InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
         return (new _InstanceAccelerationStructure(m))->getPublicType();
+    }
+
+    void Scene::generateShaderBindingTableLayout(size_t* memorySize) const {
+        if (m->sbtLayoutIsUpToDate) {
+            *memorySize = sizeof(HitGroupSBTRecord) * m->numSBTRecords;
+            return;
+        }
+
+        uint32_t sbtOffset = 0;
+        m->sbtOffsets.clear();
+        for (_GeometryAccelerationStructure* gas : m->geomASs) {
+            uint32_t numMatSets = gas->getNumMaterialSets();
+            for (int matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
+                uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
+                _Scene::SBTOffsetKey key = { gas, matSetIdx };
+                m->sbtOffsets[key] = sbtOffset;
+                sbtOffset += gasNumSBTRecords;
+            }
+        }
+        m->numSBTRecords = sbtOffset;
+        m->sbtLayoutIsUpToDate = true;
+
+        *memorySize = sizeof(HitGroupSBTRecord) * m->numSBTRecords;
     }
 
 
@@ -538,7 +531,8 @@ namespace optix {
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         // Setup instances.
         {
-            m->scene->generateSBTLayout();
+            THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
+                                "Shader binding table layout generation has not been done.");
 
             m->instanceBuffer.finalize();
             m->instanceBuffer.initialize(m->getCUDAContext(), s_BufferType, m->children.size());
@@ -722,7 +716,7 @@ namespace optix {
                     missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
                 missRecords.unmap();
 
-                const HitGroupSBT* hitGroupSBT = scene->setupHitGroupSBT(this);
+                scene->setupHitGroupSBT(this, hitGroupSbt);
 
 
 
@@ -734,9 +728,9 @@ namespace optix {
                 sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
                 sbt.missRecordCount = numMissRayTypes;
 
-                sbt.hitgroupRecordBase = hitGroupSBT->records.getCUdeviceptr();
-                sbt.hitgroupRecordStrideInBytes = hitGroupSBT->records.stride();
-                sbt.hitgroupRecordCount = hitGroupSBT->records.numElements();
+                sbt.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
+                sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupSBTRecord);
+                sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / sizeof(HitGroupSBTRecord);
 
                 sbt.callablesRecordBase = 0;
                 sbt.callablesRecordCount = 0;
@@ -971,11 +965,6 @@ namespace optix {
 
 
 
-    void Pipeline::setScene(Scene scene) const {
-        m->scene = extract(scene);
-        m->scene->registerPipeline(m);
-    }
-
     void Pipeline::setNumMissRayTypes(uint32_t numMissRayTypes) const {
         m->numMissRayTypes = numMissRayTypes;
         m->missPrograms.resize(m->numMissRayTypes);
@@ -1010,9 +999,19 @@ namespace optix {
         m->sbtIsUpToDate = false;
     }
 
+    void Pipeline::setScene(const Scene &scene) const {
+        m->scene = extract(scene);
+    }
+
+    void Pipeline::setShaderBindingTable(Buffer* shaderBindingTable) const {
+        m->hitGroupSbt = shaderBindingTable;
+        m->sbtIsUpToDate = false;
+    }
+
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
         THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
+        THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
 
         m->setupShaderBindingTable();
 

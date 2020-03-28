@@ -5,8 +5,6 @@
 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
 
 TODO:
-- SBTのダブルバッファリングの運用方法を考える。
-  => これもレイアウトとフィル処理だけUtilが行ってバッファーはユーザー管理にする？
 - Assertとexceptionの整理。
 - IASのインスタンスを保持するバッファーはユーザー管理にすべき？
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
@@ -170,6 +168,8 @@ private: \
         GeometryAccelerationStructure createGeometryAccelerationStructure() const;
         Instance createInstance() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
+
+        void generateShaderBindingTableLayout(size_t* memorySize) const;
     };
 
 
@@ -277,13 +277,14 @@ private: \
 
         void link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const;
 
-        void setScene(Scene scene) const;
         void setNumMissRayTypes(uint32_t numMissRayTypes) const;
 
         void setRayGenerationProgram(ProgramGroup program) const;
         void setExceptionProgram(ProgramGroup program) const;
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
 
+        void setScene(const Scene &scene) const;
+        void setShaderBindingTable(Buffer* shaderBindingTable) const;
         void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
     };
 

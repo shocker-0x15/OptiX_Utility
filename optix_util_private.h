@@ -142,10 +142,6 @@ namespace optix {
         HitGroupSBTRecordData data;
     };
 
-    struct HitGroupSBT {
-        TypedBuffer<HitGroupSBTRecord> records;
-    };
-
 
 
     class Context::Priv {
@@ -241,8 +237,6 @@ namespace optix {
             unsigned int sbtLayoutIsUpToDate : 1;
         };
 
-        std::map<const _Pipeline*, HitGroupSBT*> hitGroupSBTs;
-
     public:
         OPTIX_OPAQUE_BRIDGE(Scene);
 
@@ -271,8 +265,6 @@ namespace optix {
             instASs.erase(ias);
         }
 
-        void registerPipeline(const _Pipeline* pipeline);
-        void generateSBTLayout();
         bool sbtLayoutGenerationDone() const {
             return sbtLayoutIsUpToDate;
         }
@@ -281,7 +273,7 @@ namespace optix {
             return sbtOffsets.at(SBTOffsetKey{ gas, matSetIdx });
         }
 
-        const HitGroupSBT* setupHitGroupSBT(const _Pipeline* pipeline);
+        void setupHitGroupSBT(const _Pipeline* pipeline, Buffer* sbt);
 
         bool isReady();
     };
@@ -568,6 +560,7 @@ namespace optix {
         Buffer exceptionRecord;
         Buffer missRecords;
 
+        Buffer* hitGroupSbt;
         OptixShaderBindingTable sbt;
 
         struct {
@@ -584,7 +577,7 @@ namespace optix {
         Priv(const _Context* ctxt) : context(ctxt),
             maxTraceDepth(0),
             scene(nullptr), numMissRayTypes(0),
-            rayGenProgram(nullptr), exceptionProgram(nullptr),
+            rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
             pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
             rayGenRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
             exceptionRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
