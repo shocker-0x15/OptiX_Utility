@@ -367,7 +367,8 @@ namespace optix {
                                     scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
                                     accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &m->handle,
-                                    compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
+                                    compactionEnabled ? &m->propertyCompactedSize : nullptr,
+                                    compactionEnabled ? 1 : 0));
 
         m->accelBuffer = &accelBuffer;
         m->available = true;
@@ -456,12 +457,11 @@ namespace optix {
         if (type == InstanceType::GAS) {
             THROW_RUNTIME_ERROR(gas->isReady(), "GAS %p is not ready.", gas);
 
-            *instance = OptixInstance{};
+            *instance = {};
             instance->instanceId = 0;
             instance->visibilityMask = 0xFF;
             std::copy_n(transform, 12, instance->transform);
             instance->flags = OPTIX_INSTANCE_FLAG_NONE;
-
             instance->traversableHandle = gas->getHandle();
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
@@ -470,15 +470,12 @@ namespace optix {
         }
     }
 
-    void Instance::Priv::updateInstance(CUstream stream, CUdeviceptr dst) {
-        OptixInstance inst = {};
-        inst.instanceId = 0;
-        inst.visibilityMask = 0xFF;
-        std::copy_n(transform, 12, inst.transform);
-        inst.flags = OPTIX_INSTANCE_FLAG_NONE;
-        inst.traversableHandle = gas->getHandle();
-        inst.sbtOffset = scene->getSBTOffset(gas, matSetIndex);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(dst, &inst, sizeof(inst), stream));
+    void Instance::Priv::updateInstance(OptixInstance* instance) {
+        instance->instanceId = 0;
+        instance->visibilityMask = 0xFF;
+        std::copy_n(transform, 12, instance->transform);
+        //instance->flags = OPTIX_INSTANCE_FLAG_NONE; ‚±‚ê‚Í•Ï‚¦‚ç‚ê‚È‚¢H
+        //instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
     }
 
     void Instance::destroy() {
@@ -532,19 +529,14 @@ namespace optix {
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
-        // Setup instances.
+        // Setup the instance buffer.
         {
             THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
                                 "Shader binding table layout generation has not been done.");
 
             m->instanceBuffer.finalize();
             m->instanceBuffer.initialize(m->getCUDAContext(), s_BufferType, m->children.size());
-            auto instances = m->instanceBuffer.map();
-
-            for (int i = 0; i < m->children.size(); ++i)
-                m->children[i]->fillInstance(&instances[i]);
-
-            m->instanceBuffer.unmap();
+            m->instances.resize(m->children.size());
         }
 
         // Fill the build input.
@@ -575,6 +567,12 @@ namespace optix {
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
 
+        for (int i = 0; i < m->children.size(); ++i)
+            m->children[i]->fillInstance(&m->instances[i]);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
+                                        m->instanceBuffer.sizeInBytes(),
+                                        stream));
+
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
@@ -582,7 +580,8 @@ namespace optix {
                                     scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
                                     accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &m->handle,
-                                    compactionEnabled ? &m->propertyCompactedSize : nullptr, compactionEnabled ? 1 : 0));
+                                    compactionEnabled ? &m->propertyCompactedSize : nullptr,
+                                    compactionEnabled ? 1 : 0));
 
         m->accelBuffer = &accelBuffer;
         m->available = true;
@@ -645,7 +644,10 @@ namespace optix {
                             "Size of the given scratch buffer is not enough.");
 
         for (int i = 0; i < m->children.size(); ++i)
-            m->children[i]->updateInstance(stream, m->instanceBuffer.getCUdeviceptrAt(i));
+            m->children[i]->updateInstance(&m->instances[i]);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
+                                        m->instanceBuffer.sizeInBytes(),
+                                        stream));
 
         const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;
@@ -689,6 +691,7 @@ namespace optix {
             missRecords.resize(numMissRayTypes, missRecords.stride());
 
             sbtAllocDone = true;
+            sbtIsUpToDate = false;
         }
 
         if (!sbtIsUpToDate) {

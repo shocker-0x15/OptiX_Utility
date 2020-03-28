@@ -453,7 +453,7 @@ namespace optix {
 
 
         void fillInstance(OptixInstance* instance);
-        void updateInstance(CUstream stream, CUdeviceptr dst);
+        void updateInstance(OptixInstance* instance);
     };
 
 
@@ -463,6 +463,7 @@ namespace optix {
 
         std::vector<_Instance*> children;
         OptixBuildInput buildInput;
+        std::vector<OptixInstance> instances;
         TypedBuffer<OptixInstance> instanceBuffer;
 
         OptixAccelBuildOptions buildOptions;

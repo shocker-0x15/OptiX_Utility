@@ -6,12 +6,21 @@ JP: 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
 EN: It is very likely for now that any API will have breaking changes.
 
 TODO:
+- Callable Programサポート。
+
+- Texture classの作成。CUDAHelperに行くべき？
+
 - Assertとexceptionの整理。
+
+- GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
+  名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
+
 - IASのインスタンスを保持するバッファーはユーザー管理にすべき？
   現状の実装だとインスタンス要素ごとにMemcpyHtoDAsyncで更新する場合は動作するが、
   ASメモリ自体をダブルバッファリングする場合に危険性がある？
-- GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
-  名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
+  => ビルド・アップデートにおいて非同期なメモリコピーを使うことで危険性は回避。
+- HitGroup以外のプログラムの非同期更新。
+
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
 

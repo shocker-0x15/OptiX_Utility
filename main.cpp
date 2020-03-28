@@ -1139,12 +1139,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
         cpuTimeRecord.syncTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
+        // JP: 非同期実行を確かめるためにCPU側にダミー負荷を与える。
+        // EN: Have dummy load on CPU to verify asynchronous execution.
         static float cpuDummyLoad = 15.0f;
         static float dummyProb = 0.0f;
         sw.start();
         if (cpuDummyLoad > 0.0f && u01(rng) < dummyProb * 0.01f)
             std::this_thread::sleep_for(std::chrono::microseconds(static_cast<uint64_t>(cpuDummyLoad * 1000)));
         cpuTimeRecord.dummyTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
+
+
 
         sw.start();
         {
@@ -1233,8 +1237,26 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             ImGui::End();
         }
 
+
+
+        static bool enablePeriodicIASRebuild = true;
+        static int32_t iasRebuildInterval = 30;
+        {
+            ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Checkbox("Enable IAS Rebuild", &enablePeriodicIASRebuild);
+            ImGui::SliderInt("IAS Rebuild Interval", &iasRebuildInterval, 1, 60);
+
+            ImGui::End();
+        }
+
+
+
         static bool play = true;
         bool sceneEdited = false;
+
+        // JP: マテリアルの編集。
+        // EN; Edit materials.
         {
             ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -1265,10 +1287,29 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                 curCuStream));
                 sceneEdited = true;
             }
+            if (ImGui::ColorEdit3("Object 0", reinterpret_cast<float*>(&matObject0Data.albedo),
+                                  ImGuiColorEditFlags_DisplayHSV |
+                                  ImGuiColorEditFlags_Float)) {
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matObject0Index),
+                                                &matObject0Data, sizeof(matObject0Data),
+                                                curCuStream));
+                sceneEdited = true;
+            }
+            if (ImGui::ColorEdit3("Object 1", reinterpret_cast<float*>(&matObject1Data.albedo),
+                                  ImGuiColorEditFlags_DisplayHSV |
+                                  ImGuiColorEditFlags_Float)) {
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matObject1Index),
+                                                &matObject1Data, sizeof(matObject1Data),
+                                                curCuStream));
+                sceneEdited = true;
+            }
 
             ImGui::End();
         }
+
         cpuTimeRecord.imGuiTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
+
+
 
         sw.start();
         if (play) {
@@ -1297,8 +1338,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                             &gasHandle, sizeof(gasHandle),
                                             curCuStream));
 
-            // JP: 
-            // EN: 
+            // JP: インスタンスのトランスフォーム。
+            // EN: Transform instances.
+
             Matrix3x3 sr0 =
                 scale3x3(0.25 + 0.2f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
                 rotateY3x3(2 * M_PI * (animFrameIndex % 180) / 180.0f) *
@@ -1323,8 +1365,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             };
             instObject1.setTransform(tfObject1);
 
+            // JP: IASをアップデート。
+            // EN: Update the IAS.
             curGPUTimer.updateIAS.start(curCuStream);
-            OptixTraversableHandle iasHandle = iasScene.update(curCuStream, asBuildScratchMem);
+            OptixTraversableHandle iasHandle;
+            if (enablePeriodicIASRebuild && animFrameIndex % iasRebuildInterval == 0)
+                iasHandle = iasScene.rebuild(curCuStream, iasSceneMem, asBuildScratchMem);
+            else
+                iasHandle = iasScene.update(curCuStream, asBuildScratchMem);
             curGPUTimer.updateIAS.stop(curCuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
                                             &iasHandle, sizeof(iasHandle),
@@ -1333,6 +1381,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             ++animFrameIndex;
         }
         cpuTimeRecord.updateIASTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
+
+
 
         if (play || sceneEdited)
             plp.numAccumFrames = 1;
