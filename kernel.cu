@@ -229,9 +229,16 @@ RT_PROGRAM void __closesthit__shading() {
     //payload.terminate = true;
     //return;
 
+    float3 albedo = mat.albedo;
+    if (sbtr.materialData == plp.matFloorIndex) {
+        float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+        float4 texValue = tex2D<float4>(plp.texFloor, texCoord.x, texCoord.y);
+        albedo = make_float3(texValue.x, texValue.y, texValue.z);
+    }
+
     const float3 LightRadiance = make_float3(20, 20, 20);
     // Hard-coded directly visible light
-    if (sbtr.materialData == 3 && dot(optixGetWorldRayDirection(), sn) < 0 && payload.pathLength == 1) {
+    if (sbtr.materialData == plp.matLightIndex && dot(optixGetWorldRayDirection(), sn) < 0 && payload.pathLength == 1) {
         payload.contribution = payload.contribution + payload.alpha * LightRadiance;
     }
 
@@ -259,7 +266,7 @@ RT_PROGRAM void __closesthit__shading() {
 
         float cosSP = dot(sn, shadowRayDir);
         float G = shadowPayload.raw.visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
-        float3 fs = cosSP > 0 ? mat.albedo / M_PI : make_float3(0, 0, 0);
+        float3 fs = cosSP > 0 ? albedo / M_PI : make_float3(0, 0, 0);
         float3 contribution = payload.alpha * fs * G * Le / areaPDF;
         payload.contribution = payload.contribution + contribution;
     }
@@ -284,7 +291,7 @@ RT_PROGRAM void __closesthit__shading() {
     vIn = make_float3(dot(make_float3(s.x, t.x, sn.x), vIn),
                       dot(make_float3(s.y, t.y, sn.y), vIn),
                       dot(make_float3(s.z, t.z, sn.z), vIn));
-    payload.alpha = payload.alpha * mat.albedo;
+    payload.alpha = payload.alpha * albedo;
     payload.origin = p;
     payload.direction = vIn;
     payload.terminate = false;

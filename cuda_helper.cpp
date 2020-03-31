@@ -44,6 +44,7 @@ namespace CUDAHelper {
     }
 
     Buffer::Buffer(Buffer &&b) {
+        m_cudaContext = b.m_cudaContext;
         m_type = b.m_type;
         m_numElements = b.m_numElements;
         m_stride = b.m_stride;
@@ -52,7 +53,6 @@ namespace CUDAHelper {
         m_mappedPointer = b.m_mappedPointer;
         m_GLBufferID = b.m_GLBufferID;
         m_cudaGfxResource = b.m_cudaGfxResource;
-        m_cudaContext = b.m_cudaContext;
         m_initialized = b.m_initialized;
         m_mapped = b.m_mapped;
 
@@ -62,6 +62,7 @@ namespace CUDAHelper {
     Buffer &Buffer::operator=(Buffer &&b) {
         finalize();
 
+        m_cudaContext = b.m_cudaContext;
         m_type = b.m_type;
         m_numElements = b.m_numElements;
         m_stride = b.m_stride;
@@ -70,7 +71,6 @@ namespace CUDAHelper {
         m_mappedPointer = b.m_mappedPointer;
         m_GLBufferID = b.m_GLBufferID;
         m_cudaGfxResource = b.m_cudaGfxResource;
-        m_cudaContext = b.m_cudaContext;
         m_initialized = b.m_initialized;
         m_mapped = b.m_mapped;
 
@@ -81,7 +81,8 @@ namespace CUDAHelper {
 
 
     
-    void Buffer::initialize(CUcontext context, BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID) {
+    void Buffer::initialize(CUcontext context, BufferType type,
+                            uint32_t numElements, uint32_t stride, uint32_t glBufferID) {
         if (m_initialized)
             throw std::runtime_error("Buffer is already initialized.");
 
@@ -151,7 +152,7 @@ namespace CUDAHelper {
         m_initialized = false;
     }
 
-    void Buffer::resize(int32_t numElements, int32_t stride) {
+    void Buffer::resize(uint32_t numElements, uint32_t stride) {
         if (!m_initialized)
             throw std::runtime_error("Buffer is not initialized.");
         if (m_type == BufferType::GL_Interop)
@@ -165,7 +166,7 @@ namespace CUDAHelper {
         Buffer newBuffer;
         newBuffer.initialize(m_cudaContext, m_type, numElements, stride, m_GLBufferID);
 
-        int32_t numElementsToCopy = std::min(m_numElements, numElements);
+        uint32_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
             size_t numBytesToCopy = static_cast<size_t>(numElementsToCopy) * m_stride;
             CUDADRV_CHECK(cuMemcpyDtoD(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy));
@@ -290,5 +291,235 @@ namespace CUDAHelper {
         }
 
         return ret;
+    }
+
+
+
+    Array::Array() : 
+        m_cudaContext(nullptr),
+        m_array(0), m_mappedPointer(nullptr),
+        m_initialized(false), m_mapped(false) {
+    }
+
+    Array::~Array() {
+        if (m_initialized)
+            finalize();
+    }
+
+    Array::Array(Array &&b) {
+        m_cudaContext = b.m_cudaContext;
+        m_width = b.m_width;
+        m_height = b.m_height;
+        m_depth = b.m_depth;
+        m_stride = b.m_stride;
+        m_elemType = b.m_elemType;
+        m_array = b.m_array;
+        m_mappedPointer = b.m_mappedPointer;
+        m_initialized = b.m_initialized;
+        m_mapped = b.m_mapped;
+
+        b.m_initialized = false;
+    }
+
+    Array &Array::operator=(Array &&b) {
+        finalize();
+
+        m_cudaContext = b.m_cudaContext;
+        m_width = b.m_width;
+        m_height = b.m_height;
+        m_depth = b.m_depth;
+        m_stride = b.m_stride;
+        m_elemType = b.m_elemType;
+        m_array = b.m_array;
+        m_mappedPointer = b.m_mappedPointer;
+        m_initialized = b.m_initialized;
+        m_mapped = b.m_mapped;
+
+        b.m_initialized = false;
+
+        return *this;
+    }
+
+
+    
+    void Array::initialize(CUcontext context, ArrayElementType elemType,
+                           uint32_t width, uint32_t height, uint32_t depth,
+                           bool cubemap, bool layered) {
+        if (m_initialized)
+            throw std::runtime_error("Array is already initialized.");
+
+        m_cudaContext = context;
+
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+        //if (height == 0 && depth == 0 && cubemap == false && layered == false)
+        //    m_arrayType = ArrayType::E_1D;
+        //else if (depth == 0 && cubemap == false && layered == false)
+        //    m_arrayType = ArrayType::E_2D;
+        //else if (cubemap == false && layered == false)
+        //    m_arrayType = ArrayType::E_3D;
+        //else if (height == 0 && cubemap == false && layered == true)
+        //    m_arrayType = ArrayType::E_1DLayered;
+        //else if (cubemap == false && layered == true)
+        //    m_arrayType = ArrayType::E_2DLayered;
+        //else if (cubemap == true && layered == false)
+        //    m_arrayType = ArrayType::Cubemap;
+        //else if (cubemap == true && layered == true)
+        //    m_arrayType = ArrayType::CubemapLayered;
+
+        m_width = width;
+        m_height = height;
+        m_depth = depth;
+        m_elemType = elemType;
+
+        CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
+        arrayDesc.Width = m_width;
+        arrayDesc.Height = m_height;
+        arrayDesc.Depth = m_depth;
+        if (layered)
+            arrayDesc.Flags |= CUDA_ARRAY3D_LAYERED;
+        if (cubemap)
+            arrayDesc.Flags |= CUDA_ARRAY3D_CUBEMAP;
+        switch (m_elemType) {
+        case CUDAHelper::ArrayElementType::UInt8x4:
+            arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT8;
+            arrayDesc.NumChannels = 4;
+            m_stride = 4;
+            break;
+        case CUDAHelper::ArrayElementType::UInt16x4:
+            arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT16;
+            arrayDesc.NumChannels = 4;
+            m_stride = 8;
+            break;
+        case CUDAHelper::ArrayElementType::UInt32x4:
+            arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT32;
+            arrayDesc.NumChannels = 4;
+            m_stride = 16;
+            break;
+        case CUDAHelper::ArrayElementType::Int8x4:
+            arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT8;
+            arrayDesc.NumChannels = 4;
+            m_stride = 4;
+            break;
+        case CUDAHelper::ArrayElementType::Int16x4:
+            arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT16;
+            arrayDesc.NumChannels = 4;
+            m_stride = 8;
+            break;
+        case CUDAHelper::ArrayElementType::Int32x4:
+            arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT32;
+            arrayDesc.NumChannels = 4;
+            m_stride = 16;
+            break;
+        case CUDAHelper::ArrayElementType::Halfx4:
+            arrayDesc.Format = CU_AD_FORMAT_HALF;
+            arrayDesc.NumChannels = 4;
+            m_stride = 8;
+            break;
+        case CUDAHelper::ArrayElementType::Floatx4:
+            arrayDesc.Format = CU_AD_FORMAT_FLOAT;
+            arrayDesc.NumChannels = 4;
+            m_stride = 16;
+            break;
+        default:
+            CUDAHAssert_NotImplemented();
+            break;
+        }
+
+        // Is cuArray3DCreate the upper compatible to cuArrayCreate?
+        //CUDADRV_CHECK(cuArrayCreate(&m_array, &arrayDesc));
+        CUDADRV_CHECK(cuArray3DCreate(&m_array, &arrayDesc));
+
+        m_initialized = true;
+    }
+
+    void Array::finalize() {
+        if (!m_initialized)
+            return;
+
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+        CUDADRV_CHECK(cuArrayDestroy(m_array));
+
+        m_initialized = false;
+    }
+
+
+
+    void* Array::map() {
+        if (m_mapped)
+            throw std::runtime_error("This buffer is already mapped.");
+
+        m_mapped = true;
+
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+        size_t sizePerRow = m_width * static_cast<size_t>(m_stride);
+        size_t size = std::max<size_t>(1, m_depth) * std::max<size_t>(1, m_height) * sizePerRow;
+        m_mappedPointer = new uint8_t[size];
+
+        CUDA_MEMCPY3D params = {};
+        params.WidthInBytes = sizePerRow;
+        params.Height = std::max<size_t>(1, m_height);
+        params.Depth = std::max<size_t>(1, m_depth);
+
+        params.srcMemoryType = CU_MEMORYTYPE_ARRAY;
+        params.srcArray = m_array;
+        params.srcXInBytes = 0;
+        params.srcY = 0;
+        params.srcZ = 0;
+        // srcDevice, srcHeight, srcHost, srcLOD, srcPitch are not used in this case.
+
+        params.dstMemoryType = CU_MEMORYTYPE_HOST;
+        params.dstHost = m_mappedPointer;
+        params.dstPitch = sizePerRow;
+        params.dstHeight = m_height;
+        params.dstXInBytes = 0;
+        params.dstY = 0;
+        params.dstZ = 0;
+        // dstArray, dstDevice, dstLOD are not used in this case.
+
+        CUDADRV_CHECK(cuMemcpy3D(&params));
+
+        return m_mappedPointer;
+    }
+
+    void Array::unmap() {
+        if (!m_mapped)
+            throw std::runtime_error("This buffer is not mapped.");
+
+        m_mapped = false;
+
+        CUDAHAssert(m_mappedPointer, "This buffer is not mapped.");
+
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+        size_t sizePerRow = m_width * static_cast<size_t>(m_stride);
+
+        CUDA_MEMCPY3D params = {};
+        params.WidthInBytes = sizePerRow;
+        params.Height = std::max<size_t>(1, m_height);
+        params.Depth = std::max<size_t>(1, m_depth);
+
+        params.srcMemoryType = CU_MEMORYTYPE_HOST;
+        params.srcHost = m_mappedPointer;
+        params.srcPitch = sizePerRow;
+        params.srcHeight = m_height;
+        params.srcXInBytes = 0;
+        params.srcY = 0;
+        params.srcZ = 0;
+        // srcArray, srcDevice, srcLOD are not used in this case.
+
+        params.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+        params.dstArray = m_array;
+        params.dstXInBytes = 0;
+        params.dstY = 0;
+        params.dstZ = 0;
+        // dstDevice, dstHeight, dstHost, dstLOD, dstPitch are not used in this case.
+
+        CUDADRV_CHECK(cuMemcpy3D(&params));
+
+        delete[] m_mappedPointer;
+        m_mappedPointer = nullptr;
     }
 }

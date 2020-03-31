@@ -50,6 +50,8 @@
 #include "stopwatch.h"
 
 #include "ext/tiny_obj_loader.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "ext/stb_image.h"
 
 
 
@@ -601,6 +603,33 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matGrayWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
     matData[matGrayWallIndex] = matGrayWallData;
 
+    uint32_t matFloorIndex = materialID++;
+    optix::Material matFloor = optixContext.createMaterial();
+    matFloor.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matFloor.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
+    matFloor.setUserData(matFloorIndex);
+    Shared::MaterialData matFloorData;
+    matFloorData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    matData[matFloorIndex] = matFloorData;
+
+    CUDAHelper::Array arrayCheckerBoard;
+    CUDAHelper::TextureSampler texCheckerBoard;
+    {
+        int32_t width, height, n;
+        uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 0);
+        arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height);
+        auto data = arrayCheckerBoard.map<uint8_t>();
+        std::copy_n(linearImageData, width * height * 4, data);
+        arrayCheckerBoard.unmap();
+        stbi_image_free(linearImageData);
+    }
+    texCheckerBoard.setArray(arrayCheckerBoard);
+    texCheckerBoard.setFilterMode(CUDAHelper::TextureFilterMode::Point,
+                                  CUDAHelper::TextureFilterMode::Point);
+    texCheckerBoard.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
+    texCheckerBoard.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
+    CUtexObject texObjCheckerBoard = texCheckerBoard.getTextureObject();
+
     uint32_t matLeftWallIndex = materialID++;
     optix::Material matLeft = optixContext.createMaterial();
     matLeft.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
@@ -662,9 +691,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         Shared::Vertex vertices[] = {
             // floor
             { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 1) },
-            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(1, 0) },
+            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
+            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
             // back wall
             { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
             { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
@@ -708,8 +737,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         
         // JP: インデックスバッファーは別々にしてみる。
         // EN: Use separated index buffers among walls.
-        // floor, back wall, ceiling
-        meshCornellBox.addMaterialGroup(triangles + 0, 6, matGray);
+        // floor
+        meshCornellBox.addMaterialGroup(triangles + 0, 2, matFloor);
+        // back wall, ceiling
+        meshCornellBox.addMaterialGroup(triangles + 2, 4, matGray);
         // left wall
         meshCornellBox.addMaterialGroup(triangles + 6, 2, matLeft);
         // right wall
@@ -1031,6 +1062,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.accumBuffer = accumBuffer.getDevicePointer();
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
+    plp.matLightIndex = matLightIndex;
+    plp.matFloorIndex = matFloorIndex;
+    plp.texFloor = texObjCheckerBoard;
 
     pipeline.setScene(scene);
     pipeline.setShaderBindingTable(&shaderBindingTable);
@@ -1551,6 +1585,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matLight.destroy();
     matRight.destroy();
     matLeft.destroy();
+    texCheckerBoard.destroyTextureObject();
+    arrayCheckerBoard.finalize();
+    matFloor.destroy();
     matGray.destroy();
 
     materialDataBuffer.finalize();

@@ -149,10 +149,11 @@ namespace CUDAHelper {
     };
 
     class Buffer {
+        CUcontext m_cudaContext;
         BufferType m_type;
 
-        int32_t m_numElements;
-        int32_t m_stride;
+        uint32_t m_numElements;
+        uint32_t m_stride;
 
         void* m_hostPointer;
         CUdeviceptr m_devicePointer;
@@ -160,8 +161,6 @@ namespace CUDAHelper {
 
         uint32_t m_GLBufferID;
         CUgraphicsResource m_cudaGfxResource;
-
-        CUcontext m_cudaContext;
 
         struct {
             unsigned int m_initialized : 1;
@@ -173,7 +172,8 @@ namespace CUDAHelper {
 
     public:
         Buffer();
-        Buffer(CUcontext context, BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID = 0) : Buffer() {
+        Buffer(CUcontext context, BufferType type,
+               uint32_t numElements, uint32_t stride, uint32_t glBufferID = 0) : Buffer() {
             initialize(context, type, numElements, stride, glBufferID);
         }
         ~Buffer();
@@ -181,10 +181,11 @@ namespace CUDAHelper {
         Buffer(Buffer &&b);
         Buffer &operator=(Buffer &&b);
 
-        void initialize(CUcontext context, BufferType type, int32_t numElements, int32_t stride, uint32_t glBufferID);
+        void initialize(CUcontext context, BufferType type,
+                        uint32_t numElements, uint32_t stride, uint32_t glBufferID);
         void finalize();
 
-        void resize(int32_t numElements, int32_t stride);
+        void resize(uint32_t numElements, uint32_t stride);
 
         CUdeviceptr getCUdeviceptr() const {
             return m_devicePointer;
@@ -193,13 +194,13 @@ namespace CUDAHelper {
             return m_devicePointer + m_stride * idx;
         }
         size_t sizeInBytes() const {
-            return (size_t)m_numElements * m_stride;
+            return m_numElements * m_stride;
         }
         size_t stride() const {
             return m_stride;
         }
         size_t numElements() const {
-            return (size_t)m_numElements;
+            return m_numElements;
         }
         bool isInitialized() const {
             return m_initialized;
@@ -312,6 +313,229 @@ namespace CUDAHelper {
         }
         T &operator[](uint32_t idx) {
             return m_values[idx];
+        }
+    };
+
+
+
+    enum class ArrayElementType {
+        UInt8x4,
+        UInt16x4,
+        UInt32x4,
+        Int8x4,
+        Int16x4,
+        Int32x4,
+        Halfx4,
+        Floatx4,
+    };
+
+    //enum class ArrayType {
+    //    E_1D = 0,
+    //    E_2D,
+    //    E_3D,
+    //    E_1DLayered,
+    //    E_2DLayered,
+    //    Cubemap,
+    //    CubemapLayered,
+    //};
+    
+    class Array {
+        CUcontext m_cudaContext;
+
+        //ArrayType m_arrayType;
+        uint32_t m_width;
+        uint32_t m_height;
+        uint32_t m_depth;
+        uint32_t m_stride;
+        ArrayElementType m_elemType;
+
+        CUarray m_array;
+        void* m_mappedPointer;
+
+        struct {
+            unsigned int m_initialized : 1;
+            unsigned int m_mapped : 1;
+        };
+
+        Array(const Array &) = delete;
+        Array &operator=(const Array &) = delete;
+
+        void initialize(CUcontext context, ArrayElementType elemType,
+                        uint32_t width, uint32_t height, uint32_t depth,
+                        bool cubemap, bool layered);
+
+    public:
+        Array();
+        Array(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height) {
+            initialize(context, elemType, width, height);
+        }
+        ~Array();
+
+        Array(Array &&b);
+        Array &operator=(Array &&b);
+
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t length) {
+            initialize(context, elemType, length, 0, 0, false, false);
+        }
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height) {
+            initialize(context, elemType, width, height, 0, false, false);
+        }
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height, uint32_t depth) {
+            initialize(context, elemType, width, height, 0, false, false);
+        }
+        void finalize();
+
+        CUarray getCUarray() const {
+            return m_array;
+        }
+
+        uint32_t getWidth() const {
+            return m_width;
+        }
+        uint32_t getHeight() const {
+            return m_height;
+        }
+        uint32_t getDepth() const {
+            return m_depth;
+        }
+
+        void* map();
+        template <typename T>
+        T* map() {
+            return reinterpret_cast<T*>(map());
+        }
+        void unmap();
+    };
+
+
+
+    //enum class MipmappedArrayType {
+    //    E_1DMipmapped = 0,
+    //    E_2DMipmapped,
+    //    E_3DMipmapped,
+    //};
+
+
+
+    enum class TextureWrapMode {
+        Repeat = CU_TR_ADDRESS_MODE_WRAP,
+        Clamp = CU_TR_ADDRESS_MODE_CLAMP,
+        Mirror = CU_TR_ADDRESS_MODE_MIRROR,
+        Border = CU_TR_ADDRESS_MODE_BORDER,
+    };
+
+    enum class TextureFilterMode {
+        Point = CU_TR_FILTER_MODE_POINT,
+        Linear = CU_TR_FILTER_MODE_LINEAR,
+    };
+
+    enum class TextureIndexingMode {
+        NormalizedCoordinates = 0,
+        ArrayIndex,
+    };
+
+    enum class TextureReadMode {
+        ElementType = 0,
+        NormalizedFloat,
+        ElementType_sRGB,
+        NormalizedFloat_sRGB
+    };
+    
+    class TextureSampler {
+        CUDA_RESOURCE_DESC m_resDesc;
+        CUDA_TEXTURE_DESC m_texDesc;
+        CUtexObject m_texObject;
+        struct {
+            unsigned int m_texObjectCreated : 1;
+            unsigned int m_texObjectIsUpToDate : 1;
+        };
+
+        TextureSampler(const TextureSampler &) = delete;
+        TextureSampler &operator=(const TextureSampler &) = delete;
+
+    public:
+        TextureSampler() : m_texObjectCreated(false), m_texObjectIsUpToDate(false) {
+            m_resDesc = {};
+            m_texDesc = {};
+        }
+        ~TextureSampler() {
+            if (m_texObjectIsUpToDate)
+                CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
+        }
+
+        void destroyTextureObject() {
+            if (m_texObjectIsUpToDate) {
+                CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
+                m_texObjectIsUpToDate = false;
+                m_texObjectCreated = false;
+            }
+        }
+
+        TextureSampler(TextureSampler &&t) {
+            m_resDesc = t.m_resDesc;
+            m_texDesc = t.m_texDesc;
+            m_texObject = t.m_texObject;
+            m_texObjectCreated = t.m_texObjectCreated;
+            m_texObjectIsUpToDate = t.m_texObjectIsUpToDate;
+
+            t.m_texObjectCreated = false;
+        }
+        TextureSampler &operator=(TextureSampler &&t) {
+            m_resDesc = t.m_resDesc;
+            m_texDesc = t.m_texDesc;
+            m_texObject = t.m_texObject;
+            m_texObjectCreated = t.m_texObjectCreated;
+            m_texObjectIsUpToDate = t.m_texObjectIsUpToDate;
+
+            t.m_texObjectCreated = false;
+        }
+
+        void setArray(const Array &array) {
+            m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+            m_resDesc.res.array.hArray = array.getCUarray();
+            m_texObjectIsUpToDate = false;
+        }
+
+        void setFilterMode(TextureFilterMode xy, TextureFilterMode mipmap) {
+            m_texDesc.filterMode = static_cast<CUfilter_mode>(xy);
+            m_texDesc.mipmapFilterMode = static_cast<CUfilter_mode>(mipmap);
+            m_texObjectIsUpToDate = false;
+        }
+        void setWrapMode(uint32_t dim, TextureWrapMode mode) {
+            if (dim >= 3)
+                return;
+            m_texDesc.addressMode[dim] = static_cast<CUaddress_mode>(mode);
+            m_texObjectIsUpToDate = false;
+        }
+        void setIndexingMode(TextureIndexingMode mode) {
+            if (mode == TextureIndexingMode::ArrayIndex)
+                m_texDesc.flags &= ~CU_TRSF_NORMALIZED_COORDINATES;
+            else
+                m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
+            m_texObjectIsUpToDate = false;
+        }
+        void setReadMode(TextureReadMode mode) {
+            if (mode == TextureReadMode::ElementType || mode == TextureReadMode::ElementType_sRGB)
+                m_texDesc.flags |= CU_TRSF_READ_AS_INTEGER;
+            else if (mode == TextureReadMode::NormalizedFloat || mode == TextureReadMode::NormalizedFloat_sRGB)
+                m_texDesc.flags &= ~CU_TRSF_READ_AS_INTEGER;
+
+            if (mode == TextureReadMode::ElementType_sRGB || mode == TextureReadMode::NormalizedFloat_sRGB)
+                m_texDesc.flags |= CU_TRSF_SRGB;
+            else if (mode == TextureReadMode::ElementType || mode == TextureReadMode::NormalizedFloat)
+                m_texDesc.flags &= ~CU_TRSF_SRGB;
+            m_texObjectIsUpToDate = false;
+        }
+
+        CUtexObject getTextureObject() {
+            if (m_texObjectCreated && !m_texObjectIsUpToDate)
+                CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
+            if (!m_texObjectIsUpToDate) {
+                CUDADRV_CHECK(cuTexObjectCreate(&m_texObject, &m_resDesc, &m_texDesc, nullptr));
+                m_texObjectCreated = true;
+                m_texObjectIsUpToDate = true;
+            }
+            return m_texObject;
         }
     };
 }

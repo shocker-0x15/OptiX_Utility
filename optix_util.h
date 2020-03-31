@@ -35,6 +35,7 @@ TODO:
 #endif
 
 #include <optix.h>
+#include <cuda.h>
 #include <cstdint>
 
 #if !defined(__CUDA_ARCH__)

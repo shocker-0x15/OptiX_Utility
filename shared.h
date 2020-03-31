@@ -10,6 +10,29 @@ RT_FUNCTION float4 make_float4(const float3 &v, float w) {
     return make_float4(v.x, v.y, v.z, w);
 }
 
+RT_FUNCTION float2 operator-(const float2 &v) {
+    return make_float2(-v.x, -v.y);
+}
+RT_FUNCTION float2 operator+(const float2 &v0, const float2 &v1) {
+    return make_float2(v0.x + v1.x, v0.y + v1.y);
+}
+RT_FUNCTION float2 operator-(const float2 &v0, const float2 &v1) {
+    return make_float2(v0.x - v1.x, v0.y - v1.y);
+}
+RT_FUNCTION float2 operator*(const float2 &v0, const float2 &v1) {
+    return make_float2(v0.x * v1.x, v0.y * v1.y);
+}
+RT_FUNCTION float2 operator*(float s, const float2 &v) {
+    return make_float2(s * v.x, s * v.y);
+}
+RT_FUNCTION float2 operator*(const float2 &v, float s) {
+    return make_float2(s * v.x, s * v.y);
+}
+RT_FUNCTION float2 operator/(const float2 &v, float s) {
+    float r = 1 / s;
+    return r * v;
+}
+
 RT_FUNCTION float3 operator-(const float3 &v) {
     return make_float3(-v.x, -v.y, -v.z);
 }
@@ -123,5 +146,8 @@ namespace Shared {
         PCG32RNG* rngBuffer;
         float4* accumBuffer;
         PerspectiveCamera camera;
+        uint32_t matLightIndex;
+        uint32_t matFloorIndex;
+        CUtexObject texFloor;
     };
 }
