@@ -437,7 +437,6 @@ namespace CUDAHelper {
     enum class TextureReadMode {
         ElementType = 0,
         NormalizedFloat,
-        ElementType_sRGB,
         NormalizedFloat_sRGB
     };
     
@@ -457,9 +456,10 @@ namespace CUDAHelper {
         TextureSampler() : m_texObjectCreated(false), m_texObjectIsUpToDate(false) {
             m_resDesc = {};
             m_texDesc = {};
+            m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
         }
         ~TextureSampler() {
-            if (m_texObjectIsUpToDate)
+            if (m_texObjectCreated)
                 CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
         }
 
@@ -507,6 +507,13 @@ namespace CUDAHelper {
             m_texDesc.addressMode[dim] = static_cast<CUaddress_mode>(mode);
             m_texObjectIsUpToDate = false;
         }
+        void setBorderColor(float r, float g, float b, float a) {
+            m_texDesc.borderColor[0] = r;
+            m_texDesc.borderColor[1] = g;
+            m_texDesc.borderColor[2] = b;
+            m_texDesc.borderColor[3] = a;
+            m_texObjectIsUpToDate = false;
+        }
         void setIndexingMode(TextureIndexingMode mode) {
             if (mode == TextureIndexingMode::ArrayIndex)
                 m_texDesc.flags &= ~CU_TRSF_NORMALIZED_COORDINATES;
@@ -515,14 +522,14 @@ namespace CUDAHelper {
             m_texObjectIsUpToDate = false;
         }
         void setReadMode(TextureReadMode mode) {
-            if (mode == TextureReadMode::ElementType || mode == TextureReadMode::ElementType_sRGB)
+            if (mode == TextureReadMode::ElementType)
                 m_texDesc.flags |= CU_TRSF_READ_AS_INTEGER;
-            else if (mode == TextureReadMode::NormalizedFloat || mode == TextureReadMode::NormalizedFloat_sRGB)
+            else
                 m_texDesc.flags &= ~CU_TRSF_READ_AS_INTEGER;
 
-            if (mode == TextureReadMode::ElementType_sRGB || mode == TextureReadMode::NormalizedFloat_sRGB)
+            if (mode == TextureReadMode::NormalizedFloat_sRGB)
                 m_texDesc.flags |= CU_TRSF_SRGB;
-            else if (mode == TextureReadMode::ElementType || mode == TextureReadMode::NormalizedFloat)
+            else
                 m_texDesc.flags &= ~CU_TRSF_SRGB;
             m_texObjectIsUpToDate = false;
         }
