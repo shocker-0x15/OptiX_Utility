@@ -195,6 +195,12 @@ RT_PROGRAM void __miss__searchRay() {
     //payload.setAll();
 }
 
+RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, float2 texCoord) {
+    CUtexObject texture = plp.textures[texID];
+    float4 texValue = tex2D<float4>(texture, texCoord.x, texCoord.y);
+    return make_float3(texValue.x, texValue.y, texValue.z);
+}
+
 RT_PROGRAM void __closesthit__shading() {
     auto sbtr = optix::getHitGroupSBTRecordData();
     auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
@@ -230,10 +236,9 @@ RT_PROGRAM void __closesthit__shading() {
     //return;
 
     float3 albedo = mat.albedo;
-    if (sbtr.materialData == plp.matFloorIndex) {
+    if (mat.misc != 0xFFFFFFFF) {
         float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
-        float4 texValue = tex2D<float4>(plp.texFloor, texCoord.x, texCoord.y);
-        albedo = make_float3(texValue.x, texValue.y, texValue.z);
+        albedo = optixDirectCall<float3>(mat.program, mat.texID, texCoord);
     }
 
     const float3 LightRadiance = make_float3(20, 20, 20);

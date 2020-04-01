@@ -132,6 +132,17 @@ namespace Shared {
 
     struct MaterialData {
         float3 albedo;
+        union {
+            struct {
+                unsigned int program : 16;
+                unsigned int texID : 16;
+            };
+            uint32_t misc;
+        };
+
+        MaterialData() :
+            albedo(make_float3(0.0f, 0.0f, 0.5f)),
+            misc(0xFFFFFFFF) {}
     };
 
 
@@ -147,7 +158,6 @@ namespace Shared {
         float4* accumBuffer;
         PerspectiveCamera camera;
         uint32_t matLightIndex;
-        uint32_t matFloorIndex;
-        CUtexObject texFloor;
+        CUtexObject* textures;
     };
 }

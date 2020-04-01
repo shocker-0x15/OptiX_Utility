@@ -443,6 +443,7 @@ namespace CUDAHelper {
     class TextureSampler {
         CUDA_RESOURCE_DESC m_resDesc;
         CUDA_TEXTURE_DESC m_texDesc;
+        CUDA_RESOURCE_VIEW_DESC m_resViewDesc;
         CUtexObject m_texObject;
         struct {
             unsigned int m_texObjectCreated : 1;
@@ -457,6 +458,8 @@ namespace CUDAHelper {
             m_resDesc = {};
             m_texDesc = {};
             m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
+            m_resViewDesc = {};
+            // TODO: support block compression formats.
         }
         ~TextureSampler() {
             if (m_texObjectCreated)

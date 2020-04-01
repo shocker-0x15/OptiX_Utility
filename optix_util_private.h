@@ -557,9 +557,11 @@ namespace optix {
         _ProgramGroup* rayGenProgram;
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
+        std::vector<_ProgramGroup*> callablePrograms;
         Buffer rayGenRecord;
         Buffer exceptionRecord;
         Buffer missRecords;
+        Buffer callableRecords;
 
         Buffer* hitGroupSbt;
         OptixShaderBindingTable sbt;
@@ -583,11 +585,13 @@ namespace optix {
             rayGenRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
             exceptionRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
             missRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
+            callableRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE, 0);
         }
         ~Priv() {
             if (pipelineLinked)
                 optixPipelineDestroy(rawPipeline);
 
+            callableRecords.finalize();
             missRecords.finalize();
             exceptionRecord.finalize();
             rayGenRecord.finalize();

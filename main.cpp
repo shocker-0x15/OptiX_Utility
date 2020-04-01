@@ -553,6 +553,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optix::ProgramGroup searchRayHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
     optix::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
 
+    uint32_t callableProgramSampleTextureIndex = 0;
+    optix::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__sampleTexture", emptyModule, nullptr);
+
     pipeline.setMaxTraceDepth(2);
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
 
@@ -562,6 +565,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
+
+    pipeline.setCallableProgram(callableProgramSampleTextureIndex, callableProgramSampleTexture);
 
     CUmodule modulePostProcess;
     CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str()));
@@ -588,6 +593,33 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     hpprintf("Setup a scene.\n");
 
+    CUDAHelper::TypedBuffer<CUtexObject> textureObjectBuffer;
+    textureObjectBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    CUtexObject* textureObjects = textureObjectBuffer.map();
+
+    CUDAHelper::Array arrayCheckerBoard;
+    CUDAHelper::TextureSampler texCheckerBoard;
+    {
+        int32_t width, height, n;
+        uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 0);
+        arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height);
+        auto data = arrayCheckerBoard.map<uint8_t>();
+        std::copy_n(linearImageData, width * height * 4, data);
+        arrayCheckerBoard.unmap();
+        stbi_image_free(linearImageData);
+    }
+    texCheckerBoard.setArray(arrayCheckerBoard);
+    texCheckerBoard.setFilterMode(CUDAHelper::TextureFilterMode::Point,
+                                  CUDAHelper::TextureFilterMode::Point);
+    texCheckerBoard.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
+    texCheckerBoard.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
+    uint32_t texCheckerBoardIndex = 0;
+    textureObjects[texCheckerBoardIndex] = texCheckerBoard.getTextureObject();
+
+    textureObjectBuffer.unmap();
+
+
+
     CUDAHelper::TypedBuffer<Shared::MaterialData> materialDataBuffer;
     materialDataBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
     uint32_t materialID = 0;
@@ -609,26 +641,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matFloor.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matFloor.setUserData(matFloorIndex);
     Shared::MaterialData matFloorData;
-    matFloorData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    matFloorData.albedo = make_float3(0, 0, 0);
+    matFloorData.program = callableProgramSampleTextureIndex;
+    matFloorData.texID = texCheckerBoardIndex;
     matData[matFloorIndex] = matFloorData;
-
-    CUDAHelper::Array arrayCheckerBoard;
-    CUDAHelper::TextureSampler texCheckerBoard;
-    {
-        int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 0);
-        arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height);
-        auto data = arrayCheckerBoard.map<uint8_t>();
-        std::copy_n(linearImageData, width * height * 4, data);
-        arrayCheckerBoard.unmap();
-        stbi_image_free(linearImageData);
-    }
-    texCheckerBoard.setArray(arrayCheckerBoard);
-    texCheckerBoard.setFilterMode(CUDAHelper::TextureFilterMode::Point,
-                                  CUDAHelper::TextureFilterMode::Point);
-    texCheckerBoard.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
-    texCheckerBoard.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
-    CUtexObject texObjCheckerBoard = texCheckerBoard.getTextureObject();
 
     uint32_t matLeftWallIndex = materialID++;
     optix::Material matLeft = optixContext.createMaterial();
@@ -1063,8 +1079,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
     plp.matLightIndex = matLightIndex;
-    plp.matFloorIndex = matFloorIndex;
-    plp.texFloor = texObjCheckerBoard;
+    plp.textures = textureObjectBuffer.getDevicePointer();
 
     pipeline.setScene(scene);
     pipeline.setShaderBindingTable(&shaderBindingTable);
@@ -1585,12 +1600,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matLight.destroy();
     matRight.destroy();
     matLeft.destroy();
-    texCheckerBoard.destroyTextureObject();
-    arrayCheckerBoard.finalize();
     matFloor.destroy();
     matGray.destroy();
 
     materialDataBuffer.finalize();
+
+    texCheckerBoard.destroyTextureObject();
+    arrayCheckerBoard.finalize();
+
+    textureObjectBuffer.finalize();
 
     CUDADRV_CHECK(cuModuleUnload(moduleDeform));
     CUDADRV_CHECK(cuModuleUnload(modulePostProcess));

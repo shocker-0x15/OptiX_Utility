@@ -49,7 +49,7 @@ namespace optix {
         m = nullptr;
     }
 
-    void Material::setHitGroup(uint32_t rayType, const ProgramGroup &hitGroup) {
+    void Material::setHitGroup(uint32_t rayType, ProgramGroup hitGroup) {
         auto _pipeline = extract(hitGroup)->getPipeline();
         THROW_RUNTIME_ERROR(_pipeline, "Invalid pipeline: %p.", _pipeline);
 
@@ -325,7 +325,7 @@ namespace optix {
         m->scene->markSBTLayoutDirty();
     }
 
-    void GeometryAccelerationStructure::addChild(const GeometryInstance &geomInst) const {
+    void GeometryAccelerationStructure::addChild(GeometryInstance geomInst) const {
         auto _geomInst = extract(geomInst);
         THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
         THROW_RUNTIME_ERROR(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance.");
@@ -483,7 +483,7 @@ namespace optix {
         m = nullptr;
     }
 
-    void Instance::setGAS(const GeometryAccelerationStructure &gas, uint32_t matSetIdx) const {
+    void Instance::setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx) const {
         m->type = InstanceType::GAS;
         m->gas = extract(gas);
         m->matSetIndex = matSetIdx;
@@ -518,7 +518,7 @@ namespace optix {
             m->markDirty();
     }
 
-    void InstanceAccelerationStructure::addChild(const Instance &instance) const {
+    void InstanceAccelerationStructure::addChild(Instance instance) const {
         _Instance* _inst = extract(instance);
         THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
         THROW_RUNTIME_ERROR(_inst->getScene() == m->scene, "Scene mismatch for the given instance.");
@@ -689,6 +689,7 @@ namespace optix {
     void Pipeline::Priv::setupShaderBindingTable() {
         if (!sbtAllocDone) {
             missRecords.resize(numMissRayTypes, missRecords.stride());
+            callableRecords.resize(callablePrograms.size(), callableRecords.stride());
 
             sbtAllocDone = true;
             sbtIsUpToDate = false;
@@ -719,6 +720,11 @@ namespace optix {
 
                 scene->setupHitGroupSBT(this, hitGroupSbt);
 
+                auto callableRecordsOnHost = callableRecords.map<uint8_t>();
+                for (int i = 0; i < callablePrograms.size(); ++i)
+                    callablePrograms[i]->packHeader(callableRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
+                callableRecords.unmap();
+
 
 
                 sbt.raygenRecord = rayGenRecord.getCUdeviceptr();
@@ -733,8 +739,9 @@ namespace optix {
                 sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupSBTRecord);
                 sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / sizeof(HitGroupSBTRecord);
 
-                sbt.callablesRecordBase = 0;
-                sbt.callablesRecordCount = 0;
+                sbt.callablesRecordBase = callableRecords.getCUdeviceptr();
+                sbt.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
+                sbt.callablesRecordCount = callableRecords.numElements();
             }
 
             sbtIsUpToDate = true;
@@ -997,6 +1004,19 @@ namespace optix {
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
         m->missPrograms[rayType] = _program;
+        m->sbtIsUpToDate = false;
+    }
+
+    void Pipeline::setCallableProgram(uint32_t index, ProgramGroup program) const {
+        _ProgramGroup* _program = extract(program);
+        THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
+        THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
+
+        if (index >= m->callablePrograms.size()) {
+            m->callablePrograms.resize(index + 1);
+            m->sbtIsUpToDate = false;
+        }
+        m->callablePrograms[index] = _program;
         m->sbtIsUpToDate = false;
     }
 

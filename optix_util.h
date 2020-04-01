@@ -8,7 +8,7 @@ EN: It is very likely for now that any API will have breaking changes.
 TODO:
 - Callable Programサポート。
 
-- Texture classの作成。CUDAHelperに行くべき？
+- スタックサイズ調整。
 
 - Assertとexceptionの整理。
 
@@ -46,9 +46,11 @@ TODO:
 #if defined(__CUDA_ARCH__)
 #   define RT_FUNCTION __forceinline__ __device__
 #   define RT_PROGRAM extern "C" __global__
+#   define RT_CALLABLE_PROGRAM extern "C" __device__
 #else
 #   define RT_FUNCTION
 #   define RT_PROGRAM
+#   define RT_CALLABLE_PROGRAM
 #endif
 
 
@@ -165,7 +167,7 @@ private: \
     public:
         void destroy();
 
-        void setHitGroup(uint32_t rayType, const ProgramGroup &hitGroup);
+        void setHitGroup(uint32_t rayType, ProgramGroup hitGroup);
         void setUserData(uint32_t data) const;
     };
 
@@ -215,7 +217,7 @@ private: \
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
-        void addChild(const GeometryInstance &geomInst) const;
+        void addChild(GeometryInstance geomInst) const;
 
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -235,7 +237,7 @@ private: \
     public:
         void destroy();
 
-        void setGAS(const GeometryAccelerationStructure &gas, uint32_t matSetIdx = 0) const;
+        void setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx = 0) const;
         void setTransform(const float transform[12]) const;
     };
 
@@ -249,7 +251,7 @@ private: \
 
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
 
-        void addChild(const Instance &instance) const;
+        void addChild(Instance instance) const;
 
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -291,6 +293,7 @@ private: \
         void setRayGenerationProgram(ProgramGroup program) const;
         void setExceptionProgram(ProgramGroup program) const;
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
+        void setCallableProgram(uint32_t index, ProgramGroup program) const;
 
         void setScene(const Scene &scene) const;
         void setShaderBindingTable(Buffer* shaderBindingTable) const;
@@ -299,6 +302,7 @@ private: \
 
 
 
+    // The lifetime of a module must extend to the lifetime of any ProgramGroup that reference that module.
     class Module {
         OPTIX_PIMPL();
 
