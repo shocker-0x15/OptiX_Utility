@@ -140,7 +140,7 @@ struct HitPointParameter {
 
 
 RT_PROGRAM void __raygen__pathtracing() {
-    uint3 launchIndex = optixGetLaunchIndex();
+    uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
     int32_t index = plp.imageSize.x * launchIndex.y + launchIndex.x;
 
     PCG32RNG rng = plp.rngBuffer[index];
@@ -178,10 +178,18 @@ RT_PROGRAM void __raygen__pathtracing() {
     plp.rngBuffer[index] = payload.rng;
     float3 cumResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
+#if defined(USE_BUFFER2D)
+        float4 cumResultF4 = plp.accumBuffer[launchIndex];
+#else
         float4 cumResultF4 = plp.accumBuffer[index];
+#endif
         cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
     }
+#if defined(USE_BUFFER2D)
+    plp.accumBuffer.write(launchIndex, make_float4(cumResult + payload.contribution, 1.0f));
+#else
     plp.accumBuffer[index] = make_float4(cumResult + payload.contribution, 1.0f);
+#endif
 }
 
 RT_PROGRAM void __miss__searchRay() {

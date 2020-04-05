@@ -2,6 +2,8 @@
 
 #include "optix_util.h"
 
+//#define USE_BUFFER2D
+
 RT_FUNCTION float3 getXYZ(const float4 &v) {
     return make_float3(v.x, v.y, v.z);
 }
@@ -155,7 +157,11 @@ namespace Shared {
         int2 imageSize;
         uint32_t numAccumFrames;
         PCG32RNG* rngBuffer;
+#if defined(USE_BUFFER2D)
+        optix::WritableBuffer2D<float4> accumBuffer;
+#else
         float4* accumBuffer;
+#endif
         PerspectiveCamera camera;
         uint32_t matLightIndex;
         CUtexObject* textures;

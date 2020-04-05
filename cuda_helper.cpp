@@ -295,9 +295,10 @@ namespace CUDAHelper {
 
 
 
-    Array::Array() : 
+    Array::Array() :
         m_cudaContext(nullptr),
         m_array(0), m_mappedPointer(nullptr),
+        m_writable(false), m_cubemap(false), m_layered(false),
         m_initialized(false), m_mapped(false) {
     }
 
@@ -315,6 +316,9 @@ namespace CUDAHelper {
         m_elemType = b.m_elemType;
         m_array = b.m_array;
         m_mappedPointer = b.m_mappedPointer;
+        m_writable = b.m_writable;
+        m_cubemap = b.m_cubemap;
+        m_layered = b.m_layered;
         m_initialized = b.m_initialized;
         m_mapped = b.m_mapped;
 
@@ -332,6 +336,9 @@ namespace CUDAHelper {
         m_elemType = b.m_elemType;
         m_array = b.m_array;
         m_mappedPointer = b.m_mappedPointer;
+        m_writable = b.m_writable;
+        m_cubemap = b.m_cubemap;
+        m_layered = b.m_layered;
         m_initialized = b.m_initialized;
         m_mapped = b.m_mapped;
 
@@ -344,7 +351,7 @@ namespace CUDAHelper {
     
     void Array::initialize(CUcontext context, ArrayElementType elemType,
                            uint32_t width, uint32_t height, uint32_t depth,
-                           bool cubemap, bool layered) {
+                           bool writable, bool cubemap, bool layered) {
         if (m_initialized)
             throw std::runtime_error("Array is already initialized.");
 
@@ -371,11 +378,16 @@ namespace CUDAHelper {
         m_height = height;
         m_depth = depth;
         m_elemType = elemType;
+        m_writable = writable;
+        m_cubemap = cubemap;
+        m_layered = layered;
 
         CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
         arrayDesc.Width = m_width;
         arrayDesc.Height = m_height;
         arrayDesc.Depth = m_depth;
+        if (writable)
+            arrayDesc.Flags |= CUDA_ARRAY3D_SURFACE_LDST;
         if (layered)
             arrayDesc.Flags |= CUDA_ARRAY3D_LAYERED;
         if (cubemap)
@@ -442,6 +454,51 @@ namespace CUDAHelper {
         CUDADRV_CHECK(cuArrayDestroy(m_array));
 
         m_initialized = false;
+    }
+
+    void Array::resize(uint32_t length) {
+        if (m_height > 0 || m_depth > 0)
+            throw std::runtime_error("Array dimension cannot be changed.");
+        CUDAHAssert_NotImplemented();
+    }
+
+    void Array::resize(uint32_t width, uint32_t height) {
+        if (m_depth > 0)
+            throw std::runtime_error("Array dimension cannot be changed.");
+        
+        if (width == m_width && height == m_height)
+            return;
+
+        Array newArray;
+        newArray.initialize(m_cudaContext, m_elemType, width, height, m_height,
+                            m_writable, m_cubemap, m_layered);
+
+        size_t sizePerRow = std::min(m_width, width) * static_cast<size_t>(m_stride);
+
+        CUDA_MEMCPY3D params = {};
+        params.WidthInBytes = sizePerRow;
+        params.Height = std::max<size_t>(1, std::min(m_height, height));
+        params.Depth = std::max<size_t>(1, m_depth);
+
+        params.srcMemoryType = CU_MEMORYTYPE_ARRAY;
+        params.srcArray = m_array;
+        params.srcXInBytes = 0;
+        params.srcY = 0;
+        params.srcZ = 0;
+        // srcDevice, srcHeight, srcHost, srcLOD, srcPitch are not used in this case.
+
+        params.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+        params.dstArray = m_array;
+        params.dstXInBytes = 0;
+        params.dstY = 0;
+        params.dstZ = 0;
+        // dstDevice, dstHeight, dstHost, dstLOD, dstPitch are not used in this case.
+
+        *this = std::move(newArray);
+    }
+
+    void Array::resize(uint32_t width, uint32_t height, uint32_t depth) {
+        CUDAHAssert_NotImplemented();
     }
 
 

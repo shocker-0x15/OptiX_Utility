@@ -338,6 +338,11 @@ namespace CUDAHelper {
     //    Cubemap,
     //    CubemapLayered,
     //};
+
+    enum class ArrayWritable {
+        Enable = 0,
+        Disable,
+    };
     
     class Array {
         CUcontext m_cudaContext;
@@ -353,6 +358,9 @@ namespace CUDAHelper {
         void* m_mappedPointer;
 
         struct {
+            unsigned int m_writable : 1;
+            unsigned int m_cubemap : 1;
+            unsigned int m_layered : 1;
             unsigned int m_initialized : 1;
             unsigned int m_mapped : 1;
         };
@@ -362,28 +370,32 @@ namespace CUDAHelper {
 
         void initialize(CUcontext context, ArrayElementType elemType,
                         uint32_t width, uint32_t height, uint32_t depth,
-                        bool cubemap, bool layered);
+                        bool writable, bool cubemap, bool layered);
 
     public:
         Array();
-        Array(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height) {
-            initialize(context, elemType, width, height);
-        }
         ~Array();
 
         Array(Array &&b);
         Array &operator=(Array &&b);
 
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t length) {
-            initialize(context, elemType, length, 0, 0, false, false);
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t length, ArrayWritable writable) {
+            initialize(context, elemType, length, 0, 0,
+                       writable == ArrayWritable::Enable, false, false);
         }
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height) {
-            initialize(context, elemType, width, height, 0, false, false);
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height, ArrayWritable writable) {
+            initialize(context, elemType, width, height, 0,
+                       writable == ArrayWritable::Enable, false, false);
         }
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height, uint32_t depth) {
-            initialize(context, elemType, width, height, 0, false, false);
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height, uint32_t depth, ArrayWritable writable) {
+            initialize(context, elemType, width, height, 0,
+                       writable == ArrayWritable::Enable, false, false);
         }
         void finalize();
+
+        void resize(uint32_t length);
+        void resize(uint32_t width, uint32_t height);
+        void resize(uint32_t width, uint32_t height, uint32_t depth);
 
         CUarray getCUarray() const {
             return m_array;
@@ -454,7 +466,8 @@ namespace CUDAHelper {
         TextureSampler &operator=(const TextureSampler &) = delete;
 
     public:
-        TextureSampler() : m_texObjectCreated(false), m_texObjectIsUpToDate(false) {
+        TextureSampler() : 
+            m_texObjectCreated(false), m_texObjectIsUpToDate(false) {
             m_resDesc = {};
             m_texDesc = {};
             m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
@@ -463,11 +476,11 @@ namespace CUDAHelper {
         }
         ~TextureSampler() {
             if (m_texObjectCreated)
-                CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
+                cuTexObjectDestroy(m_texObject);
         }
 
         void destroyTextureObject() {
-            if (m_texObjectIsUpToDate) {
+            if (m_texObjectCreated) {
                 CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
                 m_texObjectIsUpToDate = false;
                 m_texObjectCreated = false;
@@ -477,6 +490,7 @@ namespace CUDAHelper {
         TextureSampler(TextureSampler &&t) {
             m_resDesc = t.m_resDesc;
             m_texDesc = t.m_texDesc;
+            m_resViewDesc = t.m_resViewDesc;
             m_texObject = t.m_texObject;
             m_texObjectCreated = t.m_texObjectCreated;
             m_texObjectIsUpToDate = t.m_texObjectIsUpToDate;
@@ -486,6 +500,7 @@ namespace CUDAHelper {
         TextureSampler &operator=(TextureSampler &&t) {
             m_resDesc = t.m_resDesc;
             m_texDesc = t.m_texDesc;
+            m_resViewDesc = t.m_resViewDesc;
             m_texObject = t.m_texObject;
             m_texObjectCreated = t.m_texObjectCreated;
             m_texObjectIsUpToDate = t.m_texObjectIsUpToDate;
@@ -546,6 +561,70 @@ namespace CUDAHelper {
                 m_texObjectIsUpToDate = true;
             }
             return m_texObject;
+        }
+    };
+
+
+
+    class SurfaceView {
+        CUDA_RESOURCE_DESC m_resDesc;
+        CUsurfObject m_surfObject;
+        struct {
+            unsigned int m_surfObjectCreated : 1;
+            unsigned int m_surfObjectIsUpToDate : 1;
+        };
+
+        SurfaceView(const SurfaceView &) = delete;
+        SurfaceView &operator=(const SurfaceView &) = delete;
+
+    public:
+        SurfaceView() :
+            m_surfObjectCreated(false), m_surfObjectIsUpToDate(false) {
+            m_resDesc = {};
+        }
+        ~SurfaceView() {
+            if (m_surfObjectCreated)
+                cuSurfObjectDestroy(m_surfObject);
+        }
+
+        void destroySurfaceObject() {
+            if (m_surfObjectCreated) {
+                CUDADRV_CHECK(cuSurfObjectDestroy(m_surfObject));
+                m_surfObjectIsUpToDate = false;
+                m_surfObjectCreated = false;
+            }
+        }
+
+        SurfaceView(SurfaceView &&s) {
+            m_resDesc = s.m_resDesc;
+            m_surfObjectCreated = s.m_surfObjectCreated;
+            m_surfObjectIsUpToDate = s.m_surfObjectIsUpToDate;
+
+            s.m_surfObjectCreated = false;
+        }
+        SurfaceView &operator=(SurfaceView &&s) {
+            m_resDesc = s.m_resDesc;
+            m_surfObjectCreated = s.m_surfObjectCreated;
+            m_surfObjectIsUpToDate = s.m_surfObjectIsUpToDate;
+
+            s.m_surfObjectCreated = false;
+        }
+
+        void setArray(const Array &array) {
+            m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+            m_resDesc.res.array.hArray = array.getCUarray();
+            m_surfObjectIsUpToDate = false;
+        }
+
+        CUsurfObject getSurfaceObject() {
+            if (m_surfObjectCreated && !m_surfObjectIsUpToDate)
+                CUDADRV_CHECK(cuSurfObjectDestroy(m_surfObject));
+            if (!m_surfObjectIsUpToDate) {
+                CUDADRV_CHECK(cuSurfObjectCreate(&m_surfObject, &m_resDesc));
+                m_surfObjectCreated = true;
+                m_surfObjectIsUpToDate = true;
+            }
+            return m_surfObject;
         }
     };
 }

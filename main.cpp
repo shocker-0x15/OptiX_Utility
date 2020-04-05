@@ -529,7 +529,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUDADRV_CHECK(cuStreamCreate(&cuStream[1], 0));
     gpuTimer[0].initialize(cuContext);
     gpuTimer[1].initialize(cuContext);
-    
+
     optix::Context optixContext = optix::Context::create(cuContext);
 
     optix::Pipeline pipeline = optixContext.createPipeline();
@@ -602,7 +602,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 0);
-        arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height);
+        arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height,
+                                     CUDAHelper::ArrayWritable::Disable);
         auto data = arrayCheckerBoard.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
         arrayCheckerBoard.unmap();
@@ -1061,8 +1062,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     initializeRNGSeeds(rngBuffer);
 
+#if defined(USE_BUFFER2D)
+    CUDAHelper::Array arrayAccumBuffer;
+    arrayAccumBuffer.initialize(cuContext, CUDAHelper::ArrayElementType::Floatx4,
+                                renderTargetSizeX, renderTargetSizeY, CUDAHelper::ArrayWritable::Enable);
+    CUDAHelper::SurfaceView surfViewAccumBuffer;
+    surfViewAccumBuffer.setArray(arrayAccumBuffer);
+#else
     CUDAHelper::TypedBuffer<float4> accumBuffer;
     accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
+#endif
 
 
 
@@ -1075,7 +1084,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
     plp.rngBuffer = rngBuffer.getDevicePointer();
+#if defined(USE_BUFFER2D)
+    plp.accumBuffer = surfViewAccumBuffer.getSurfaceObject();
+#else
     plp.accumBuffer = accumBuffer.getDevicePointer();
+#endif
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
     plp.matLightIndex = matLightIndex;
@@ -1159,7 +1172,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
 
+#if defined(USE_BUFFER2D)
+            arrayAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
+            surfViewAccumBuffer.setArray(arrayAccumBuffer);
+#else
             accumBuffer.resize(renderTargetSizeX * renderTargetSizeY);
+#endif
             rngBuffer.resize(renderTargetSizeX * renderTargetSizeY);
             initializeRNGSeeds(rngBuffer);
 
@@ -1168,7 +1186,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             plp.imageSize.y = renderTargetSizeY;
             plp.numAccumFrames = 1;
             plp.rngBuffer = rngBuffer.getDevicePointer();
+#if defined(USE_BUFFER2D)
+            plp.accumBuffer = surfViewAccumBuffer.getSurfaceObject();
+#else
             plp.accumBuffer = accumBuffer.getDevicePointer();
+#endif
             plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
             resized = true;
@@ -1456,7 +1478,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
         uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
         CUDAHelper::callKernel(curCuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
-                               accumBuffer.getDevicePointer(), renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
+#if defined(USE_BUFFER2D)
+                               surfViewAccumBuffer.getSurfaceObject(),
+#else
+                               accumBuffer.getDevicePointer(),
+#endif
+                               renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
                                outputBufferCUDA.beginCUDAAccess(curCuStream));
         outputBufferCUDA.endCUDAAccess(curCuStream);
         curGPUTimer.postProcess.stop(curCuStream);
@@ -1550,7 +1577,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+#if defined(USE_BUFFER2D)
+    surfViewAccumBuffer.destroySurfaceObject();
+    arrayAccumBuffer.finalize();
+#else
     accumBuffer.finalize();
+#endif
     rngBuffer.finalize();
     
     scaleSampler.finalize();

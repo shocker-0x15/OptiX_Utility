@@ -101,6 +101,31 @@ namespace optix {
 
 
 
+    template <typename T>
+    class WritableBuffer2D {
+        CUsurfObject m_surfObject;
+
+    public:
+        WritableBuffer2D() : m_surfObject(0) {}
+        WritableBuffer2D(CUsurfObject surfObject) : m_surfObject(surfObject) {};
+
+        WritableBuffer2D &operator=(CUsurfObject surfObject) {
+            m_surfObject = surfObject;
+            return *this;
+        }
+
+#if defined(__CUDA_ARCH__)
+        RT_FUNCTION T operator[](uint2 idx) const {
+            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        RT_FUNCTION void write(uint2 idx, const T &value) {
+            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+#endif
+    };
+
+
+
 #if !defined(__CUDA_ARCH__)
     using namespace CUDAHelper;
 
