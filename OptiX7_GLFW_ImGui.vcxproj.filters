@@ -135,10 +135,10 @@
     <CudaCompile Include="deform.cu">
       <Filter>kernels</Filter>
     </CudaCompile>
-    <CudaCompile Include="kernel.cu">
+    <CudaCompile Include="post_process.cu">
       <Filter>kernels</Filter>
     </CudaCompile>
-    <CudaCompile Include="post_process.cu">
+    <CudaCompile Include="optix_kernels.cu">
       <Filter>kernels</Filter>
     </CudaCompile>
   </ItemGroup>

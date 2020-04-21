@@ -341,6 +341,7 @@ namespace optix {
             m->children[i]->fillBuildInput(&m->buildInputs[i]);
 
         m->buildOptions = {};
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
                                       (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                       (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
@@ -549,6 +550,7 @@ namespace optix {
         }
 
         m->buildOptions = {};
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
                                       (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                       (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));

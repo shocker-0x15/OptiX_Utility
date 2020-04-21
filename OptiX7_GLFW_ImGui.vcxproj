@@ -176,11 +176,12 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="deform.cu" />
-    <CudaCompile Include="kernel.cu">
+    <CudaCompile Include="optix_kernels.cu">
       <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </AdditionalCompilerOptions>
       <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </AdditionalCompilerOptions>
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
     </CudaCompile>
     <CudaCompile Include="post_process.cu" />
   </ItemGroup>
