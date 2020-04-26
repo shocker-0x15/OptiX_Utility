@@ -539,7 +539,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernel.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/optix_kernels.ptx");
     optix::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
                                                                    OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 
