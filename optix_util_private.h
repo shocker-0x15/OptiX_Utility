@@ -15,8 +15,8 @@
 #include <optix_function_table_definition.h>
 
 #include <vector>
-#include <set>
-#include <map>
+#include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
 
 #include <intrin.h>
@@ -188,12 +188,28 @@ namespace optix {
                 }
                 return false;
             }
+
+            struct Hash {
+                typedef std::size_t result_type;
+
+                std::size_t operator()(const Key& key) const {
+                    size_t seed = 0;
+                    auto hash0 = std::hash<const _Pipeline*>()(key.pipeline);
+                    auto hash1 = std::hash<uint32_t>()(key.rayType);
+                    seed ^= hash0 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+                    seed ^= hash1 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+                    return seed;
+                }
+            };
+            bool operator==(const Key &rKey) const {
+                return pipeline == rKey.pipeline && rayType == rKey.rayType;
+            }
         };
 
         _Context* context;
         uint32_t userData;
 
-        std::map<Key, const _ProgramGroup*> programs;
+        std::unordered_map<Key, const _ProgramGroup*, Key::Hash> programs;
 
     public:
         OPTIX_OPAQUE_BRIDGE(Material);
@@ -226,13 +242,29 @@ namespace optix {
                 }
                 return false;
             }
+
+            struct Hash {
+                typedef std::size_t result_type;
+
+                std::size_t operator()(const SBTOffsetKey& key) const {
+                    size_t seed = 0;
+                    auto hash0 = std::hash<const _GeometryAccelerationStructure*>()(key.gas);
+                    auto hash1 = std::hash<uint32_t>()(key.matSetIndex);
+                    seed ^= hash0 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+                    seed ^= hash1 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+                    return seed;
+                }
+            };
+            bool operator==(const SBTOffsetKey &rKey) const {
+                return gas == rKey.gas && matSetIndex == rKey.matSetIndex;
+            }
         };
 
         const _Context* context;
-        std::set<_GeometryAccelerationStructure*> geomASs;
-        std::map<SBTOffsetKey, uint32_t> sbtOffsets;
+        std::unordered_set<_GeometryAccelerationStructure*> geomASs;
+        std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> sbtOffsets;
         uint32_t numSBTRecords;
-        std::set<_InstanceAccelerationStructure*> instASs;
+        std::unordered_set<_InstanceAccelerationStructure*> instASs;
         struct {
             unsigned int sbtLayoutIsUpToDate : 1;
         };
@@ -313,6 +345,7 @@ namespace optix {
 
 
         void fillBuildInput(OptixBuildInput* input) const;
+        void updateBuildInput(OptixBuildInput* input) const;
 
         uint32_t getNumSBTRecords() const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
@@ -326,7 +359,7 @@ namespace optix {
 
         std::vector<uint32_t> numRayTypesPerMaterialSet;
 
-        std::vector<_GeometryInstance*> children;
+        std::unordered_set<_GeometryInstance*> children;
         std::vector<OptixBuildInput> buildInputs;
 
         OptixAccelBuildOptions buildOptions;
@@ -452,8 +485,8 @@ namespace optix {
 
 
 
-        void fillInstance(OptixInstance* instance);
-        void updateInstance(OptixInstance* instance);
+        void fillInstance(OptixInstance* instance) const;
+        void updateInstance(OptixInstance* instance) const;
     };
 
 
@@ -461,10 +494,9 @@ namespace optix {
     class InstanceAccelerationStructure::Priv {
         _Scene* scene;
 
-        std::vector<_Instance*> children;
+        std::unordered_set<_Instance*> children;
         OptixBuildInput buildInput;
         std::vector<OptixInstance> instances;
-        TypedBuffer<OptixInstance> instanceBuffer;
 
         OptixAccelBuildOptions buildOptions;
         OptixAccelBufferSizes memoryRequirement;
@@ -475,6 +507,7 @@ namespace optix {
 
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
+        const TypedBuffer<OptixInstance>* instanceBuffer;
         const Buffer* accelBuffer;
         const Buffer* compactedAccelBuffer;
         struct {
@@ -505,8 +538,6 @@ namespace optix {
             compactedAvailable = false;
         }
         ~Priv() {
-            instanceBuffer.finalize();
-
             compactedSizeOnDevice.finalize();
 
             scene->removeIAS(this);
@@ -549,7 +580,7 @@ namespace optix {
         uint32_t maxTraceDepth;
         OptixPipelineCompileOptions pipelineCompileOptions;
         size_t sizeOfPipelineLaunchParams;
-        std::set<OptixProgramGroup> programGroups;
+        std::unordered_set<OptixProgramGroup> programGroups;
 
         _Scene* scene;
         uint32_t numMissRayTypes;

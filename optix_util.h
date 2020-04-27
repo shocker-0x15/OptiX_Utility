@@ -15,12 +15,44 @@ TODO:
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
 
-- IASのインスタンスを保持するバッファーはユーザー管理にすべき？
-  現状の実装だとASメモリ自体をダブルバッファリングする場合に危険性がある？
 - HitGroup以外のプログラムの非同期更新。
 
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
+
+----------------------------------------------------------------
+- GASの構築と更新
+  - ジオメトリの変形
+    - シングルバッファリング
+      GeomInstに登録済みの頂点バッファー(+インデックスバッファー)の情報を更新してGASのupdate()を呼ぶ。
+      要素数・フォーマットは変更しない。
+      OptiXカーネル実行中にCPUから内容を更新するのは危険。
+    - マルチバッファリング
+      GeomInstに登録済みの頂点バッファー(+インデックスバッファー)と同じ要素数、
+      同じフォーマットのバッファーを新たに登録してGASのupdate()を呼ぶ。
+  - GeomInstの追加・削除
+    prepareForBuild()を呼びメモリ要件を取得、GAS用のメモリを確保してrebuild()を呼ぶ。
+    すでに確保済みのメモリを使用する場合、GASを使用しているOptiXカーネル実行中に、他のCUDA streamからrebuild()を呼ぶのは危険。
+- IASの構築と更新
+  - インスタンスの変形
+    - Instanceのトランスフォームを更新してIASのupdate()を呼ぶ。
+  - インスタンスの追加・削除
+    prepareForBuild()を呼びメモリ要件を取得、インスタンスバッファーとIAS用のメモリを確保してrebuild()を呼ぶ。
+    すでに確保済みのメモリを使用する場合、IASを使用しているOptiXカーネル実行中に、他のCUDA streamからrebuild()を呼ぶのは危険。
+- SBTの更新
+  - マテリアルの更新
+    マテリアルには32bitの情報しか記録できないようにしているため、
+    典型的にはユーザーが用意したマテリアル情報本体を格納したバッファーのインデックスとして使用することを期待している。
+    そのためマテリアルの変化はユーザーの管理する世界の中で起きることを想定している。
+    が、バッファーのインデックス自体を変えるケースも考えうる。
+    その場合にはSBT自体をユーザーがダブルバッファリングなどして非同期に更新することを想定している。
+  - プログラムグループの更新
+    SBT中のレコードヘッダー、つまりプログラムグループを書き換えることは頻繁には起こらないと想定している。
+    が、可能性としてはゼロではない。
+    その場合にはSBT自体をユーザーがダブルバッファリングなどして非同期に更新することを想定している。
+
+markDirty()はUtil側で検知できるdirty状態をカーネルローンチ時に検出したら警告してくれるだけのもの。
+Util側で検知できないdirty状態はユーザーが管理する必要がある。
 
 */
 
@@ -227,7 +259,7 @@ private: \
         void setUserData(uint32_t data) const;
 
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
-        void setMaterial(uint32_t matSetIdx, uint32_t matIdx, const Material &mat) const;
+        void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
     };
 
 
@@ -243,6 +275,7 @@ private: \
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
         void addChild(GeometryInstance geomInst) const;
+        void removeChild(GeometryInstance geomInst) const;
 
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -277,9 +310,19 @@ private: \
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
 
         void addChild(Instance instance) const;
+        void removeChild(Instance instance) const;
 
-        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
-        OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const;
+        // JP: インスタンスバッファーもユーザー管理にしたいため、今の形になっているが微妙かもしれない。
+        //     インスタンスバッファーを内部で1つ持つようにすると、
+        //     あるフレームでIASをビルド、次のフレームでインスタンスの追加がありリビルドの必要が生じた場合に
+        //     1フレーム目のGPU処理の終了を待たないと危険という状況になってしまう。
+        //     OptiX的にはASのビルド完了後にはインスタンスバッファーは不要となるが、
+        //     アップデート処理はリビルド時に書かれたインスタンスバッファーの内容を期待しているため、
+        //     基本的にインスタンスバッファーとASのメモリ(コンパクション版にもなり得る)は同じ寿命で扱ったほうが良さそう。
+        // EN: 
+        OptixTraversableHandle rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer,
+                                       const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
         void prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted(CUstream compactionStream) const;
@@ -321,8 +364,12 @@ private: \
         void setCallableProgram(uint32_t index, ProgramGroup program) const;
 
         void setScene(const Scene &scene) const;
-        void setShaderBindingTable(Buffer* shaderBindingTable) const;
+        void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
+        void markHitGroupShaderBindingTableDirty() const;
+
         void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
+
+        //void setStackSize() const;
     };
 
 

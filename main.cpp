@@ -498,6 +498,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         CUDAHelper::Timer updateIAS;
         CUDAHelper::Timer render;
         CUDAHelper::Timer postProcess;
+        bool animated;
 
         void initialize(CUcontext context) {
             frame.initialize(context);
@@ -506,6 +507,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             updateIAS.initialize(context);
             render.initialize(context);
             postProcess.initialize(context);
+            animated = false;
         }
         void finalize() {
             postProcess.finalize();
@@ -976,12 +978,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t iasSceneIndex = travID++;
     optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     CUDAHelper::Buffer iasSceneMem;
+    CUDAHelper::TypedBuffer<OptixInstance> instanceBuffer;
+    uint32_t numInstances;
     iasScene.setConfiguration(false, true, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instObject0);
     iasScene.addChild(instObject1);
-    iasScene.prepareForBuild(&asMemReqs);
+    iasScene.prepareForBuild(&asMemReqs, &numInstances);
+    instanceBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, numInstances);
     iasSceneMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
     if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {
@@ -991,7 +996,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     // JP: Instance Acceleration Structureをビルドする。
     // EN: Build the instance acceleration structure.
-    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream[0], iasSceneMem, asBuildScratchMem);
+    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream[0], instanceBuffer, iasSceneMem, asBuildScratchMem);
 
     travHandleBuffer.unmap();
     CUDADRV_CHECK(cuStreamSynchronize(cuStream[0]));
@@ -1095,7 +1100,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.textures = textureObjectBuffer.getDevicePointer();
 
     pipeline.setScene(scene);
-    pipeline.setShaderBindingTable(&shaderBindingTable);
+    pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -1229,9 +1234,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             float cudaFrameTime = frameIndex >= 2 ? curGPUTimer.frame.report() : 0.0f;
-            float deformTime = frameIndex >= 2 ? curGPUTimer.deform.report() : 0.0f;
-            float updateGASTime = frameIndex >= 2 ? curGPUTimer.updateGAS.report() : 0.0f;
-            float updateIASTime = frameIndex >= 2 ? curGPUTimer.updateIAS.report() : 0.0f;
+            float deformTime = (frameIndex >= 2 && curGPUTimer.animated) ? curGPUTimer.deform.report() : 0.0f;
+            float updateGASTime = (frameIndex >= 2 && curGPUTimer.animated) ? curGPUTimer.updateGAS.report() : 0.0f;
+            float updateIASTime = (frameIndex >= 2 && curGPUTimer.animated) ? curGPUTimer.updateIAS.report() : 0.0f;
             float renderTime = frameIndex >= 2 ? curGPUTimer.render.report() : 0.0f;
             float postProcessTime = frameIndex >= 2 ? curGPUTimer.postProcess.report() : 0.0f;
             //ImGui::SetNextItemWidth(100.0f);
@@ -1313,11 +1318,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+        static bool enablePeriodicGASRebuild = true;
+        static int32_t gasRebuildInterval = 30;
         static bool enablePeriodicIASRebuild = true;
         static int32_t iasRebuildInterval = 30;
         {
             ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
+            ImGui::Checkbox("Enable GAS Rebuild", &enablePeriodicGASRebuild);
+            ImGui::SliderInt("GAS Rebuild Interval", &gasRebuildInterval, 1, 60);
             ImGui::Checkbox("Enable IAS Rebuild", &enablePeriodicIASRebuild);
             ImGui::SliderInt("IAS Rebuild Interval", &iasRebuildInterval, 1, 60);
 
@@ -1388,6 +1397,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         curGPUTimer.frame.start(curCuStream);
 
         sw.start();
+        curGPUTimer.animated = play;
         if (play) {
             // JP: ジオメトリの非剛体変形。
             // EN: Non-rigid deformation of a geometry.
@@ -1406,9 +1416,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             curGPUTimer.deform.stop(curCuStream);
 
             // JP: 変形したジオメトリを基にGASをアップデート。
+            //     たまにリビルドを実行するが、ここでは頂点情報以外変化しないため、
+            //     メモリサイズの再計算や再確保は不要。
             // EN: Update the GAS based on the deformed geometry.
+            //     It sometimes performs rebuild, but all the information except for vertices doesn't change here
+            //     so neither recalculation of nor reallocating memory is not required.
             curGPUTimer.updateGAS.start(curCuStream);
-            OptixTraversableHandle gasHandle = gasObject.update(curCuStream, asBuildScratchMem);
+            OptixTraversableHandle gasHandle;
+            if (enablePeriodicGASRebuild && animFrameIndex % gasRebuildInterval == 0)
+                gasHandle = gasObject.rebuild(curCuStream, gasObjectMem, asBuildScratchMem);
+            else
+                gasHandle = gasObject.update(curCuStream, asBuildScratchMem);
             curGPUTimer.updateGAS.stop(curCuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
                                             &gasHandle, sizeof(gasHandle),
@@ -1446,7 +1464,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             curGPUTimer.updateIAS.start(curCuStream);
             OptixTraversableHandle iasHandle;
             if (enablePeriodicIASRebuild && animFrameIndex % iasRebuildInterval == 0)
-                iasHandle = iasScene.rebuild(curCuStream, iasSceneMem, asBuildScratchMem);
+                iasHandle = iasScene.rebuild(curCuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
             else
                 iasHandle = iasScene.update(curCuStream, asBuildScratchMem);
             curGPUTimer.updateIAS.stop(curCuStream);
@@ -1596,6 +1614,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     outputTexture.finalize();
     outputBufferGL.finalize();
 
+    instanceBuffer.finalize();
     iasSceneMem.finalize();
     iasScene.destroy();
 

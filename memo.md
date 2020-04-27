@@ -145,13 +145,13 @@ IASのDirty化条件:
 
 HitGroup SBTのDirty化条件:
 1. HitGroup SBT LayoutのDirty化
-1. ~~GeomInstのデータ更新~~\
+1. GeomInstのデータ更新\
    これはレコード内に直接データを記録しないようにしたことで不要になる。
    ただしレコードへのインデックスを更新する場合はSBTを直接書き換える必要があるためDirty化する。
-1. ~~GeomInstに所属するMaterialのデータ更新~~\
+1. GeomInstに所属するMaterialのデータ更新\
    これはレコード内に直接データを記録しないようにしたことで不要になる。
    ただしレコードへのインデックスを更新する場合はSBTを直接書き換える必要があるためDirty化する。
-1. GeomInstに所属するMaterial自体の更新、HitGroupのアップデート。
+1. MaterialのHitGroupのアップデート
 
 (Auto)は該当の条件によるDirty化が自動で行われることを示す。
 例: GASに対するGeomInstの追加・削除 (Auto)

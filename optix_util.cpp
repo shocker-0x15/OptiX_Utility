@@ -185,6 +185,19 @@ namespace optix {
         triArray.flags = buildInputFlags.data();
     }
 
+    void GeometryInstance::Priv::updateBuildInput(OptixBuildInput* input) const {
+        OptixBuildInputTriangleArray &triArray = input->triangleArray;
+
+        triArray.vertexBuffers = vertexBufferArray;
+
+        triArray.indexBuffer = triangleBuffer->getCUdeviceptr();
+
+        if (triArray.numSbtRecords > 1) {
+            optixAssert_NotImplemented();
+            triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
+        }
+    }
+
     uint32_t GeometryInstance::Priv::getNumSBTRecords() const {
         return static_cast<uint32_t>(buildInputFlags.size());
     }
@@ -244,7 +257,7 @@ namespace optix {
         m->buildInputFlags[matIdx] = flags;
     }
 
-    void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, const Material &mat) const {
+    void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const {
         size_t numMaterials = m->buildInputFlags.size();
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
                             "Out of material bounds [0, %u).", (uint32_t)numMaterials);
@@ -262,8 +275,8 @@ namespace optix {
 
     uint32_t GeometryAccelerationStructure::Priv::calcNumSBTRecords(uint32_t matSetIdx) const {
         uint32_t numSBTRecords = 0;
-        for (int i = 0; i < children.size(); ++i)
-            numSBTRecords += children[i]->getNumSBTRecords();
+        for (const _GeometryInstance* child : children)
+            numSBTRecords += child->getNumSBTRecords();
         numSBTRecords *= numRayTypesPerMaterialSet[matSetIdx];
 
         return numSBTRecords;
@@ -276,8 +289,8 @@ namespace optix {
 
         uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
         uint32_t sumRecords = 0;
-        for (int i = 0; i < children.size(); ++i) {
-            uint32_t numRecords = children[i]->fillSBTRecords(pipeline, matSetIdx, numRayTypes, records);
+        for (const _GeometryInstance* child : children) {
+            uint32_t numRecords = child->fillSBTRecords(pipeline, matSetIdx, numRayTypes, records);
             records += numRecords;
             sumRecords += numRecords;
         }
@@ -329,16 +342,29 @@ namespace optix {
         auto _geomInst = extract(geomInst);
         THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
         THROW_RUNTIME_ERROR(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance.");
+        THROW_RUNTIME_ERROR(m->children.count(_geomInst) == 0, "Geometry instance %p has been already added.", _geomInst);
 
-        m->children.push_back(_geomInst);
+        m->children.insert(_geomInst);
+
+        m->markDirty();
+    }
+
+    void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst) const {
+        auto _geomInst = extract(geomInst);
+        THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
+        THROW_RUNTIME_ERROR(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance.");
+        THROW_RUNTIME_ERROR(m->children.count(_geomInst) > 0, "Geometry instance %p has not been added.", _geomInst);
+
+        m->children.erase(_geomInst);
 
         m->markDirty();
     }
 
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
-        for (int i = 0; i < m->children.size(); ++i)
-            m->children[i]->fillBuildInput(&m->buildInputs[i]);
+        uint32_t childIdx = 0;
+        for (const _GeometryInstance* child : m->children)
+            child->fillBuildInput(&m->buildInputs[childIdx++]);
 
         m->buildOptions = {};
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
@@ -431,8 +457,9 @@ namespace optix {
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
 
-        for (int i = 0; i < m->children.size(); ++i)
-            m->children[i]->fillBuildInput(&m->buildInputs[i]);
+        uint32_t childIdx = 0;
+        for (const _GeometryInstance* child : m->children)
+            child->updateBuildInput(&m->buildInputs[childIdx++]);
 
         const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;
@@ -454,7 +481,7 @@ namespace optix {
 
 
 
-    void Instance::Priv::fillInstance(OptixInstance* instance) {
+    void Instance::Priv::fillInstance(OptixInstance* instance) const {
         if (type == InstanceType::GAS) {
             THROW_RUNTIME_ERROR(gas->isReady(), "GAS %p is not ready.", gas);
 
@@ -471,7 +498,7 @@ namespace optix {
         }
     }
 
-    void Instance::Priv::updateInstance(OptixInstance* instance) {
+    void Instance::Priv::updateInstance(OptixInstance* instance) const {
         instance->instanceId = 0;
         instance->visibilityMask = 0xFF;
         std::copy_n(transform, 12, instance->transform);
@@ -523,29 +550,36 @@ namespace optix {
         _Instance* _inst = extract(instance);
         THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
         THROW_RUNTIME_ERROR(_inst->getScene() == m->scene, "Scene mismatch for the given instance.");
+        THROW_RUNTIME_ERROR(m->children.count(_inst) == 0, "Instance %p has been already added.", _inst);
 
-        m->children.push_back(_inst);
+        m->children.insert(_inst);
 
         m->markDirty();
     }
 
-    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
-        // Setup the instance buffer.
-        {
-            THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
-                                "Shader binding table layout generation has not been done.");
+    void InstanceAccelerationStructure::removeChild(Instance instance) const {
+        _Instance* _inst = extract(instance);
+        THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
+        THROW_RUNTIME_ERROR(_inst->getScene() == m->scene, "Scene mismatch for the given instance.");
+        THROW_RUNTIME_ERROR(m->children.count(_inst) > 0, "Instance %p has not been added.", _inst);
 
-            m->instanceBuffer.finalize();
-            m->instanceBuffer.initialize(m->getCUDAContext(), s_BufferType, m->children.size());
-            m->instances.resize(m->children.size());
-        }
+        m->children.erase(_inst);
+
+        m->markDirty();
+    }
+
+    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const {
+        m->instances.resize(m->children.size());
+        uint32_t childIdx = 0;
+        for (const _Instance* child : m->children)
+            child->fillInstance(&m->instances[childIdx++]);
 
         // Fill the build input.
         {
             m->buildInput = OptixBuildInput{};
             m->buildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
             OptixBuildInputInstanceArray &instArray = m->buildInput.instanceArray;
-            instArray.instances = m->instanceBuffer.getCUdeviceptr();
+            instArray.instances = 0;
             instArray.numInstances = static_cast<uint32_t>(m->children.size());
         }
 
@@ -561,19 +595,24 @@ namespace optix {
                                                  &m->memoryRequirement));
 
         *memoryRequirement = m->memoryRequirement;
+        *numInstances = m->instances.size();
     }
 
-    OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
+    OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer,
+                                                                  const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
         THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
                             "Size of the given buffer is not enough.");
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
+        THROW_RUNTIME_ERROR(instanceBuffer.numElements() >= m->instances.size(),
+                            "Size of the given instance buffer is not enough.");
+        THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
+                            "Shader binding table layout generation has not been done.");
 
-        for (int i = 0; i < m->children.size(); ++i)
-            m->children[i]->fillInstance(&m->instances[i]);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
-                                        m->instanceBuffer.sizeInBytes(),
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
+                                        instanceBuffer.sizeInBytes(),
                                         stream));
+        m->buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
@@ -585,6 +624,7 @@ namespace optix {
                                     compactionEnabled ? &m->propertyCompactedSize : nullptr,
                                     compactionEnabled ? 1 : 0));
 
+        m->instanceBuffer = &instanceBuffer;
         m->accelBuffer = &accelBuffer;
         m->available = true;
         m->compactedHandle = 0;
@@ -645,10 +685,11 @@ namespace optix {
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
 
-        for (int i = 0; i < m->children.size(); ++i)
-            m->children[i]->updateInstance(&m->instances[i]);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
-                                        m->instanceBuffer.sizeInBytes(),
+        uint32_t childIdx = 0;
+        for (const _Instance* child : m->children)
+            child->updateInstance(&m->instances[childIdx++]);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(m->instanceBuffer->getCUdeviceptr(), m->instances.data(),
+                                        m->instanceBuffer->sizeInBytes(),
                                         stream));
 
         const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
@@ -1026,8 +1067,12 @@ namespace optix {
         m->scene = extract(scene);
     }
 
-    void Pipeline::setShaderBindingTable(Buffer* shaderBindingTable) const {
+    void Pipeline::setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const {
         m->hitGroupSbt = shaderBindingTable;
+        m->sbtIsUpToDate = false;
+    }
+
+    void Pipeline::markHitGroupShaderBindingTableDirty() const {
         m->sbtIsUpToDate = false;
     }
 
