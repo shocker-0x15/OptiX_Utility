@@ -552,7 +552,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
     optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optix::ProgramGroup searchRayHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading", emptyModule, nullptr, emptyModule, nullptr);
+    optix::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse", emptyModule, nullptr, emptyModule, nullptr);
+    optix::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_specular", emptyModule, nullptr, emptyModule, nullptr);
     optix::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
 
     uint32_t callableProgramSampleTextureIndex = 0;
@@ -590,20 +591,22 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     // ----------------------------------------------------------------
-    // JP: シーンのセットアップ。
-    // EN: Setup a scene.
+    // JP: テクスチャー・マテリアルのセットアップ。
+    // EN: Setup materials.
 
-    hpprintf("Setup a scene.\n");
+    hpprintf("Setup materials.\n");
 
     CUDAHelper::TypedBuffer<CUtexObject> textureObjectBuffer;
     textureObjectBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    uint32_t textureID = 0;
+
     CUtexObject* textureObjects = textureObjectBuffer.map();
 
     CUDAHelper::Array arrayCheckerBoard;
     CUDAHelper::TextureSampler texCheckerBoard;
     {
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 0);
+        uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 4);
         arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height,
                                      CUDAHelper::ArrayWritable::Disable);
         auto data = arrayCheckerBoard.map<uint8_t>();
@@ -616,8 +619,33 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                   CUDAHelper::TextureFilterMode::Point);
     texCheckerBoard.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
     texCheckerBoard.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
-    uint32_t texCheckerBoardIndex = 0;
+    uint32_t texCheckerBoardIndex = textureID++;
     textureObjects[texCheckerBoardIndex] = texCheckerBoard.getTextureObject();
+
+    CUDAHelper::Array arrayGrid;
+    CUDAHelper::TextureSampler texGrid;
+    {
+        int32_t width, height, n;
+        uint8_t* linearImageData = stbi_load("data/grid.png", &width, &height, &n, 4);
+        arrayGrid.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height,
+                             CUDAHelper::ArrayWritable::Disable);
+        auto data = arrayGrid.map<uint8_t>();
+        std::copy_n(linearImageData, width * height * 4, data);
+        arrayGrid.unmap();
+        stbi_image_free(linearImageData);
+    }
+    texGrid.setArray(arrayGrid);
+    texGrid.setFilterMode(CUDAHelper::TextureFilterMode::Point,
+                          CUDAHelper::TextureFilterMode::Point);
+    texGrid.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
+    texGrid.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
+    uint32_t texGridIndex = textureID++;
+    textureObjects[texGridIndex] = texGrid.getTextureObject();
+
+    const char* textureNames[] = {
+        "Checkerboard",
+        "Grid"
+    };
 
     textureObjectBuffer.unmap();
 
@@ -631,7 +659,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matGrayWallIndex = materialID++;
     optix::Material matGray = optixContext.createMaterial();
-    matGray.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matGray.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matGray.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matGray.setUserData(matGrayWallIndex);
     Shared::MaterialData matGrayWallData;
@@ -640,7 +668,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matFloorIndex = materialID++;
     optix::Material matFloor = optixContext.createMaterial();
-    matFloor.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matFloor.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matFloor.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matFloor.setUserData(matFloorIndex);
     Shared::MaterialData matFloorData;
@@ -651,7 +679,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matLeftWallIndex = materialID++;
     optix::Material matLeft = optixContext.createMaterial();
-    matLeft.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matLeft.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matLeft.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matLeft.setUserData(matLeftWallIndex);
     Shared::MaterialData matLeftWallData;
@@ -660,7 +688,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matRightWallIndex = materialID++;
     optix::Material matRight = optixContext.createMaterial();
-    matRight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matRight.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matRight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matRight.setUserData(matRightWallIndex);
     Shared::MaterialData matRightWallData;
@@ -669,7 +697,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matLightIndex = materialID++;
     optix::Material matLight = optixContext.createMaterial();
-    matLight.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matLight.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matLight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matLight.setUserData(matLightIndex);
     Shared::MaterialData matLightData;
@@ -678,7 +706,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matObject0Index = materialID++;
     optix::Material matObject0 = optixContext.createMaterial();
-    matObject0.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matObject0.setHitGroup(Shared::RayType_Search, searchRaySpecularHitProgramGroup);
     matObject0.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matObject0.setUserData(matObject0Index);
     Shared::MaterialData matObject0Data;
@@ -687,7 +715,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t matObject1Index = materialID++;
     optix::Material matObject1 = optixContext.createMaterial();
-    matObject1.setHitGroup(Shared::RayType_Search, searchRayHitProgramGroup);
+    matObject1.setHitGroup(Shared::RayType_Search, searchRaySpecularHitProgramGroup);
     matObject1.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matObject1.setUserData(matObject1Index);
     Shared::MaterialData matObject1Data;
@@ -696,7 +724,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     materialDataBuffer.unmap();
 
+    // END: Setup materials.
+    // ----------------------------------------------------------------
 
+
+
+    // ----------------------------------------------------------------
+    // JP: シーンのセットアップ。
+    // EN: Setup a scene.
+
+    hpprintf("Setup a scene.\n");
 
     optix::Scene scene = optixContext.createScene();
     
@@ -1395,6 +1432,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                 curCuStream));
                 sceneEdited = true;
             }
+            static int32_t floorTexID;
+            floorTexID = matFloorData.texID;
+            if (ImGui::Combo("Floor", &floorTexID, textureNames, lengthof(textureNames))) {
+                matFloorData.texID = floorTexID;
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matFloorIndex),
+                                                &matFloorData, sizeof(matFloorData),
+                                                curCuStream));
+                sceneEdited = true;
+            }
 
             ImGui::End();
         }
@@ -1667,6 +1713,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     materialDataBuffer.finalize();
 
+    texGrid.destroyTextureObject();
+    arrayGrid.finalize();
     texCheckerBoard.destroyTextureObject();
     arrayCheckerBoard.finalize();
 
@@ -1676,7 +1724,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUDADRV_CHECK(cuModuleUnload(modulePostProcess));
 
     visibilityRayHitProgramGroup.destroy();
-    searchRayHitProgramGroup.destroy();
+    searchRaySpecularHitProgramGroup.destroy();
+    searchRayDiffuseHitProgramGroup.destroy();
 
     visibilityRayMissProgram.destroy();
     searchRayMissProgram.destroy();

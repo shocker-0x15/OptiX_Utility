@@ -109,6 +109,7 @@ struct SearchRayPayload {
     float3 direction;
     struct {
         uint32_t pathLength;
+        bool specularBounce : 1;
         bool terminate : 1;
     };
 };
@@ -209,7 +210,7 @@ RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, floa
     return make_float3(texValue.x, texValue.y, texValue.z);
 }
 
-RT_PROGRAM void __closesthit__shading() {
+RT_PROGRAM void __closesthit__shading_diffuse() {
     auto sbtr = optix::getHitGroupSBTRecordData();
     auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
     auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
@@ -252,7 +253,9 @@ RT_PROGRAM void __closesthit__shading() {
 
     const float3 LightRadiance = make_float3(20, 20, 20);
     // Hard-coded directly visible light
-    if (sbtr.materialData == plp.matLightIndex && dot(optixGetWorldRayDirection(), sn) < 0 && payload.pathLength == 1) {
+    if (sbtr.materialData == plp.matLightIndex &&
+        dot(optixGetWorldRayDirection(), sn) < 0 &&
+        (payload.pathLength == 1 || payload.specularBounce)) {
         payload.contribution = payload.contribution + payload.alpha * LightRadiance;
     }
 
@@ -308,6 +311,62 @@ RT_PROGRAM void __closesthit__shading() {
     payload.alpha = payload.alpha * albedo;
     payload.origin = p;
     payload.direction = vIn;
+    payload.specularBounce = false;
+    payload.terminate = false;
+
+    //payload.setAll();
+}
+
+// JP: それなりの規模のパストレーシングを実装する場合はプログラムは基本的に共通化して
+//     差異のある部分をCallable Programなどで呼び分けるほうが実用的だが、
+//     ここではデモ目的であえて別のプログラムとする。
+// EN: When implementing a moderately complex path tracing,
+//     it appears better to basically use a common program and callable programs for different behaviors,
+//     but here define another program on purpose for demonstration.
+RT_PROGRAM void __closesthit__shading_specular() {
+    auto sbtr = optix::getHitGroupSBTRecordData();
+    auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
+    auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
+
+    const MaterialData &mat = matData[sbtr.materialData];
+    const GeometryData &geom = geomInstData[sbtr.geomInstData];
+
+    OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
+
+    auto hitPointParam = HitPointParameter::get();
+
+    PayloadAccessor<SearchRayPayload*> payloadPtr;
+    payloadPtr.getAll();
+    SearchRayPayload &payload = *payloadPtr.raw;
+
+    PCG32RNG &rng = payload.rng;
+
+    const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
+    const Vertex &v0 = geom.vertexBuffer[tri.index0];
+    const Vertex &v1 = geom.vertexBuffer[tri.index1];
+    const Vertex &v2 = geom.vertexBuffer[tri.index2];
+    float b0 = hitPointParam.b0;
+    float b1 = hitPointParam.b1;
+    float b2 = 1 - (b0 + b1);
+    float3 p = optixTransformPointFromObjectToWorldSpace(b0 * v0.position + b1 * v1.position + b2 * v2.position);
+    float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * v0.normal + b1 * v1.normal + b2 * v2.normal));
+    p = p + sn * 0.001f;
+
+    float3 albedo = mat.albedo;
+    if (mat.misc != 0xFFFFFFFF) {
+        // Demonstrate how to use texture sampling and direct callable program.
+        float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+        albedo = optixDirectCall<float3>(mat.program, mat.texID, texCoord);
+    }
+
+    float3 vOut = -optixGetWorldRayDirection();
+
+    // Sampling incoming direction (delta distribution).
+    float3 vIn = normalize(2 * dot(vOut, sn) * sn - vOut);
+    payload.alpha = payload.alpha * albedo;
+    payload.origin = p;
+    payload.direction = vIn;
+    payload.specularBounce = true;
     payload.terminate = false;
 
     //payload.setAll();
