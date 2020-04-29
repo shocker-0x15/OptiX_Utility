@@ -377,7 +377,9 @@ namespace optix {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
+            unsigned int readyToBuild : 1;
             unsigned int available : 1;
+            unsigned int readyToCompact : 1;
             unsigned int compactedAvailable : 1;
         };
 
@@ -397,7 +399,9 @@ namespace optix {
             allowUpdate = false;
             allowCompaction = false;
 
+            readyToBuild = false;
             available = false;
+            readyToCompact = false;
             compactedAvailable = false;
         }
         ~Priv() {
@@ -514,7 +518,9 @@ namespace optix {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
+            unsigned int readyToBuild : 1;
             unsigned int available : 1;
+            unsigned int readyToCompact : 1;
             unsigned int compactedAvailable : 1;
         };
 
@@ -534,7 +540,9 @@ namespace optix {
             allowUpdate = false;
             allowCompaction = false;
 
+            readyToBuild = false;
             available = false;
+            readyToCompact = false;
             compactedAvailable = false;
         }
         ~Priv() {

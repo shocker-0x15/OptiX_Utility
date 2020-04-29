@@ -153,7 +153,7 @@ RT_PROGRAM void __raygen__pathtracing() {
     float3 origin = make_float3(0, 0, 3.2f);
     float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
 
-    OptixTraversableHandle topGroup = plp.travHandles[plp.topGroupIndex];
+    OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
 
     PayloadAccessor<SearchRayPayload*> payloadPtr;
     SearchRayPayload payload;
@@ -199,7 +199,7 @@ RT_PROGRAM void __miss__searchRay() {
 
     payload.contribution = payload.contribution + payload.alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload.terminate = true;
-    
+
     //payload.setAll();
 }
 
@@ -217,7 +217,7 @@ RT_PROGRAM void __closesthit__shading() {
     const MaterialData &mat = matData[sbtr.materialData];
     const GeometryData &geom = geomInstData[sbtr.geomInstData];
 
-    OptixTraversableHandle topGroup = plp.travHandles[plp.topGroupIndex];
+    OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
 
     auto hitPointParam = HitPointParameter::get();
 
@@ -245,6 +245,7 @@ RT_PROGRAM void __closesthit__shading() {
 
     float3 albedo = mat.albedo;
     if (mat.misc != 0xFFFFFFFF) {
+        // Demonstrate how to use texture sampling and direct callable program.
         float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
         albedo = optixDirectCall<float3>(mat.program, mat.texID, texCoord);
     }

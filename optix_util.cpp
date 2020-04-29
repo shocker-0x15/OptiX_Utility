@@ -299,7 +299,9 @@ namespace optix {
     }
 
     void GeometryAccelerationStructure::Priv::markDirty() {
+        readyToBuild = false;
         available = false;
+        readyToCompact = false;
         compactedAvailable = false;
 
         scene->markSBTLayoutDirty();
@@ -378,15 +380,26 @@ namespace optix {
                                                  &m->memoryRequirement));
 
         *memoryRequirement = m->memoryRequirement;
+
+        m->readyToBuild = true;
     }
 
     OptixTraversableHandle GeometryAccelerationStructure::rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
+        THROW_RUNTIME_ERROR(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
         THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
                             "Size of the given buffer is not enough.");
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
                             "Size of the given scratch buffer is not enough.");
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+
+        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
+        //     ビルド入力を更新する処理をここにも書いておく必要がある。
+        // EN: User is not required to call prepareForBuild() when performing rebuild
+        //     for purpose of update so updating build inputs should be here.
+        uint32_t childIdx = 0;
+        for (const _GeometryInstance* child : m->children)
+            child->updateBuildInput(&m->buildInputs[childIdx++]);
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
@@ -399,6 +412,7 @@ namespace optix {
 
         m->accelBuffer = &accelBuffer;
         m->available = true;
+        m->readyToCompact = false;
         m->compactedHandle = 0;
         m->compactedAvailable = false;
 
@@ -419,11 +433,14 @@ namespace optix {
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
 
         *compactedAccelBufferSize = m->compactedSize;
+
+        m->readyToCompact = true;
     }
 
     OptixTraversableHandle GeometryAccelerationStructure::compact(CUstream stream, const Buffer &compactedAccelBuffer) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
         THROW_RUNTIME_ERROR(compactionEnabled, "This AS does not allow compaction.");
+        THROW_RUNTIME_ERROR(m->readyToCompact, "You need to call prepareForCompact() before compaction.");
         THROW_RUNTIME_ERROR(m->available, "Uncompacted AS has not been built yet.");
         THROW_RUNTIME_ERROR(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
                             "Size of the given buffer is not enough.");
@@ -524,7 +541,9 @@ namespace optix {
 
 
     void InstanceAccelerationStructure::Priv::markDirty() {
+        readyToBuild = false;
         available = false;
+        readyToCompact = false;
         compactedAvailable = false;
     }
     
@@ -596,10 +615,13 @@ namespace optix {
 
         *memoryRequirement = m->memoryRequirement;
         *numInstances = m->instances.size();
+
+        m->readyToBuild = true;
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer,
                                                                   const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
+        THROW_RUNTIME_ERROR(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
         THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
                             "Size of the given buffer is not enough.");
         THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
@@ -609,6 +631,13 @@ namespace optix {
         THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
                             "Shader binding table layout generation has not been done.");
 
+        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
+        //     インスタンス情報を更新する処理をここにも書いておく必要がある。
+        // EN: User is not required to call prepareForBuild() when performing rebuild
+        //     for purpose of update so updating instance information should be here.
+        uint32_t childIdx = 0;
+        for (const _Instance* child : m->children)
+            child->updateInstance(&m->instances[childIdx++]);
         CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
                                         instanceBuffer.sizeInBytes(),
                                         stream));
@@ -627,6 +656,7 @@ namespace optix {
         m->instanceBuffer = &instanceBuffer;
         m->accelBuffer = &accelBuffer;
         m->available = true;
+        m->readyToCompact = false;
         m->compactedHandle = 0;
         m->compactedAvailable = false;
 
@@ -647,11 +677,14 @@ namespace optix {
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
 
         *compactedAccelBufferSize = m->compactedSize;
+
+        m->readyToCompact = true;
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::compact(CUstream stream, const Buffer &compactedAccelBuffer) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
         THROW_RUNTIME_ERROR(compactionEnabled, "This AS does not allow compaction.");
+        THROW_RUNTIME_ERROR(m->readyToCompact, "You need to call prepareForCompact() before compaction.");
         THROW_RUNTIME_ERROR(m->available, "Uncompacted AS has not been built yet.");
         THROW_RUNTIME_ERROR(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
                             "Size of the given buffer is not enough.");

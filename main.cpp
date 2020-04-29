@@ -965,9 +965,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     };
     instAreaLight.setTransform(tfAreaLight);
 
+    // JP: オブジェクトのインスタンスを2つ作成するが、
+    //     ひとつはマテリアルセット0、もうひとつは1にする。
+    // EN: Create two instances using the object but
+    //     the one with material set 0, the other with 1.
     optix::Instance instObject0 = scene.createInstance();
     instObject0.setGAS(gasObject, 0);
-
     optix::Instance instObject1 = scene.createInstance();
     instObject1.setGAS(gasObject, 1);
 
@@ -1001,7 +1004,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     travHandleBuffer.unmap();
     CUDADRV_CHECK(cuStreamSynchronize(cuStream[0]));
 
-    // END: 
+    // END: Setup a scene.
     // ----------------------------------------------------------------
 
 
@@ -1084,7 +1087,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.travHandles = travHandleBuffer.getDevicePointer();
     plp.materialData = materialDataBuffer.getDevicePointer();
     plp.geomInstData = sceneContext.geometryDataBuffer.getDevicePointer();
-    plp.topGroupIndex = iasSceneIndex;
+    plp.travIndex = iasSceneIndex;
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.numAccumFrames = 1;
@@ -1336,6 +1339,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
         static bool play = true;
+        bool playStep = false;
         bool sceneEdited = false;
 
         // JP: マテリアルの編集。
@@ -1345,6 +1349,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
             if (ImGui::Button(play ? "Stop" : "Play"))
                 play = !play;
+            ImGui::SameLine();
+            if (ImGui::Button("Step")) {
+                playStep = true;
+                play = false;
+            }
 
             if (ImGui::ColorEdit3("Left Wall", reinterpret_cast<float*>(&matLeftWallData.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
@@ -1397,15 +1406,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         curGPUTimer.frame.start(curCuStream);
 
         sw.start();
-        curGPUTimer.animated = play;
-        if (play) {
+        curGPUTimer.animated = false;
+        if (play || playStep) {
+            curGPUTimer.animated = true;
+
             // JP: ジオメトリの非剛体変形。
             // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(curCuStream);
             uint32_t dimDeform = (orgObjectVertexBuffer.numElements() + 31) / 32;
             CUDAHelper::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
                                    orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
-                                   0.5f * std::sinf(2 * M_PI * (animFrameIndex % 120) / 120.0f));
+                                   0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
             const CUDAHelper::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             uint32_t dimAccum = (triangleBuffer.numElements() + 31) / 32;
             CUDAHelper::callKernel(curCuStream, kernelAccumulateVertexNormals, dim3(dimAccum), dim3(32), 0,
@@ -1478,7 +1489,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-        if (play || sceneEdited)
+        if (play || playStep || sceneEdited)
             plp.numAccumFrames = 1;
 
         // Render

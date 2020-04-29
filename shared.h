@@ -153,7 +153,7 @@ namespace Shared {
         const OptixTraversableHandle* travHandles;
         const MaterialData* materialData;
         const GeometryData* geomInstData;
-        uint32_t topGroupIndex;
+        uint32_t travIndex;
         int2 imageSize;
         uint32_t numAccumFrames;
         PCG32RNG* rngBuffer;
