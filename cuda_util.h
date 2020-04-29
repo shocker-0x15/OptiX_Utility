@@ -94,7 +94,7 @@ namespace cudau {
     template <typename... ArgTypes>
     void callKernel(CUstream stream, CUfunction kernel, const dim3 &gridDim, const dim3 &blockDim, uint32_t sharedMemSize,
                     ArgTypes&&... args) {
-        ConstVoidPtr argPointers[30];
+        ConstVoidPtr argPointers[sizeof...(args)];
         addArgPointer(argPointers, std::forward<ArgTypes>(args)...);
 
         CUDADRV_CHECK(cuLaunchKernel(kernel,
@@ -102,6 +102,48 @@ namespace cudau {
                                      blockDim.x, blockDim.y, blockDim.z,
                                      sharedMemSize, stream, const_cast<void**>(argPointers), nullptr));
     }
+
+
+
+    class Kernel {
+        CUfunction m_kernel;
+        dim3 m_blockDim;
+        uint32_t m_sharedMemSize;
+
+    public:
+        Kernel(CUmodule module, const char* name, const dim3 blockDim, uint32_t sharedMemSize) :
+            m_blockDim(blockDim), m_sharedMemSize(sharedMemSize) {
+            CUDADRV_CHECK(cuModuleGetFunction(&m_kernel, module, name));
+        }
+
+        void setBlockDimensions(const dim3 &blockDim) {
+            m_blockDim = blockDim;
+        }
+        void setSharedMemorySize(uint32_t sharedMemSize) {
+            m_sharedMemSize = sharedMemSize;
+        }
+
+        uint32_t getBlockDimX() const { return m_blockDim.x; }
+        uint32_t getBlockDimY() const { return m_blockDim.y; }
+        uint32_t getBlockDimZ() const { return m_blockDim.z; }
+        dim3 calcGridDim(uint32_t numItemsX) const {
+            return dim3((numItemsX + m_blockDim.x - 1) / m_blockDim.x);
+        }
+        dim3 calcGridDim(uint32_t numItemsX, uint32_t numItemsY) const {
+            return dim3((numItemsX + m_blockDim.x - 1) / m_blockDim.x,
+                        (numItemsY + m_blockDim.y - 1) / m_blockDim.y);
+        }
+        dim3 calcGridDim(uint32_t numItemsX, uint32_t numItemsY, uint32_t numItemsZ) const {
+            return dim3((numItemsX + m_blockDim.x - 1) / m_blockDim.x,
+                        (numItemsY + m_blockDim.y - 1) / m_blockDim.y,
+                        (numItemsZ + m_blockDim.z - 1) / m_blockDim.z);
+        }
+
+        template <typename... ArgTypes>
+        void operator()(CUstream stream, const dim3 &gridDim, ArgTypes&&... args) const {
+            callKernel(stream, m_kernel, gridDim, m_blockDim, m_sharedMemSize, std::forward<ArgTypes>(args)...);
+        }
+    };
 
 
 

@@ -654,17 +654,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     CUmodule modulePostProcess;
     CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str()));
-    CUfunction kernelPostProcess;
-    CUDADRV_CHECK(cuModuleGetFunction(&kernelPostProcess, modulePostProcess, "postProcess"));
+    cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", dim3(8, 8), 0);
 
     CUmodule moduleDeform;
     CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "ptxes/deform.ptx").string().c_str()));
-    CUfunction kernelDeform;
-    CUDADRV_CHECK(cuModuleGetFunction(&kernelDeform, moduleDeform, "deform"));
-    CUfunction kernelAccumulateVertexNormals;
-    CUDADRV_CHECK(cuModuleGetFunction(&kernelAccumulateVertexNormals, moduleDeform, "accumulateVertexNormals"));
-    CUfunction kernelNormalizeVertexNormals;
-    CUDADRV_CHECK(cuModuleGetFunction(&kernelNormalizeVertexNormals, moduleDeform, "normalizeVertexNormals"));
+    cudau::Kernel kernelDeform(moduleDeform, "deform", dim3(32), 0);
+    cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", dim3(32), 0);
+    cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -1629,17 +1625,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             // JP: ジオメトリの非剛体変形。
             // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(curCuStream);
-            uint32_t dimDeform = (orgObjectVertexBuffer.numElements() + 31) / 32;
-            cudau::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
-                              orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
-                              0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
+            dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
+            kernelDeform(curCuStream, dimDeform,
+                         orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
+                         0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
-            uint32_t dimAccum = (triangleBuffer.numElements() + 31) / 32;
-            cudau::callKernel(curCuStream, kernelAccumulateVertexNormals, dim3(dimAccum), dim3(32), 0,
-                              meshObject.getVertexBuffer().getDevicePointer(),
-                              triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
-            cudau::callKernel(curCuStream, kernelNormalizeVertexNormals, dim3(dimDeform), dim3(32), 0,
-                              meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
+            dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
+            kernelAccumulateVertexNormals(curCuStream, dimAccum,
+                                          meshObject.getVertexBuffer().getDevicePointer(),
+                                          triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
+            kernelNormalizeVertexNormals(curCuStream, dimDeform,
+                                         meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(curCuStream);
 
             // JP: 変形したジオメトリを基にGASをアップデート。
@@ -1719,10 +1715,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // Post Process
         sw.start();
         curGPUTimer.postProcess.start(curCuStream);
-        const uint32_t blockSize = 8;
-        uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
-        uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
-        cudau::callKernel(curCuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
+        dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
+        kernelPostProcess(curCuStream, dimPostProcess,
 #if defined(USE_BUFFER2D)
                           surfViewAccumBuffer.getSurfaceObject(),
 #else
