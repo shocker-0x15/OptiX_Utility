@@ -42,7 +42,7 @@
 #include "imgui_impl_opengl3.h"
 
 #include "GLToolkit.h"
-#include "cuda_helper.h"
+#include "cuda_util.h"
 #include "optix_util.h"
 #include <cuda_runtime.h>
 
@@ -226,8 +226,8 @@ float3 g_cameraPosition;
 
 
 struct SceneContext {
-    optix::Scene optixScene;
-    CUDAHelper::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
+    optixu::Scene optixScene;
+    cudau::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
     uint32_t geometryID;
 };
 
@@ -236,12 +236,12 @@ class TriangleMesh {
     SceneContext* m_sceneContext;
 
     struct MaterialGroup {
-        CUDAHelper::TypedBuffer<Shared::Triangle>* triangleBuffer;
-        optix::Material material;
-        optix::GeometryInstance geometryInstance;
+        cudau::TypedBuffer<Shared::Triangle>* triangleBuffer;
+        optixu::Material material;
+        optixu::GeometryInstance geometryInstance;
     };
 
-    CUDAHelper::TypedBuffer<Shared::Vertex> m_vertexBuffer;
+    cudau::TypedBuffer<Shared::Vertex> m_vertexBuffer;
     std::vector<MaterialGroup> m_materialGroups;
 
     TriangleMesh(const TriangleMesh &) = delete;
@@ -263,24 +263,24 @@ public:
     }
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
-        m_vertexBuffer.initialize(m_cudaContext, CUDAHelper::BufferType::Device, numVertices);
+        m_vertexBuffer.initialize(m_cudaContext, cudau::BufferType::Device, numVertices);
         auto verticesOnHost = m_vertexBuffer.map();
         std::copy_n(vertices, numVertices, verticesOnHost);
         m_vertexBuffer.unmap();
     }
 
-    const CUDAHelper::TypedBuffer<Shared::Vertex> &getVertexBuffer() const {
+    const cudau::TypedBuffer<Shared::Vertex> &getVertexBuffer() const {
         return m_vertexBuffer;
     }
 
-    uint32_t addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, optix::Material &material) {
+    uint32_t addMaterialGroup(const Shared::Triangle* triangles, uint32_t numTriangles, optixu::Material &material) {
         m_materialGroups.push_back(MaterialGroup());
 
         MaterialGroup &group = m_materialGroups.back();
 
-        auto triangleBuffer = new CUDAHelper::TypedBuffer<Shared::Triangle>();
+        auto triangleBuffer = new cudau::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
-        triangleBuffer->initialize(m_cudaContext, CUDAHelper::BufferType::Device, numTriangles);
+        triangleBuffer->initialize(m_cudaContext, cudau::BufferType::Device, numTriangles);
         Shared::Triangle* trianglesOnHost = triangleBuffer->map();
         std::copy_n(triangles, numTriangles, trianglesOnHost);
         triangleBuffer->unmap();
@@ -293,7 +293,7 @@ public:
         recordData.triangleBuffer = triangleBuffer->getDevicePointer();
         m_sceneContext->geometryDataBuffer.unmap();
 
-        optix::GeometryInstance geomInst = m_sceneContext->optixScene.createGeometryInstance();
+        optixu::GeometryInstance geomInst = m_sceneContext->optixScene.createGeometryInstance();
         geomInst.setVertexBuffer(&m_vertexBuffer);
         geomInst.setTriangleBuffer(triangleBuffer);
         geomInst.setUserData(m_sceneContext->geometryID);
@@ -307,16 +307,16 @@ public:
         return static_cast<uint32_t>(m_materialGroups.size()) - 1;
     }
 
-    void setMatrial(uint32_t matGroupIdx, optix::Material &material) {
+    void setMatrial(uint32_t matGroupIdx, optixu::Material &material) {
         MaterialGroup &group = m_materialGroups[matGroupIdx];
         group.geometryInstance.setMaterial(1, 0, material);
     }
 
-    const CUDAHelper::TypedBuffer<Shared::Triangle> &getTriangleBuffer(uint32_t matGroupIdx) const {
+    const cudau::TypedBuffer<Shared::Triangle> &getTriangleBuffer(uint32_t matGroupIdx) const {
         return *m_materialGroups[matGroupIdx].triangleBuffer;
     }
 
-    void addToGAS(optix::GeometryAccelerationStructure* gas) {
+    void addToGAS(optixu::GeometryAccelerationStructure* gas) {
         for (int i = 0; i < m_materialGroups.size(); ++i)
             gas->addChild(m_materialGroups[i].geometryInstance);
     }
@@ -573,12 +573,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     hpprintf("Setup OptiX context and pipeline.\n");
 
     struct GPUTimer {
-        CUDAHelper::Timer frame;
-        CUDAHelper::Timer deform;
-        CUDAHelper::Timer updateGAS;
-        CUDAHelper::Timer updateIAS;
-        CUDAHelper::Timer render;
-        CUDAHelper::Timer postProcess;
+        cudau::Timer frame;
+        cudau::Timer deform;
+        cudau::Timer updateGAS;
+        cudau::Timer updateIAS;
+        cudau::Timer render;
+        cudau::Timer postProcess;
         bool animated;
 
         void initialize(CUcontext context) {
@@ -613,9 +613,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gpuTimer[0].initialize(cuContext);
     gpuTimer[1].initialize(cuContext);
 
-    optix::Context optixContext = optix::Context::create(cuContext);
+    optixu::Context optixContext = optixu::Context::create(cuContext);
 
-    optix::Pipeline pipeline = optixContext.createPipeline();
+    optixu::Pipeline pipeline = optixContext.createPipeline();
 
     pipeline.setPipelineOptions(6, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
@@ -623,22 +623,22 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 OPTIX_EXCEPTION_FLAG_DEBUG);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/optix_kernels.ptx");
-    optix::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-                                                                   OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
+    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+                                                                    OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 
-    optix::Module emptyModule;
+    optixu::Module emptyModule;
 
-    optix::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__pathtracing");
-    //optix::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optix::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
-    optix::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
+    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__pathtracing");
+    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
+    optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optix::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse", emptyModule, nullptr, emptyModule, nullptr);
-    optix::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_specular", emptyModule, nullptr, emptyModule, nullptr);
-    optix::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
+    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse", emptyModule, nullptr, emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_specular", emptyModule, nullptr, emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
 
     uint32_t callableProgramSampleTextureIndex = 0;
-    optix::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__sampleTexture", emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__sampleTexture", emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
@@ -677,49 +677,49 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     hpprintf("Setup materials.\n");
 
-    CUDAHelper::TypedBuffer<CUtexObject> textureObjectBuffer;
-    textureObjectBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    cudau::TypedBuffer<CUtexObject> textureObjectBuffer;
+    textureObjectBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
     uint32_t textureID = 0;
 
     CUtexObject* textureObjects = textureObjectBuffer.map();
 
-    CUDAHelper::Array arrayCheckerBoard;
-    CUDAHelper::TextureSampler texCheckerBoard;
+    cudau::Array arrayCheckerBoard;
+    cudau::TextureSampler texCheckerBoard;
     {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height,
-                                     CUDAHelper::ArrayWritable::Disable);
+        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8x4, width, height,
+                                     cudau::ArrayWritable::Disable);
         auto data = arrayCheckerBoard.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
         arrayCheckerBoard.unmap();
         stbi_image_free(linearImageData);
     }
     texCheckerBoard.setArray(arrayCheckerBoard);
-    texCheckerBoard.setFilterMode(CUDAHelper::TextureFilterMode::Point,
-                                  CUDAHelper::TextureFilterMode::Point);
-    texCheckerBoard.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
-    texCheckerBoard.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
+    texCheckerBoard.setFilterMode(cudau::TextureFilterMode::Point,
+                                  cudau::TextureFilterMode::Point);
+    texCheckerBoard.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+    texCheckerBoard.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
     uint32_t texCheckerBoardIndex = textureID++;
     textureObjects[texCheckerBoardIndex] = texCheckerBoard.getTextureObject();
 
-    CUDAHelper::Array arrayGrid;
-    CUDAHelper::TextureSampler texGrid;
+    cudau::Array arrayGrid;
+    cudau::TextureSampler texGrid;
     {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize(cuContext, CUDAHelper::ArrayElementType::UInt8x4, width, height,
-                             CUDAHelper::ArrayWritable::Disable);
+        arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8x4, width, height,
+                             cudau::ArrayWritable::Disable);
         auto data = arrayGrid.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
         arrayGrid.unmap();
         stbi_image_free(linearImageData);
     }
     texGrid.setArray(arrayGrid);
-    texGrid.setFilterMode(CUDAHelper::TextureFilterMode::Point,
-                          CUDAHelper::TextureFilterMode::Point);
-    texGrid.setIndexingMode(CUDAHelper::TextureIndexingMode::NormalizedCoordinates);
-    texGrid.setReadMode(CUDAHelper::TextureReadMode::NormalizedFloat_sRGB);
+    texGrid.setFilterMode(cudau::TextureFilterMode::Point,
+                          cudau::TextureFilterMode::Point);
+    texGrid.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+    texGrid.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
     uint32_t texGridIndex = textureID++;
     textureObjects[texGridIndex] = texGrid.getTextureObject();
 
@@ -732,14 +732,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    CUDAHelper::TypedBuffer<Shared::MaterialData> materialDataBuffer;
-    materialDataBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    cudau::TypedBuffer<Shared::MaterialData> materialDataBuffer;
+    materialDataBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
     uint32_t materialID = 0;
 
     Shared::MaterialData* matData = materialDataBuffer.map();
 
     uint32_t matGrayWallIndex = materialID++;
-    optix::Material matGray = optixContext.createMaterial();
+    optixu::Material matGray = optixContext.createMaterial();
     matGray.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matGray.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matGray.setUserData(matGrayWallIndex);
@@ -748,7 +748,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matData[matGrayWallIndex] = matGrayWallData;
 
     uint32_t matFloorIndex = materialID++;
-    optix::Material matFloor = optixContext.createMaterial();
+    optixu::Material matFloor = optixContext.createMaterial();
     matFloor.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matFloor.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matFloor.setUserData(matFloorIndex);
@@ -759,7 +759,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matData[matFloorIndex] = matFloorData;
 
     uint32_t matLeftWallIndex = materialID++;
-    optix::Material matLeft = optixContext.createMaterial();
+    optixu::Material matLeft = optixContext.createMaterial();
     matLeft.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matLeft.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matLeft.setUserData(matLeftWallIndex);
@@ -768,7 +768,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matData[matLeftWallIndex] = matLeftWallData;
 
     uint32_t matRightWallIndex = materialID++;
-    optix::Material matRight = optixContext.createMaterial();
+    optixu::Material matRight = optixContext.createMaterial();
     matRight.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matRight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matRight.setUserData(matRightWallIndex);
@@ -777,7 +777,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matData[matRightWallIndex] = matRightWallData;
 
     uint32_t matLightIndex = materialID++;
-    optix::Material matLight = optixContext.createMaterial();
+    optixu::Material matLight = optixContext.createMaterial();
     matLight.setHitGroup(Shared::RayType_Search, searchRayDiffuseHitProgramGroup);
     matLight.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matLight.setUserData(matLightIndex);
@@ -786,7 +786,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matData[matLightIndex] = matLightData;
 
     uint32_t matObject0Index = materialID++;
-    optix::Material matObject0 = optixContext.createMaterial();
+    optixu::Material matObject0 = optixContext.createMaterial();
     matObject0.setHitGroup(Shared::RayType_Search, searchRaySpecularHitProgramGroup);
     matObject0.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matObject0.setUserData(matObject0Index);
@@ -795,7 +795,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matData[matObject0Index] = matObject0Data;
 
     uint32_t matObject1Index = materialID++;
-    optix::Material matObject1 = optixContext.createMaterial();
+    optixu::Material matObject1 = optixContext.createMaterial();
     matObject1.setHitGroup(Shared::RayType_Search, searchRaySpecularHitProgramGroup);
     matObject1.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matObject1.setUserData(matObject1Index);
@@ -816,11 +816,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     hpprintf("Setup a scene.\n");
 
-    optix::Scene scene = optixContext.createScene();
+    optixu::Scene scene = optixContext.createScene();
     
     SceneContext sceneContext;
     sceneContext.optixScene = scene;
-    sceneContext.geometryDataBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    sceneContext.geometryDataBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
     sceneContext.geometryID = 0;
     
     TriangleMesh meshCornellBox(cuContext, &sceneContext);
@@ -999,7 +999,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         objectMatGroupIndex = meshObject.addMaterialGroup(triangles.data(), triangles.size(), matObject0);
         meshObject.setMatrial(objectMatGroupIndex, matObject1);
     }
-    CUDAHelper::TypedBuffer<Shared::Vertex> orgObjectVertexBuffer = meshObject.getVertexBuffer().copy();
+    cudau::TypedBuffer<Shared::Vertex> orgObjectVertexBuffer = meshObject.getVertexBuffer().copy();
 
 
 
@@ -1007,9 +1007,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     size_t maxSizeOfScratchBuffer = 0;
     OptixAccelBufferSizes asMemReqs;
 
-    CUDAHelper::Buffer asBuildScratchMem;
-    CUDAHelper::TypedBuffer<OptixTraversableHandle> travHandleBuffer;
-    travHandleBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, 128);
+    cudau::Buffer asBuildScratchMem;
+    cudau::TypedBuffer<OptixTraversableHandle> travHandleBuffer;
+    travHandleBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
     OptixTraversableHandle* travHandles = travHandleBuffer.map();
 
     // JP: コーネルボックスと面光源にサンプルとして敢えて別々のGASを使う。
@@ -1017,37 +1017,37 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //     on purpose as sample.
     
     uint32_t gasCornellBoxIndex = travID++;
-    optix::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
-    CUDAHelper::Buffer gasCornellBoxMem;
+    optixu::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gasCornellBoxMem;
     gasCornellBox.setConfiguration(true, false, false);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
     gasCornellBox.prepareForBuild(&asMemReqs);
-    gasCornellBoxMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasCornellBoxMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     uint32_t gasAreaLightIndex = travID++;
-    optix::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
-    CUDAHelper::Buffer gasAreaLightMem;
+    optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gasAreaLightMem;
     gasAreaLight.setConfiguration(true, false, false);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
     gasAreaLight.prepareForBuild(&asMemReqs);
-    gasAreaLightMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     uint32_t gasObjectIndex = travID++;
-    optix::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
-    CUDAHelper::Buffer gasObjectMem;
+    optixu::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gasObjectMem;
     gasObject.setConfiguration(false, true, false);
     gasObject.setNumMaterialSets(2);
     gasObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasObject.setNumRayTypes(1, Shared::NumRayTypes);
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
-    gasObjectMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, 
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
@@ -1055,25 +1055,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //     スクラッチバッファーは共用する。
     // EN: Build geometry acceleration structures.
     //     Share the scratch buffer among them.
-    asBuildScratchMem.initialize(cuContext, CUDAHelper::BufferType::Device, maxSizeOfScratchBuffer, 1, 0);
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1, 0);
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
 
 
 
-    CUDAHelper::Buffer shaderBindingTable;
+    cudau::Buffer shaderBindingTable;
     size_t sbtSize;
     scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, CUDAHelper::BufferType::Device, sbtSize, 1, 0);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1, 0);
     
     // JP: GASからインスタンスを作成する。
     // EN: Make instances from GASs.
 
-    optix::Instance instCornellBox = scene.createInstance();
+    optixu::Instance instCornellBox = scene.createInstance();
     instCornellBox.setGAS(gasCornellBox);
 
-    optix::Instance instAreaLight = scene.createInstance();
+    optixu::Instance instAreaLight = scene.createInstance();
     instAreaLight.setGAS(gasAreaLight);
 
     float tfAreaLight[] = {
@@ -1087,9 +1087,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //     ひとつはマテリアルセット0、もうひとつは1にする。
     // EN: Create two instances using the object but
     //     the one with material set 0, the other with 1.
-    optix::Instance instObject0 = scene.createInstance();
+    optixu::Instance instObject0 = scene.createInstance();
     instObject0.setGAS(gasObject, 0);
-    optix::Instance instObject1 = scene.createInstance();
+    optixu::Instance instObject1 = scene.createInstance();
     instObject1.setGAS(gasObject, 1);
 
 
@@ -1097,9 +1097,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: Instance Acceleration Structureの準備。
     // EN: Prepare the instance acceleration structure.
     uint32_t iasSceneIndex = travID++;
-    optix::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
-    CUDAHelper::Buffer iasSceneMem;
-    CUDAHelper::TypedBuffer<OptixInstance> instanceBuffer;
+    optixu::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
+    cudau::Buffer iasSceneMem;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer;
     uint32_t numInstances;
     iasScene.setConfiguration(false, true, false);
     iasScene.addChild(instCornellBox);
@@ -1107,8 +1107,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasScene.addChild(instObject0);
     iasScene.addChild(instObject1);
     iasScene.prepareForBuild(&asMemReqs, &numInstances);
-    instanceBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, numInstances);
-    iasSceneMem.initialize(cuContext, CUDAHelper::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
     if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, tempBufferForIAS);
@@ -1133,10 +1133,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
     GLTK::Buffer outputBufferGL;
     GLTK::BufferTexture outputTexture;
-    CUDAHelper::Buffer outputBufferCUDA;
+    cudau::Buffer outputBufferCUDA;
     outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
     outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-    outputBufferCUDA.initialize(cuContext, CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+    outputBufferCUDA.initialize(cuContext, cudau::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
 
     
@@ -1176,9 +1176,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    CUDAHelper::TypedBuffer<Shared::PCG32RNG> rngBuffer;
-    rngBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
-    const auto initializeRNGSeeds = [](CUDAHelper::Buffer &buffer) {
+    cudau::TypedBuffer<Shared::PCG32RNG> rngBuffer;
+    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
+    const auto initializeRNGSeeds = [](cudau::Buffer &buffer) {
         std::mt19937_64 rng(591842031321323413);
 
         auto seeds = buffer.map<uint64_t>();
@@ -1189,14 +1189,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     initializeRNGSeeds(rngBuffer);
 
 #if defined(USE_BUFFER2D)
-    CUDAHelper::Array arrayAccumBuffer;
-    arrayAccumBuffer.initialize(cuContext, CUDAHelper::ArrayElementType::Floatx4,
-                                renderTargetSizeX, renderTargetSizeY, CUDAHelper::ArrayWritable::Enable);
-    CUDAHelper::SurfaceView surfViewAccumBuffer;
+    cudau::Array arrayAccumBuffer;
+    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Floatx4,
+                                renderTargetSizeX, renderTargetSizeY, cudau::ArrayWritable::Enable);
+    cudau::SurfaceView surfViewAccumBuffer;
     surfViewAccumBuffer.setArray(arrayAccumBuffer);
 #else
-    CUDAHelper::TypedBuffer<float4> accumBuffer;
-    accumBuffer.initialize(cuContext, CUDAHelper::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
+    cudau::TypedBuffer<float4> accumBuffer;
+    accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX * renderTargetSizeY);
 #endif
 
 
@@ -1294,7 +1294,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             outputBufferGL.finalize();
             outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
             outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-            outputBufferCUDA.initialize(cuContext, CUDAHelper::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+            outputBufferCUDA.initialize(cuContext, cudau::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
 
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
@@ -1630,16 +1630,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(curCuStream);
             uint32_t dimDeform = (orgObjectVertexBuffer.numElements() + 31) / 32;
-            CUDAHelper::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
-                                   orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
-                                   0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
-            const CUDAHelper::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
+            cudau::callKernel(curCuStream, kernelDeform, dim3(dimDeform), dim3(32), 0,
+                              orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
+                              0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
+            const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             uint32_t dimAccum = (triangleBuffer.numElements() + 31) / 32;
-            CUDAHelper::callKernel(curCuStream, kernelAccumulateVertexNormals, dim3(dimAccum), dim3(32), 0,
-                                   meshObject.getVertexBuffer().getDevicePointer(),
-                                   triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
-            CUDAHelper::callKernel(curCuStream, kernelNormalizeVertexNormals, dim3(dimDeform), dim3(32), 0,
-                                   meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
+            cudau::callKernel(curCuStream, kernelAccumulateVertexNormals, dim3(dimAccum), dim3(32), 0,
+                              meshObject.getVertexBuffer().getDevicePointer(),
+                              triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
+            cudau::callKernel(curCuStream, kernelNormalizeVertexNormals, dim3(dimDeform), dim3(32), 0,
+                              meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(curCuStream);
 
             // JP: 変形したジオメトリを基にGASをアップデート。
@@ -1722,14 +1722,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         const uint32_t blockSize = 8;
         uint32_t dimX = (renderTargetSizeX + blockSize - 1) / blockSize;
         uint32_t dimY = (renderTargetSizeY + blockSize - 1) / blockSize;
-        CUDAHelper::callKernel(curCuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
+        cudau::callKernel(curCuStream, kernelPostProcess, dim3(dimX, dimY), dim3(blockSize, blockSize), 0,
 #if defined(USE_BUFFER2D)
-                               surfViewAccumBuffer.getSurfaceObject(),
+                          surfViewAccumBuffer.getSurfaceObject(),
 #else
-                               accumBuffer.getDevicePointer(),
+                          accumBuffer.getDevicePointer(),
 #endif
-                               renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
-                               outputBufferCUDA.beginCUDAAccess(curCuStream));
+                          renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
+                          outputBufferCUDA.beginCUDAAccess(curCuStream));
         outputBufferCUDA.endCUDAAccess(curCuStream);
         curGPUTimer.postProcess.stop(curCuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;

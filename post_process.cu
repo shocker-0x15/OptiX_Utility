@@ -4,7 +4,7 @@
 
 extern "C" __global__ void postProcess(
 #if defined(USE_BUFFER2D)
-    optix::WritableBuffer2D<float4> accumBuffer,
+    optixu::WritableBuffer2D<float4> accumBuffer,
 #else
     const float4* accumBuffer,
 #endif

@@ -1,4 +1,4 @@
-﻿#include "cuda_helper.h"
+﻿#include "cuda_util.h"
 
 #ifdef CUDAHPlatform_Windows_MSVC
 #   include <Windows.h>
@@ -10,7 +10,7 @@
 
 
 
-namespace CUDAHelper {
+namespace cudau {
 #ifdef CUDAHPlatform_Windows_MSVC
     void devPrintf(const char* fmt, ...) {
         va_list args;
@@ -393,42 +393,42 @@ namespace CUDAHelper {
         if (cubemap)
             arrayDesc.Flags |= CUDA_ARRAY3D_CUBEMAP;
         switch (m_elemType) {
-        case CUDAHelper::ArrayElementType::UInt8x4:
+        case cudau::ArrayElementType::UInt8x4:
             arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT8;
             arrayDesc.NumChannels = 4;
             m_stride = 4;
             break;
-        case CUDAHelper::ArrayElementType::UInt16x4:
+        case cudau::ArrayElementType::UInt16x4:
             arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT16;
             arrayDesc.NumChannels = 4;
             m_stride = 8;
             break;
-        case CUDAHelper::ArrayElementType::UInt32x4:
+        case cudau::ArrayElementType::UInt32x4:
             arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT32;
             arrayDesc.NumChannels = 4;
             m_stride = 16;
             break;
-        case CUDAHelper::ArrayElementType::Int8x4:
+        case cudau::ArrayElementType::Int8x4:
             arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT8;
             arrayDesc.NumChannels = 4;
             m_stride = 4;
             break;
-        case CUDAHelper::ArrayElementType::Int16x4:
+        case cudau::ArrayElementType::Int16x4:
             arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT16;
             arrayDesc.NumChannels = 4;
             m_stride = 8;
             break;
-        case CUDAHelper::ArrayElementType::Int32x4:
+        case cudau::ArrayElementType::Int32x4:
             arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT32;
             arrayDesc.NumChannels = 4;
             m_stride = 16;
             break;
-        case CUDAHelper::ArrayElementType::Halfx4:
+        case cudau::ArrayElementType::Halfx4:
             arrayDesc.Format = CU_AD_FORMAT_HALF;
             arrayDesc.NumChannels = 4;
             m_stride = 8;
             break;
-        case CUDAHelper::ArrayElementType::Floatx4:
+        case cudau::ArrayElementType::Floatx4:
             arrayDesc.Format = CU_AD_FORMAT_FLOAT;
             arrayDesc.NumChannels = 4;
             m_stride = 16;

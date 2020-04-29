@@ -2,6 +2,7 @@
 
 #include "optix_util.h"
 
+// OptiX 7.0 has an issue in use of CUDA surface at least with the driver 445.87.
 //#define USE_BUFFER2D
 
 
@@ -291,7 +292,7 @@ namespace Shared {
         uint32_t numAccumFrames;
         PCG32RNG* rngBuffer;
 #if defined(USE_BUFFER2D)
-        optix::WritableBuffer2D<float4> accumBuffer;
+        optixu::WritableBuffer2D<float4> accumBuffer;
 #else
         float4* accumBuffer;
 #endif

@@ -69,7 +69,7 @@ AS/SBT Layoutのdirty状態はUtil側で検知できるdirty状態をカーネ�
 
 #if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
-#include "cuda_helper.h"
+#include "cuda_util.h"
 #endif
 
 #if defined(__CUDA_ARCH__)
@@ -84,7 +84,7 @@ AS/SBT Layoutのdirty状態はUtil側で検知できるdirty状態をカーネ�
 
 
 
-namespace optix {
+namespace optixu {
 
 #ifdef _DEBUG
 #   define OPTIX_ENABLE_ASSERT
@@ -156,7 +156,7 @@ namespace optix {
 
 
 #if !defined(__CUDA_ARCH__)
-    using namespace CUDAHelper;
+    using namespace cudau;
 
     /*
 

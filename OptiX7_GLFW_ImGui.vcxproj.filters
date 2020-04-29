@@ -52,11 +52,11 @@
     <ClCompile Include="ext\gl3w\gl3w.c">
       <Filter>ext\gl3w</Filter>
     </ClCompile>
-    <ClCompile Include="cuda_helper.cpp" />
     <ClCompile Include="optix_util.cpp" />
     <ClCompile Include="ext\tiny_obj_loader.cc">
       <Filter>ext\tinyobjloader</Filter>
     </ClCompile>
+    <ClCompile Include="cuda_util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ext\imgui\imgui_internal.h">
@@ -95,7 +95,6 @@
     <ClInclude Include="ext\gl3w\include\GL\glcorearb.h">
       <Filter>ext\gl3w</Filter>
     </ClInclude>
-    <ClInclude Include="cuda_helper.h" />
     <ClInclude Include="shared.h" />
     <ClInclude Include="optix_util.h" />
     <ClInclude Include="optix_util_private.h" />
@@ -111,6 +110,7 @@
     <ClInclude Include="stopwatch.h">
       <Filter>non_essentials</Filter>
     </ClInclude>
+    <ClInclude Include="cuda_util.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ext\imgui\natvis\imgui.natvis">

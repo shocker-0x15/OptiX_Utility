@@ -211,7 +211,7 @@ RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, floa
 }
 
 RT_PROGRAM void __closesthit__shading_diffuse() {
-    auto sbtr = optix::getHitGroupSBTRecordData();
+    auto sbtr = optixu::getHitGroupSBTRecordData();
     auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
     auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
 
@@ -329,7 +329,7 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
 //     it appears better to basically use a common program and callable programs for different behaviors,
 //     but here define another program on purpose for demonstration.
 RT_PROGRAM void __closesthit__shading_specular() {
-    auto sbtr = optix::getHitGroupSBTRecordData();
+    auto sbtr = optixu::getHitGroupSBTRecordData();
     auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
     auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
 

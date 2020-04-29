@@ -128,7 +128,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     </CudaLink>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="cuda_helper.cpp" />
+    <ClCompile Include="cuda_util.cpp" />
     <ClCompile Include="ext\gl3w\gl3w.c" />
     <ClCompile Include="ext\imgui\imgui.cpp" />
     <ClCompile Include="ext\imgui\imgui_demo.cpp" />
@@ -144,7 +144,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cuda_helper.h" />
+    <ClInclude Include="cuda_util.h" />
     <ClInclude Include="ext\gl3w\include\GL\gl3w.h" />
     <ClInclude Include="ext\gl3w\include\GL\glcorearb.h" />
     <ClInclude Include="ext\glfw\include\GLFW\glfw3.h" />

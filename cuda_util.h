@@ -37,8 +37,8 @@
 #ifdef CUDAH_ENABLE_ASSERT
 #   define CUDAHAssert(expr, fmt, ...) \
     if (!(expr)) { \
-        CUDAHelper::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
-        CUDAHelper::devPrintf(fmt"\n", ##__VA_ARGS__); \
+        cudau::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
+        cudau::devPrintf(fmt"\n", ##__VA_ARGS__); \
         abort(); \
     } 0
 #else
@@ -76,7 +76,7 @@
 
 
 
-namespace CUDAHelper {
+namespace cudau {
     void devPrintf(const char* fmt, ...);
 
 

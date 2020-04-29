@@ -49,7 +49,7 @@
 
 
 
-namespace optix {
+namespace optixu {
     static std::runtime_error make_runtime_error(const char* fmt, ...) {
         va_list args;
         va_start(args, fmt);
