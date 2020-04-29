@@ -120,110 +120,108 @@ constexpr size_t lengthof(const T(&array)[size]) {
 
 
 
-struct Matrix3x3 {
+struct Quaternion {
     union {
-        struct { float m00, m10, m20; };
-        float3 c0;
+        float3 v;
+        struct {
+            float x;
+            float y;
+            float z;
+        };
     };
-    union {
-        struct { float m01, m11, m21; };
-        float3 c1;
-    };
-    union {
-        struct { float m02, m12, m22; };
-        float3 c2;
-    };
+    float w;
 
-    Matrix3x3() :
-        c0(make_float3(1, 0, 0)),
-        c1(make_float3(0, 1, 0)),
-        c2(make_float3(0, 0, 1)) { }
-    Matrix3x3(const float array[9]) :
-        m00(array[0]), m10(array[1]), m20(array[2]),
-        m01(array[3]), m11(array[4]), m21(array[5]),
-        m02(array[6]), m12(array[7]), m22(array[8]) { }
-    Matrix3x3(const float3 &col0, const float3 &col1, const float3 &col2) :
-        c0(col0), c1(col1), c2(col2)
-    { }
+    Quaternion() : v(), w(1) {}
+    Quaternion(float xx, float yy, float zz, float ww) : v(make_float3(xx, yy, zz)), w(ww) {}
+    Quaternion(const float3 &vv, float ww) : v(vv), w(ww) {}
 
-    Matrix3x3 operator+() const { return *this; }
-    Matrix3x3 operator-() const { return Matrix3x3(-c0, -c1, -c2); }
+    Quaternion operator+() const { return *this; }
+    Quaternion operator-() const { return Quaternion(-v, -w); }
 
-    Matrix3x3 operator+(const Matrix3x3 &mat) const { return Matrix3x3(c0 + mat.c0, c1 + mat.c1, c2 + mat.c2); }
-    Matrix3x3 operator-(const Matrix3x3 &mat) const { return Matrix3x3(c0 - mat.c0, c1 - mat.c1, c2 - mat.c2); }
-    Matrix3x3 operator*(const Matrix3x3 &mat) const {
-        const float3 r[] = { row(0), row(1), row(2) };
-        return Matrix3x3(make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0)),
-                         make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1)),
-                         make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2)));
+    Quaternion operator*(const Quaternion &q) const {
+        return Quaternion(cross(v, q.v) + w * q.v + q.w * v, w * q.w - dot(v, q.v));
     }
+    Quaternion operator*(float s) const { return Quaternion(v * s, w * s); }
+    Quaternion operator/(float s) const { float r = 1 / s; return *this * r; }
+    friend Quaternion operator*(float s, const Quaternion &q) { return q * s; }
 
-    Matrix3x3 &operator*=(const Matrix3x3 &mat) {
-        const float3 r[] = { row(0), row(1), row(2) };
-        c0 = make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0));
-        c1 = make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1));
-        c2 = make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2));
-        return *this;
-    }
-
-    float3 row(unsigned int r) const {
-        Assert(r < 3, "\"r\" is out of range [0, 2].");
-        switch (r) {
-        case 0:
-            return make_float3(m00, m01, m02);
-        case 1:
-            return make_float3(m10, m11, m12);
-        case 2:
-            return make_float3(m20, m21, m22);
-        default:
-            return make_float3(0, 0, 0);
-        }
-    }
-
-    Matrix3x3 &transpose() {
-        std::swap(m10, m01); std::swap(m20, m02);
-        std::swap(m21, m12);
-        return *this;
+    Matrix3x3 toMatrix3x3() const {
+        float xx = x * x, yy = y * y, zz = z * z;
+        float xy = x * y, yz = y * z, zx = z * x;
+        float xw = x * w, yw = y * w, zw = z * w;
+        return Matrix3x3(make_float3(1 - 2 * (yy + zz), 2 * (xy + zw), 2 * (zx - yw)),
+                         make_float3(2 * (xy - zw), 1 - 2 * (xx + zz), 2 * (yz + xw)),
+                         make_float3(2 * (zx + yw), 2 * (yz - xw), 1 - 2 * (xx + yy)));
     }
 };
 
-inline Matrix3x3 scale3x3(const float3 &s) {
-    return Matrix3x3(s.x * make_float3(1, 0, 0),
-                     s.y * make_float3(0, 1, 0),
-                     s.z * make_float3(0, 0, 1));
+static Quaternion qRotate(float angle, const float3 &axis) {
+    float ha = angle / 2;
+    float s = std::sin(ha), c = std::cos(ha);
+    return Quaternion(s * normalize(axis), c);
 }
-inline Matrix3x3 scale3x3(float sx, float sy, float sz) {
-    return scale3x3(make_float3(sx, sy, sz));
+static Quaternion qRotate(float angle, float ax, float ay, float az) {
+    return qRotate(angle, make_float3(ax, ay, az));
 }
-inline Matrix3x3 scale3x3(float s) {
-    return scale3x3(make_float3(s, s, s));
-}
+static Quaternion qRotateX(float angle) { return qRotate(angle, make_float3(1, 0, 0)); }
+static Quaternion qRotateY(float angle) { return qRotate(angle, make_float3(0, 1, 0)); }
+static Quaternion qRotateZ(float angle) { return qRotate(angle, make_float3(0, 0, 1)); }
 
-inline Matrix3x3 rotate3x3(float angle, const float3 &axis) {
-    Matrix3x3 matrix;
-    float3 nAxis = normalize(axis);
-    float s = std::sin(angle);
-    float c = std::cos(angle);
-    float oneMinusC = 1 - c;
 
-    matrix.m00 = nAxis.x * nAxis.x * oneMinusC + c;
-    matrix.m10 = nAxis.x * nAxis.y * oneMinusC + nAxis.z * s;
-    matrix.m20 = nAxis.z * nAxis.x * oneMinusC - nAxis.y * s;
-    matrix.m01 = nAxis.x * nAxis.y * oneMinusC - nAxis.z * s;
-    matrix.m11 = nAxis.y * nAxis.y * oneMinusC + c;
-    matrix.m21 = nAxis.y * nAxis.z * oneMinusC + nAxis.x * s;
-    matrix.m02 = nAxis.z * nAxis.x * oneMinusC + nAxis.y * s;
-    matrix.m12 = nAxis.y * nAxis.z * oneMinusC - nAxis.x * s;
-    matrix.m22 = nAxis.z * nAxis.z * oneMinusC + c;
 
-    return matrix;
-}
-inline Matrix3x3 rotate3x3(float angle, float ax, float ay, float az) {
-    return rotate3x3(angle, make_float3(ax, ay, az));
-}
-inline Matrix3x3 rotateX3x3(float angle) { return rotate3x3(angle, make_float3(1, 0, 0)); }
-inline Matrix3x3 rotateY3x3(float angle) { return rotate3x3(angle, make_float3(0, 1, 0)); }
-inline Matrix3x3 rotateZ3x3(float angle) { return rotate3x3(angle, make_float3(0, 0, 1)); }
+struct KeyState {
+    uint64_t timesLastChanged[5];
+    bool statesLastChanged[5];
+    uint32_t lastIndex;
+
+    KeyState() : lastIndex(0) {
+        for (int i = 0; i < 5; ++i) {
+            timesLastChanged[i] = 0;
+            statesLastChanged[i] = false;
+        }
+    }
+
+    void recordStateChange(bool state, uint64_t time) {
+        bool lastState = statesLastChanged[lastIndex];
+        if (state == lastState)
+            return;
+
+        lastIndex = (lastIndex + 1) % 5;
+        statesLastChanged[lastIndex] = !lastState;
+        timesLastChanged[lastIndex] = time;
+    }
+
+    bool getState(int32_t goBack = 0) const {
+        Assert(goBack >= -4 && goBack <= 0, "goBack must be in the range [-4, 0].");
+        return statesLastChanged[(lastIndex + goBack + 5) % 5];
+    }
+
+    uint64_t getTime(int32_t goBack = 0) const {
+        Assert(goBack >= -4 && goBack <= 0, "goBack must be in the range [-4, 0].");
+        return timesLastChanged[(lastIndex + goBack + 5) % 5];
+    }
+};
+
+KeyState g_keyForward;
+KeyState g_keyBackward;
+KeyState g_keyLeftward;
+KeyState g_keyRightward;
+KeyState g_keyUpward;
+KeyState g_keyDownward;
+KeyState g_keyTiltLeft;
+KeyState g_keyTiltRight;
+KeyState g_keyFasterPosMovSpeed;
+KeyState g_keySlowerPosMovSpeed;
+KeyState g_buttonRotate;
+double g_mouseX;
+double g_mouseY;
+
+float g_cameraPositionalMovingSpeed;
+float g_cameraDirectionalMovingSpeed;
+float g_cameraTiltSpeed;
+Quaternion g_cameraOrientation;
+Quaternion g_tempCameraOrientation;
+float3 g_cameraPosition;
 
 
 
@@ -481,6 +479,89 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     ImGui::GetStyle() = guiStyleWithGamma;
 
     // END: Initialize ImGui.
+    // ----------------------------------------------------------------
+
+
+
+    // ----------------------------------------------------------------
+    // JP: 入力コールバックの設定。
+    // EN: Set up input callbacks.
+
+    glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int32_t button, int32_t action, int32_t mods) {
+        uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
+        ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+
+        switch (button) {
+        case GLFW_MOUSE_BUTTON_MIDDLE: {
+            devPrintf("Mouse Middle\n");
+            g_buttonRotate.recordStateChange(action == GLFW_PRESS, frameIndex);
+            break;
+        }
+        default:
+            break;
+        }
+                               });
+    glfwSetCursorPosCallback(window, [](GLFWwindow* window, double x, double y) {
+        g_mouseX = x;
+        g_mouseY = y;
+                             });
+    glfwSetKeyCallback(window, [](GLFWwindow* window, int32_t key, int32_t scancode, int32_t action, int32_t mods) {
+        uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
+        ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+
+        switch (key) {
+        case GLFW_KEY_W: {
+            g_keyForward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_S: {
+            g_keyBackward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_A: {
+            g_keyLeftward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_D: {
+            g_keyRightward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_R: {
+            g_keyUpward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_F: {
+            g_keyDownward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_Q: {
+            g_keyTiltLeft.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_E: {
+            g_keyTiltRight.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_T: {
+            g_keyFasterPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        case GLFW_KEY_G: {
+            g_keySlowerPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+            break;
+        }
+        default:
+            break;
+        }
+                       });
+
+    g_cameraPositionalMovingSpeed = 0.01f;
+    g_cameraDirectionalMovingSpeed = 0.0015f;
+    g_cameraTiltSpeed = 0.025f;
+    g_cameraPosition = make_float3(0, 0, 3.2f);
+    g_cameraOrientation = qRotateY(M_PI);
+
+    // END: Set up input callbacks.
     // ----------------------------------------------------------------
 
 
@@ -1154,6 +1235,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     std::uniform_real_distribution<float> u01;
     
     uint64_t frameIndex = 0;
+    glfwSetWindowUserPointer(window, &frameIndex);
     uint64_t animFrameIndex = 0;
     int32_t requestedSize[2];
     struct CPUTimeRecord {
@@ -1187,7 +1269,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         sw.start();
 
-        sw.start();
+        sw.start(); // Frame Begin
         uint32_t bufferIndex = frameIndex % 2;
 
         if (glfwWindowShouldClose(window))
@@ -1249,12 +1331,89 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+        bool operatingCamera;
+        bool cameraIsActuallyMoving;
+        static bool operatedCameraOnPrevFrame = false;
+        {
+            const auto decideDirection = [](const KeyState& a, const KeyState& b) {
+                int32_t dir = 0;
+                if (a.getState() == true) {
+                    if (b.getState() == true)
+                        dir = 0;
+                    else
+                        dir = 1;
+                }
+                else {
+                    if (b.getState() == true)
+                        dir = -1;
+                    else
+                        dir = 0;
+                }
+                return dir;
+            };
+
+            int32_t trackZ = decideDirection(g_keyForward, g_keyBackward);
+            int32_t trackX = decideDirection(g_keyLeftward, g_keyRightward);
+            int32_t trackY = decideDirection(g_keyUpward, g_keyDownward);
+            int32_t tiltZ = decideDirection(g_keyTiltRight, g_keyTiltLeft);
+            int32_t adjustPosMoveSpeed = decideDirection(g_keyFasterPosMovSpeed, g_keySlowerPosMovSpeed);
+
+            g_cameraPositionalMovingSpeed *= 1.0f + 0.02f * adjustPosMoveSpeed;
+            g_cameraPositionalMovingSpeed = std::min(std::max(g_cameraPositionalMovingSpeed, 1e-6f), 1e+6f);
+
+            static double deltaX = 0, deltaY = 0;
+            static double lastX, lastY;
+            static double g_prevMouseX = g_mouseX, g_prevMouseY = g_mouseY;
+            if (g_buttonRotate.getState() == true) {
+                if (g_buttonRotate.getTime() == frameIndex) {
+                    lastX = g_mouseX;
+                    lastY = g_mouseY;
+                }
+                else {
+                    deltaX = g_mouseX - lastX;
+                    deltaY = g_mouseY - lastY;
+                }
+            }
+
+            float deltaAngle = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+            float3 axis = make_float3(deltaY, -deltaX, 0);
+            axis /= deltaAngle;
+            if (deltaAngle == 0.0f)
+                axis = make_float3(1, 0, 0);
+
+            g_cameraOrientation = g_cameraOrientation * qRotateZ(g_cameraTiltSpeed * tiltZ);
+            g_tempCameraOrientation = g_cameraOrientation * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
+            g_cameraPosition += g_tempCameraOrientation.toMatrix3x3() * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
+            if (g_buttonRotate.getState() == false && g_buttonRotate.getTime() == frameIndex) {
+                g_cameraOrientation = g_tempCameraOrientation;
+                deltaX = 0;
+                deltaY = 0;
+            }
+
+            operatingCamera = (g_keyForward.getState() || g_keyBackward.getState() ||
+                               g_keyLeftward.getState() || g_keyRightward.getState() ||
+                               g_keyUpward.getState() || g_keyDownward.getState() ||
+                               g_keyTiltLeft.getState() || g_keyTiltRight.getState() ||
+                               g_buttonRotate.getState());
+            cameraIsActuallyMoving = (trackZ != 0 || trackX != 0 || trackY != 0 ||
+                                      tiltZ != 0 || (g_mouseX != g_prevMouseX) || (g_mouseY != g_prevMouseY))
+                && operatingCamera;
+
+            g_prevMouseX = g_mouseX;
+            g_prevMouseY = g_mouseY;
+
+            plp.camera.position = g_cameraPosition;
+            plp.camera.orientation = g_tempCameraOrientation.toMatrix3x3();
+        }
+
+
+
         CUstream &curCuStream = cuStream[bufferIndex];
         GPUTimer &curGPUTimer = gpuTimer[bufferIndex];
         
         // JP: 前フレームの処理が完了するのを待つ。
         // EN: Wait the previous frame processing to finish.
-        sw.start();
+        sw.start(); // Sync
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
         cpuTimeRecord.syncTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
@@ -1262,14 +1421,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // EN: Have dummy load on CPU to verify asynchronous execution.
         static float cpuDummyLoad = 15.0f;
         static float dummyProb = 0.0f;
-        sw.start();
+        sw.start(); // Dummy Load
         if (cpuDummyLoad > 0.0f && u01(rng) < dummyProb * 0.01f)
             std::this_thread::sleep_for(std::chrono::microseconds(static_cast<uint64_t>(cpuDummyLoad * 1000)));
         cpuTimeRecord.dummyTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
 
 
-        sw.start();
+        sw.start(); // ImGui
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -1369,6 +1528,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             ImGui::SliderInt("GAS Rebuild Interval", &gasRebuildInterval, 1, 60);
             ImGui::Checkbox("Enable IAS Rebuild", &enablePeriodicIASRebuild);
             ImGui::SliderInt("IAS Rebuild Interval", &iasRebuildInterval, 1, 60);
+
+            ImGui::End();
+        }
+
+
+
+        {
+            ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
+            ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
         }
@@ -1535,7 +1705,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-        if (play || playStep || sceneEdited)
+        if (play || playStep || sceneEdited || cameraIsActuallyMoving)
             plp.numAccumFrames = 1;
 
         // Render

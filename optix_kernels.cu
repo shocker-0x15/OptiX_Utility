@@ -151,8 +151,8 @@ RT_PROGRAM void __raygen__pathtracing() {
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
-    float3 origin = make_float3(0, 0, 3.2f);
-    float3 direction = normalize(make_float3(vw * (x - 0.5f), vh * (0.5f - y), -1));
+    float3 origin = plp.camera.position;
+    float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
     OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
 
@@ -237,6 +237,11 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     float b2 = 1 - (b0 + b1);
     float3 p = optixTransformPointFromObjectToWorldSpace(b0 * v0.position + b1 * v1.position + b2 * v2.position);
     float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * v0.normal + b1 * v1.normal + b2 * v2.normal));
+
+    float3 vOut = -optixGetWorldRayDirection();
+    bool isFrontFace = dot(vOut, sn) > 0;
+    if (!isFrontFace)
+        sn = -sn;
     p = p + sn * 0.001f;
 
     //// Visualize normal
@@ -254,7 +259,7 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     const float3 LightRadiance = make_float3(20, 20, 20);
     // Hard-coded directly visible light
     if (sbtr.materialData == plp.matLightIndex &&
-        dot(optixGetWorldRayDirection(), sn) < 0 &&
+        isFrontFace &&
         (payload.pathLength == 1 || payload.specularBounce)) {
         payload.contribution = payload.contribution + payload.alpha * LightRadiance;
     }
@@ -330,8 +335,6 @@ RT_PROGRAM void __closesthit__shading_specular() {
 
     const MaterialData &mat = matData[sbtr.materialData];
     const GeometryData &geom = geomInstData[sbtr.geomInstData];
-
-    OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
 
     auto hitPointParam = HitPointParameter::get();
 
