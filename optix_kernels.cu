@@ -13,7 +13,6 @@ extern "C" __constant__ PipelineLaunchParameters plp;
 
 
 struct SearchRayPayload {
-    PCG32RNG rng;
     float3 alpha;
     float3 contribution;
     float3 origin;
@@ -70,20 +69,19 @@ RT_PROGRAM void __raygen__pathtracing() {
     SearchRayPayload payload;
     payload.alpha = make_float3(1.0f, 1.0f, 1.0f);
     payload.contribution = make_float3(0.0f, 0.0f, 0.0f);
-    payload.rng = rng;
     payload.pathLength = 1;
     payload.terminate = false;
     while (true) {
         // JP: ペイロードとともにトレースを呼び出す。
         //     ペイロード数は最大で8DWだが、
-        //     2つ目のペイロードをそのまま渡すと収まりきらないのでポインターとして渡す。
+        //     3つ目のペイロードをそのまま渡すと収まりきらないのでポインターとして渡す。
         // EN: Trace call with payloads.
         //     The maximum number of payloads is 8 dwords in total.
-        //     However pass the second payload as pointer because its direct size cannot fit in.
+        //     However pass the third payload as pointer because its direct size cannot fit in.
         optixu::trace(traversable, origin, direction,
                       0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                       RayType_Search, NumRayTypes, RayType_Search,
-                      traversable, &payload);
+                      traversable, rng, &payload);
         if (payload.terminate || payload.pathLength >= 10)
             break;
 
@@ -92,7 +90,7 @@ RT_PROGRAM void __raygen__pathtracing() {
         ++payload.pathLength;
     }
 
-    plp.rngBuffer[index] = payload.rng;
+    plp.rngBuffer[index] = rng;
     float3 accResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
 #if defined(USE_BUFFER2D)
@@ -117,7 +115,7 @@ RT_PROGRAM void __miss__searchRay() {
     //     in optixu::trace() to pointer types.
     //     However pass the null pointer as the first payload because we don't need the first payload here.
     SearchRayPayload* payload;
-    optixu::getPayloads((OptixTraversableHandle*)nullptr, &payload);
+    optixu::getPayloads((OptixTraversableHandle*)nullptr, (PCG32RNG*)nullptr, &payload);
     payload->contribution = payload->contribution + payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
 }
@@ -143,10 +141,9 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     // EN: The signature used in getPayloads() must match the one replacing the part of payloads
     //     in optixu::trace() to pointer types.
     OptixTraversableHandle traversable;
+    PCG32RNG rng;
     SearchRayPayload* payload;
-    optixu::getPayloads(&traversable, &payload);
-
-    PCG32RNG &rng = payload->rng;
+    optixu::getPayloads(&traversable, &rng, &payload);
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
@@ -237,6 +234,14 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     payload->direction = vIn;
     payload->specularBounce = false;
     payload->terminate = false;
+
+    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    //     しかしここでは書き換えていないペイロードに関してはnullポインターを渡す。
+    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
+    //     However pass the null pointers for the payloads which were read only.
+    optixu::setPayloads((OptixTraversableHandle*)nullptr, &rng, (SearchRayPayload**)nullptr);
 }
 
 // JP: それなりの規模のパストレーシングを実装する場合はプログラムは基本的に共通化して
@@ -262,7 +267,7 @@ RT_PROGRAM void __closesthit__shading_specular() {
     //     in optixu::trace() to pointer types.
     //     However pass the null pointer as the first payload because we don't need the first payload here.
     SearchRayPayload* payload;
-    optixu::getPayloads((OptixTraversableHandle*)nullptr, &payload);
+    optixu::getPayloads((OptixTraversableHandle*)nullptr, (PCG32RNG*)nullptr, &payload);
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
