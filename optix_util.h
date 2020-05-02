@@ -167,19 +167,19 @@ namespace optixu {
     }
 
     template <uint32_t start, typename PayloadType>
-    RT_FUNCTION void _setPayloads(uint32_t** p, PayloadType &&payload) {
+    RT_FUNCTION void _traceSetPayloads(uint32_t** p, PayloadType &&payload) {
         constexpr uint32_t numDwords = sizeof(PayloadType) / 4;
         for (int i = 0; i < numDwords; ++i)
             p[start + i] = reinterpret_cast<uint32_t*>(&payload) + i;
     }
 
     template <uint32_t start, typename HeadType, typename... TailTypes>
-    RT_FUNCTION void _setPayloads(uint32_t** p, HeadType &&headPayload, TailTypes &&... tailPayloads) {
+    RT_FUNCTION void _traceSetPayloads(uint32_t** p, HeadType &&headPayload, TailTypes &&... tailPayloads) {
         constexpr uint32_t numDwords = sizeof(HeadType) / 4;
 #pragma unroll
         for (int i = 0; i < numDwords; ++i)
             p[start + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
-        _setPayloads<start + numDwords>(p, std::forward<TailTypes>(tailPayloads)...);
+        _traceSetPayloads<start + numDwords>(p, std::forward<TailTypes>(tailPayloads)...);
     }
 
 #define OPTIXU_TRACE_PARAMETERS \
@@ -236,7 +236,7 @@ namespace optixu {
         constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
         uint32_t* p[numDwords];
-        _setPayloads<0>(p, std::forward<PayloadTypes>(payloads)...);
+        _traceSetPayloads<0>(p, std::forward<PayloadTypes>(payloads)...);
         _trace(OPTIXU_TRACE_ARGUMENTS, p);
     }
 
