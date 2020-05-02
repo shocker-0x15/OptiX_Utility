@@ -31,22 +31,22 @@
 #include <vector_types.h>
 
 #ifdef _DEBUG
-#   define CUDAH_ENABLE_ASSERT
+#   define CUDAU_ENABLE_ASSERT
 #endif
 
-#ifdef CUDAH_ENABLE_ASSERT
-#   define CUDAHAssert(expr, fmt, ...) \
+#ifdef CUDAU_ENABLE_ASSERT
+#   define CUDAUAssert(expr, fmt, ...) \
     if (!(expr)) { \
         cudau::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
         cudau::devPrintf(fmt"\n", ##__VA_ARGS__); \
         abort(); \
     } 0
 #else
-#   define CUDAHAssert(expr, fmt, ...)
+#   define CUDAUAssert(expr, fmt, ...)
 #endif
 
-#define CUDAHAssert_ShouldNotBeCalled() CUDAHAssert(false, "Should not be called!")
-#define CUDAHAssert_NotImplemented() CUDAHAssert(false, "Not implemented yet!")
+#define CUDAUAssert_ShouldNotBeCalled() CUDAUAssert(false, "Should not be called!")
+#define CUDAUAssert_NotImplemented() CUDAUAssert(false, "Not implemented yet!")
 
 #define CUDADRV_CHECK(call) \
     do { \

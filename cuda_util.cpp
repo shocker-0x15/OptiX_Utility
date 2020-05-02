@@ -252,8 +252,6 @@ namespace cudau {
         if (m_type == BufferType::Device ||
             m_type == BufferType::P2P ||
             m_type == BufferType::GL_Interop) {
-            CUDAHAssert(m_mappedPointer, "This buffer is not mapped.");
-
             CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
             size_t size = (size_t)m_numElements * m_stride;
@@ -434,7 +432,7 @@ namespace cudau {
             m_stride = 16;
             break;
         default:
-            CUDAHAssert_NotImplemented();
+            CUDAUAssert_NotImplemented();
             break;
         }
 
@@ -459,7 +457,7 @@ namespace cudau {
     void Array::resize(uint32_t length) {
         if (m_height > 0 || m_depth > 0)
             throw std::runtime_error("Array dimension cannot be changed.");
-        CUDAHAssert_NotImplemented();
+        CUDAUAssert_NotImplemented();
     }
 
     void Array::resize(uint32_t width, uint32_t height) {
@@ -498,7 +496,7 @@ namespace cudau {
     }
 
     void Array::resize(uint32_t width, uint32_t height, uint32_t depth) {
-        CUDAHAssert_NotImplemented();
+        CUDAUAssert_NotImplemented();
     }
 
 
@@ -546,8 +544,6 @@ namespace cudau {
             throw std::runtime_error("This buffer is not mapped.");
 
         m_mapped = false;
-
-        CUDAHAssert(m_mappedPointer, "This buffer is not mapped.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 

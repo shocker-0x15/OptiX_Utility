@@ -122,7 +122,7 @@ namespace optixu {
         uint32_t geomInstData;
     };
 
-#if defined(__CUDA_ARCH__)
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
     RT_FUNCTION HitGroupSBTRecordData getHitGroupSBTRecordData() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
@@ -143,7 +143,7 @@ namespace optixu {
             return *this;
         }
 
-#if defined(__CUDA_ARCH__)
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
         RT_FUNCTION T operator[](uint2 idx) const {
             return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
         }
@@ -152,6 +152,183 @@ namespace optixu {
         }
 #endif
     };
+
+
+
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+    template <typename T>
+    RT_FUNCTION constexpr size_t _calcSumDwords() {
+        return sizeof(T) / 4;
+    }
+    
+    template <typename HeadType0, typename... TailTypes>
+    RT_FUNCTION constexpr size_t _calcSumDwords() {
+        return sizeof(HeadType0) / 4 + _calcSumDwords<TailTypes...>();
+    }
+
+    template <uint32_t start, typename PayloadType>
+    RT_FUNCTION void _setPayloads(uint32_t** p, PayloadType &&payload) {
+        constexpr uint32_t numDwords = sizeof(PayloadType) / 4;
+        for (int i = 0; i < numDwords; ++i)
+            p[start + i] = reinterpret_cast<uint32_t*>(&payload) + i;
+    }
+
+    template <uint32_t start, typename HeadType, typename... TailTypes>
+    RT_FUNCTION void _setPayloads(uint32_t** p, HeadType &&headPayload, TailTypes &&... tailPayloads) {
+        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+#pragma unroll
+        for (int i = 0; i < numDwords; ++i)
+            p[start + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
+        _setPayloads<start + numDwords>(p, std::forward<TailTypes>(tailPayloads)...);
+    }
+
+#define OPTIXU_TRACE_PARAMETERS \
+    OptixTraversableHandle handle, \
+    const float3 &origin, const float3 &direction, \
+    float tmin, float tmax, float rayTime, \
+    OptixVisibilityMask visibilityMask, uint32_t rayFlags, \
+    uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex
+#define OPTIXU_TRACE_ARGUMENTS \
+    handle, \
+    origin, direction, \
+    tmin, tmax, rayTime, \
+    visibilityMask, rayFlags, \
+    SBToffset, SBTstride, missSBTIndex \
+
+    template <uint32_t numDwords>
+    RT_FUNCTION void _trace(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[numDwords]);
+    template <>
+    RT_FUNCTION void _trace<1>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[1]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0]);
+    }
+    template <>
+    RT_FUNCTION void _trace<2>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[2]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1]);
+    }
+    template <>
+    RT_FUNCTION void _trace<3>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[3]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2]);
+    }
+    template <>
+    RT_FUNCTION void _trace<4>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[4]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3]);
+    }
+    template <>
+    RT_FUNCTION void _trace<5>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[5]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4]);
+    }
+    template <>
+    RT_FUNCTION void _trace<6>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[6]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5]);
+    }
+    template <>
+    RT_FUNCTION void _trace<7>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[7]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6]);
+    }
+    template <>
+    RT_FUNCTION void _trace<8>(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[8]) {
+        optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6], *p[7]);
+    }
+    
+    template <typename... PayloadTypes>
+    RT_FUNCTION void trace(OPTIXU_TRACE_PARAMETERS,
+                           PayloadTypes &&... payloads) {
+        constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
+        static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
+        uint32_t* p[numDwords];
+        _setPayloads<0>(p, std::forward<PayloadTypes>(payloads)...);
+        _trace(OPTIXU_TRACE_ARGUMENTS, p);
+    }
+
+    template <uint32_t index>
+    RT_FUNCTION uint32_t _optixGetPayload();
+    template <> RT_FUNCTION uint32_t _optixGetPayload<0>() { return optixGetPayload_0(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<1>() { return optixGetPayload_1(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<2>() { return optixGetPayload_2(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<3>() { return optixGetPayload_3(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<4>() { return optixGetPayload_4(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<5>() { return optixGetPayload_5(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<6>() { return optixGetPayload_6(); }
+    template <> RT_FUNCTION uint32_t _optixGetPayload<7>() { return optixGetPayload_7(); }
+    template <uint32_t index>
+    RT_FUNCTION void _optixSetPayload(uint32_t p);
+    template <> RT_FUNCTION void _optixSetPayload<0>(uint32_t p) { optixSetPayload_0(p); }
+    template <> RT_FUNCTION void _optixSetPayload<1>(uint32_t p) { optixSetPayload_1(p); }
+    template <> RT_FUNCTION void _optixSetPayload<2>(uint32_t p) { optixSetPayload_2(p); }
+    template <> RT_FUNCTION void _optixSetPayload<3>(uint32_t p) { optixSetPayload_3(p); }
+    template <> RT_FUNCTION void _optixSetPayload<4>(uint32_t p) { optixSetPayload_4(p); }
+    template <> RT_FUNCTION void _optixSetPayload<5>(uint32_t p) { optixSetPayload_5(p); }
+    template <> RT_FUNCTION void _optixSetPayload<6>(uint32_t p) { optixSetPayload_6(p); }
+    template <> RT_FUNCTION void _optixSetPayload<7>(uint32_t p) { optixSetPayload_7(p); }
+
+    template <typename PayloadType, uint32_t offset, uint32_t start>
+    RT_FUNCTION void _getPayload(PayloadType* payload) {
+        if (!payload)
+            return;
+        constexpr uint32_t numDwords = sizeof(PayloadType) / 4;
+        *(reinterpret_cast<uint32_t*>(payload) + offset) = _optixGetPayload<start>();
+        if constexpr (offset + 1 < numDwords)
+            _getPayload<PayloadType, offset + 1, start + 1>(payload);
+    }
+
+    template <uint32_t start, typename PayloadType>
+    RT_FUNCTION void _getPayloads(PayloadType* payload) {
+        _getPayload<PayloadType, 0, start>(payload);
+    }
+
+    template <uint32_t start, typename HeadType, typename... TailTypes>
+    RT_FUNCTION void _getPayloads(HeadType* headPayload, TailTypes*... tailPayloads) {
+        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+        _getPayload<HeadType, 0, start>(headPayload);
+        _getPayloads<start + numDwords>(tailPayloads...);
+    }
+
+    template <typename PayloadType>
+    RT_FUNCTION void getPayloads(PayloadType* payload) {
+        _getPayload<PayloadType, 0, 0>(payload);
+    }
+
+    template <typename HeadType, typename... TailTypes>
+    RT_FUNCTION void getPayloads(HeadType* headPayload, TailTypes*... tailPayloads) {
+        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+        _getPayload<HeadType, 0, 0>(headPayload);
+        _getPayloads<numDwords>(tailPayloads...);
+    }
+
+    template <typename PayloadType, uint32_t offset, uint32_t start>
+    RT_FUNCTION void _setPayload(const PayloadType* payload) {
+        if (!payload)
+            return;
+        constexpr uint32_t numDwords = sizeof(PayloadType) / 4;
+        _optixSetPayload<start>(*(reinterpret_cast<const uint32_t*>(payload) + offset));
+        if constexpr (offset + 1 < numDwords)
+            _setPayload<PayloadType, offset + 1, start + 1>(payload);
+    }
+
+    template <uint32_t start, typename PayloadType>
+    RT_FUNCTION void _setPayloads(const PayloadType* payload) {
+        _setPayload<PayloadType, 0, start>(payload);
+    }
+
+    template <uint32_t start, typename HeadType, typename... TailTypes>
+    RT_FUNCTION void _setPayloads(const HeadType* headPayload, const TailTypes*... tailPayloads) {
+        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+        _setPayload<HeadType, 0, start>(headPayload);
+        _setPayloads<start + numDwords>(tailPayloads...);
+    }
+
+    template <typename PayloadType>
+    RT_FUNCTION void setPayloads(const PayloadType* payload) {
+        _setPayload<PayloadType, 0, 0>(payload);
+    }
+
+    template <typename HeadType, typename... TailTypes>
+    RT_FUNCTION void setPayloads(const HeadType* headPayload, const TailTypes* ... tailPayloads) {
+        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+        _setPayload<HeadType, 0, 0>(headPayload);
+        _setPayloads<numDwords>(tailPayloads...);
+    }
+#endif
 
 
 

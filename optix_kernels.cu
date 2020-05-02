@@ -12,95 +12,6 @@ extern "C" __constant__ PipelineLaunchParameters plp;
 
 
 
-// JP: このクラスのようにシステマティックにuint32_t&にせずに、
-//     個別に適切なペイロードの渡し方を考えたほうが性能は良いかもしれない。
-// EN: It is possibly better to individually tune how to pass a payload
-//     unlike this class which systematically uses uint32_t &.
-template <typename PayloadType>
-union PayloadAccessor {
-    PayloadType raw;
-    uint32_t asUInt[(sizeof(PayloadType) + 3) / 4];
-    static_assert(sizeof(PayloadType) <= 8 * 4, "sizeof(PayloadType) must be within 8 DWords.");
-
-    RT_FUNCTION PayloadAccessor() {
-        for (int i = 0; i < sizeof(asUInt) / 4; ++i)
-            asUInt[i] = optixUndefinedValue();
-    }
-
-    RT_FUNCTION uint32_t &operator[](uint32_t idx) {
-        return asUInt[idx];
-    }
-
-    RT_FUNCTION void getAll() {
-        constexpr uint32_t numSlots = sizeof(asUInt) / 4;
-        if (numSlots > 0)
-            asUInt[0] = optixGetPayload_0();
-        if (numSlots > 1)
-            asUInt[1] = optixGetPayload_1();
-        if (numSlots > 2)
-            asUInt[2] = optixGetPayload_2();
-        if (numSlots > 3)
-            asUInt[3] = optixGetPayload_3();
-        if (numSlots > 4)
-            asUInt[4] = optixGetPayload_4();
-        if (numSlots > 5)
-            asUInt[5] = optixGetPayload_5();
-        if (numSlots > 6)
-            asUInt[6] = optixGetPayload_6();
-        if (numSlots > 7)
-            asUInt[7] = optixGetPayload_7();
-    }
-
-    RT_FUNCTION void setAll() const {
-        constexpr uint32_t numSlots = sizeof(asUInt) / 4;
-        if (numSlots > 0)
-            optixSetPayload_0(asUInt[0]);
-        if (numSlots > 1)
-            optixSetPayload_1(asUInt[1]);
-        if (numSlots > 2)
-            optixSetPayload_2(asUInt[2]);
-        if (numSlots > 3)
-            optixSetPayload_3(asUInt[3]);
-        if (numSlots > 4)
-            optixSetPayload_4(asUInt[4]);
-        if (numSlots > 5)
-            optixSetPayload_5(asUInt[5]);
-        if (numSlots > 6)
-            optixSetPayload_6(asUInt[6]);
-        if (numSlots > 7)
-            optixSetPayload_7(asUInt[7]);
-    }
-};
-
-
-
-struct Ray {
-    float3 origin;
-    float3 direction;
-    float tmin;
-    float tmax;
-    float time;
-
-    RT_FUNCTION static Ray getWorld() {
-        Ray ret;
-        ret.origin = optixGetWorldRayOrigin();
-        ret.direction = optixGetWorldRayDirection();
-        ret.tmin = optixGetRayTmin();
-        ret.tmax = optixGetRayTmax();
-        ret.time = optixGetRayTime();
-        return ret;
-    }
-    RT_FUNCTION static Ray getObject() {
-        Ray ret;
-        ret.origin = optixGetObjectRayOrigin();
-        ret.direction = optixGetObjectRayDirection();
-        ret.tmin = optixGetRayTmin();
-        ret.tmax = optixGetRayTmax();
-        ret.time = optixGetRayTime();
-        return ret;
-    }
-};
-
 struct SearchRayPayload {
     PCG32RNG rng;
     float3 alpha;
@@ -154,20 +65,25 @@ RT_PROGRAM void __raygen__pathtracing() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
-    OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
+    OptixTraversableHandle traversable = plp.travHandles[plp.travIndex];
 
-    PayloadAccessor<SearchRayPayload*> payloadPtr;
     SearchRayPayload payload;
     payload.alpha = make_float3(1.0f, 1.0f, 1.0f);
     payload.contribution = make_float3(0.0f, 0.0f, 0.0f);
     payload.rng = rng;
     payload.pathLength = 1;
     payload.terminate = false;
-    payloadPtr.raw = &payload;
     while (true) {
-        optixTrace(topGroup, origin, direction, 0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
-                   RayType_Search, NumRayTypes, RayType_Search,
-                   payloadPtr[0], payloadPtr[1]);
+        // JP: ペイロードとともにトレースを呼び出す。
+        //     ペイロード数は最大で8DWだが、
+        //     2つ目のペイロードをそのまま渡すと収まりきらないのでポインターとして渡す。
+        // EN: Trace call with payloads.
+        //     The maximum number of payloads is 8 dwords in total.
+        //     However pass the second payload as pointer because its direct size cannot fit in.
+        optixu::trace(traversable, origin, direction,
+                      0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+                      RayType_Search, NumRayTypes, RayType_Search,
+                      traversable, &payload);
         if (payload.terminate || payload.pathLength >= 10)
             break;
 
@@ -177,31 +93,33 @@ RT_PROGRAM void __raygen__pathtracing() {
     }
 
     plp.rngBuffer[index] = payload.rng;
-    float3 cumResult = make_float3(0.0f, 0.0f, 0.0f);
+    float3 accResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
 #if defined(USE_BUFFER2D)
-        float4 cumResultF4 = plp.accumBuffer[launchIndex];
+        float4 accResultF4 = plp.accumBuffer[launchIndex];
 #else
-        float4 cumResultF4 = plp.accumBuffer[index];
+        float4 accResultF4 = plp.accumBuffer[index];
 #endif
-        cumResult = make_float3(cumResultF4.x, cumResultF4.y, cumResultF4.z);
+        accResult = make_float3(accResultF4.x, accResultF4.y, accResultF4.z);
     }
 #if defined(USE_BUFFER2D)
-    plp.accumBuffer.write(launchIndex, make_float4(cumResult + payload.contribution, 1.0f));
+    plp.accumBuffer.write(launchIndex, make_float4(accResult + payload.contribution, 1.0f));
 #else
-    plp.accumBuffer[index] = make_float4(cumResult + payload.contribution, 1.0f);
+    plp.accumBuffer[index] = make_float4(accResult + payload.contribution, 1.0f);
 #endif
 }
 
 RT_PROGRAM void __miss__searchRay() {
-    PayloadAccessor<SearchRayPayload*> payloadPtr;
-    payloadPtr.getAll();
-    SearchRayPayload &payload = *payloadPtr.raw;
-
-    payload.contribution = payload.contribution + payload.alpha * make_float3(0.01f, 0.01f, 0.01f);
-    payload.terminate = true;
-
-    //payload.setAll();
+    // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
+    // EN: The signature used in getPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
+    //     However pass the null pointer as the first payload because we don't need the first payload here.
+    SearchRayPayload* payload;
+    optixu::getPayloads((OptixTraversableHandle*)nullptr, &payload);
+    payload->contribution = payload->contribution + payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
+    payload->terminate = true;
 }
 
 RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, float2 texCoord) {
@@ -218,15 +136,17 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     const MaterialData &mat = matData[sbtr.materialData];
     const GeometryData &geom = geomInstData[sbtr.geomInstData];
 
-    OptixTraversableHandle topGroup = plp.travHandles[plp.travIndex];
-
     auto hitPointParam = HitPointParameter::get();
 
-    PayloadAccessor<SearchRayPayload*> payloadPtr;
-    payloadPtr.getAll();
-    SearchRayPayload &payload = *payloadPtr.raw;
+    // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    // EN: The signature used in getPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
+    OptixTraversableHandle traversable;
+    SearchRayPayload* payload;
+    optixu::getPayloads(&traversable, &payload);
 
-    PCG32RNG &rng = payload.rng;
+    PCG32RNG &rng = payload->rng;
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
@@ -245,8 +165,8 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     p = p + sn * 0.001f;
 
     //// Visualize normal
-    //payload.contribution = 0.5f * sn + make_float3(0.5f, 0.5f, 0.5f);
-    //payload.terminate = true;
+    //payload->contribution = 0.5f * sn + make_float3(0.5f, 0.5f, 0.5f);
+    //payload->terminate = true;
     //return;
 
     float3 albedo = mat.albedo;
@@ -260,8 +180,8 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     // Hard-coded directly visible light
     if (sbtr.materialData == plp.matLightIndex &&
         isFrontFace &&
-        (payload.pathLength == 1 || payload.specularBounce)) {
-        payload.contribution = payload.contribution + payload.alpha * LightRadiance;
+        (payload->pathLength == 1 || payload->specularBounce)) {
+        payload->contribution = payload->contribution + payload->alpha * LightRadiance;
     }
 
     // Next Event Estimation
@@ -280,17 +200,16 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
         float cosLight = dot(lpn, -shadowRayDir);
         float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
-        PayloadAccessor<VisibilityRayPayload> shadowPayload;
-        shadowPayload.raw.visibility = 1.0f;
-        optixTrace(topGroup, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
-                   RayType_Visibility, NumRayTypes, RayType_Visibility,
-                   shadowPayload[0]);
+        float visibility = 1.0f;
+        optixu::trace(traversable, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+                      RayType_Visibility, NumRayTypes, RayType_Visibility,
+                      visibility);
 
         float cosSP = dot(sn, shadowRayDir);
-        float G = shadowPayload.raw.visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
+        float G = visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
         float3 fs = cosSP > 0 ? albedo / M_PI : make_float3(0, 0, 0);
-        float3 contribution = payload.alpha * fs * G * Le / areaPDF;
-        payload.contribution = payload.contribution + contribution;
+        float3 contribution = payload->alpha * fs * G * Le / areaPDF;
+        payload->contribution = payload->contribution + contribution;
     }
 
     const auto makeCoordinateSystem = [](const float3 &n, float3* s, float3* t) {
@@ -313,13 +232,11 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     vIn = make_float3(dot(make_float3(s.x, t.x, sn.x), vIn),
                       dot(make_float3(s.y, t.y, sn.y), vIn),
                       dot(make_float3(s.z, t.z, sn.z), vIn));
-    payload.alpha = payload.alpha * albedo;
-    payload.origin = p;
-    payload.direction = vIn;
-    payload.specularBounce = false;
-    payload.terminate = false;
-
-    //payload.setAll();
+    payload->alpha = payload->alpha * albedo;
+    payload->origin = p;
+    payload->direction = vIn;
+    payload->specularBounce = false;
+    payload->terminate = false;
 }
 
 // JP: それなりの規模のパストレーシングを実装する場合はプログラムは基本的に共通化して
@@ -338,11 +255,14 @@ RT_PROGRAM void __closesthit__shading_specular() {
 
     auto hitPointParam = HitPointParameter::get();
 
-    PayloadAccessor<SearchRayPayload*> payloadPtr;
-    payloadPtr.getAll();
-    SearchRayPayload &payload = *payloadPtr.raw;
-
-    PCG32RNG &rng = payload.rng;
+    // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
+    // EN: The signature used in getPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
+    //     However pass the null pointer as the first payload because we don't need the first payload here.
+    SearchRayPayload* payload;
+    optixu::getPayloads((OptixTraversableHandle*)nullptr, &payload);
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
@@ -366,20 +286,16 @@ RT_PROGRAM void __closesthit__shading_specular() {
 
     // Sampling incoming direction (delta distribution).
     float3 vIn = normalize(2 * dot(vOut, sn) * sn - vOut);
-    payload.alpha = payload.alpha * albedo;
-    payload.origin = p;
-    payload.direction = vIn;
-    payload.specularBounce = true;
-    payload.terminate = false;
-
-    //payload.setAll();
+    payload->alpha = payload->alpha * albedo;
+    payload->origin = p;
+    payload->direction = vIn;
+    payload->specularBounce = true;
+    payload->terminate = false;
 }
 
 RT_PROGRAM void __anyhit__visibility() {
-    PayloadAccessor<VisibilityRayPayload> payload;
-
-    payload.raw.visibility = 0.0f;
-    payload.setAll();
+    float visibility = 0.0f;
+    optixu::setPayloads(&visibility);
 
     optixTerminateRay();
 }
