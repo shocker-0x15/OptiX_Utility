@@ -294,6 +294,10 @@ RT_PROGRAM void __closesthit__shading_specular() {
 }
 
 RT_PROGRAM void __anyhit__visibility() {
+    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
     float visibility = 0.0f;
     optixu::setPayloads(&visibility);
 

@@ -193,7 +193,7 @@ namespace optixu {
     origin, direction, \
     tmin, tmax, rayTime, \
     visibilityMask, rayFlags, \
-    SBToffset, SBTstride, missSBTIndex \
+    SBToffset, SBTstride, missSBTIndex
 
     template <uint32_t numDwords>
     RT_FUNCTION void _trace(OPTIXU_TRACE_PARAMETERS, uint32_t* (&p)[numDwords]);
@@ -250,16 +250,6 @@ namespace optixu {
     template <> RT_FUNCTION uint32_t _optixGetPayload<5>() { return optixGetPayload_5(); }
     template <> RT_FUNCTION uint32_t _optixGetPayload<6>() { return optixGetPayload_6(); }
     template <> RT_FUNCTION uint32_t _optixGetPayload<7>() { return optixGetPayload_7(); }
-    template <uint32_t index>
-    RT_FUNCTION void _optixSetPayload(uint32_t p);
-    template <> RT_FUNCTION void _optixSetPayload<0>(uint32_t p) { optixSetPayload_0(p); }
-    template <> RT_FUNCTION void _optixSetPayload<1>(uint32_t p) { optixSetPayload_1(p); }
-    template <> RT_FUNCTION void _optixSetPayload<2>(uint32_t p) { optixSetPayload_2(p); }
-    template <> RT_FUNCTION void _optixSetPayload<3>(uint32_t p) { optixSetPayload_3(p); }
-    template <> RT_FUNCTION void _optixSetPayload<4>(uint32_t p) { optixSetPayload_4(p); }
-    template <> RT_FUNCTION void _optixSetPayload<5>(uint32_t p) { optixSetPayload_5(p); }
-    template <> RT_FUNCTION void _optixSetPayload<6>(uint32_t p) { optixSetPayload_6(p); }
-    template <> RT_FUNCTION void _optixSetPayload<7>(uint32_t p) { optixSetPayload_7(p); }
 
     template <typename PayloadType, uint32_t offset, uint32_t start>
     RT_FUNCTION void _getPayload(PayloadType* payload) {
@@ -294,6 +284,17 @@ namespace optixu {
         _getPayload<HeadType, 0, 0>(headPayload);
         _getPayloads<numDwords>(tailPayloads...);
     }
+
+    template <uint32_t index>
+    RT_FUNCTION void _optixSetPayload(uint32_t p);
+    template <> RT_FUNCTION void _optixSetPayload<0>(uint32_t p) { optixSetPayload_0(p); }
+    template <> RT_FUNCTION void _optixSetPayload<1>(uint32_t p) { optixSetPayload_1(p); }
+    template <> RT_FUNCTION void _optixSetPayload<2>(uint32_t p) { optixSetPayload_2(p); }
+    template <> RT_FUNCTION void _optixSetPayload<3>(uint32_t p) { optixSetPayload_3(p); }
+    template <> RT_FUNCTION void _optixSetPayload<4>(uint32_t p) { optixSetPayload_4(p); }
+    template <> RT_FUNCTION void _optixSetPayload<5>(uint32_t p) { optixSetPayload_5(p); }
+    template <> RT_FUNCTION void _optixSetPayload<6>(uint32_t p) { optixSetPayload_6(p); }
+    template <> RT_FUNCTION void _optixSetPayload<7>(uint32_t p) { optixSetPayload_7(p); }
 
     template <typename PayloadType, uint32_t offset, uint32_t start>
     RT_FUNCTION void _setPayload(const PayloadType* payload) {
