@@ -548,7 +548,9 @@ private: \
 
         void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
 
-        //void setStackSize() const;
+        void setStackSize(uint32_t directCallableStackSizeFromTraversal,
+                          uint32_t directCallableStackSizeFromState,
+                          uint32_t continuationStackSize) const;
     };
 
 
@@ -568,6 +570,8 @@ private: \
 
     public:
         void destroy();
+
+        void getStackSize(OptixStackSizes* sizes) const;
     };
 
 #endif // #if !defined(__CUDA_ARCH__)

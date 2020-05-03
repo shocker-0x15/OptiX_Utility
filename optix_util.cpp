@@ -1120,6 +1120,16 @@ namespace optixu {
                                 &m->sbt, dimX, dimY, dimZ));
     }
 
+    void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,
+                                uint32_t directCallableStackSizeFromState,
+                                uint32_t continuationStackSize) const {
+        OPTIX_CHECK(optixPipelineSetStackSize(m->rawPipeline,
+                                              directCallableStackSizeFromTraversal,
+                                              directCallableStackSizeFromState,
+                                              continuationStackSize,
+                                              m->maxTraceDepth));
+    }
+
 
 
     void Module::destroy() {
@@ -1136,5 +1146,9 @@ namespace optixu {
 
         delete m;
         m = nullptr;
+    }
+
+    void ProgramGroup::getStackSize(OptixStackSizes* sizes) const {
+        OPTIX_CHECK(optixProgramGroupGetStackSize(m->rawGroup, sizes));
     }
 }

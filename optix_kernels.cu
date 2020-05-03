@@ -18,7 +18,7 @@ struct SearchRayPayload {
     float3 origin;
     float3 direction;
     struct {
-        uint32_t pathLength;
+        unsigned int pathLength : 30;
         bool specularBounce : 1;
         bool terminate : 1;
     };
@@ -134,11 +134,8 @@ RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, floa
 
 RT_PROGRAM void __closesthit__shading_diffuse() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
-    auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
-    auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
-
-    const MaterialData &mat = matData[sbtr.materialData];
-    const GeometryData &geom = geomInstData[sbtr.geomInstData];
+    const MaterialData &mat = plp.materialData[sbtr.materialData];
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
 
     auto hitPointParam = HitPointParameter::get();
 
@@ -263,11 +260,8 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
 //     but here define another program on purpose for demonstration.
 RT_PROGRAM void __closesthit__shading_specular() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
-    auto matData = reinterpret_cast<const MaterialData*>(plp.materialData);
-    auto geomInstData = reinterpret_cast<const GeometryData*>(plp.geomInstData);
-
-    const MaterialData &mat = matData[sbtr.materialData];
-    const GeometryData &geom = geomInstData[sbtr.geomInstData];
+    const MaterialData &mat = plp.materialData[sbtr.materialData];
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
 
     auto hitPointParam = HitPointParameter::get();
 

@@ -652,6 +652,37 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     pipeline.setCallableProgram(callableProgramSampleTextureIndex, callableProgramSampleTexture);
 
+    OptixStackSizes stackSizes;
+
+    rayGenProgram.getStackSize(&stackSizes);
+    uint32_t cssRG = stackSizes.cssRG;
+
+    searchRayMissProgram.getStackSize(&stackSizes);
+    uint32_t cssMS = stackSizes.cssMS;
+
+    searchRayDiffuseHitProgramGroup.getStackSize(&stackSizes);
+    uint32_t cssCHSearchRayDiffuse = stackSizes.cssCH;
+    searchRaySpecularHitProgramGroup.getStackSize(&stackSizes);
+    uint32_t cssCHSearchRaySpecular = stackSizes.cssCH;
+    visibilityRayHitProgramGroup.getStackSize(&stackSizes);
+    uint32_t cssAHVisibilityRay = stackSizes.cssAH;
+
+    callableProgramSampleTexture.getStackSize(&stackSizes);
+    uint32_t dssDC = stackSizes.dssDC;
+
+    uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
+    uint32_t dcStackSizeFromState = dssDC;
+    // Possible Program Paths:
+    // RG - CH(SearchRay/Diffuse) - AH(VisibilityRay)
+    // RG - CH(SearchRay/Specular)
+    // RG - MS(SearchRay)
+    uint32_t ccStackSize =
+        cssRG +
+        std::max(std::max(cssCHSearchRayDiffuse + cssAHVisibilityRay,
+                          cssCHSearchRaySpecular),
+                 cssMS);
+    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize);
+
     CUmodule modulePostProcess;
     CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str()));
     cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", dim3(8, 8), 0);
