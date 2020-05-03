@@ -167,19 +167,20 @@ namespace optixu {
     }
 
     template <uint32_t start, typename PayloadType>
-    RT_FUNCTION void _traceSetPayloads(uint32_t** p, PayloadType &&payload) {
+    RT_FUNCTION void _traceSetPayloads(uint32_t** p, PayloadType &payload) {
         constexpr uint32_t numDwords = sizeof(PayloadType) / 4;
+#pragma unroll
         for (int i = 0; i < numDwords; ++i)
             p[start + i] = reinterpret_cast<uint32_t*>(&payload) + i;
     }
 
     template <uint32_t start, typename HeadType, typename... TailTypes>
-    RT_FUNCTION void _traceSetPayloads(uint32_t** p, HeadType &&headPayload, TailTypes &&... tailPayloads) {
+    RT_FUNCTION void _traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
         constexpr uint32_t numDwords = sizeof(HeadType) / 4;
 #pragma unroll
         for (int i = 0; i < numDwords; ++i)
             p[start + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
-        _traceSetPayloads<start + numDwords>(p, std::forward<TailTypes>(tailPayloads)...);
+        _traceSetPayloads<start + numDwords>(p, tailPayloads...);
     }
 
 #define OPTIXU_TRACE_PARAMETERS \
@@ -230,13 +231,16 @@ namespace optixu {
         optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6], *p[7]);
     }
     
+    // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
+    //     が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするためただの参照で受け取る。
+    // EN: 
     template <typename... PayloadTypes>
     RT_FUNCTION void trace(OPTIXU_TRACE_PARAMETERS,
-                           PayloadTypes &&... payloads) {
+                           PayloadTypes &... payloads) {
         constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
         uint32_t* p[numDwords];
-        _traceSetPayloads<0>(p, std::forward<PayloadTypes>(payloads)...);
+        _traceSetPayloads<0>(p, payloads...);
         _trace(OPTIXU_TRACE_ARGUMENTS, p);
     }
 

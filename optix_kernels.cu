@@ -24,9 +24,13 @@ struct SearchRayPayload {
     };
 };
 
+#define SearchRayPayloadSignature OptixTraversableHandle, PCG32RNG, SearchRayPayload*
+
 struct VisibilityRayPayload {
     float visibility;
 };
+
+#define VisibilityRayPayloadSignature float
 
 struct HitPointParameter {
     float b0, b1;
@@ -71,6 +75,7 @@ RT_PROGRAM void __raygen__pathtracing() {
     payload.contribution = make_float3(0.0f, 0.0f, 0.0f);
     payload.pathLength = 1;
     payload.terminate = false;
+    SearchRayPayload* payloadPtr = &payload;
     while (true) {
         // JP: ペイロードとともにトレースを呼び出す。
         //     ペイロード数は最大で8DWだが、
@@ -78,10 +83,11 @@ RT_PROGRAM void __raygen__pathtracing() {
         // EN: Trace call with payloads.
         //     The maximum number of payloads is 8 dwords in total.
         //     However pass the third payload as pointer because its direct size cannot fit in.
-        optixu::trace(traversable, origin, direction,
-                      0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
-                      RayType_Search, NumRayTypes, RayType_Search,
-                      traversable, rng, &payload);
+        optixu::trace<SearchRayPayloadSignature>(
+            traversable, origin, direction,
+            0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            RayType_Search, NumRayTypes, RayType_Search,
+            traversable, rng, payloadPtr);
         if (payload.terminate || payload.pathLength >= 10)
             break;
 
@@ -115,7 +121,7 @@ RT_PROGRAM void __miss__searchRay() {
     //     in optixu::trace() to pointer types.
     //     However pass the null pointer as the first payload because we don't need the first payload here.
     SearchRayPayload* payload;
-    optixu::getPayloads((OptixTraversableHandle*)nullptr, (PCG32RNG*)nullptr, &payload);
+    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &payload);
     payload->contribution = payload->contribution + payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
 }
@@ -138,12 +144,16 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
 
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
+    //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
+    //     不一致を検出できるようにすることを推奨する。
     // EN: The signature used in getPayloads() must match the one replacing the part of payloads
     //     in optixu::trace() to pointer types.
+    //     It is recommended to explicitly pass the same template arguments to 
+    //     corresponding trace/getPayloads/setPayloads to notice mismatch.
     OptixTraversableHandle traversable;
     PCG32RNG rng;
     SearchRayPayload* payload;
-    optixu::getPayloads(&traversable, &rng, &payload);
+    optixu::getPayloads<SearchRayPayloadSignature>(&traversable, &rng, &payload);
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
@@ -198,9 +208,10 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
         float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
         float visibility = 1.0f;
-        optixu::trace(traversable, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
-                      RayType_Visibility, NumRayTypes, RayType_Visibility,
-                      visibility);
+        optixu::trace<VisibilityRayPayloadSignature>(
+            traversable, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            RayType_Visibility, NumRayTypes, RayType_Visibility,
+            visibility);
 
         float cosSP = dot(sn, shadowRayDir);
         float G = visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
@@ -241,7 +252,7 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     // EN: The signature used in setPayloads() must match the one replacing the part of payloads
     //     in optixu::trace() to pointer types.
     //     However pass the null pointers for the payloads which were read only.
-    optixu::setPayloads((OptixTraversableHandle*)nullptr, &rng, (SearchRayPayload**)nullptr);
+    optixu::setPayloads<SearchRayPayloadSignature>(nullptr, &rng, nullptr);
 }
 
 // JP: それなりの規模のパストレーシングを実装する場合はプログラムは基本的に共通化して
@@ -267,7 +278,7 @@ RT_PROGRAM void __closesthit__shading_specular() {
     //     in optixu::trace() to pointer types.
     //     However pass the null pointer as the first payload because we don't need the first payload here.
     SearchRayPayload* payload;
-    optixu::getPayloads((OptixTraversableHandle*)nullptr, (PCG32RNG*)nullptr, &payload);
+    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &payload);
 
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
@@ -304,7 +315,7 @@ RT_PROGRAM void __anyhit__visibility() {
     // EN: The signature used in setPayloads() must match the one replacing the part of payloads
     //     in optixu::trace() to pointer types.
     float visibility = 0.0f;
-    optixu::setPayloads(&visibility);
+    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
 
     optixTerminateRay();
 }
