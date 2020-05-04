@@ -126,6 +126,8 @@ RT_PROGRAM void __miss__searchRay() {
     payload->terminate = true;
 }
 
+using ProgSampleTexture = optixu::DirectCallableProgramID<float3(uint32_t, float2)>;
+
 RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, float2 texCoord) {
     CUtexObject texture = plp.textures[texID];
     float4 texValue = tex2D<float4>(texture, texCoord.x, texCoord.y);
@@ -177,7 +179,8 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     if (mat.misc != 0xFFFFFFFF) {
         // Demonstrate how to use texture sampling and direct callable program.
         float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
-        albedo = optixDirectCall<float3>(mat.program, mat.texID, texCoord);
+        ProgSampleTexture sampleTexture(mat.program);
+        albedo = sampleTexture(mat.texID, texCoord);
     }
 
     const float3 LightRadiance = make_float3(20, 20, 20);

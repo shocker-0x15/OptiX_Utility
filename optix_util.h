@@ -133,6 +133,44 @@ namespace optixu {
 
 
 
+    template <typename FuncType>
+    class DirectCallableProgramID;
+
+    template <typename ReturnType, typename... ArgTypes>
+    class DirectCallableProgramID<ReturnType(ArgTypes...)> {
+        uint32_t m_sbtIndex;
+
+    public:
+        RT_FUNCTION DirectCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
+        RT_FUNCTION operator uint32_t() const { return m_sbtIndex; }
+
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+        RT_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
+            return optixDirectCall<ReturnType>(m_sbtIndex, args...);
+        }
+#endif
+    };
+
+    template <typename FuncType>
+    class ContinuationCallableProgramID;
+
+    template <typename ReturnType, typename... ArgTypes>
+    class ContinuationCallableProgramID<ReturnType(ArgTypes...)> {
+        uint32_t m_sbtIndex;
+
+    public:
+        RT_FUNCTION ContinuationCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
+        RT_FUNCTION operator uint32_t() const { return m_sbtIndex; }
+
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+        RT_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
+            return optixContinuationCall<ReturnType>(m_sbtIndex, args...);
+        }
+#endif
+    };
+
+
+
     template <typename T>
     class WritableBuffer2D {
         CUsurfObject m_surfObject;
