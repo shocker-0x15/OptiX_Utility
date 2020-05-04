@@ -141,6 +141,7 @@ namespace optixu {
         uint32_t m_sbtIndex;
 
     public:
+        RT_FUNCTION DirectCallableProgramID() {}
         RT_FUNCTION DirectCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
         RT_FUNCTION operator uint32_t() const { return m_sbtIndex; }
 
@@ -159,6 +160,7 @@ namespace optixu {
         uint32_t m_sbtIndex;
 
     public:
+        RT_FUNCTION ContinuationCallableProgramID() {}
         RT_FUNCTION ContinuationCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
         RT_FUNCTION operator uint32_t() const { return m_sbtIndex; }
 
