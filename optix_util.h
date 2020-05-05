@@ -217,6 +217,8 @@ namespace optixu {
             return 0;
     }
 
+
+
     template <uint32_t start, typename HeadType, typename... TailTypes>
     RT_FUNCTION void _traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
         constexpr uint32_t numDwords = sizeof(HeadType) / 4;
@@ -324,6 +326,8 @@ namespace optixu {
         if constexpr (numDwords > 0)
             _getPayloads<0>(payloads...);
     }
+
+
 
     template <uint32_t index>
     RT_FUNCTION void _optixSetPayload(uint32_t p) {
@@ -487,8 +491,6 @@ namespace optixu {
                              +-- Instance
                              |
                              +-- GAS
-                             |
-                             +-- CustomPrimitiveGAS
                              |
                              +-- GeomInst
 
