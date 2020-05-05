@@ -141,5 +141,8 @@
     <CudaCompile Include="optix_kernels.cu">
       <Filter>kernels</Filter>
     </CudaCompile>
+    <CudaCompile Include="sphere_bounding_box.cu">
+      <Filter>kernels</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

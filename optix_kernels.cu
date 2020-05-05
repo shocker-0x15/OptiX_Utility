@@ -32,26 +32,6 @@ struct VisibilityRayPayload {
 
 #define VisibilityRayPayloadSignature float
 
-struct HitPointParameter {
-    float b0, b1;
-    int32_t primIndex;
-
-    RT_FUNCTION static HitPointParameter get() {
-        HitPointParameter ret;
-        if (optixIsTriangleHit()) {
-            float2 bc = optixGetTriangleBarycentrics();
-            ret.b0 = 1 - bc.x - bc.y;
-            ret.b1 = bc.x;
-        }
-        else {
-            ret.b0 = __uint_as_float(optixGetAttribute_0());
-            ret.b1 = __uint_as_float(optixGetAttribute_1());
-        }
-        ret.primIndex = optixGetPrimitiveIndex();
-        return ret;
-    }
-};
-
 
 
 RT_PROGRAM void __raygen__pathtracing() {
@@ -126,6 +106,8 @@ RT_PROGRAM void __miss__searchRay() {
     payload->terminate = true;
 }
 
+
+
 using ProgSampleTexture = optixu::DirectCallableProgramID<float3(uint32_t, float2)>;
 
 RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, float2 texCoord) {
@@ -134,12 +116,26 @@ RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, floa
     return make_float3(texValue.x, texValue.y, texValue.z);
 }
 
+RT_CALLABLE_PROGRAM void __direct_callable__decodeHitPointTriangle(const HitPointParameter &hitPointParam, const GeometryData &geom,
+                                                                   float3* p, float3* sn, float2* texCoord) {
+    const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
+    const Vertex &v0 = geom.vertexBuffer[tri.index0];
+    const Vertex &v1 = geom.vertexBuffer[tri.index1];
+    const Vertex &v2 = geom.vertexBuffer[tri.index2];
+    float b0 = hitPointParam.b0;
+    float b1 = hitPointParam.b1;
+    float b2 = 1 - (b0 + b1);
+    *p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
+    *sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+    *texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+}
+
+
+
 RT_PROGRAM void __closesthit__shading_diffuse() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const MaterialData &mat = plp.materialData[sbtr.materialData];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
-
-    auto hitPointParam = HitPointParameter::get();
 
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
@@ -154,15 +150,10 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     SearchRayPayload* payload;
     optixu::getPayloads<SearchRayPayloadSignature>(&traversable, &rng, &payload);
 
-    const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
-    const Vertex &v0 = geom.vertexBuffer[tri.index0];
-    const Vertex &v1 = geom.vertexBuffer[tri.index1];
-    const Vertex &v2 = geom.vertexBuffer[tri.index2];
-    float b0 = hitPointParam.b0;
-    float b1 = hitPointParam.b1;
-    float b2 = 1 - (b0 + b1);
-    float3 p = optixTransformPointFromObjectToWorldSpace(b0 * v0.position + b1 * v1.position + b2 * v2.position);
-    float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * v0.normal + b1 * v1.normal + b2 * v2.normal));
+    float3 p;
+    float3 sn;
+    float2 texCoord;
+    geom.decodeHitPoint(HitPointParameter::get(), &p, &sn, &texCoord);
 
     float3 vOut = -optixGetWorldRayDirection();
     bool isFrontFace = dot(vOut, sn) > 0;
@@ -178,7 +169,6 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
     float3 albedo = mat.albedo;
     if (mat.misc != 0xFFFFFFFF) {
         // Demonstrate how to use texture sampling and direct callable program.
-        float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
         ProgSampleTexture sampleTexture(mat.program);
         albedo = sampleTexture(mat.texID, texCoord);
     }
@@ -266,8 +256,6 @@ RT_PROGRAM void __closesthit__shading_specular() {
     const MaterialData &mat = plp.materialData[sbtr.materialData];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
 
-    auto hitPointParam = HitPointParameter::get();
-
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
     //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
@@ -277,21 +265,21 @@ RT_PROGRAM void __closesthit__shading_specular() {
     SearchRayPayload* payload;
     optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &payload);
 
-    const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
-    const Vertex &v0 = geom.vertexBuffer[tri.index0];
-    const Vertex &v1 = geom.vertexBuffer[tri.index1];
-    const Vertex &v2 = geom.vertexBuffer[tri.index2];
-    float b0 = hitPointParam.b0;
-    float b1 = hitPointParam.b1;
-    float b2 = 1 - (b0 + b1);
-    float3 p = optixTransformPointFromObjectToWorldSpace(b0 * v0.position + b1 * v1.position + b2 * v2.position);
-    float3 sn = normalize(optixTransformNormalFromObjectToWorldSpace(b0 * v0.normal + b1 * v1.normal + b2 * v2.normal));
+    float3 p;
+    float3 sn;
+    float2 texCoord;
+    geom.decodeHitPoint(HitPointParameter::get(), &p, &sn, &texCoord);
+
     p = p + sn * 0.001f;
+
+    //// Visualize normal
+    //payload->contribution = 0.5f * sn + make_float3(0.5f, 0.5f, 0.5f);
+    //payload->terminate = true;
+    //return;
 
     float3 albedo = mat.albedo;
     if (mat.misc != 0xFFFFFFFF) {
         // Demonstrate how to use texture sampling and direct callable program.
-        float2 texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
         albedo = optixDirectCall<float3>(mat.program, mat.texID, texCoord);
     }
 
@@ -316,6 +304,54 @@ RT_PROGRAM void __anyhit__visibility() {
 
     optixTerminateRay();
 }
+
+
+
+RT_PROGRAM void __intersection__custom_primitive() {
+    auto sbtr = optixu::getHitGroupSBTRecordData();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    uint32_t primIndex = optixGetPrimitiveIndex();
+    const SphereParameter &param = geom.paramBuffer[primIndex];
+    const float3 rayOrg = optixGetObjectRayOrigin();
+    const float3 rayDir = optixGetObjectRayDirection();
+
+    float3 nDir = normalize(rayDir);
+
+    float3 co = rayOrg - param.center;
+    float b = dot(nDir, co);
+
+    float D = b * b - (sqLength(co) - param.radius * param.radius);
+    if (D < 0)
+        return;
+
+    float sqrtD = std::sqrt(D);
+    float t0 = -b - sqrtD;
+    float t1 = -b + sqrtD;
+    bool isFront = t0 >= 0;
+    float t = isFront ? t0 : t1;
+    if (t < 0)
+        return;
+
+    float3 np = normalize(co + t * nDir);
+    float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
+    float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
+
+    optixu::reportIntersection(t, isFront ? 0 : 1, theta, phi);
+}
+
+RT_CALLABLE_PROGRAM void __direct_callable__decodeHitPointSphere(const HitPointParameter &hitPointParam, const GeometryData &geom,
+                                                                 float3* p, float3* sn, float2* texCoord) {
+    const SphereParameter &param = geom.paramBuffer[hitPointParam.primIndex];
+    float theta = hitPointParam.b0;
+    float phi = hitPointParam.b1;
+    float sinTheta = std::sin(theta);
+    float3 np = make_float3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, std::cos(theta));
+    *p = param.center + np * param.radius;
+    *sn = np;
+    *texCoord = make_float2(theta / Pi, phi / (2 * Pi)) * param.texCoordMultiplier;
+}
+
+
 
 RT_PROGRAM void __exception__print() {
     uint3 launchIndex = optixGetLaunchIndex();

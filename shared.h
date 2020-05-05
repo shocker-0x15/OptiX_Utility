@@ -88,6 +88,9 @@ RT_FUNCTION float3 cross(const float3 &v0, const float3 &v1) {
 RT_FUNCTION float length(const float3 &v) {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
+RT_FUNCTION float sqLength(const float3 &v) {
+    return v.x * v.x + v.y * v.y + v.z * v.z;
+}
 RT_FUNCTION float3 normalize(const float3 &v) {
     return v / length(v);
 }
@@ -208,6 +211,10 @@ RT_FUNCTION Matrix3x3 rotateZ3x3(float angle) { return rotate3x3(angle, make_flo
 
 
 namespace Shared {
+    static constexpr float Pi = 3.14159265358979323846f;
+
+
+
     enum RayType {
         RayType_Search = 0,
         RayType_Visibility,
@@ -224,6 +231,11 @@ namespace Shared {
 
     struct Triangle {
         uint32_t index0, index1, index2;
+    };
+
+    struct AABB {
+        float3 minP;
+        float3 maxP;
     };
 
 
@@ -261,9 +273,62 @@ namespace Shared {
 
 
 
+    struct SphereParameter {
+        float3 center;
+        float radius;
+        float texCoordMultiplier;
+    };
+
+
+
+    struct HitPointParameter {
+        float b0, b1;
+        int32_t primIndex;
+
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+        RT_FUNCTION static HitPointParameter get() {
+            HitPointParameter ret;
+            if (optixIsTriangleHit()) {
+                float2 bc = optixGetTriangleBarycentrics();
+                ret.b0 = 1 - bc.x - bc.y;
+                ret.b1 = bc.x;
+            }
+            else {
+                optixu::getAttributes(&ret.b0, &ret.b1);
+            }
+            ret.primIndex = optixGetPrimitiveIndex();
+            return ret;
+        }
+#endif
+    };
+
+
+    
+    struct GeometryData;
+    
+    using ProgDecodeHitPoint = optixu::DirectCallableProgramID<void(const HitPointParameter &, const GeometryData &, float3*, float3*, float2*)>;
+    
     struct GeometryData {
-        const Vertex* vertexBuffer;
-        const Triangle* triangleBuffer;
+        union {
+            struct {
+                const Vertex* vertexBuffer;
+                const Triangle* triangleBuffer;
+            };
+            struct {
+                const AABB* aabbBuffer;
+                const SphereParameter* paramBuffer;
+            };
+        };
+        ProgDecodeHitPoint decodeHitPointFunc;
+
+#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+        RT_FUNCTION void decodeHitPoint(const HitPointParameter &hitPointParam,
+                                        float3* p, float3* sn, float2* texCoord) const {
+            decodeHitPointFunc(hitPointParam, *this, p, sn, texCoord);
+            *p = optixTransformPointFromObjectToWorldSpace(*p);
+            *sn = normalize(optixTransformNormalFromObjectToWorldSpace(*sn));
+        }
+#endif
     };
 
     struct MaterialData {

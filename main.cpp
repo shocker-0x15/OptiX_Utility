@@ -227,6 +227,7 @@ float3 g_cameraPosition;
 
 struct SceneContext {
     optixu::Scene optixScene;
+    Shared::ProgDecodeHitPoint decodeHitPointTriangle;
     cudau::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
     uint32_t geometryID;
 };
@@ -291,6 +292,7 @@ public:
         Shared::GeometryData &recordData = geomDataPtr[m_sceneContext->geometryID];
         recordData.vertexBuffer = m_vertexBuffer.getDevicePointer();
         recordData.triangleBuffer = triangleBuffer->getDevicePointer();
+        recordData.decodeHitPointFunc = m_sceneContext->decodeHitPointTriangle;
         m_sceneContext->geometryDataBuffer.unmap();
 
         optixu::GeometryInstance geomInst = m_sceneContext->optixScene.createGeometryInstance();
@@ -633,12 +635,27 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
     optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
+    // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
+    // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
     optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse", emptyModule, nullptr, emptyModule, nullptr);
     optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_specular", emptyModule, nullptr, emptyModule, nullptr);
     optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
 
+    // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
+    // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
+    optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse",
+                                                                                                emptyModule, nullptr,
+                                                                                                moduleOptiX, "__intersection__custom_primitive");
+    optixu::ProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr,
+                                                                                             moduleOptiX, "__anyhit__visibility",
+                                                                                             moduleOptiX, "__intersection__custom_primitive");
+
     uint32_t callableProgramSampleTextureIndex = 0;
     optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__sampleTexture", emptyModule, nullptr);
+    uint32_t callableProgramDecodeHitPointTriangleIndex = 1;
+    optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__decodeHitPointTriangle", emptyModule, nullptr);
+    uint32_t callableProgramDecodeHitPointSphereIndex = 2;
+    optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__decodeHitPointSphere", emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
@@ -651,6 +668,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
     pipeline.setCallableProgram(callableProgramSampleTextureIndex, callableProgramSampleTexture);
+    pipeline.setCallableProgram(callableProgramDecodeHitPointTriangleIndex, callableProgramDecodeHitPointTriangle);
+    pipeline.setCallableProgram(callableProgramDecodeHitPointSphereIndex, callableProgramDecodeHitPointSphere);
 
     OptixStackSizes stackSizes;
 
@@ -667,8 +686,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     visibilityRayHitProgramGroup.getStackSize(&stackSizes);
     uint32_t cssAHVisibilityRay = stackSizes.cssAH;
 
+    uint32_t dssDC = 0;
     callableProgramSampleTexture.getStackSize(&stackSizes);
-    uint32_t dssDC = stackSizes.dssDC;
+    dssDC = std::max(dssDC, stackSizes.dssDC);
+    callableProgramDecodeHitPointTriangle.getStackSize(&stackSizes);
+    dssDC = std::max(dssDC, stackSizes.dssDC);
+    callableProgramDecodeHitPointSphere.getStackSize(&stackSizes);
+    dssDC = std::max(dssDC, stackSizes.dssDC);
 
     uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
     uint32_t dcStackSizeFromState = dssDC;
@@ -692,6 +716,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Kernel kernelDeform(moduleDeform, "deform", dim3(32), 0);
     cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", dim3(32), 0);
     cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", dim3(32), 0);
+
+    CUmodule moduleBoundingBoxProgram;
+    CUDADRV_CHECK(cuModuleLoad(&moduleBoundingBoxProgram, (getExecutableDirectory() / "ptxes/sphere_bounding_box.ptx").string().c_str()));
+    cudau::Kernel kernelCalculateBoundingBoxesForSpheres(moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -830,6 +858,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matObject1Data.albedo = make_float3(0, 0.5f, 1);
     matData[matObject1Index] = matObject1Data;
 
+    uint32_t matCustomPrimObjectIndex = materialID++;
+    optixu::Material matCustomPrimObject = optixContext.createMaterial();
+    matCustomPrimObject.setHitGroup(Shared::RayType_Search, searchRayDiffuseCustomHitProgramGroup);
+    matCustomPrimObject.setHitGroup(Shared::RayType_Visibility, visibilityRayCustomHitProgramGroup);
+    matCustomPrimObject.setUserData(matCustomPrimObjectIndex);
+    Shared::MaterialData matCustomPrimObjectData;
+    matCustomPrimObjectData.program = callableProgramSampleTextureIndex;
+    matCustomPrimObjectData.texID = texGridIndex;
+    matData[matCustomPrimObjectIndex] = matCustomPrimObjectData;
+
     materialDataBuffer.unmap();
 
     // END: Setup materials.
@@ -847,6 +885,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     
     SceneContext sceneContext;
     sceneContext.optixScene = scene;
+    sceneContext.decodeHitPointTriangle = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointTriangleIndex);
     sceneContext.geometryDataBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
     sceneContext.geometryID = 0;
     
@@ -1028,6 +1067,47 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
     cudau::TypedBuffer<Shared::Vertex> orgObjectVertexBuffer = meshObject.getVertexBuffer().copy();
 
+    // JP: カスタムプリミティブによるGeometryInstanceのセットアップ。
+    // EN: Setup a geometry instance with custom primitives.
+    optixu::GeometryInstance customPrimInstance = scene.createGeometryInstance(true);
+    cudau::TypedBuffer<Shared::AABB> customPrimAABBs;
+    cudau::TypedBuffer<Shared::SphereParameter> customPrimParameters;
+    {
+        constexpr uint32_t numPrimitives = 25;
+        customPrimAABBs.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
+        customPrimParameters.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
+
+        Shared::SphereParameter* params = customPrimParameters.map();
+        std::mt19937 rng(1290527201);
+        std::uniform_real_distribution u01;
+        for (int i = 0; i < numPrimitives; ++i) {
+            Shared::SphereParameter &param = params[i];
+            float x = -0.8f + 1.6f * (i % 5) / 4.0f;
+            float y = 0.3f * u01(rng);
+            float z = -0.8f + 1.6f * (i / 5) / 4.0f;
+            param.center = make_float3(x, y, z);
+            param.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
+            param.texCoordMultiplier = 10;
+        }
+        customPrimParameters.unmap();
+
+        static_assert(sizeof(Shared::AABB) == sizeof(OptixAabb),
+                      "Custom AABB buffer must obey the same format as OptixAabb.");
+        customPrimInstance.setCustomPrimitiveAABBBuffer(reinterpret_cast<cudau::TypedBuffer<OptixAabb>*>(&customPrimAABBs));
+        customPrimInstance.setNumMaterials(1, nullptr);
+        customPrimInstance.setMaterial(0, 0, matCustomPrimObject);
+        customPrimInstance.setUserData(sceneContext.geometryID);
+
+        Shared::GeometryData* geomDataPtr = sceneContext.geometryDataBuffer.map();
+        Shared::GeometryData &recordData = geomDataPtr[sceneContext.geometryID];
+        recordData.aabbBuffer = customPrimAABBs.getDevicePointer();
+        recordData.paramBuffer = customPrimParameters.getDevicePointer();
+        recordData.decodeHitPointFunc = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointSphereIndex);
+        sceneContext.geometryDataBuffer.unmap();
+
+        ++sceneContext.geometryID;
+    }
+
 
 
     uint32_t travID = 0;
@@ -1078,6 +1158,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, 
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
+    uint32_t gasCustomPrimObjectIndex = travID++;
+    // Create a GAS for custom primitives.
+    optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(true);
+    cudau::Buffer gasCustomPrimObjectMem;
+    gasCustomPrimObject.setConfiguration(false, true, false);
+    gasCustomPrimObject.setNumMaterialSets(1);
+    gasCustomPrimObject.setNumRayTypes(0, Shared::NumRayTypes);
+    gasCustomPrimObject.addChild(customPrimInstance);
+    gasCustomPrimObject.prepareForBuild(&asMemReqs);
+    gasCustomPrimObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer,
+                                      std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
+
     // JP: Geometry Acceleration Structureをビルドする。
     //     スクラッチバッファーは共用する。
     // EN: Build geometry acceleration structures.
@@ -1086,6 +1179,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
+    dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
+    kernelCalculateBoundingBoxesForSpheres(cuStream[0], dimBB,
+                                           customPrimParameters.getDevicePointer(), customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
+    travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream[0], gasCustomPrimObjectMem, asBuildScratchMem);
 
 
 
@@ -1101,13 +1198,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     instCornellBox.setGAS(gasCornellBox);
 
     optixu::Instance instAreaLight = scene.createInstance();
-    instAreaLight.setGAS(gasAreaLight);
-
     float tfAreaLight[] = {
     1, 0, 0, 0,
     0, 1, 0, 0.99f,
     0, 0, 1, 0
     };
+    instAreaLight.setGAS(gasAreaLight);
     instAreaLight.setTransform(tfAreaLight);
 
     // JP: オブジェクトのインスタンスを2つ作成するが、
@@ -1118,6 +1214,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     instObject0.setGAS(gasObject, 0);
     optixu::Instance instObject1 = scene.createInstance();
     instObject1.setGAS(gasObject, 1);
+
+    optixu::Instance instCustomPrimObject = scene.createInstance();
+    float tfCustomPrimObject[] = {
+    1, 0, 0, 0,
+    0, 1, 0, -0.8f,
+    0, 0, 1, 0
+    };
+    instCustomPrimObject.setGAS(gasCustomPrimObject);
+    instCustomPrimObject.setTransform(tfCustomPrimObject);
 
 
 
@@ -1133,6 +1238,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instObject0);
     iasScene.addChild(instObject1);
+    iasScene.addChild(instCustomPrimObject);
     iasScene.prepareForBuild(&asMemReqs, &numInstances);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
     iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
@@ -1870,6 +1976,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasSceneMem.finalize();
     iasScene.destroy();
 
+    instCustomPrimObject.destroy();
     instObject1.destroy();
     instObject0.destroy();
     instAreaLight.destroy();
@@ -1879,6 +1986,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     asBuildScratchMem.finalize();
 
+    gasCustomPrimObjectMem.finalize();
+    gasCustomPrimObject.destroy();
     gasObjectMem.finalize();
     gasObject.destroy();
     gasAreaLightMem.finalize();
@@ -1887,6 +1996,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasCornellBox.destroy();
 
     travHandleBuffer.finalize();
+
+    customPrimParameters.finalize();
+    customPrimAABBs.finalize();
+    customPrimInstance.destroy();
 
     orgObjectVertexBuffer.finalize();
 
@@ -1915,8 +2028,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     textureObjectBuffer.finalize();
 
+    CUDADRV_CHECK(cuModuleUnload(moduleBoundingBoxProgram));
     CUDADRV_CHECK(cuModuleUnload(moduleDeform));
     CUDADRV_CHECK(cuModuleUnload(modulePostProcess));
+
+    callableProgramDecodeHitPointSphere.destroy();
+    callableProgramDecodeHitPointTriangle.destroy();
+    callableProgramSampleTexture.destroy();
+
+    visibilityRayCustomHitProgramGroup.destroy();
+    searchRayDiffuseCustomHitProgramGroup.destroy();
 
     visibilityRayHitProgramGroup.destroy();
     searchRaySpecularHitProgramGroup.destroy();
