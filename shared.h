@@ -3,7 +3,7 @@
 #include "optix_util.h"
 
 // OptiX 7.0 has an issue in use of CUDA surface at least with the driver 445.87.
-//#define USE_BUFFER2D
+//#define USE_NATIVE_BLOCK_BUFFER2D
 
 
 
@@ -246,6 +246,8 @@ namespace Shared {
     public:
         RT_FUNCTION PCG32RNG() {}
 
+        void setState(uint32_t _state) { state = _state; }
+
         RT_FUNCTION uint32_t operator()() {
             uint64_t oldstate = state;
             // Advance internal state
@@ -355,11 +357,11 @@ namespace Shared {
         uint32_t travIndex;
         int2 imageSize;
         uint32_t numAccumFrames;
-        PCG32RNG* rngBuffer;
-#if defined(USE_BUFFER2D)
-        optixu::WritableBuffer2D<float4> accumBuffer;
+        optixu::BlockBuffer2D<PCG32RNG, 1> rngBuffer;
+#if defined(USE_NATIVE_BLOCK_BUFFER2D)
+        optixu::NativeBlockBuffer2D<float4> accumBuffer;
 #else
-        float4* accumBuffer;
+        optixu::BlockBuffer2D<float4, 1> accumBuffer;
 #endif
         PerspectiveCamera camera;
         uint32_t matLightIndex;

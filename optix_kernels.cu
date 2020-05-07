@@ -36,9 +36,8 @@ struct VisibilityRayPayload {
 
 RT_PROGRAM void __raygen__pathtracing() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    int32_t index = plp.imageSize.x * launchIndex.y + launchIndex.x;
 
-    PCG32RNG rng = plp.rngBuffer[index];
+    PCG32RNG rng = plp.rngBuffer[launchIndex];
 
     float x = (float)(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
     float y = (float)(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
@@ -76,20 +75,16 @@ RT_PROGRAM void __raygen__pathtracing() {
         ++payload.pathLength;
     }
 
-    plp.rngBuffer[index] = rng;
+    plp.rngBuffer[launchIndex] = rng;
     float3 accResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
-#if defined(USE_BUFFER2D)
         float4 accResultF4 = plp.accumBuffer[launchIndex];
-#else
-        float4 accResultF4 = plp.accumBuffer[index];
-#endif
         accResult = make_float3(accResultF4.x, accResultF4.y, accResultF4.z);
     }
-#if defined(USE_BUFFER2D)
+#if defined(USE_NATIVE_BLOCK_BUFFER2D)
     plp.accumBuffer.write(launchIndex, make_float4(accResult + payload.contribution, 1.0f));
 #else
-    plp.accumBuffer[index] = make_float4(accResult + payload.contribution, 1.0f);
+    plp.accumBuffer[launchIndex] = make_float4(accResult + payload.contribution, 1.0f);
 #endif
 }
 

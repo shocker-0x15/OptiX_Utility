@@ -3,10 +3,10 @@
 #include "shared.h"
 
 extern "C" __global__ void postProcess(
-#if defined(USE_BUFFER2D)
-    optixu::WritableBuffer2D<float4> accumBuffer,
+#if defined(USE_NATIVE_BLOCK_BUFFER2D)
+    optixu::NativeBlockBuffer2D<float4> accumBuffer,
 #else
-    const float4* accumBuffer,
+    optixu::BlockBuffer2D<float4, 1> accumBuffer,
 #endif
     uint32_t imageSizeX, uint32_t imageSizeY, uint32_t numAccumFrames,
     float4* outputBuffer) {
@@ -15,11 +15,7 @@ extern "C" __global__ void postProcess(
     if (ipx >= imageSizeX || ipy >= imageSizeY)
         return;
     uint32_t idx = ipy * imageSizeX + ipx;
-#if defined(USE_BUFFER2D)
     float3 pix = getXYZ(accumBuffer[make_uint2(ipx, ipy)]) / (float)numAccumFrames;
-#else
-    float3 pix = getXYZ(accumBuffer[idx]) / (float)numAccumFrames;
-#endif
     pix.x = 1 - std::exp(-pix.x);
     pix.y = 1 - std::exp(-pix.y);
     pix.z = 1 - std::exp(-pix.z);
