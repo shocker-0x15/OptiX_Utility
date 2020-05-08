@@ -309,9 +309,9 @@ public:
         return static_cast<uint32_t>(m_materialGroups.size()) - 1;
     }
 
-    void setMatrial(uint32_t matGroupIdx, optixu::Material &material) {
+    void setMatrial(uint32_t matSetIdx, uint32_t matGroupIdx, optixu::Material &material) {
         MaterialGroup &group = m_materialGroups[matGroupIdx];
-        group.geometryInstance.setMaterial(1, 0, material);
+        group.geometryInstance.setMaterial(matSetIdx, 0, material);
     }
 
     const cudau::TypedBuffer<Shared::Triangle> &getTriangleBuffer(uint32_t matGroupIdx) const {
@@ -1063,7 +1063,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         meshObject.setVertexBuffer(orgObjectVertices.data(), orgObjectVertices.size());
 
         objectMatGroupIndex = meshObject.addMaterialGroup(triangles.data(), triangles.size(), matObject0);
-        meshObject.setMatrial(objectMatGroupIndex, matObject1);
+        meshObject.setMatrial(1, objectMatGroupIndex, matObject1);
     }
     cudau::TypedBuffer<Shared::Vertex> orgObjectVertexBuffer = meshObject.getVertexBuffer().copy();
 
