@@ -364,6 +364,7 @@ namespace optixu {
 
 
 
+    // Device-side function wrappers
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
     template <typename T>
     RT_FUNCTION constexpr size_t __calcSumDwords() {
@@ -759,9 +760,9 @@ private: \
 
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
-        void prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const;
+        void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
-        void removeUncompacted(CUstream compactionStream) const;
+        void removeUncompacted() const;
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
@@ -803,9 +804,9 @@ private: \
         // EN: 
         OptixTraversableHandle rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer,
                                        const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
-        void prepareForCompact(CUstream rebuildOrUpdateStream, size_t* compactedAccelBufferSize) const;
+        void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
-        void removeUncompacted(CUstream compactionStream) const;
+        void removeUncompacted() const;
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;

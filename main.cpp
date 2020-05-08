@@ -1126,7 +1126,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasCornellBoxIndex = travID++;
     optixu::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasCornellBoxMem;
-    gasCornellBox.setConfiguration(true, false, false);
+    cudau::Buffer gasCornellBoxCompactedMem;
+    gasCornellBox.setConfiguration(true, false, true);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
@@ -1137,7 +1138,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasAreaLightIndex = travID++;
     optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasAreaLightMem;
-    gasAreaLight.setConfiguration(true, false, false);
+    cudau::Buffer gasAreaLightCompactedMem;
+    gasAreaLight.setConfiguration(true, false, true);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
@@ -1158,8 +1160,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, 
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
+    // JP: カスタムプリミティブ用のGASを作成する。
+    // EN: Create a GAS for custom primitives.
     uint32_t gasCustomPrimObjectIndex = travID++;
-    // Create a GAS for custom primitives.
     optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(true);
     cudau::Buffer gasCustomPrimObjectMem;
     gasCustomPrimObject.setConfiguration(false, true, false);
@@ -1171,6 +1174,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer,
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
+    // JP: カスタムプリミティブのAABBを計算するカーネルを実行。
+    // EN: Execute a kernel to compute AABBs of custom primitives.
+    dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
+    kernelCalculateBoundingBoxesForSpheres(cuStream[0], dimBB,
+                                           customPrimParameters.getDevicePointer(), customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
+
     // JP: Geometry Acceleration Structureをビルドする。
     //     スクラッチバッファーは共用する。
     // EN: Build geometry acceleration structures.
@@ -1179,10 +1188,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
-    dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
-    kernelCalculateBoundingBoxesForSpheres(cuStream[0], dimBB,
-                                           customPrimParameters.getDevicePointer(), customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
     travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream[0], gasCustomPrimObjectMem, asBuildScratchMem);
+
+    // JP: 静的なメッシュはコンパクションもしておく。
+    // EN: Perform compaction for static meshes.
+    size_t compactedASSize;
+    gasCornellBox.prepareForCompact(&compactedASSize);
+    gasCornellBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1, 0);
+    gasAreaLight.prepareForCompact(&compactedASSize);
+    gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1, 0);
+    travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream[0], gasCornellBoxCompactedMem);
+    travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream[0], gasAreaLightCompactedMem);
+    gasCornellBox.removeUncompacted();
+    gasAreaLight.removeUncompacted();
 
 
 
@@ -1991,8 +2009,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasCustomPrimObject.destroy();
     gasObjectMem.finalize();
     gasObject.destroy();
+    gasAreaLightCompactedMem.finalize();
     gasAreaLightMem.finalize();
     gasAreaLight.destroy();
+    gasCornellBoxCompactedMem.finalize();
     gasCornellBoxMem.finalize();
     gasCornellBox.destroy();
 
