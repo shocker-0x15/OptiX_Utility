@@ -130,6 +130,7 @@
     <None Include="shaders\drawOptiXResult.frag">
       <Filter>ext\shaders</Filter>
     </None>
+    <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="deform.cu">

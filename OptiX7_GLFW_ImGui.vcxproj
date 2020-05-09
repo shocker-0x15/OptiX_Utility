@@ -169,6 +169,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <Natvis Include="ext\imgui\natvis\imgui.natvis" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="README.md" />
     <None Include="shaders\drawOptiXResult.frag" />
     <None Include="shaders\drawOptiXResult.vert" />
     <None Include="shaders\scale.frag" />
