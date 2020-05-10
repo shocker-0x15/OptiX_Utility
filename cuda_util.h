@@ -371,14 +371,14 @@ namespace cudau {
 
 
     enum class ArrayElementType {
-        UInt8x4,
-        UInt16x4,
-        UInt32x4,
-        Int8x4,
-        Int16x4,
-        Int32x4,
-        Halfx4,
-        Floatx4,
+        UInt8,
+        UInt16,
+        UInt32,
+        Int8,
+        Int16,
+        Int32,
+        Float16,
+        Float32
     };
 
     //enum class ArrayType {
@@ -405,6 +405,7 @@ namespace cudau {
         uint32_t m_depth;
         uint32_t m_stride;
         ArrayElementType m_elemType;
+        uint32_t m_numChannels;
 
         CUarray m_array;
         void* m_mappedPointer;
@@ -420,7 +421,7 @@ namespace cudau {
         Array(const Array &) = delete;
         Array &operator=(const Array &) = delete;
 
-        void initialize(CUcontext context, ArrayElementType elemType,
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
                         uint32_t width, uint32_t height, uint32_t depth,
                         bool writable, bool cubemap, bool layered);
 
@@ -431,16 +432,19 @@ namespace cudau {
         Array(Array &&b);
         Array &operator=(Array &&b);
 
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t length, ArrayWritable writable) {
-            initialize(context, elemType, length, 0, 0,
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArrayWritable writable,
+                        uint32_t length) {
+            initialize(context, elemType, numChannels, length, 0, 0,
                        writable == ArrayWritable::Enable, false, false);
         }
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height, ArrayWritable writable) {
-            initialize(context, elemType, width, height, 0,
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArrayWritable writable,
+                        uint32_t width, uint32_t height) {
+            initialize(context, elemType, numChannels, width, height, 0,
                        writable == ArrayWritable::Enable, false, false);
         }
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t width, uint32_t height, uint32_t depth, ArrayWritable writable) {
-            initialize(context, elemType, width, height, 0,
+        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArrayWritable writable,
+                        uint32_t width, uint32_t height, uint32_t depth) {
+            initialize(context, elemType, numChannels, width, height, 0,
                        writable == ArrayWritable::Enable, false, false);
         }
         void finalize();

@@ -743,8 +743,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8x4, width, height,
-                                     cudau::ArrayWritable::Disable);
+        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArrayWritable::Disable,
+                                     width, height);
         auto data = arrayCheckerBoard.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
         arrayCheckerBoard.unmap();
@@ -763,8 +763,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8x4, width, height,
-                             cudau::ArrayWritable::Disable);
+        arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArrayWritable::Disable,
+                             width, height);
         auto data = arrayGrid.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
         arrayGrid.unmap();
@@ -1342,8 +1342,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
     cudau::Array arrayAccumBuffer;
-    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Floatx4,
-                                renderTargetSizeX, renderTargetSizeY, cudau::ArrayWritable::Enable);
+    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Float32, 4, cudau::ArrayWritable::Enable,
+                                renderTargetSizeX, renderTargetSizeY);
     cudau::SurfaceView surfViewAccumBuffer;
     surfViewAccumBuffer.setArray(arrayAccumBuffer);
 #else

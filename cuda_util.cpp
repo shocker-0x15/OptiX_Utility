@@ -312,6 +312,7 @@ namespace cudau {
         m_depth = b.m_depth;
         m_stride = b.m_stride;
         m_elemType = b.m_elemType;
+        m_numChannels = b.m_numChannels;
         m_array = b.m_array;
         m_mappedPointer = b.m_mappedPointer;
         m_writable = b.m_writable;
@@ -332,6 +333,7 @@ namespace cudau {
         m_depth = b.m_depth;
         m_stride = b.m_stride;
         m_elemType = b.m_elemType;
+        m_numChannels = b.m_numChannels;
         m_array = b.m_array;
         m_mappedPointer = b.m_mappedPointer;
         m_writable = b.m_writable;
@@ -347,11 +349,13 @@ namespace cudau {
 
 
     
-    void Array::initialize(CUcontext context, ArrayElementType elemType,
+    void Array::initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
                            uint32_t width, uint32_t height, uint32_t depth,
                            bool writable, bool cubemap, bool layered) {
         if (m_initialized)
             throw std::runtime_error("Array is already initialized.");
+        if (numChannels != 1 && numChannels != 2 && numChannels != 4)
+            throw std::runtime_error("numChannels must be 1, 2, or 4.");
 
         m_cudaContext = context;
 
@@ -391,50 +395,45 @@ namespace cudau {
         if (cubemap)
             arrayDesc.Flags |= CUDA_ARRAY3D_CUBEMAP;
         switch (m_elemType) {
-        case cudau::ArrayElementType::UInt8x4:
+        case cudau::ArrayElementType::UInt8:
             arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT8;
-            arrayDesc.NumChannels = 4;
-            m_stride = 4;
+            m_stride = 1;
             break;
-        case cudau::ArrayElementType::UInt16x4:
+        case cudau::ArrayElementType::UInt16:
             arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT16;
-            arrayDesc.NumChannels = 4;
-            m_stride = 8;
+            m_stride = 2;
             break;
-        case cudau::ArrayElementType::UInt32x4:
+        case cudau::ArrayElementType::UInt32:
             arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT32;
-            arrayDesc.NumChannels = 4;
-            m_stride = 16;
-            break;
-        case cudau::ArrayElementType::Int8x4:
-            arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT8;
-            arrayDesc.NumChannels = 4;
             m_stride = 4;
             break;
-        case cudau::ArrayElementType::Int16x4:
+        case cudau::ArrayElementType::Int8:
+            arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT8;
+            m_stride = 1;
+            break;
+        case cudau::ArrayElementType::Int16:
             arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT16;
-            arrayDesc.NumChannels = 4;
-            m_stride = 8;
+            m_stride = 2;
             break;
-        case cudau::ArrayElementType::Int32x4:
+        case cudau::ArrayElementType::Int32:
             arrayDesc.Format = CU_AD_FORMAT_SIGNED_INT32;
-            arrayDesc.NumChannels = 4;
-            m_stride = 16;
+            m_stride = 4;
             break;
-        case cudau::ArrayElementType::Halfx4:
+        case cudau::ArrayElementType::Float16:
             arrayDesc.Format = CU_AD_FORMAT_HALF;
-            arrayDesc.NumChannels = 4;
-            m_stride = 8;
+            m_stride = 2;
             break;
-        case cudau::ArrayElementType::Floatx4:
+        case cudau::ArrayElementType::Float32:
             arrayDesc.Format = CU_AD_FORMAT_FLOAT;
-            arrayDesc.NumChannels = 4;
-            m_stride = 16;
+            m_stride = 4;
             break;
         default:
-            CUDAUAssert_NotImplemented();
+            CUDAUAssert_ShouldNotBeCalled();
             break;
         }
+        arrayDesc.NumChannels = numChannels;
+        m_numChannels = numChannels;
+        m_stride *= numChannels;
 
         // Is cuArray3DCreate the upper compatible to cuArrayCreate?
         //CUDADRV_CHECK(cuArrayCreate(&m_array, &arrayDesc));
@@ -468,7 +467,7 @@ namespace cudau {
             return;
 
         Array newArray;
-        newArray.initialize(m_cudaContext, m_elemType, width, height, m_height,
+        newArray.initialize(m_cudaContext, m_elemType, m_numChannels, width, height, m_height,
                             m_writable, m_cubemap, m_layered);
 
         size_t sizePerRow = std::min(m_width, width) * static_cast<size_t>(m_stride);
