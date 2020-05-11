@@ -391,17 +391,7 @@ namespace cudau {
         BC7_UNorm
     };
 
-    //enum class ArrayType {
-    //    E_1D = 0,
-    //    E_2D,
-    //    E_3D,
-    //    E_1DLayered,
-    //    E_2DLayered,
-    //    Cubemap,
-    //    CubemapLayered,
-    //};
-
-    enum class ArrayWritable {
+    enum class ArraySurface {
         Enable = 0,
         Disable,
     };
@@ -409,30 +399,33 @@ namespace cudau {
     class Array {
         CUcontext m_cudaContext;
 
-        //ArrayType m_arrayType;
         uint32_t m_width;
         uint32_t m_height;
         uint32_t m_depth;
+        uint32_t m_numMipmapLevels;
         uint32_t m_stride;
         ArrayElementType m_elemType;
         uint32_t m_numChannels;
 
-        CUarray m_array;
-        void* m_mappedPointer;
+        union {
+            CUarray m_array;
+            CUmipmappedArray m_mipmappedArray;
+        };
+        void** m_mappedPointers;
+        CUarray* m_mappedArrays;
 
         struct {
-            unsigned int m_writable : 1;
+            unsigned int m_surfaceLoadStore : 1;
             unsigned int m_cubemap : 1;
             unsigned int m_layered : 1;
             unsigned int m_initialized : 1;
-            unsigned int m_mapped : 1;
         };
 
         Array(const Array &) = delete;
         Array &operator=(const Array &) = delete;
 
         void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
-                        uint32_t width, uint32_t height, uint32_t depth,
+                        uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels,
                         bool writable, bool cubemap, bool layered);
 
     public:
@@ -442,20 +435,20 @@ namespace cudau {
         Array(Array &&b);
         Array &operator=(Array &&b);
 
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArrayWritable writable,
-                        uint32_t length) {
-            initialize(context, elemType, numChannels, length, 0, 0,
-                       writable == ArrayWritable::Enable, false, false);
+        void initialize1D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
+                          uint32_t length, uint32_t numMipmapLevels) {
+            initialize(context, elemType, numChannels, length, 0, 0, numMipmapLevels,
+                       surfaceLoadStore == ArraySurface::Enable, false, false);
         }
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArrayWritable writable,
-                        uint32_t width, uint32_t height) {
-            initialize(context, elemType, numChannels, width, height, 0,
-                       writable == ArrayWritable::Enable, false, false);
+        void initialize2D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
+                          uint32_t width, uint32_t height, uint32_t numMipmapLevels) {
+            initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
+                       surfaceLoadStore == ArraySurface::Enable, false, false);
         }
-        void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArrayWritable writable,
-                        uint32_t width, uint32_t height, uint32_t depth) {
-            initialize(context, elemType, numChannels, width, height, 0,
-                       writable == ArrayWritable::Enable, false, false);
+        void initialize3D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
+                          uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels) {
+            initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
+                       surfaceLoadStore == ArraySurface::Enable, false, false);
         }
         void finalize();
 
@@ -465,6 +458,9 @@ namespace cudau {
 
         CUarray getCUarray() const {
             return m_array;
+        }
+        CUmipmappedArray getCUmipmappedArray() const {
+            return m_mipmappedArray;
         }
 
         uint32_t getWidth() const {
@@ -476,24 +472,19 @@ namespace cudau {
         uint32_t getDepth() const {
             return m_depth;
         }
-
-        void* map();
-        template <typename T>
-        T* map() {
-            return reinterpret_cast<T*>(map());
+        uint32_t getNumMipmapLevels() const {
+            return m_numMipmapLevels;
         }
-        void unmap();
+
+        void* map(uint32_t mipmapLevel = 0);
+        template <typename T>
+        T* map(uint32_t mipmapLevel = 0) {
+            return reinterpret_cast<T*>(map(mipmapLevel));
+        }
+        void unmap(uint32_t mipmapLevel = 0);
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
     };
-
-
-
-    //enum class MipmappedArrayType {
-    //    E_1DMipmapped = 0,
-    //    E_2DMipmapped,
-    //    E_3DMipmapped,
-    //};
 
 
 
@@ -576,8 +567,14 @@ namespace cudau {
         }
 
         void setArray(const Array &array) {
-            m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
-            m_resDesc.res.array.hArray = array.getCUarray();
+            if (array.getNumMipmapLevels() > 1) {
+                m_resDesc.resType = CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
+                m_resDesc.res.mipmap.hMipmappedArray = array.getCUmipmappedArray();
+            }
+            else {
+                m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+                m_resDesc.res.array.hArray = array.getCUarray();
+            }
             m_resViewDesc = array.getResourceViewDesc();
             m_texObjectIsUpToDate = false;
         }

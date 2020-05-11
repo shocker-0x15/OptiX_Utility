@@ -78,8 +78,6 @@ namespace cudau {
 
         return *this;
     }
-
-
     
     void Buffer::initialize(CUcontext context, BufferType type,
                             uint32_t numElements, uint32_t stride, uint32_t glBufferID) {
@@ -184,8 +182,6 @@ namespace cudau {
 
         *this = std::move(newBuffer);
     }
-
-
 
     CUdeviceptr Buffer::beginCUDAAccess(CUstream stream) {
         if (m_type != BufferType::GL_Interop)
@@ -423,9 +419,9 @@ namespace cudau {
 
     Array::Array() :
         m_cudaContext(nullptr),
-        m_array(0), m_mappedPointer(nullptr),
-        m_writable(false), m_cubemap(false), m_layered(false),
-        m_initialized(false), m_mapped(false) {
+        m_array(0), m_mappedPointers(nullptr), m_mappedArrays(nullptr),
+        m_surfaceLoadStore(false), m_cubemap(false), m_layered(false),
+        m_initialized(false) {
     }
 
     Array::~Array() {
@@ -441,13 +437,16 @@ namespace cudau {
         m_stride = b.m_stride;
         m_elemType = b.m_elemType;
         m_numChannels = b.m_numChannels;
-        m_array = b.m_array;
-        m_mappedPointer = b.m_mappedPointer;
-        m_writable = b.m_writable;
+        if (m_numMipmapLevels > 1)
+            m_mipmappedArray = b.m_mipmappedArray;
+        else
+            m_array = b.m_array;
+        m_mappedPointers = b.m_mappedPointers;
+        m_mappedArrays = b.m_mappedArrays;
+        m_surfaceLoadStore = b.m_surfaceLoadStore;
         m_cubemap = b.m_cubemap;
         m_layered = b.m_layered;
         m_initialized = b.m_initialized;
-        m_mapped = b.m_mapped;
 
         b.m_initialized = false;
     }
@@ -462,24 +461,25 @@ namespace cudau {
         m_stride = b.m_stride;
         m_elemType = b.m_elemType;
         m_numChannels = b.m_numChannels;
-        m_array = b.m_array;
-        m_mappedPointer = b.m_mappedPointer;
-        m_writable = b.m_writable;
+        if (m_numMipmapLevels > 1)
+            m_mipmappedArray = b.m_mipmappedArray;
+        else
+            m_array = b.m_array;
+        m_mappedPointers = b.m_mappedPointers;
+        m_mappedArrays = b.m_mappedArrays;
+        m_surfaceLoadStore = b.m_surfaceLoadStore;
         m_cubemap = b.m_cubemap;
         m_layered = b.m_layered;
         m_initialized = b.m_initialized;
-        m_mapped = b.m_mapped;
 
         b.m_initialized = false;
 
         return *this;
     }
-
-
     
     void Array::initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
-                           uint32_t width, uint32_t height, uint32_t depth,
-                           bool writable, bool cubemap, bool layered) {
+                           uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels,
+                           bool surfaceLoadStore, bool cubemap, bool layered) {
         if (m_initialized)
             throw std::runtime_error("Array is already initialized.");
         if (numChannels != 1 && numChannels != 2 && numChannels != 4)
@@ -493,32 +493,18 @@ namespace cudau {
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-        //if (height == 0 && depth == 0 && cubemap == false && layered == false)
-        //    m_arrayType = ArrayType::E_1D;
-        //else if (depth == 0 && cubemap == false && layered == false)
-        //    m_arrayType = ArrayType::E_2D;
-        //else if (cubemap == false && layered == false)
-        //    m_arrayType = ArrayType::E_3D;
-        //else if (height == 0 && cubemap == false && layered == true)
-        //    m_arrayType = ArrayType::E_1DLayered;
-        //else if (cubemap == false && layered == true)
-        //    m_arrayType = ArrayType::E_2DLayered;
-        //else if (cubemap == true && layered == false)
-        //    m_arrayType = ArrayType::Cubemap;
-        //else if (cubemap == true && layered == true)
-        //    m_arrayType = ArrayType::CubemapLayered;
-
         m_width = width;
         m_height = height;
         m_depth = depth;
+        m_numMipmapLevels = numMipmapLevels;
         m_elemType = elemType;
         m_numChannels = numChannels;
-        m_writable = writable;
+        m_surfaceLoadStore = surfaceLoadStore;
         m_cubemap = cubemap;
         m_layered = layered;
 
         CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
-        if (writable)
+        if (surfaceLoadStore)
             arrayDesc.Flags |= CUDA_ARRAY3D_SURFACE_LDST;
         if (layered)
             arrayDesc.Flags |= CUDA_ARRAY3D_LAYERED;
@@ -591,9 +577,17 @@ namespace cudau {
         arrayDesc.NumChannels = numChannels;
         m_stride *= numChannels;
 
-        // Is cuArray3DCreate the upper compatible to cuArrayCreate?
-        //CUDADRV_CHECK(cuArrayCreate(&m_array, &arrayDesc));
-        CUDADRV_CHECK(cuArray3DCreate(&m_array, &arrayDesc));
+        if (m_numMipmapLevels > 1)
+            CUDADRV_CHECK(cuMipmappedArrayCreate(&m_mipmappedArray, &arrayDesc, numMipmapLevels));
+        else
+            CUDADRV_CHECK(cuArray3DCreate(&m_array, &arrayDesc));
+
+        m_mappedPointers = new void*[m_numMipmapLevels];
+        m_mappedArrays = new CUarray[m_numMipmapLevels];
+        for (int i = 0; i < m_numMipmapLevels; ++i) {
+            m_mappedPointers[i] = nullptr;
+            m_mappedArrays[i] = nullptr;
+        }
 
         m_initialized = true;
     }
@@ -602,9 +596,15 @@ namespace cudau {
         if (!m_initialized)
             return;
 
+        delete[] m_mappedArrays;
+        delete[] m_mappedPointers;
+
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-        CUDADRV_CHECK(cuArrayDestroy(m_array));
+        if (m_numMipmapLevels > 1)
+            CUDADRV_CHECK(cuMipmappedArrayDestroy(m_mipmappedArray));
+        else
+            CUDADRV_CHECK(cuArrayDestroy(m_array));
 
         m_initialized = false;
     }
@@ -618,13 +618,15 @@ namespace cudau {
     void Array::resize(uint32_t width, uint32_t height) {
         if (m_depth > 0)
             throw std::runtime_error("Array dimension cannot be changed.");
+        if (m_numMipmapLevels > 1)
+            throw std::runtime_error("resize() is supported only on non-mipmapped array.");
         
         if (width == m_width && height == m_height)
             return;
 
         Array newArray;
-        newArray.initialize(m_cudaContext, m_elemType, m_numChannels, width, height, m_height,
-                            m_writable, m_cubemap, m_layered);
+        newArray.initialize(m_cudaContext, m_elemType, m_numChannels, width, height, m_depth, m_numMipmapLevels,
+                            m_surfaceLoadStore, m_cubemap, m_layered);
 
         size_t sizePerRow = std::min(m_width, width) * static_cast<size_t>(m_stride);
 
@@ -654,19 +656,20 @@ namespace cudau {
         CUDAUAssert_NotImplemented();
     }
 
-
-
-    void* Array::map() {
-        if (m_mapped)
-            throw std::runtime_error("This buffer is already mapped.");
-
-        m_mapped = true;
+    void* Array::map(uint32_t mipmapLevel) {
+        if (m_mappedPointers[mipmapLevel])
+            throw std::runtime_error("This mip-map level is already mapped.");
+        if (mipmapLevel >= m_numMipmapLevels)
+            throw std::runtime_error("Specified mip-map level is out of bound.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
+        if (m_numMipmapLevels > 1)
+            CUDADRV_CHECK(cuMipmappedArrayGetLevel(&m_mappedArrays[mipmapLevel], m_mipmappedArray, mipmapLevel));
+
         size_t sizePerRow = m_width * static_cast<size_t>(m_stride);
         size_t size = std::max<size_t>(1, m_depth) * std::max<size_t>(1, m_height) * sizePerRow;
-        m_mappedPointer = new uint8_t[size];
+        m_mappedPointers[mipmapLevel] = new uint8_t[size];
 
         CUDA_MEMCPY3D params = {};
         params.WidthInBytes = sizePerRow;
@@ -674,14 +677,14 @@ namespace cudau {
         params.Depth = std::max<size_t>(1, m_depth);
 
         params.srcMemoryType = CU_MEMORYTYPE_ARRAY;
-        params.srcArray = m_array;
+        params.srcArray = m_numMipmapLevels > 1 ? m_mappedArrays[mipmapLevel] : m_array;
         params.srcXInBytes = 0;
         params.srcY = 0;
         params.srcZ = 0;
         // srcDevice, srcHeight, srcHost, srcLOD, srcPitch are not used in this case.
 
         params.dstMemoryType = CU_MEMORYTYPE_HOST;
-        params.dstHost = m_mappedPointer;
+        params.dstHost = m_mappedPointers[mipmapLevel];
         params.dstPitch = sizePerRow;
         params.dstHeight = m_height;
         params.dstXInBytes = 0;
@@ -691,14 +694,14 @@ namespace cudau {
 
         CUDADRV_CHECK(cuMemcpy3D(&params));
 
-        return m_mappedPointer;
+        return m_mappedPointers[mipmapLevel];
     }
 
-    void Array::unmap() {
-        if (!m_mapped)
-            throw std::runtime_error("This buffer is not mapped.");
-
-        m_mapped = false;
+    void Array::unmap(uint32_t mipmapLevel) {
+        if (!m_mappedPointers[mipmapLevel])
+            throw std::runtime_error("This mip-map level is not mapped.");
+        if (mipmapLevel >= m_numMipmapLevels)
+            throw std::runtime_error("Specified mip-map level is out of bound.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
@@ -710,7 +713,7 @@ namespace cudau {
         params.Depth = std::max<size_t>(1, m_depth);
 
         params.srcMemoryType = CU_MEMORYTYPE_HOST;
-        params.srcHost = m_mappedPointer;
+        params.srcHost = m_mappedPointers[mipmapLevel];
         params.srcPitch = sizePerRow;
         params.srcHeight = m_height;
         params.srcXInBytes = 0;
@@ -719,7 +722,7 @@ namespace cudau {
         // srcArray, srcDevice, srcLOD are not used in this case.
 
         params.dstMemoryType = CU_MEMORYTYPE_ARRAY;
-        params.dstArray = m_array;
+        params.dstArray = m_numMipmapLevels > 1 ? m_mappedArrays[mipmapLevel] : m_array;
         params.dstXInBytes = 0;
         params.dstY = 0;
         params.dstZ = 0;
@@ -727,11 +730,9 @@ namespace cudau {
 
         CUDADRV_CHECK(cuMemcpy3D(&params));
 
-        delete[] m_mappedPointer;
-        m_mappedPointer = nullptr;
+        delete[] m_mappedPointers[mipmapLevel];
+        m_mappedPointers[mipmapLevel] = nullptr;
     }
-
-
 
     CUDA_RESOURCE_VIEW_DESC Array::getResourceViewDesc() const {
         CUDA_RESOURCE_VIEW_DESC ret = {};
@@ -741,7 +742,7 @@ namespace cudau {
         ret.height = (isBC ? 4 : 1) * m_height;
         ret.depth = m_depth;
         ret.firstMipmapLevel = 0;
-        ret.lastMipmapLevel = 0;
+        ret.lastMipmapLevel = m_numMipmapLevels - 1;
         if (m_layered) {
             CUDAUAssert_NotImplemented();
         }

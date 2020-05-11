@@ -995,8 +995,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         DDS::Format format;
         uint8_t** ddsData = DDS::load("data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
-        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArrayWritable::Disable,
-                                     width, height);
+        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
+                                       width, height, 1);
         auto data = arrayCheckerBoard.map<uint8_t>();
         // Use mip-level 0 only.
         std::copy_n(ddsData[0], sizes[0], data);
@@ -1006,7 +1006,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 #else
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArrayWritable::Disable,
+        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
                                      width, height);
         auto data = arrayCheckerBoard.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
@@ -1031,8 +1031,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         DDS::Format format;
         uint8_t** ddsData = DDS::load("data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
 
-        arrayGrid.initialize(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArrayWritable::Disable,
-                             width, height);
+        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
+                               width, height, 1);
         auto data = arrayGrid.map<uint8_t>();
         // Use mip-level 0 only.
         std::copy_n(ddsData[0], sizes[0], data);
@@ -1042,7 +1042,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 #else
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArrayWritable::Disable,
+        arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
                              width, height);
         auto data = arrayGrid.map<uint8_t>();
         std::copy_n(linearImageData, width * height * 4, data);
@@ -1622,7 +1622,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
     cudau::Array arrayAccumBuffer;
-    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Float32, 4, cudau::ArrayWritable::Enable,
+    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Float32, 4, cudau::ArraySurface::Enable,
                                 renderTargetSizeX, renderTargetSizeY);
     cudau::SurfaceView surfViewAccumBuffer;
     surfViewAccumBuffer.setArray(arrayAccumBuffer);
