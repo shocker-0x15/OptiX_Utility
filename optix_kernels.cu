@@ -107,7 +107,7 @@ using ProgSampleTexture = optixu::DirectCallableProgramID<float3(uint32_t, float
 
 RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, float2 texCoord) {
     CUtexObject texture = plp.textures[texID];
-    float4 texValue = tex2D<float4>(texture, texCoord.x, texCoord.y);
+    float4 texValue = tex2DLod<float4>(texture, texCoord.x, texCoord.y, 0.0f);
     return make_float3(texValue.x, texValue.y, texValue.z);
 }
 

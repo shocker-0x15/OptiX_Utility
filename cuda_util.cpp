@@ -293,6 +293,134 @@ namespace cudau {
 
 
 
+    static bool isBCFormat(ArrayElementType elemType) {
+        return (elemType == cudau::ArrayElementType::BC1_UNorm ||
+                elemType == cudau::ArrayElementType::BC2_UNorm ||
+                elemType == cudau::ArrayElementType::BC3_UNorm ||
+                elemType == cudau::ArrayElementType::BC4_UNorm ||
+                elemType == cudau::ArrayElementType::BC4_SNorm ||
+                elemType == cudau::ArrayElementType::BC5_UNorm ||
+                elemType == cudau::ArrayElementType::BC5_SNorm ||
+                elemType == cudau::ArrayElementType::BC6H_UF16 ||
+                elemType == cudau::ArrayElementType::BC6H_SF16 ||
+                elemType == cudau::ArrayElementType::BC7_UNorm);
+    }
+
+    static CUresourceViewFormat getResourceViewFormat(ArrayElementType elemType, uint32_t numChannels) {
+        switch (elemType) {
+        case cudau::ArrayElementType::UInt8:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_UINT_1X8;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_UINT_2X8;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UINT_4X8;
+            break;
+        case cudau::ArrayElementType::Int8:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_SINT_1X8;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_SINT_2X8;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_SINT_4X8;
+            break;
+        case cudau::ArrayElementType::UInt16:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_UINT_1X16;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_UINT_2X16;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UINT_4X16;
+            break;
+        case cudau::ArrayElementType::Int16:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_SINT_1X16;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_SINT_2X16;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_SINT_4X16;
+            break;
+        case cudau::ArrayElementType::UInt32:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_UINT_1X32;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_UINT_2X32;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UINT_4X32;
+            break;
+        case cudau::ArrayElementType::Int32:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_SINT_1X32;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_SINT_2X32;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_SINT_4X32;
+            break;
+        case cudau::ArrayElementType::Float16:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_FLOAT_1X16;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_FLOAT_2X16;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_FLOAT_4X16;
+            break;
+        case cudau::ArrayElementType::Float32:
+            if (numChannels == 1)
+                return CU_RES_VIEW_FORMAT_FLOAT_1X32;
+            else if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_FLOAT_2X32;
+            else if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_FLOAT_4X32;
+            break;
+        case cudau::ArrayElementType::BC1_UNorm:
+            if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC1;
+            break;
+        case cudau::ArrayElementType::BC2_UNorm:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC2;
+            break;
+        case cudau::ArrayElementType::BC3_UNorm:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC3;
+            break;
+        case cudau::ArrayElementType::BC4_UNorm:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC4;
+            break;
+        case cudau::ArrayElementType::BC4_SNorm:
+            if (numChannels == 2)
+                return CU_RES_VIEW_FORMAT_SIGNED_BC4;
+            break;
+        case cudau::ArrayElementType::BC5_UNorm:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC5;
+            break;
+        case cudau::ArrayElementType::BC5_SNorm:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_SIGNED_BC5;
+            break;
+        case cudau::ArrayElementType::BC6H_UF16:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC6H;
+            break;
+        case cudau::ArrayElementType::BC6H_SF16:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_SIGNED_BC6H;
+            break;
+        case cudau::ArrayElementType::BC7_UNorm:
+            if (numChannels == 4)
+                return CU_RES_VIEW_FORMAT_UNSIGNED_BC7;
+            break;
+        default:
+            break;
+        }
+        CUDAUAssert_ShouldNotBeCalled();
+        return CU_RES_VIEW_FORMAT_NONE;
+    }
+
+
+
     Array::Array() :
         m_cudaContext(nullptr),
         m_array(0), m_mappedPointer(nullptr),
@@ -356,6 +484,10 @@ namespace cudau {
             throw std::runtime_error("Array is already initialized.");
         if (numChannels != 1 && numChannels != 2 && numChannels != 4)
             throw std::runtime_error("numChannels must be 1, 2, or 4.");
+        if (elemType >= ArrayElementType::BC1_UNorm &&
+            elemType <= ArrayElementType::BC7_UNorm &&
+            numChannels != 1)
+            throw std::runtime_error("numChannels must be 1 for BC format.");
 
         m_cudaContext = context;
 
@@ -380,14 +512,12 @@ namespace cudau {
         m_height = height;
         m_depth = depth;
         m_elemType = elemType;
+        m_numChannels = numChannels;
         m_writable = writable;
         m_cubemap = cubemap;
         m_layered = layered;
 
         CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
-        arrayDesc.Width = m_width;
-        arrayDesc.Height = m_height;
-        arrayDesc.Depth = m_depth;
         if (writable)
             arrayDesc.Flags |= CUDA_ARRAY3D_SURFACE_LDST;
         if (layered)
@@ -427,12 +557,38 @@ namespace cudau {
             arrayDesc.Format = CU_AD_FORMAT_FLOAT;
             m_stride = 4;
             break;
+        case cudau::ArrayElementType::BC1_UNorm:
+        case cudau::ArrayElementType::BC4_UNorm:
+        case cudau::ArrayElementType::BC4_SNorm:
+            arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT32;
+            m_stride = 4;
+            m_numChannels = 2;
+            numChannels = 2;
+            m_width >>= 2;
+            m_height >>= 2;
+            break;
+        case cudau::ArrayElementType::BC2_UNorm:
+        case cudau::ArrayElementType::BC3_UNorm:
+        case cudau::ArrayElementType::BC5_UNorm:
+        case cudau::ArrayElementType::BC5_SNorm:
+        case cudau::ArrayElementType::BC6H_UF16:
+        case cudau::ArrayElementType::BC6H_SF16:
+        case cudau::ArrayElementType::BC7_UNorm:
+            arrayDesc.Format = CU_AD_FORMAT_UNSIGNED_INT32;
+            m_stride = 4;
+            m_numChannels = 4;
+            numChannels = 4;
+            m_width >>= 2;
+            m_height >>= 2;
+            break;
         default:
             CUDAUAssert_ShouldNotBeCalled();
             break;
         }
+        arrayDesc.Width = m_width;
+        arrayDesc.Height = m_height;
+        arrayDesc.Depth = m_depth;
         arrayDesc.NumChannels = numChannels;
-        m_numChannels = numChannels;
         m_stride *= numChannels;
 
         // Is cuArray3DCreate the upper compatible to cuArrayCreate?
@@ -573,5 +729,27 @@ namespace cudau {
 
         delete[] m_mappedPointer;
         m_mappedPointer = nullptr;
+    }
+
+
+
+    CUDA_RESOURCE_VIEW_DESC Array::getResourceViewDesc() const {
+        CUDA_RESOURCE_VIEW_DESC ret = {};
+        bool isBC = isBCFormat(m_elemType);
+        ret.format = getResourceViewFormat(m_elemType, m_numChannels);
+        ret.width = (isBC ? 4 : 1) * m_width;
+        ret.height = (isBC ? 4 : 1) * m_height;
+        ret.depth = m_depth;
+        ret.firstMipmapLevel = 0;
+        ret.lastMipmapLevel = 0;
+        if (m_layered) {
+            CUDAUAssert_NotImplemented();
+        }
+        else {
+            ret.firstLayer = 0;
+            ret.lastLayer = 0;
+        }
+
+        return ret;
     }
 }

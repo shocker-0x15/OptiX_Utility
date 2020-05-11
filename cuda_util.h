@@ -372,13 +372,23 @@ namespace cudau {
 
     enum class ArrayElementType {
         UInt8,
-        UInt16,
-        UInt32,
         Int8,
+        UInt16,
         Int16,
+        UInt32,
         Int32,
         Float16,
-        Float32
+        Float32,
+        BC1_UNorm,
+        BC2_UNorm,
+        BC3_UNorm,
+        BC4_UNorm,
+        BC4_SNorm,
+        BC5_UNorm,
+        BC5_SNorm,
+        BC6H_UF16,
+        BC6H_SF16,
+        BC7_UNorm
     };
 
     //enum class ArrayType {
@@ -473,6 +483,8 @@ namespace cudau {
             return reinterpret_cast<T*>(map());
         }
         void unmap();
+
+        CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
     };
 
 
@@ -528,7 +540,6 @@ namespace cudau {
             m_texDesc = {};
             m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
             m_resViewDesc = {};
-            // TODO: support block compression formats.
         }
         ~TextureSampler() {
             if (m_texObjectCreated)
@@ -567,6 +578,7 @@ namespace cudau {
         void setArray(const Array &array) {
             m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
             m_resDesc.res.array.hArray = array.getCUarray();
+            m_resViewDesc = array.getResourceViewDesc();
             m_texObjectIsUpToDate = false;
         }
 
@@ -612,7 +624,7 @@ namespace cudau {
             if (m_texObjectCreated && !m_texObjectIsUpToDate)
                 CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
             if (!m_texObjectIsUpToDate) {
-                CUDADRV_CHECK(cuTexObjectCreate(&m_texObject, &m_resDesc, &m_texDesc, nullptr));
+                CUDADRV_CHECK(cuTexObjectCreate(&m_texObject, &m_resDesc, &m_texDesc, &m_resViewDesc));
                 m_texObjectCreated = true;
                 m_texObjectIsUpToDate = true;
             }

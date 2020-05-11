@@ -169,6 +169,252 @@ static Quaternion qRotateZ(float angle) { return qRotate(angle, make_float3(0, 0
 
 
 
+// For DDS image read (block compressed format)
+namespace DDS {
+    enum class Format : uint32_t {
+        BC1_UNorm = 71,
+        BC1_UNorm_sRGB = 72,
+        BC2_UNorm = 74,
+        BC2_UNorm_sRGB = 75,
+        BC3_UNorm = 77,
+        BC3_UNorm_sRGB = 78,
+        BC4_UNorm = 80,
+        BC4_SNorm = 81,
+        BC5_UNorm = 83,
+        BC5_SNorm = 84,
+        BC6H_UF16 = 95,
+        BC6H_SF16 = 96,
+        BC7_UNorm = 98,
+        BC7_UNorm_sRGB = 99,
+    };
+
+    struct Header {
+        struct Flags {
+            enum Value : uint32_t {
+                Caps = 1 << 0,
+                Height = 1 << 1,
+                Width = 1 << 2,
+                Pitch = 1 << 3,
+                PixelFormat = 1 << 12,
+                MipMapCount = 1 << 17,
+                LinearSize = 1 << 19,
+                Depth = 1 << 23
+            } value;
+
+            Flags() : value((Value)0) {}
+            Flags(Value v) : value(v) {}
+
+            Flags operator&(Flags v) const {
+                return (Value)(value & v.value);
+            }
+            Flags operator|(Flags v) const {
+                return (Value)(value | v.value);
+            }
+            bool operator==(uint32_t v) const {
+                return value == v;
+            }
+            bool operator!=(uint32_t v) const {
+                return value != v;
+            }
+        };
+
+        struct PFFlags {
+            enum Value : uint32_t {
+                AlphaPixels = 1 << 0,
+                Alpha = 1 << 1,
+                FourCC = 1 << 2,
+                PaletteIndexed4 = 1 << 3,
+                PaletteIndexed8 = 1 << 5,
+                RGB = 1 << 6,
+                Luminance = 1 << 17,
+                BumpDUDV = 1 << 19,
+            } value;
+
+            PFFlags() : value((Value)0) {}
+            PFFlags(Value v) : value(v) {}
+
+            PFFlags operator&(PFFlags v) const {
+                return (Value)(value & v.value);
+            }
+            PFFlags operator|(PFFlags v) const {
+                return (Value)(value | v.value);
+            }
+            bool operator==(uint32_t v) const {
+                return value == v;
+            }
+            bool operator!=(uint32_t v) const {
+                return value != v;
+            }
+        };
+
+        struct Caps {
+            enum Value : uint32_t {
+                Alpha = 1 << 1,
+                Complex = 1 << 3,
+                Texture = 1 << 12,
+                MipMap = 1 << 22,
+            } value;
+
+            Caps() : value((Value)0) {}
+            Caps(Value v) : value(v) {}
+
+            Caps operator&(Caps v) const {
+                return (Value)(value & v.value);
+            }
+            Caps operator|(Caps v) const {
+                return (Value)(value | v.value);
+            }
+            bool operator==(uint32_t v) const {
+                return value == v;
+            }
+            bool operator!=(uint32_t v) const {
+                return value != v;
+            }
+        };
+
+        struct Caps2 {
+            enum Value : uint32_t {
+                CubeMap = 1 << 9,
+                CubeMapPositiveX = 1 << 10,
+                CubeMapNegativeX = 1 << 11,
+                CubeMapPositiveY = 1 << 12,
+                CubeMapNegativeY = 1 << 13,
+                CubeMapPositiveZ = 1 << 14,
+                CubeMapNegativeZ = 1 << 15,
+                Volume = 1 << 22,
+            } value;
+
+            Caps2() : value((Value)0) {}
+            Caps2(Value v) : value(v) {}
+
+            Caps2 operator&(Caps2 v) const {
+                return (Value)(value & v.value);
+            }
+            Caps2 operator|(Caps2 v) const {
+                return (Value)(value | v.value);
+            }
+            bool operator==(uint32_t v) const {
+                return value == v;
+            }
+            bool operator!=(uint32_t v) const {
+                return value != v;
+            }
+        };
+
+        uint32_t m_magic;
+        uint32_t m_size;
+        Flags m_flags;
+        uint32_t m_height;
+        uint32_t m_width;
+        uint32_t m_pitchOrLinearSize;
+        uint32_t m_depth;
+        uint32_t m_mipmapCount;
+        uint32_t m_reserved1[11];
+        uint32_t m_PFSize;
+        PFFlags m_PFFlags;
+        uint32_t m_fourCC;
+        uint32_t m_RGBBitCount;
+        uint32_t m_RBitMask;
+        uint32_t m_GBitMask;
+        uint32_t m_BBitMask;
+        uint32_t m_RGBAlphaBitMask;
+        Caps m_caps;
+        Caps2 m_caps2;
+        uint32_t m_reservedCaps[2];
+        uint32_t m_reserved2;
+    };
+    static_assert(sizeof(Header) == 128, "sizeof(Header) must be 128.");
+
+    struct HeaderDX10 {
+        Format m_format;
+        uint32_t m_dimension;
+        uint32_t m_miscFlag;
+        uint32_t m_arraySize;
+        uint32_t m_miscFlag2;
+    };
+    static_assert(sizeof(HeaderDX10) == 20, "sizeof(HeaderDX10) must be 20.");
+
+    static uint8_t** load(const char* filepath, int32_t* width, int32_t* height, int32_t* mipCount, size_t** sizes, Format* format) {
+        std::ifstream ifs(filepath);
+        if (!ifs.is_open()) {
+            hpprintf("Not found: %s\n", filepath);
+            return nullptr;
+        }
+
+        ifs.seekg(0, std::ios::end);
+        size_t fileSize = ifs.tellg();
+
+        ifs.clear();
+        ifs.seekg(0, std::ios::beg);
+
+        Header header;
+        ifs.read((char*)&header, sizeof(Header));
+        if (header.m_magic != 0x20534444 || header.m_fourCC != 0x30315844) {
+            hpprintf("Non dds (dx10) file: %s", filepath);
+            return nullptr;
+        }
+
+        HeaderDX10 dx10Header;
+        ifs.read((char*)&dx10Header, sizeof(HeaderDX10));
+
+        *width = header.m_width;
+        *height = header.m_height;
+        *format = (Format)dx10Header.m_format;
+
+        if (*format != Format::BC1_UNorm && *format != Format::BC1_UNorm_sRGB &&
+            *format != Format::BC2_UNorm && *format != Format::BC2_UNorm_sRGB &&
+            *format != Format::BC3_UNorm && *format != Format::BC3_UNorm_sRGB &&
+            *format != Format::BC4_UNorm && *format != Format::BC4_SNorm &&
+            *format != Format::BC5_UNorm && *format != Format::BC5_SNorm &&
+            *format != Format::BC6H_UF16 && *format != Format::BC6H_SF16 &&
+            *format != Format::BC7_UNorm && *format != Format::BC7_UNorm_sRGB) {
+            hpprintf("No support for non block compressed formats: %s", filepath);
+            return nullptr;
+        }
+
+        const size_t dataSize = fileSize - (sizeof(Header) + sizeof(HeaderDX10));
+
+        *mipCount = 1;
+        if ((header.m_flags & Header::Flags::MipMapCount) != 0)
+            *mipCount = header.m_mipmapCount;
+
+        uint8_t** data = new uint8_t * [*mipCount];
+        *sizes = new size_t[*mipCount];
+        int32_t mipWidth = *width;
+        int32_t mipHeight = *height;
+        uint32_t blockSize = 16;
+        if (*format == Format::BC1_UNorm || *format == Format::BC1_UNorm_sRGB ||
+            *format == Format::BC4_UNorm || *format == Format::BC4_SNorm)
+            blockSize = 8;
+        size_t cumDataSize = 0;
+        for (int i = 0; i < *mipCount; ++i) {
+            int32_t bw = (mipWidth + 3) / 4;
+            int32_t bh = (mipHeight + 3) / 4;
+            size_t mipDataSize = bw * bh * blockSize;
+
+            data[i] = new uint8_t[mipDataSize];
+            (*sizes)[i] = mipDataSize;
+            ifs.read((char*)data[i], mipDataSize);
+            cumDataSize += mipDataSize;
+
+            mipWidth = std::max<int32_t>(1, mipWidth / 2);
+            mipHeight = std::max<int32_t>(1, mipHeight / 2);
+        }
+        Assert(cumDataSize == dataSize, "Data size mismatch.");
+
+        return data;
+    }
+
+    static void free(uint8_t** data, int32_t mipCount, size_t* sizes) {
+        for (int i = mipCount - 1; i >= 0; --i)
+            delete[] data[i];
+        delete[] sizes;
+        delete[] data;
+    }
+}
+
+
+
 struct KeyState {
     uint64_t timesLastChanged[5];
     bool statesLastChanged[5];
@@ -736,11 +982,28 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     textureObjectBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
     uint32_t textureID = 0;
 
+#define USE_BLOCK_COMPRESSED_TEXTURE
+
     CUtexObject* textureObjects = textureObjectBuffer.map();
 
     cudau::Array arrayCheckerBoard;
     cudau::TextureSampler texCheckerBoard;
     {
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        int32_t width, height, mipCount;
+        size_t* sizes;
+        DDS::Format format;
+        uint8_t** ddsData = DDS::load("data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
+
+        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArrayWritable::Disable,
+                                     width, height);
+        auto data = arrayCheckerBoard.map<uint8_t>();
+        // Use mip-level 0 only.
+        std::copy_n(ddsData[0], sizes[0], data);
+        arrayCheckerBoard.unmap();
+
+        DDS::free(ddsData, mipCount, sizes);
+#else
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 4);
         arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArrayWritable::Disable,
@@ -749,6 +1012,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::copy_n(linearImageData, width * height * 4, data);
         arrayCheckerBoard.unmap();
         stbi_image_free(linearImageData);
+#endif
     }
     texCheckerBoard.setArray(arrayCheckerBoard);
     texCheckerBoard.setFilterMode(cudau::TextureFilterMode::Point,
@@ -761,6 +1025,21 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Array arrayGrid;
     cudau::TextureSampler texGrid;
     {
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        int32_t width, height, mipCount;
+        size_t* sizes;
+        DDS::Format format;
+        uint8_t** ddsData = DDS::load("data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
+
+        arrayGrid.initialize(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArrayWritable::Disable,
+                             width, height);
+        auto data = arrayGrid.map<uint8_t>();
+        // Use mip-level 0 only.
+        std::copy_n(ddsData[0], sizes[0], data);
+        arrayGrid.unmap();
+
+        DDS::free(ddsData, mipCount, sizes);
+#else
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("data/grid.png", &width, &height, &n, 4);
         arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArrayWritable::Disable,
@@ -769,6 +1048,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::copy_n(linearImageData, width * height * 4, data);
         arrayGrid.unmap();
         stbi_image_free(linearImageData);
+#endif
     }
     texGrid.setArray(arrayGrid);
     texGrid.setFilterMode(cudau::TextureFilterMode::Point,
