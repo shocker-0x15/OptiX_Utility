@@ -570,6 +570,7 @@ namespace cudau {
             if (array.getNumMipmapLevels() > 1) {
                 m_resDesc.resType = CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
                 m_resDesc.res.mipmap.hMipmappedArray = array.getCUmipmappedArray();
+                m_texDesc.maxMipmapLevelClamp = array.getNumMipmapLevels() - 1;
             }
             else {
                 m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;

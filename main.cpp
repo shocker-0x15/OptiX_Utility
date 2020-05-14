@@ -996,11 +996,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         uint8_t** ddsData = DDS::load("data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
-                                       width, height, 1);
-        auto data = arrayCheckerBoard.map<uint8_t>();
-        // Use mip-level 0 only.
-        std::copy_n(ddsData[0], sizes[0], data);
-        arrayCheckerBoard.unmap();
+                                       width, height, mipCount);
+        //// Use mip-level 0 only.
+        //auto data = arrayCheckerBoard.map<uint8_t>();
+        //std::copy_n(ddsData[0], sizes[0], data);
+        //arrayCheckerBoard.unmap();
+        for (int i = 0; i < mipCount; ++i) {
+            auto data = arrayCheckerBoard.map<uint8_t>(i);
+            std::copy_n(ddsData[i], sizes[i], data);
+            arrayCheckerBoard.unmap(i);
+        }
 
         DDS::free(ddsData, mipCount, sizes);
 #else

@@ -664,17 +664,30 @@ namespace cudau {
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
+        // JP: CUDAはミップマップレベル数の計算に問題を抱えているように見える。
+        //     例: 64x64, BCフォーマットのテクスチャー(16x16ブロック)は次のミップレベルを持つことができる。
+        //         64x64(16x16), 32x32(8x8), 16x16(4x4), 8x8(2x2), 4x4(1x1), 2x2(1x1), 1x1(1x1)
+        //     しかしCUDAは最後のミップレベルが4x4(1x1)だと仮定しているように見える。
+        //     それとも何か勘違いしている？
+        // EN: CUDA seems to have an issue in calculation of the number of mipmap levels.
+        //     e.g. 64x64 texture with BC format (16x16 blocks) can have the following mipmap levels:
+        //          64x64(16x16), 32x32(8x8), 16x16(4x4), 8x8(2x2), 4x4(1x1), 2x2(1x1), 1x1(1x1)
+        //     However CUDA seems to suppose that the last mip level is 4x4(1x1).
+        //     Or do I misunderstand something?
         if (m_numMipmapLevels > 1)
             CUDADRV_CHECK(cuMipmappedArrayGetLevel(&m_mappedArrays[mipmapLevel], m_mipmappedArray, mipmapLevel));
 
-        size_t sizePerRow = m_width * static_cast<size_t>(m_stride);
-        size_t size = std::max<size_t>(1, m_depth) * std::max<size_t>(1, m_height) * sizePerRow;
+        uint32_t width = std::max<size_t>(1, m_width >> mipmapLevel);
+        uint32_t height = std::max<size_t>(1, m_height >> mipmapLevel);
+        uint32_t depth = std::max<size_t>(1, m_depth);
+        size_t sizePerRow = width * static_cast<size_t>(m_stride);
+        size_t size = depth * height * sizePerRow;
         m_mappedPointers[mipmapLevel] = new uint8_t[size];
 
         CUDA_MEMCPY3D params = {};
         params.WidthInBytes = sizePerRow;
-        params.Height = std::max<size_t>(1, m_height);
-        params.Depth = std::max<size_t>(1, m_depth);
+        params.Height = height;
+        params.Depth = depth;
 
         params.srcMemoryType = CU_MEMORYTYPE_ARRAY;
         params.srcArray = m_numMipmapLevels > 1 ? m_mappedArrays[mipmapLevel] : m_array;
@@ -686,7 +699,7 @@ namespace cudau {
         params.dstMemoryType = CU_MEMORYTYPE_HOST;
         params.dstHost = m_mappedPointers[mipmapLevel];
         params.dstPitch = sizePerRow;
-        params.dstHeight = m_height;
+        params.dstHeight = height;
         params.dstXInBytes = 0;
         params.dstY = 0;
         params.dstZ = 0;
@@ -705,17 +718,20 @@ namespace cudau {
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-        size_t sizePerRow = m_width * static_cast<size_t>(m_stride);
+        uint32_t width = std::max<size_t>(1, m_width >> mipmapLevel);
+        uint32_t height = std::max<size_t>(1, m_height >> mipmapLevel);
+        uint32_t depth = std::max<size_t>(1, m_depth);
+        size_t sizePerRow = width * static_cast<size_t>(m_stride);
 
         CUDA_MEMCPY3D params = {};
         params.WidthInBytes = sizePerRow;
-        params.Height = std::max<size_t>(1, m_height);
-        params.Depth = std::max<size_t>(1, m_depth);
+        params.Height = height;
+        params.Depth = depth;
 
         params.srcMemoryType = CU_MEMORYTYPE_HOST;
         params.srcHost = m_mappedPointers[mipmapLevel];
         params.srcPitch = sizePerRow;
-        params.srcHeight = m_height;
+        params.srcHeight = height;
         params.srcXInBytes = 0;
         params.srcY = 0;
         params.srcZ = 0;
