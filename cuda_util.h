@@ -24,10 +24,16 @@
 #include <vector>
 #include <sstream>
 
+// Enable this macro if CUDA/OpenGL interoperability is required.
+#define CUDA_UTIL_USE_GL_INTEROP
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
 #include <GL/gl3w.h>
+#endif
 
 #include <cuda.h>
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
 #include <cudaGL.h>
+#endif
 #include <vector_types.h>
 
 #undef min
@@ -215,19 +221,33 @@ namespace cudau {
         Buffer(const Buffer &) = delete;
         Buffer &operator=(const Buffer &) = delete;
 
+        void initialize(CUcontext context, BufferType type,
+                        uint32_t numElements, uint32_t stride, uint32_t glBufferID);
+
     public:
         Buffer();
-        Buffer(CUcontext context, BufferType type,
-               uint32_t numElements, uint32_t stride, uint32_t glBufferID = 0) : Buffer() {
-            initialize(context, type, numElements, stride, glBufferID);
-        }
         ~Buffer();
 
         Buffer(Buffer &&b);
         Buffer &operator=(Buffer &&b);
 
         void initialize(CUcontext context, BufferType type,
-                        uint32_t numElements, uint32_t stride, uint32_t glBufferID);
+                        uint32_t numElements, uint32_t stride) {
+            initialize(context, type, numElements, stride, 0);
+        }
+        void initializeFromGLBuffer(CUcontext context, uint32_t glBufferID) {
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
+            GLint currentBuffer;
+            glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &currentBuffer);
+            glBindBuffer(GL_ARRAY_BUFFER, glBufferID);
+            GLint size;
+            glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+            glBindBuffer(GL_ARRAY_BUFFER, currentBuffer);
+            initialize(context, BufferType::GL_Interop, size, 1, glBufferID);
+#else
+            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
+#endif
+        }
         void finalize();
 
         void resize(uint32_t numElements, uint32_t stride);
@@ -278,10 +298,10 @@ namespace cudau {
     public:
         TypedBuffer() {}
         TypedBuffer(CUcontext context, BufferType type, int32_t numElements) {
-            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+            Buffer::initialize(context, type, numElements, sizeof(T));
         }
         TypedBuffer(CUcontext context, BufferType type, int32_t numElements, const T &value) {
-            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+            Buffer::initialize(context, type, numElements, sizeof(T));
             T* values = (T*)map();
             for (int i = 0; i < numElements; ++i)
                 values[i] = value;
@@ -289,10 +309,10 @@ namespace cudau {
         }
 
         void initialize(CUcontext context, BufferType type, int32_t numElements) {
-            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+            Buffer::initialize(context, type, numElements, sizeof(T));
         }
         void initialize(CUcontext context, BufferType type, int32_t numElements, const T &value) {
-            Buffer::initialize(context, type, numElements, sizeof(T), 0);
+            Buffer::initialize(context, type, numElements, sizeof(T));
             T* values = (T*)Buffer::map();
             for (int i = 0; i < numElements; ++i)
                 values[i] = value;

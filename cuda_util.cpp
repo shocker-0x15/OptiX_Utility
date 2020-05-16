@@ -91,12 +91,16 @@ namespace cudau {
 
         // If using GL Interop, expect that the active device is also the display device.
         if (m_type == BufferType::GL_Interop) {
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
             CUdevice currentDevice;
             int32_t isDisplayDevice;
             CUDADRV_CHECK(cuCtxGetDevice(&currentDevice));
             CUDADRV_CHECK(cuDeviceGetAttribute(&isDisplayDevice, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, currentDevice));
             if (!isDisplayDevice)
                 throw std::runtime_error("GL Interop is only available on the display device.");
+#else
+            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
+#endif
         }
 
         m_numElements = numElements;
@@ -107,8 +111,10 @@ namespace cudau {
         if (m_type == BufferType::Device || m_type == BufferType::P2P)
             CUDADRV_CHECK(cuMemAlloc(&m_devicePointer, m_numElements * m_stride));
 
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
         if (m_type == BufferType::GL_Interop)
             CUDADRV_CHECK(cuGraphicsGLRegisterBuffer(&m_cudaGfxResource, m_GLBufferID, CU_GRAPHICS_REGISTER_FLAGS_NONE));
+#endif
 
         if (m_type == BufferType::ZeroCopy) {
             CUDADRV_CHECK(cuMemHostAlloc(&m_hostPointer, m_numElements * m_stride, CU_MEMHOSTALLOC_PORTABLE | CU_MEMHOSTALLOC_DEVICEMAP));
@@ -674,6 +680,10 @@ namespace cudau {
         //          64x64(16x16), 32x32(8x8), 16x16(4x4), 8x8(2x2), 4x4(1x1), 2x2(1x1), 1x1(1x1)
         //     However CUDA seems to suppose that the last mip level is 4x4(1x1).
         //     Or do I misunderstand something?
+        //
+        // Bug reports:
+        // https://forums.developer.nvidia.com/t/how-to-create-cudatextureobject-with-texture-raw-data-in-block-compressed-bc-format/119570
+        // https://forums.developer.nvidia.com/t/mip-map-with-block-compressed-texture/72170
         if (m_numMipmapLevels > 1)
             CUDADRV_CHECK(cuMipmappedArrayGetLevel(&m_mappedArrays[mipmapLevel], m_mipmappedArray, mipmapLevel));
 

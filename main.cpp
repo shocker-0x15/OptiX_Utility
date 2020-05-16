@@ -996,15 +996,20 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         uint8_t** ddsData = DDS::load("data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
-                                       width, height, mipCount);
-        //// Use mip-level 0 only.
-        //auto data = arrayCheckerBoard.map<uint8_t>();
-        //std::copy_n(ddsData[0], sizes[0], data);
-        //arrayCheckerBoard.unmap();
-        for (int i = 0; i < mipCount; ++i) {
-            auto data = arrayCheckerBoard.map<uint8_t>(i);
-            std::copy_n(ddsData[i], sizes[i], data);
-            arrayCheckerBoard.unmap(i);
+                                       width, height, 1/*mipCount*/);
+        if (arrayCheckerBoard.getNumMipmapLevels() > 1) {
+            // Use all the mip levels.
+            for (int i = 0; i < mipCount; ++i) {
+                auto data = arrayCheckerBoard.map<uint8_t>(i);
+                std::copy_n(ddsData[i], sizes[i], data);
+                arrayCheckerBoard.unmap(i);
+            }
+        }
+        else {
+            // Use mip-level 0 only.
+            auto data = arrayCheckerBoard.map<uint8_t>();
+            std::copy_n(ddsData[0], sizes[0], data);
+            arrayCheckerBoard.unmap();
         }
 
         DDS::free(ddsData, mipCount, sizes);
@@ -1037,11 +1042,21 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         uint8_t** ddsData = DDS::load("data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
-                               width, height, 1);
-        auto data = arrayGrid.map<uint8_t>();
-        // Use mip-level 0 only.
-        std::copy_n(ddsData[0], sizes[0], data);
-        arrayGrid.unmap();
+                               width, height, 1/*mipCount*/);
+        if (arrayGrid.getNumMipmapLevels() > 1) {
+            // Use all the mip levels.
+            for (int i = 0; i < mipCount; ++i) {
+                auto data = arrayGrid.map<uint8_t>(i);
+                std::copy_n(ddsData[i], sizes[i], data);
+                arrayGrid.unmap(i);
+            }
+        }
+        else {
+            // Use mip-level 0 only.
+            auto data = arrayGrid.map<uint8_t>();
+            std::copy_n(ddsData[0], sizes[0], data);
+            arrayGrid.unmap();
+        }
 
         DDS::free(ddsData, mipCount, sizes);
 #else
@@ -1417,7 +1432,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
     gasCornellBox.prepareForBuild(&asMemReqs);
-    gasCornellBoxMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasCornellBoxMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     uint32_t gasAreaLightIndex = travID++;
@@ -1429,7 +1444,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
     gasAreaLight.prepareForBuild(&asMemReqs);
-    gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     uint32_t gasObjectIndex = travID++;
@@ -1441,7 +1456,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasObject.setNumRayTypes(1, Shared::NumRayTypes);
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
-    gasObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, 
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
@@ -1455,7 +1470,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasCustomPrimObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasCustomPrimObject.addChild(customPrimInstance);
     gasCustomPrimObject.prepareForBuild(&asMemReqs);
-    gasCustomPrimObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    gasCustomPrimObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer,
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
@@ -1469,7 +1484,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //     スクラッチバッファーは共用する。
     // EN: Build geometry acceleration structures.
     //     Share the scratch buffer among them.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1, 0);
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
@@ -1479,9 +1494,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Perform compaction for static meshes.
     size_t compactedASSize;
     gasCornellBox.prepareForCompact(&compactedASSize);
-    gasCornellBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1, 0);
+    gasCornellBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     gasAreaLight.prepareForCompact(&compactedASSize);
-    gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1, 0);
+    gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream[0], gasCornellBoxCompactedMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream[0], gasAreaLightCompactedMem);
     gasCornellBox.removeUncompacted();
@@ -1492,7 +1507,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
     scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1, 0);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
     
     // JP: GASからインスタンスを作成する。
     // EN: Make instances from GASs.
@@ -1544,7 +1559,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasScene.addChild(instCustomPrimObject);
     iasScene.prepareForBuild(&asMemReqs, &numInstances);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
-    iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1, 0);
+    iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
     if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, tempBufferForIAS);
@@ -1572,7 +1587,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer outputBufferCUDA;
     outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
     outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-    outputBufferCUDA.initialize(cuContext, cudau::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+    outputBufferCUDA.initializeFromGLBuffer(cuContext, outputBufferGL.getRawHandle());
 
 
     
@@ -1731,7 +1746,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             outputBufferGL.finalize();
             outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
             outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-            outputBufferCUDA.initialize(cuContext, cudau::BufferType::GL_Interop, renderTargetSizeX * renderTargetSizeY, sizeof(float) * 4, outputBufferGL.getRawHandle());
+            outputBufferCUDA.initializeFromGLBuffer(cuContext, outputBufferGL.getRawHandle());
 
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
