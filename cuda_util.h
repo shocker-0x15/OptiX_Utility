@@ -278,7 +278,7 @@ namespace cudau {
             return m_initialized;
         }
 
-        CUdeviceptr beginCUDAAccess(CUstream stream);
+        void beginCUDAAccess(CUstream stream);
         void endCUDAAccess(CUstream stream);
 
         void* map();
@@ -415,6 +415,8 @@ namespace cudau {
         Enable = 0,
         Disable,
     };
+
+    void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels);
     
     class Array {
         CUcontext m_cudaContext;
@@ -434,6 +436,9 @@ namespace cudau {
         void** m_mappedPointers;
         CUarray* m_mappedArrays;
 
+        uint32_t m_GLTexID;
+        CUgraphicsResource m_cudaGfxResource;
+
         struct {
             unsigned int m_surfaceLoadStore : 1;
             unsigned int m_cubemap : 1;
@@ -446,7 +451,7 @@ namespace cudau {
 
         void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
                         uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels,
-                        bool writable, bool cubemap, bool layered);
+                        bool writable, bool cubemap, bool layered, uint32_t glTexID);
 
     public:
         Array();
@@ -458,17 +463,40 @@ namespace cudau {
         void initialize1D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
                           uint32_t length, uint32_t numMipmapLevels) {
             initialize(context, elemType, numChannels, length, 0, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false);
+                       surfaceLoadStore == ArraySurface::Enable, false, false, 0);
         }
         void initialize2D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
                           uint32_t width, uint32_t height, uint32_t numMipmapLevels) {
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false);
+                       surfaceLoadStore == ArraySurface::Enable, false, false, 0);
         }
         void initialize3D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
                           uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels) {
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false);
+                       surfaceLoadStore == ArraySurface::Enable, false, false, 0);
+        }
+        void initializeFromGLTexture2D(CUcontext context, uint32_t glTexID, ArraySurface surfaceLoadStore) {
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
+            GLint currentTexture;
+            glGetIntegerv(GL_TEXTURE_BINDING_2D, &currentTexture);
+            glBindTexture(GL_TEXTURE_2D, glTexID);
+            GLint width, height;
+            GLint numMipmapLevels;
+            GLint format;
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &format);
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_VIEW_NUM_LEVELS, &numMipmapLevels);
+            numMipmapLevels = std::max(numMipmapLevels, 1);
+            glBindTexture(GL_TEXTURE_2D, currentTexture);
+            ArrayElementType elemType;
+            uint32_t numChannels;
+            getArrayElementFormat((GLenum)format, &elemType, &numChannels);
+            initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
+                       surfaceLoadStore == ArraySurface::Enable, false, false, glTexID);
+#else
+            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
+#endif
         }
         void finalize();
 
@@ -476,8 +504,15 @@ namespace cudau {
         void resize(uint32_t width, uint32_t height);
         void resize(uint32_t width, uint32_t height, uint32_t depth);
 
-        CUarray getCUarray() const {
-            return m_array;
+        CUarray getCUarray(uint32_t mipmapLevel) const {
+            if (m_numMipmapLevels > 1) {
+                CUarray ret;
+                CUDADRV_CHECK(cuMipmappedArrayGetLevel(&ret, m_mipmappedArray, mipmapLevel));
+                return ret;
+            }
+            else {
+                return m_array;
+            }
         }
         CUmipmappedArray getCUmipmappedArray() const {
             return m_mipmappedArray;
@@ -496,6 +531,9 @@ namespace cudau {
             return m_numMipmapLevels;
         }
 
+        void beginCUDAAccess(CUstream stream, uint32_t mipmapLevel);
+        void endCUDAAccess(CUstream stream, uint32_t mipmapLevel);
+
         void* map(uint32_t mipmapLevel = 0);
         template <typename T>
         T* map(uint32_t mipmapLevel = 0) {
@@ -504,6 +542,18 @@ namespace cudau {
         void unmap(uint32_t mipmapLevel = 0);
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
+
+        CUsurfObject getSurfaceObject(uint32_t mipmapLevel) const {
+            CUsurfObject ret;
+            CUDA_RESOURCE_DESC resDesc = {};
+            resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+            if (m_GLTexID == 0)
+                resDesc.res.array.hArray = getCUarray(mipmapLevel);
+            else
+                resDesc.res.array.hArray = m_mappedArrays[mipmapLevel];
+            CUDADRV_CHECK(cuSurfObjectCreate(&ret, &resDesc));
+            return ret;
+        }
     };
 
 
@@ -594,7 +644,7 @@ namespace cudau {
             }
             else {
                 m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
-                m_resDesc.res.array.hArray = array.getCUarray();
+                m_resDesc.res.array.hArray = array.getCUarray(0);
             }
             m_resViewDesc = array.getResourceViewDesc();
             m_texObjectIsUpToDate = false;
@@ -647,70 +697,6 @@ namespace cudau {
                 m_texObjectIsUpToDate = true;
             }
             return m_texObject;
-        }
-    };
-
-
-
-    class SurfaceView {
-        CUDA_RESOURCE_DESC m_resDesc;
-        CUsurfObject m_surfObject;
-        struct {
-            unsigned int m_surfObjectCreated : 1;
-            unsigned int m_surfObjectIsUpToDate : 1;
-        };
-
-        SurfaceView(const SurfaceView &) = delete;
-        SurfaceView &operator=(const SurfaceView &) = delete;
-
-    public:
-        SurfaceView() :
-            m_surfObjectCreated(false), m_surfObjectIsUpToDate(false) {
-            m_resDesc = {};
-        }
-        ~SurfaceView() {
-            if (m_surfObjectCreated)
-                cuSurfObjectDestroy(m_surfObject);
-        }
-
-        void destroySurfaceObject() {
-            if (m_surfObjectCreated) {
-                CUDADRV_CHECK(cuSurfObjectDestroy(m_surfObject));
-                m_surfObjectIsUpToDate = false;
-                m_surfObjectCreated = false;
-            }
-        }
-
-        SurfaceView(SurfaceView &&s) {
-            m_resDesc = s.m_resDesc;
-            m_surfObjectCreated = s.m_surfObjectCreated;
-            m_surfObjectIsUpToDate = s.m_surfObjectIsUpToDate;
-
-            s.m_surfObjectCreated = false;
-        }
-        SurfaceView &operator=(SurfaceView &&s) {
-            m_resDesc = s.m_resDesc;
-            m_surfObjectCreated = s.m_surfObjectCreated;
-            m_surfObjectIsUpToDate = s.m_surfObjectIsUpToDate;
-
-            s.m_surfObjectCreated = false;
-        }
-
-        void setArray(const Array &array) {
-            m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
-            m_resDesc.res.array.hArray = array.getCUarray();
-            m_surfObjectIsUpToDate = false;
-        }
-
-        CUsurfObject getSurfaceObject() {
-            if (m_surfObjectCreated && !m_surfObjectIsUpToDate)
-                CUDADRV_CHECK(cuSurfObjectDestroy(m_surfObject));
-            if (!m_surfObjectIsUpToDate) {
-                CUDADRV_CHECK(cuSurfObjectCreate(&m_surfObject, &m_resDesc));
-                m_surfObjectCreated = true;
-                m_surfObjectIsUpToDate = true;
-            }
-            return m_surfObject;
         }
     };
 }

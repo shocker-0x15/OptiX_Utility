@@ -7,9 +7,6 @@
     <Filter Include="ext\tinyobjloader">
       <UniqueIdentifier>{ef29170b-59a3-4e67-81f1-d7ae41e6cbec}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ext\shaders">
-      <UniqueIdentifier>{fff83bc1-a6dc-4c68-9408-a29a6c4b4d18}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ext\imgui">
       <UniqueIdentifier>{ed694081-a878-4b60-a83d-60643ba9ba97}</UniqueIdentifier>
     </Filter>
@@ -27,6 +24,9 @@
     </Filter>
     <Filter Include="non_essentials">
       <UniqueIdentifier>{fa2529cc-f520-469c-9df3-46a35aac042d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non_essentials\shaders">
+      <UniqueIdentifier>{fff83bc1-a6dc-4c68-9408-a29a6c4b4d18}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -119,16 +119,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\scale.vert">
-      <Filter>ext\shaders</Filter>
+      <Filter>non_essentials\shaders</Filter>
     </None>
     <None Include="shaders\scale.frag">
-      <Filter>ext\shaders</Filter>
+      <Filter>non_essentials\shaders</Filter>
     </None>
     <None Include="shaders\drawOptiXResult.vert">
-      <Filter>ext\shaders</Filter>
+      <Filter>non_essentials\shaders</Filter>
     </None>
     <None Include="shaders\drawOptiXResult.frag">
-      <Filter>ext\shaders</Filter>
+      <Filter>non_essentials\shaders</Filter>
     </None>
     <None Include="README.md" />
   </ItemGroup>

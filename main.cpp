@@ -1582,12 +1582,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     
     // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
     // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
-    GLTK::Buffer outputBufferGL;
-    GLTK::BufferTexture outputTexture;
-    cudau::Buffer outputBufferCUDA;
-    outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
-    outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-    outputBufferCUDA.initializeFromGLBuffer(cuContext, outputBufferGL.getRawHandle());
+    GLTK::Texture2D outputTexture;
+    cudau::Array outputArray;
+    outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F); GLTK::errorCheck();
+    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(), cudau::ArraySurface::Enable);
 
 
     
@@ -1681,6 +1679,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     hpprintf("Render loop.\n");
+
+    CUsurfObject outputBufferSurface[2];
     
     StopWatchHiRes<> sw;
     std::mt19937_64 rng(3092384202);
@@ -1741,12 +1741,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
 
-            outputBufferCUDA.finalize();
-            outputTexture.finalize();
-            outputBufferGL.finalize();
-            outputBufferGL.initialize(GLTK::Buffer::Target::ArrayBuffer, sizeof(float) * 4, renderTargetSizeX * renderTargetSizeY, nullptr, GLTK::Buffer::Usage::StreamDraw);
-            outputTexture.initialize(outputBufferGL, GLTK::SizedInternalFormat::RGBA32F);
-            outputBufferCUDA.initializeFromGLBuffer(cuContext, outputBufferGL.getRawHandle());
+            outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F);
+            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(), cudau::ArraySurface::Enable);
 
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
@@ -2172,6 +2168,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         sw.start();
         curGPUTimer.postProcess.start(curCuStream);
         dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
+        outputArray.beginCUDAAccess(curCuStream, 0);
+        if (frameIndex >= 2)
+            CUDADRV_CHECK(cuSurfObjectDestroy(outputBufferSurface[bufferIndex]));
+        outputBufferSurface[bufferIndex] = outputArray.getSurfaceObject(0);
         kernelPostProcess(curCuStream, dimPostProcess,
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
                           surfViewAccumBuffer.getSurfaceObject(),
@@ -2179,8 +2179,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                           accumBuffer.getBlockBuffer2D(),
 #endif
                           renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
-                          outputBufferCUDA.beginCUDAAccess(curCuStream));
-        outputBufferCUDA.endCUDAAccess(curCuStream);
+                          outputBufferSurface[bufferIndex]);
+        outputArray.endCUDAAccess(curCuStream, 0);
         curGPUTimer.postProcess.stop(curCuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;
@@ -2287,9 +2287,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     frameBuffer.finalize();
 
-    outputBufferCUDA.finalize();
+    outputArray.finalize();
     outputTexture.finalize();
-    outputBufferGL.finalize();
 
     instanceBuffer.finalize();
     iasSceneMem.finalize();

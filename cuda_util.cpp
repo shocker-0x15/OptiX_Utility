@@ -187,30 +187,24 @@ namespace cudau {
         *this = std::move(newBuffer);
     }
 
-    CUdeviceptr Buffer::beginCUDAAccess(CUstream stream) {
+    void Buffer::beginCUDAAccess(CUstream stream) {
         if (m_type != BufferType::GL_Interop)
             throw std::runtime_error("This is not an OpenGL-interop buffer.");
 
-        if (m_type == BufferType::GL_Interop) {
-            CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-            size_t bufferSize = 0;
-            CUDADRV_CHECK(cuGraphicsMapResources(1, &m_cudaGfxResource, stream));
-            CUDADRV_CHECK(cuGraphicsResourceGetMappedPointer(&m_devicePointer, &bufferSize, m_cudaGfxResource));
-        }
-
-        return (CUdeviceptr)m_devicePointer;
+        size_t bufferSize = 0;
+        CUDADRV_CHECK(cuGraphicsMapResources(1, &m_cudaGfxResource, stream));
+        CUDADRV_CHECK(cuGraphicsResourceGetMappedPointer(&m_devicePointer, &bufferSize, m_cudaGfxResource));
     }
 
     void Buffer::endCUDAAccess(CUstream stream) {
         if (m_type != BufferType::GL_Interop)
             throw std::runtime_error("This is not an OpenGL-interop buffer.");
 
-        if (m_type == BufferType::GL_Interop) {
-            CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-            CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
-        }
+        CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
 
     void* Buffer::map() {
@@ -227,14 +221,10 @@ namespace cudau {
             size_t size = (size_t)m_numElements * m_stride;
             m_mappedPointer = new uint8_t[size];
 
-            CUdeviceptr devicePointer = m_devicePointer;
             if (m_type == BufferType::GL_Interop)
-                devicePointer = beginCUDAAccess(0);
+                beginCUDAAccess(0);
 
-            CUDADRV_CHECK(cuMemcpyDtoH(m_mappedPointer, devicePointer, size));
-
-            if (m_type == BufferType::GL_Interop)
-                endCUDAAccess(0);
+            CUDADRV_CHECK(cuMemcpyDtoH(m_mappedPointer, m_devicePointer, size));
 
             return m_mappedPointer;
         }
@@ -256,11 +246,7 @@ namespace cudau {
 
             size_t size = (size_t)m_numElements * m_stride;
 
-            CUdeviceptr devicePointer = m_devicePointer;
-            if (m_type == BufferType::GL_Interop)
-                devicePointer = beginCUDAAccess(0);
-
-            CUDADRV_CHECK(cuMemcpyHtoD(devicePointer, m_mappedPointer, size));
+            CUDADRV_CHECK(cuMemcpyHtoD(m_devicePointer, m_mappedPointer, size));
 
             if (m_type == BufferType::GL_Interop)
                 endCUDAAccess(0);
@@ -307,71 +293,25 @@ namespace cudau {
     }
 
     static CUresourceViewFormat getResourceViewFormat(ArrayElementType elemType, uint32_t numChannels) {
+#define CUDA_UTIL_EXPR0(arrayEnum, BaseType, BitWidth) \
+    case cudau::ArrayElementType::arrayEnum ## BitWidth: \
+        if (numChannels == 1) \
+            return CU_RES_VIEW_FORMAT_ ## BaseType ## _1X ## BitWidth; \
+        else if (numChannels == 2) \
+            return CU_RES_VIEW_FORMAT_ ## BaseType ## _2X ## BitWidth; \
+        else if (numChannels == 4) \
+            return CU_RES_VIEW_FORMAT_ ## BaseType ## _4X ## BitWidth; \
+        break    
+
         switch (elemType) {
-        case cudau::ArrayElementType::UInt8:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_UINT_1X8;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_UINT_2X8;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_UINT_4X8;
-            break;
-        case cudau::ArrayElementType::Int8:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_SINT_1X8;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_SINT_2X8;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_SINT_4X8;
-            break;
-        case cudau::ArrayElementType::UInt16:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_UINT_1X16;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_UINT_2X16;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_UINT_4X16;
-            break;
-        case cudau::ArrayElementType::Int16:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_SINT_1X16;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_SINT_2X16;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_SINT_4X16;
-            break;
-        case cudau::ArrayElementType::UInt32:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_UINT_1X32;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_UINT_2X32;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_UINT_4X32;
-            break;
-        case cudau::ArrayElementType::Int32:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_SINT_1X32;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_SINT_2X32;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_SINT_4X32;
-            break;
-        case cudau::ArrayElementType::Float16:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_FLOAT_1X16;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_FLOAT_2X16;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_FLOAT_4X16;
-            break;
-        case cudau::ArrayElementType::Float32:
-            if (numChannels == 1)
-                return CU_RES_VIEW_FORMAT_FLOAT_1X32;
-            else if (numChannels == 2)
-                return CU_RES_VIEW_FORMAT_FLOAT_2X32;
-            else if (numChannels == 4)
-                return CU_RES_VIEW_FORMAT_FLOAT_4X32;
-            break;
+            CUDA_UTIL_EXPR0(UInt, UINT, 8);
+            CUDA_UTIL_EXPR0(Int, SINT, 8);
+            CUDA_UTIL_EXPR0(UInt, UINT, 16);
+            CUDA_UTIL_EXPR0(Int, SINT, 16);
+            CUDA_UTIL_EXPR0(UInt, UINT, 32);
+            CUDA_UTIL_EXPR0(Int, SINT, 32);
+            CUDA_UTIL_EXPR0(Float, FLOAT, 16);
+            CUDA_UTIL_EXPR0(Float, FLOAT, 32);
         case cudau::ArrayElementType::BC1_UNorm:
             if (numChannels == 2)
                 return CU_RES_VIEW_FORMAT_UNSIGNED_BC1;
@@ -417,13 +357,47 @@ namespace cudau {
         }
         CUDAUAssert_ShouldNotBeCalled();
         return CU_RES_VIEW_FORMAT_NONE;
+
+#undef CUDA_UTIL_EXPR0
     }
 
 
 
+    void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels) {
+#define CUDA_UTIL_EXPR0(glEnum, arrayEnum, numCh) \
+    case glEnum: \
+        *elemType = ArrayElementType::arrayEnum; \
+        *numChannels = numCh; \
+        break
+#define CUDA_UTIL_EXPR1(glEnum, numCh) \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 8,    UInt8,   numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 16,   Int16,   numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 16F,  Float16, numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 32F,  Float32, numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 8UI,  UInt8,   numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 16UI, UInt16,  numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 32UI, UInt32,  numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 8I,   Int8,    numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 16I,  Int16,   numCh); \
+        CUDA_UTIL_EXPR0(GL_ ## glEnum ## 32I,  Int32,   numCh)
+
+        switch (internalFormat) {
+            CUDA_UTIL_EXPR1(R, 1);
+            CUDA_UTIL_EXPR1(RG, 2);
+            CUDA_UTIL_EXPR1(RGBA, 4);
+        default:
+            CUDAUAssert_ShouldNotBeCalled();
+            break;
+        }
+
+#undef CUDA_UTIL_EXPR1
+#undef CUDA_UTIL_EXPR0
+    }
+    
     Array::Array() :
         m_cudaContext(nullptr),
         m_array(0), m_mappedPointers(nullptr), m_mappedArrays(nullptr),
+        m_GLTexID(0), m_cudaGfxResource(nullptr),
         m_surfaceLoadStore(false), m_cubemap(false), m_layered(false),
         m_initialized(false) {
     }
@@ -447,6 +421,8 @@ namespace cudau {
             m_array = b.m_array;
         m_mappedPointers = b.m_mappedPointers;
         m_mappedArrays = b.m_mappedArrays;
+        m_GLTexID = b.m_GLTexID;
+        m_cudaGfxResource = b.m_cudaGfxResource;
         m_surfaceLoadStore = b.m_surfaceLoadStore;
         m_cubemap = b.m_cubemap;
         m_layered = b.m_layered;
@@ -471,6 +447,8 @@ namespace cudau {
             m_array = b.m_array;
         m_mappedPointers = b.m_mappedPointers;
         m_mappedArrays = b.m_mappedArrays;
+        m_GLTexID = b.m_GLTexID;
+        m_cudaGfxResource = b.m_cudaGfxResource;
         m_surfaceLoadStore = b.m_surfaceLoadStore;
         m_cubemap = b.m_cubemap;
         m_layered = b.m_layered;
@@ -483,7 +461,7 @@ namespace cudau {
     
     void Array::initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
                            uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels,
-                           bool surfaceLoadStore, bool cubemap, bool layered) {
+                           bool surfaceLoadStore, bool cubemap, bool layered, uint32_t glTexID) {
         if (m_initialized)
             throw std::runtime_error("Array is already initialized.");
         if (numChannels != 1 && numChannels != 2 && numChannels != 4)
@@ -581,10 +559,17 @@ namespace cudau {
         arrayDesc.NumChannels = numChannels;
         m_stride *= numChannels;
 
-        if (m_numMipmapLevels > 1)
-            CUDADRV_CHECK(cuMipmappedArrayCreate(&m_mipmappedArray, &arrayDesc, numMipmapLevels));
-        else
-            CUDADRV_CHECK(cuArray3DCreate(&m_array, &arrayDesc));
+        if (glTexID != 0) {
+            uint32_t flags = surfaceLoadStore ? CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST : CU_GRAPHICS_REGISTER_FLAGS_READ_ONLY;
+            CUDADRV_CHECK(cuGraphicsGLRegisterImage(&m_cudaGfxResource, glTexID, GL_TEXTURE_2D, flags));
+            m_GLTexID = glTexID;
+        }
+        else {
+            if (m_numMipmapLevels > 1)
+                CUDADRV_CHECK(cuMipmappedArrayCreate(&m_mipmappedArray, &arrayDesc, numMipmapLevels));
+            else
+                CUDADRV_CHECK(cuArray3DCreate(&m_array, &arrayDesc));
+        }
 
         m_mappedPointers = new void*[m_numMipmapLevels];
         m_mappedArrays = new CUarray[m_numMipmapLevels];
@@ -605,10 +590,16 @@ namespace cudau {
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-        if (m_numMipmapLevels > 1)
-            CUDADRV_CHECK(cuMipmappedArrayDestroy(m_mipmappedArray));
-        else
-            CUDADRV_CHECK(cuArrayDestroy(m_array));
+        if (m_GLTexID != 0) {
+            CUDADRV_CHECK(cuGraphicsUnregisterResource(m_cudaGfxResource));
+            m_GLTexID = 0;
+        }
+        else {
+            if (m_numMipmapLevels > 1)
+                CUDADRV_CHECK(cuMipmappedArrayDestroy(m_mipmappedArray));
+            else
+                CUDADRV_CHECK(cuArrayDestroy(m_array));
+        }
 
         m_initialized = false;
     }
@@ -630,7 +621,7 @@ namespace cudau {
 
         Array newArray;
         newArray.initialize(m_cudaContext, m_elemType, m_numChannels, width, height, m_depth, m_numMipmapLevels,
-                            m_surfaceLoadStore, m_cubemap, m_layered);
+                            m_surfaceLoadStore, m_cubemap, m_layered, 0);
 
         size_t sizePerRow = std::min(m_width, width) * static_cast<size_t>(m_stride);
 
@@ -658,6 +649,26 @@ namespace cudau {
 
     void Array::resize(uint32_t width, uint32_t height, uint32_t depth) {
         CUDAUAssert_NotImplemented();
+    }
+
+    void Array::beginCUDAAccess(CUstream stream, uint32_t mipmapLevel) {
+        if (m_GLTexID == 0)
+            throw std::runtime_error("This is not an OpenGL-interop buffer.");
+
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+        CUDADRV_CHECK(cuGraphicsMapResources(1, &m_cudaGfxResource, stream));
+        CUDADRV_CHECK(cuGraphicsSubResourceGetMappedArray(&m_mappedArrays[mipmapLevel], m_cudaGfxResource, 0, mipmapLevel));
+    }
+
+    void Array::endCUDAAccess(CUstream stream, uint32_t mipmapLevel) {
+        if (m_GLTexID == 0)
+            throw std::runtime_error("This is not an OpenGL-interop buffer.");
+
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+
+        m_mappedArrays[mipmapLevel] = nullptr;
+        CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
 
     void* Array::map(uint32_t mipmapLevel) {
