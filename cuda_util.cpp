@@ -91,16 +91,12 @@ namespace cudau {
 
         // If using GL Interop, expect that the active device is also the display device.
         if (m_type == BufferType::GL_Interop) {
-#if defined(CUDA_UTIL_USE_GL_INTEROP)
             CUdevice currentDevice;
             int32_t isDisplayDevice;
             CUDADRV_CHECK(cuCtxGetDevice(&currentDevice));
             CUDADRV_CHECK(cuDeviceGetAttribute(&isDisplayDevice, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, currentDevice));
             if (!isDisplayDevice)
                 throw std::runtime_error("GL Interop is only available on the display device.");
-#else
-            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
-#endif
         }
 
         m_numElements = numElements;
@@ -111,9 +107,11 @@ namespace cudau {
         if (m_type == BufferType::Device || m_type == BufferType::P2P)
             CUDADRV_CHECK(cuMemAlloc(&m_devicePointer, m_numElements * m_stride));
 
-#if defined(CUDA_UTIL_USE_GL_INTEROP)
         if (m_type == BufferType::GL_Interop)
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
             CUDADRV_CHECK(cuGraphicsGLRegisterBuffer(&m_cudaGfxResource, m_GLBufferID, CU_GRAPHICS_REGISTER_FLAGS_NONE));
+#else
+            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
 #endif
 
         if (m_type == BufferType::ZeroCopy) {
