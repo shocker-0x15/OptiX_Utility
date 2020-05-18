@@ -876,32 +876,32 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, "__raygen__pathtracing");
+    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathtracing"));
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, "__miss__searchRay");
+    optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("searchRay"));
     optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
     // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
     // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
-    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse", emptyModule, nullptr, emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_specular", emptyModule, nullptr, emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, "__anyhit__visibility", emptyModule, nullptr);
+    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr, emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr, emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"), emptyModule, nullptr);
 
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
-    optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, "__closesthit__shading_diffuse",
+    optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("shading_diffuse"),
                                                                                                 emptyModule, nullptr,
-                                                                                                moduleOptiX, "__intersection__custom_primitive");
+                                                                                                moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
     optixu::ProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr,
-                                                                                             moduleOptiX, "__anyhit__visibility",
-                                                                                             moduleOptiX, "__intersection__custom_primitive");
+                                                                                             moduleOptiX, RT_AH_NAME_STR("visibility"),
+                                                                                             moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
 
     uint32_t callableProgramSampleTextureIndex = 0;
-    optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__sampleTexture", emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointTriangleIndex = 1;
-    optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__decodeHitPointTriangle", emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointSphereIndex = 2;
-    optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableGroup(moduleOptiX, "__direct_callable__decodeHitPointSphere", emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
     pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);

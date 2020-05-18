@@ -34,7 +34,7 @@ struct VisibilityRayPayload {
 
 
 
-RT_PROGRAM void __raygen__pathtracing() {
+RT_PROGRAM void RT_RG_NAME(pathtracing)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     PCG32RNG rng = plp.rngBuffer[launchIndex];
@@ -88,7 +88,7 @@ RT_PROGRAM void __raygen__pathtracing() {
 #endif
 }
 
-RT_PROGRAM void __miss__searchRay() {
+RT_PROGRAM void RT_MS_NAME(searchRay)() {
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
     //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
@@ -105,14 +105,14 @@ RT_PROGRAM void __miss__searchRay() {
 
 using ProgSampleTexture = optixu::DirectCallableProgramID<float3(uint32_t, float2)>;
 
-RT_CALLABLE_PROGRAM float3 __direct_callable__sampleTexture(uint32_t texID, float2 texCoord) {
+RT_CALLABLE_PROGRAM float3 RT_DC_NAME(sampleTexture)(uint32_t texID, float2 texCoord) {
     CUtexObject texture = plp.textures[texID];
     float4 texValue = tex2DLod<float4>(texture, texCoord.x, texCoord.y, 0.0f);
     return make_float3(texValue.x, texValue.y, texValue.z);
 }
 
-RT_CALLABLE_PROGRAM void __direct_callable__decodeHitPointTriangle(const HitPointParameter &hitPointParam, const GeometryData &geom,
-                                                                   float3* p, float3* sn, float2* texCoord) {
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParameter &hitPointParam, const GeometryData &geom,
+                                                            float3* p, float3* sn, float2* texCoord) {
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
     const Vertex &v1 = geom.vertexBuffer[tri.index1];
@@ -127,7 +127,7 @@ RT_CALLABLE_PROGRAM void __direct_callable__decodeHitPointTriangle(const HitPoin
 
 
 
-RT_PROGRAM void __closesthit__shading_diffuse() {
+RT_PROGRAM void RT_CH_NAME(shading_diffuse)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const MaterialData &mat = plp.materialData[sbtr.materialData];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
@@ -246,7 +246,7 @@ RT_PROGRAM void __closesthit__shading_diffuse() {
 // EN: When implementing a moderately complex path tracing,
 //     it appears better to basically use a common program and callable programs for different behaviors,
 //     but here define another program on purpose for demonstration.
-RT_PROGRAM void __closesthit__shading_specular() {
+RT_PROGRAM void RT_CH_NAME(shading_specular)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const MaterialData &mat = plp.materialData[sbtr.materialData];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
@@ -289,7 +289,7 @@ RT_PROGRAM void __closesthit__shading_specular() {
     payload->terminate = false;
 }
 
-RT_PROGRAM void __anyhit__visibility() {
+RT_PROGRAM void RT_AH_NAME(visibility)() {
     // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
     // EN: The signature used in setPayloads() must match the one replacing the part of payloads
@@ -302,7 +302,7 @@ RT_PROGRAM void __anyhit__visibility() {
 
 
 
-RT_PROGRAM void __intersection__custom_primitive() {
+RT_PROGRAM void RT_IS_NAME(custom_primitive)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     uint32_t primIndex = optixGetPrimitiveIndex();
@@ -334,8 +334,8 @@ RT_PROGRAM void __intersection__custom_primitive() {
     optixu::reportIntersection(t, isFront ? 0 : 1, theta, phi);
 }
 
-RT_CALLABLE_PROGRAM void __direct_callable__decodeHitPointSphere(const HitPointParameter &hitPointParam, const GeometryData &geom,
-                                                                 float3* p, float3* sn, float2* texCoord) {
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParameter &hitPointParam, const GeometryData &geom,
+                                                          float3* p, float3* sn, float2* texCoord) {
     const SphereParameter &param = geom.paramBuffer[hitPointParam.primIndex];
     float theta = hitPointParam.b0;
     float phi = hitPointParam.b1;
@@ -348,7 +348,7 @@ RT_CALLABLE_PROGRAM void __direct_callable__decodeHitPointSphere(const HitPointP
 
 
 
-RT_PROGRAM void __exception__print() {
+RT_PROGRAM void RT_EX_NAME(print)() {
     uint3 launchIndex = optixGetLaunchIndex();
     int32_t code = optixGetExceptionCode();
     printf("(%u, %u, %u): Exception: %u\n", launchIndex.x, launchIndex.y, launchIndex.z, code);
