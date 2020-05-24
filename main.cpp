@@ -511,9 +511,7 @@ public:
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
         m_vertexBuffer.initialize(m_cudaContext, cudau::BufferType::Device, numVertices);
-        auto verticesOnHost = m_vertexBuffer.map();
-        std::copy_n(vertices, numVertices, verticesOnHost);
-        m_vertexBuffer.unmap();
+        m_vertexBuffer.transfer(vertices, numVertices);
     }
 
     const cudau::TypedBuffer<Shared::Vertex> &getVertexBuffer() const {
@@ -528,9 +526,7 @@ public:
         auto triangleBuffer = new cudau::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
         triangleBuffer->initialize(m_cudaContext, cudau::BufferType::Device, numTriangles);
-        Shared::Triangle* trianglesOnHost = triangleBuffer->map();
-        std::copy_n(triangles, numTriangles, trianglesOnHost);
-        triangleBuffer->unmap();
+        triangleBuffer->transfer(triangles, numTriangles);
 
         group.material = material;
 
