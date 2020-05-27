@@ -325,9 +325,12 @@ namespace optixu {
             };
             struct {
                 CUdeviceptr primitiveAabbBufferArray[1];
-                TypedBuffer<OptixAabb>* primitiveAABBBuffer;
+                Buffer* primitiveAABBBuffer;
             };
         };
+        uint32_t offsetInBytesForPrimitives;
+        uint32_t numPrimitives;
+        uint32_t primitiveIndexOffset;
         TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 

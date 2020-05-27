@@ -34,7 +34,6 @@
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
 #include <cudaGL.h>
 #endif
-#include <vector_types.h>
 
 #undef min
 #undef max
@@ -87,6 +86,13 @@
 
 namespace cudau {
     void devPrintf(const char* fmt, ...);
+
+
+    
+    struct dim3 {
+        uint32_t x, y, z;
+        dim3(uint32_t xx = 1, uint32_t yy = 1, uint32_t zz = 1) : x(xx), y(yy), z(zz) {}
+    };
 
 
 
@@ -298,8 +304,15 @@ namespace cudau {
         void transfer(const T* srcValues, uint32_t numValues) {
             CUDAUAssert(sizeof(T) * numValues <= static_cast<size_t>(m_stride) * m_numElements,
                         "Too large transfer.");
-            auto values = map<T>();
-            std::copy_n(srcValues, numValues, values);
+            auto dstValues = map<T>();
+            std::copy_n(srcValues, numValues, dstValues);
+            unmap();
+        }
+        template <typename T>
+        void fill(const T &value) {
+            size_t numValues = (static_cast<size_t>(m_stride) * m_numElements) / sizeof(T);
+            auto dstValues = map<T>();
+            std::fill_n(dstValues, numValues, value);
             unmap();
         }
 
@@ -361,6 +374,9 @@ namespace cudau {
         }
         void transfer(const T* srcValues, uint32_t numValues) {
             Buffer::transfer<T>(srcValues, numValues);
+        }
+        void fill(const T &value) {
+            Buffer::fill<T>(value);
         }
 
         T operator[](uint32_t idx) {

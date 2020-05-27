@@ -161,9 +161,10 @@ namespace optixu {
             input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
             OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
 
-            aabbArray.aabbBuffers = primitiveAabbBufferArray;
-            aabbArray.numPrimitives = primitiveAABBBuffer->numElements();
-            aabbArray.primitiveIndexOffset = 0;
+            aabbArray.aabbBuffers = primitiveAabbBufferArray + offsetInBytesForPrimitives;
+            aabbArray.numPrimitives = std::min<uint32_t>(primitiveAABBBuffer->numElements(), numPrimitives);
+            aabbArray.strideInBytes = primitiveAABBBuffer->stride();
+            aabbArray.primitiveIndexOffset = primitiveIndexOffset;
 
             aabbArray.numSbtRecords = buildInputFlags.size();
             if (aabbArray.numSbtRecords > 1) {
@@ -189,11 +190,11 @@ namespace optixu {
             triArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
             triArray.vertexStrideInBytes = vertexBuffer->stride();
 
-            triArray.indexBuffer = triangleBuffer->getCUdeviceptr();
-            triArray.numIndexTriplets = triangleBuffer->numElements();
+            triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
+            triArray.numIndexTriplets = std::min<uint32_t>(triangleBuffer->numElements(), numPrimitives);
             triArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
             triArray.indexStrideInBytes = triangleBuffer->stride();
-            triArray.primitiveIndexOffset = 0;
+            triArray.primitiveIndexOffset = primitiveIndexOffset;
 
             triArray.numSbtRecords = buildInputFlags.size();
             if (triArray.numSbtRecords > 1) {
@@ -275,15 +276,23 @@ namespace optixu {
         m->vertexBufferArray[0] = vertexBuffer->getCUdeviceptr();
     }
 
-    void GeometryInstance::setTriangleBuffer(Buffer* triangleBuffer) const {
+    void GeometryInstance::setTriangleBuffer(Buffer* triangleBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
         THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->triangleBuffer = triangleBuffer;
+        m->offsetInBytesForPrimitives = offsetInBytes;
+        m->numPrimitives = numPrimitives;
     }
 
-    void GeometryInstance::setCustomPrimitiveAABBBuffer(TypedBuffer<OptixAabb>* primitiveAABBBuffer) const {
+    void GeometryInstance::setCustomPrimitiveAABBBuffer(Buffer* primitiveAABBBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
         THROW_RUNTIME_ERROR(m->forCustomPrimitives, "This geometry instance was created for triangles.");
         m->primitiveAABBBuffer = primitiveAABBBuffer;
         m->primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr();
+        m->offsetInBytesForPrimitives = offsetInBytes;
+        m->numPrimitives = numPrimitives;
+    }
+
+    void GeometryInstance::setPrimitiveIndexOffset(uint32_t offset) const {
+        m->primitiveIndexOffset = offset;
     }
 
     void GeometryInstance::setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const {
@@ -549,6 +558,10 @@ namespace optixu {
         return m->isReady();
     }
 
+    OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
+        return m->getHandle();
+    }
+
 
 
     void Instance::Priv::fillInstance(OptixInstance* instance) const {
@@ -641,6 +654,8 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const {
+        THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
+                            "Shader binding table layout generation has not been done.");
         m->instances.resize(m->children.size());
         uint32_t childIdx = 0;
         for (const _Instance* child : m->children)
@@ -681,8 +696,6 @@ namespace optixu {
                             "Size of the given scratch buffer is not enough.");
         THROW_RUNTIME_ERROR(instanceBuffer.numElements() >= m->instances.size(),
                             "Size of the given instance buffer is not enough.");
-        THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
-                            "Shader binding table layout generation has not been done.");
 
         // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
         //     インスタンス情報を更新する処理をここにも書いておく必要がある。
@@ -798,6 +811,10 @@ namespace optixu {
         return m->isReady();
     }
 
+    OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {
+        return m->getHandle();
+    }
+
 
 
     void Pipeline::Priv::createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group) {
@@ -820,7 +837,8 @@ namespace optixu {
     void Pipeline::Priv::setupShaderBindingTable() {
         if (!sbtAllocDone) {
             missRecords.resize(numMissRayTypes, missRecords.stride());
-            callableRecords.resize(callablePrograms.size(), callableRecords.stride());
+            if (callablePrograms.size())
+                callableRecords.resize(callablePrograms.size(), callableRecords.stride());
 
             sbtAllocDone = true;
             sbtIsUpToDate = false;
@@ -870,9 +888,9 @@ namespace optixu {
                 sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupSBTRecord);
                 sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / sizeof(HitGroupSBTRecord);
 
-                sbt.callablesRecordBase = callableRecords.getCUdeviceptr();
+                sbt.callablesRecordBase = callablePrograms.size() ? callableRecords.getCUdeviceptr() : 0;
                 sbt.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
-                sbt.callablesRecordCount = callableRecords.numElements();
+                sbt.callablesRecordCount = callablePrograms.size();
             }
 
             sbtIsUpToDate = true;
@@ -1177,12 +1195,17 @@ namespace optixu {
 
     void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,
                                 uint32_t directCallableStackSizeFromState,
-                                uint32_t continuationStackSize) const {
+                                uint32_t continuationStackSize,
+                                uint32_t maxTraversableGraphDepth) const {
+        if (m->pipelineCompileOptions.traversableGraphFlags & OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING)
+            maxTraversableGraphDepth = 2;
+        else if (m->pipelineCompileOptions.traversableGraphFlags == OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS)
+            maxTraversableGraphDepth = 1;
         OPTIX_CHECK(optixPipelineSetStackSize(m->rawPipeline,
                                               directCallableStackSizeFromTraversal,
                                               directCallableStackSizeFromState,
                                               continuationStackSize,
-                                              m->maxTraceDepth));
+                                              maxTraversableGraphDepth));
     }
 
 

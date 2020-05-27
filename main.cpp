@@ -947,21 +947,21 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::max(std::max(cssCHSearchRayDiffuse + cssAHVisibilityRay,
                           cssCHSearchRaySpecular),
                  cssMS);
-    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize);
+    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 2);
 
     CUmodule modulePostProcess;
     CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str()));
-    cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", dim3(8, 8), 0);
+    cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", cudau::dim3(8, 8), 0);
 
     CUmodule moduleDeform;
     CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "ptxes/deform.ptx").string().c_str()));
-    cudau::Kernel kernelDeform(moduleDeform, "deform", dim3(32), 0);
-    cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", dim3(32), 0);
-    cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", dim3(32), 0);
+    cudau::Kernel kernelDeform(moduleDeform, "deform", cudau::dim3(32), 0);
+    cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", cudau::dim3(32), 0);
+    cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", cudau::dim3(32), 0);
 
     CUmodule moduleBoundingBoxProgram;
     CUDADRV_CHECK(cuModuleLoad(&moduleBoundingBoxProgram, (getExecutableDirectory() / "ptxes/sphere_bounding_box.ptx").string().c_str()));
-    cudau::Kernel kernelCalculateBoundingBoxesForSpheres(moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", dim3(32), 0);
+    cudau::Kernel kernelCalculateBoundingBoxesForSpheres(moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", cudau::dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -1472,7 +1472,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     // JP: カスタムプリミティブのAABBを計算するカーネルを実行。
     // EN: Execute a kernel to compute AABBs of custom primitives.
-    dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
+    cudau::dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
     kernelCalculateBoundingBoxesForSpheres(cuStream[0], dimBB,
                                            customPrimParameters.getDevicePointer(), customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
 
@@ -1629,7 +1629,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         buffer.map();
         for (int y = 0; y < renderTargetSizeY; ++y)
             for (int x = 0; x < renderTargetSizeX; ++x)
-                buffer[make_uint2(x, y)].setState(rng());
+                buffer(x, y).setState(rng());
         buffer.unmap();
     };
     initializeRNGSeeds(rngBuffer);
@@ -2073,12 +2073,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             // JP: ジオメトリの非剛体変形。
             // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(curCuStream);
-            dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
+            cudau::dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
             kernelDeform(curCuStream, dimDeform,
                          orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
                          0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
-            dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
+            cudau::dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
             kernelAccumulateVertexNormals(curCuStream, dimAccum,
                                           meshObject.getVertexBuffer().getDevicePointer(),
                                           triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
@@ -2163,7 +2163,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // Post Process
         sw.start();
         curGPUTimer.postProcess.start(curCuStream);
-        dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
+        cudau::dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
         outputArray.beginCUDAAccess(curCuStream, 0);
         if (frameIndex >= 2)
             CUDADRV_CHECK(cuSurfObjectDestroy(outputBufferSurface[bufferIndex]));

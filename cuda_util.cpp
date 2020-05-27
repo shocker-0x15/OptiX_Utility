@@ -696,9 +696,9 @@ namespace cudau {
         if (m_numMipmapLevels > 1)
             CUDADRV_CHECK(cuMipmappedArrayGetLevel(&m_mappedArrays[mipmapLevel], m_mipmappedArray, mipmapLevel));
 
-        uint32_t width = std::max<size_t>(1, m_width >> mipmapLevel);
-        uint32_t height = std::max<size_t>(1, m_height >> mipmapLevel);
-        uint32_t depth = std::max<size_t>(1, m_depth);
+        uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
+        uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
+        uint32_t depth = std::max<uint32_t>(1, m_depth);
         size_t sizePerRow = width * static_cast<size_t>(m_stride);
         size_t size = depth * height * sizePerRow;
         m_mappedPointers[mipmapLevel] = new uint8_t[size];
@@ -737,9 +737,9 @@ namespace cudau {
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
 
-        uint32_t width = std::max<size_t>(1, m_width >> mipmapLevel);
-        uint32_t height = std::max<size_t>(1, m_height >> mipmapLevel);
-        uint32_t depth = std::max<size_t>(1, m_depth);
+        uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
+        uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
+        uint32_t depth = std::max<uint32_t>(1, m_depth);
         size_t sizePerRow = width * static_cast<size_t>(m_stride);
 
         CUDA_MEMCPY3D params = {};

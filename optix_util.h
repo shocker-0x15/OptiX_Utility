@@ -227,6 +227,7 @@ namespace optixu {
         uint32_t m_height;
         uint32_t m_numXBlocks;
 
+#if defined(__CUDA_ARCH__)
         RT_FUNCTION constexpr uint32_t calcLinearIndex(uint2 idx) const {
             constexpr uint32_t blockWidth = 1 << log2BlockWidth;
             constexpr uint32_t mask = blockWidth - 1;
@@ -238,6 +239,7 @@ namespace optixu {
             uint32_t linearIndexInBlock = idxYInBlock * blockWidth + idxXInBlock;
             return blockOffset + linearIndexInBlock;
         }
+#endif
 
     public:
         RT_FUNCTION BlockBuffer2D() {}
@@ -248,12 +250,14 @@ namespace optixu {
             m_numXBlocks = ((width + mask) & ~mask) >> log2BlockWidth;
         }
 
+#if defined(__CUDA_ARCH__)
         RT_FUNCTION const T &operator[](uint2 idx) const {
             return m_rawBuffer[calcLinearIndex(idx)];
         }
         RT_FUNCTION T &operator[](uint2 idx) {
             return m_rawBuffer[calcLinearIndex(idx)];
         }
+#endif
     };
     
     
@@ -267,14 +271,14 @@ namespace optixu {
         uint32_t m_numXBlocks;
         T* m_mappedPointer;
 
-        constexpr uint32_t calcLinearIndex(uint2 idx) const {
+        constexpr uint32_t calcLinearIndex(uint32_t x, uint32_t y) const {
             constexpr uint32_t blockWidth = 1 << log2BlockWidth;
             constexpr uint32_t mask = blockWidth - 1;
-            uint32_t blockIdxX = idx.x >> log2BlockWidth;
-            uint32_t blockIdxY = idx.y >> log2BlockWidth;
+            uint32_t blockIdxX = x >> log2BlockWidth;
+            uint32_t blockIdxY = y >> log2BlockWidth;
             uint32_t blockOffset = (blockIdxY * m_numXBlocks + blockIdxX) * (blockWidth * blockWidth);
-            uint32_t idxXInBlock = idx.x & mask;
-            uint32_t idxYInBlock = idx.y & mask;
+            uint32_t idxXInBlock = x & mask;
+            uint32_t idxYInBlock = y & mask;
             uint32_t linearIndexInBlock = idxYInBlock * blockWidth + idxXInBlock;
             return blockOffset + linearIndexInBlock;
         }
@@ -371,11 +375,11 @@ namespace optixu {
             m_rawBuffer.unmap();
             m_mappedPointer = nullptr;
         }
-        const T &operator[](uint2 idx) const {
-            return m_mappedPointer[calcLinearIndex(idx)];
+        const T &operator()(uint32_t x, uint32_t y) const {
+            return m_mappedPointer[calcLinearIndex(x, y)];
         }
-        T &operator[](uint2 idx) {
-            return m_mappedPointer[calcLinearIndex(idx)];
+        T &operator()(uint32_t x, uint32_t y) {
+            return m_mappedPointer[calcLinearIndex(x, y)];
         }
 
         BlockBuffer2D<T, log2BlockWidth> getBlockBuffer2D() const {
@@ -757,8 +761,9 @@ private: \
         void destroy();
 
         void setVertexBuffer(Buffer* vertexBuffer) const;
-        void setTriangleBuffer(Buffer* triangleBuffer) const;
-        void setCustomPrimitiveAABBBuffer(TypedBuffer<OptixAabb>* primitiveAABBBuffer) const;
+        void setTriangleBuffer(Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        void setCustomPrimitiveAABBBuffer(Buffer* primitiveAABBBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
 
         void setUserData(uint32_t data) const;
@@ -790,6 +795,7 @@ private: \
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
+        OptixTraversableHandle getHandle() const;
     };
 
 
@@ -834,6 +840,7 @@ private: \
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
+        OptixTraversableHandle getHandle() const;
     };
 
 
@@ -876,7 +883,8 @@ private: \
 
         void setStackSize(uint32_t directCallableStackSizeFromTraversal,
                           uint32_t directCallableStackSizeFromState,
-                          uint32_t continuationStackSize) const;
+                          uint32_t continuationStackSize,
+                          uint32_t maxTraversableGraphDepth) const;
     };
 
 
