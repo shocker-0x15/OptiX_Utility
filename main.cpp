@@ -993,20 +993,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
                                        width, height, 1/*mipCount*/);
-        if (arrayCheckerBoard.getNumMipmapLevels() > 1) {
-            // Use all the mip levels.
-            for (int i = 0; i < mipCount; ++i) {
-                auto data = arrayCheckerBoard.map<uint8_t>(i);
-                std::copy_n(ddsData[i], sizes[i], data);
-                arrayCheckerBoard.unmap(i);
-            }
-        }
-        else {
-            // Use mip-level 0 only.
-            auto data = arrayCheckerBoard.map<uint8_t>();
-            std::copy_n(ddsData[0], sizes[0], data);
-            arrayCheckerBoard.unmap();
-        }
+        for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
+            arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
 
         DDS::free(ddsData, mipCount, sizes);
 #else
@@ -1039,20 +1027,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
                                width, height, 1/*mipCount*/);
-        if (arrayGrid.getNumMipmapLevels() > 1) {
-            // Use all the mip levels.
-            for (int i = 0; i < mipCount; ++i) {
-                auto data = arrayGrid.map<uint8_t>(i);
-                std::copy_n(ddsData[i], sizes[i], data);
-                arrayGrid.unmap(i);
-            }
-        }
-        else {
-            // Use mip-level 0 only.
-            auto data = arrayGrid.map<uint8_t>();
-            std::copy_n(ddsData[0], sizes[0], data);
-            arrayGrid.unmap();
-        }
+        for (int i = 0; i < arrayGrid.getNumMipmapLevels(); ++i)
+            arrayGrid.transfer<uint8_t>(ddsData[i], sizes[i], i);
 
         DDS::free(ddsData, mipCount, sizes);
 #else

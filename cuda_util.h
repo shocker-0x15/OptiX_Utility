@@ -577,6 +577,29 @@ namespace cudau {
             return reinterpret_cast<T*>(map(mipmapLevel));
         }
         void unmap(uint32_t mipmapLevel = 0);
+        template <typename T>
+        void transfer(const T* srcValues, uint32_t numValues, uint32_t mipmapLevel = 0) {
+            uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
+            uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
+            uint32_t depth = std::max<uint32_t>(1, m_depth);
+            size_t size = static_cast<size_t>(m_stride) * depth * height * width;
+            CUDAUAssert(sizeof(T) * numValues <= size,
+                        "Too large transfer.");
+            auto dstValues = map<T>(mipmapLevel);
+            std::copy_n(srcValues, numValues, dstValues);
+            unmap();
+        }
+        template <typename T>
+        void fill(const T &value, uint32_t mipmapLevel = 0) {
+            uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
+            uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
+            uint32_t depth = std::max<uint32_t>(1, m_depth);
+            size_t size = static_cast<size_t>(m_stride) * depth * height * width;
+            size_t numValues = size / sizeof(T);
+            auto dstValues = map<T>(mipmapLevel);
+            std::fill_n(dstValues, numValues, value);
+            unmap();
+        }
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
 
