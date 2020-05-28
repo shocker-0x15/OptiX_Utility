@@ -7,7 +7,6 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
-- スタックサイズ調整。
 - HitGroup以外のプログラムの非同期更新。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
