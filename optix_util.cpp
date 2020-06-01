@@ -161,8 +161,8 @@ namespace optixu {
             input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
             OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
 
-            aabbArray.aabbBuffers = primitiveAabbBufferArray + offsetInBytesForPrimitives;
-            aabbArray.numPrimitives = std::min<uint32_t>(primitiveAABBBuffer->numElements(), numPrimitives);
+            aabbArray.aabbBuffers = primitiveAabbBufferArray;
+            aabbArray.numPrimitives = numPrimitives;
             aabbArray.strideInBytes = primitiveAABBBuffer->stride();
             aabbArray.primitiveIndexOffset = primitiveIndexOffset;
 
@@ -186,12 +186,12 @@ namespace optixu {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
             triArray.vertexBuffers = vertexBufferArray;
-            triArray.numVertices = vertexBuffer->numElements();
+            triArray.numVertices = numVertices;
             triArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
             triArray.vertexStrideInBytes = vertexBuffer->stride();
 
             triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
-            triArray.numIndexTriplets = std::min<uint32_t>(triangleBuffer->numElements(), numPrimitives);
+            triArray.numIndexTriplets = numPrimitives;
             triArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
             triArray.indexStrideInBytes = triangleBuffer->stride();
             triArray.primitiveIndexOffset = primitiveIndexOffset;
@@ -231,7 +231,7 @@ namespace optixu {
 
             triArray.vertexBuffers = vertexBufferArray;
 
-            triArray.indexBuffer = triangleBuffer->getCUdeviceptr();
+            triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
 
             if (triArray.numSbtRecords > 1) {
                 optixAssert_NotImplemented();
@@ -270,32 +270,34 @@ namespace optixu {
         m = nullptr;
     }
 
-    void GeometryInstance::setVertexBuffer(Buffer* vertexBuffer) const {
+    void GeometryInstance::setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes, uint32_t numVertices) const {
         THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->vertexBuffer = vertexBuffer;
-        m->vertexBufferArray[0] = vertexBuffer->getCUdeviceptr();
+        m->vertexBufferArray[0] = vertexBuffer->getCUdeviceptr() + offsetInBytes;
+        m->offsetInBytesForVertices = offsetInBytes;
+        m->numVertices = std::min<uint32_t>(vertexBuffer->numElements(), numVertices);
     }
 
-    void GeometryInstance::setTriangleBuffer(Buffer* triangleBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
+    void GeometryInstance::setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
         THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->triangleBuffer = triangleBuffer;
         m->offsetInBytesForPrimitives = offsetInBytes;
-        m->numPrimitives = numPrimitives;
+        m->numPrimitives = std::min<uint32_t>(triangleBuffer->numElements(), numPrimitives);
     }
 
-    void GeometryInstance::setCustomPrimitiveAABBBuffer(Buffer* primitiveAABBBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
+    void GeometryInstance::setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
         THROW_RUNTIME_ERROR(m->forCustomPrimitives, "This geometry instance was created for triangles.");
         m->primitiveAABBBuffer = primitiveAABBBuffer;
-        m->primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr();
+        m->primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytes;
         m->offsetInBytesForPrimitives = offsetInBytes;
-        m->numPrimitives = numPrimitives;
+        m->numPrimitives = std::min<uint32_t>(primitiveAABBBuffer->numElements(), numPrimitives);;
     }
 
     void GeometryInstance::setPrimitiveIndexOffset(uint32_t offset) const {
         m->primitiveIndexOffset = offset;
     }
 
-    void GeometryInstance::setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const {
+    void GeometryInstance::setNumMaterials(uint32_t numMaterials, const TypedBuffer<uint32_t>* matIdxOffsetBuffer) const {
         THROW_RUNTIME_ERROR(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
         THROW_RUNTIME_ERROR((numMaterials == 1) != (matIdxOffsetBuffer != nullptr),
                             "Material index offset buffer must be provided when multiple materials are used.");

@@ -320,18 +320,20 @@ namespace optixu {
         union {
             struct {
                 CUdeviceptr vertexBufferArray[1];
-                Buffer* vertexBuffer;
-                Buffer* triangleBuffer;
+                const Buffer* vertexBuffer;
+                const Buffer* triangleBuffer;
+                uint32_t offsetInBytesForVertices;
+                uint32_t numVertices;
             };
             struct {
                 CUdeviceptr primitiveAabbBufferArray[1];
-                Buffer* primitiveAABBBuffer;
+                const Buffer* primitiveAABBBuffer;
             };
         };
         uint32_t offsetInBytesForPrimitives;
         uint32_t numPrimitives;
         uint32_t primitiveIndexOffset;
-        TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
+        const TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 
         std::vector<std::vector<const _Material*>> materialSets;

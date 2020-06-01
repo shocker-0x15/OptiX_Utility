@@ -75,10 +75,12 @@ AS/SBT Layoutのdirty状態はUtil側で検知できるdirty状態をカーネ�
 #   define RT_FUNCTION __forceinline__ __device__
 #   define RT_PROGRAM extern "C" __global__
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
+#   define RT_CONSTANT_MEMORY __constant__
 #else
 #   define RT_FUNCTION
 #   define RT_PROGRAM
 #   define RT_CALLABLE_PROGRAM
+#   define RT_CONSTANT_MEMORY
 #endif
 
 #define RT_RG_NAME(name) __raygen__ ## name
@@ -759,11 +761,11 @@ private: \
     public:
         void destroy();
 
-        void setVertexBuffer(Buffer* vertexBuffer) const;
-        void setTriangleBuffer(Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
-        void setCustomPrimitiveAABBBuffer(Buffer* primitiveAABBBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        void setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
+        void setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
-        void setNumMaterials(uint32_t numMaterials, TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
+        void setNumMaterials(uint32_t numMaterials, const TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
 
         void setUserData(uint32_t data) const;
 
