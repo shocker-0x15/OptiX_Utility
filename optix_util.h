@@ -931,5 +931,10 @@ private: \
         void getStackSize(OptixStackSizes* sizes) const;
     };
 
+
+
+#undef OPTIX_COMMON_FUNCTIONS
+#undef OPTIX_PIMPL
+
 #endif // #if !defined(__CUDA_ARCH__)
 }
