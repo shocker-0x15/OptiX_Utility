@@ -154,7 +154,7 @@ namespace optixu {
 
 
 
-    void GeometryInstance::Priv::fillBuildInput(OptixBuildInput* input) const {
+    void GeometryInstance::Priv::fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const {
         *input = OptixBuildInput{};
 
         if (forCustomPrimitives) {
@@ -209,13 +209,13 @@ namespace optixu {
                 triArray.sbtIndexOffsetStrideInBytes = 0; // No effect
             }
 
-            triArray.preTransform = 0;
+            triArray.preTransform = preTransform;
 
             triArray.flags = buildInputFlags.data();
         }
     }
 
-    void GeometryInstance::Priv::updateBuildInput(OptixBuildInput* input) const {
+    void GeometryInstance::Priv::updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const {
         if (forCustomPrimitives) {
             OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
 
@@ -237,6 +237,8 @@ namespace optixu {
                 optixAssert_NotImplemented();
                 triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
             }
+
+            triArray.preTransform = preTransform;
         }
     }
 
@@ -244,7 +246,7 @@ namespace optixu {
         return static_cast<uint32_t>(buildInputFlags.size());
     }
 
-    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
+    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t sbtGasIndex, uint32_t numRayTypes,
                                                     HitGroupSBTRecord* records) const {
         THROW_RUNTIME_ERROR(matSetIdx < materialSets.size(),
                             "Out of material set bound: [0, %u)", static_cast<uint32_t>(materialSets.size()));
@@ -258,6 +260,7 @@ namespace optixu {
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 mat->setRecordData(pipeline, rIdx, recordPtr);
                 recordPtr->data.geomInstData = userData;
+                recordPtr->data.sbtGasIndex = sbtGasIndex;
                 ++recordPtr;
             }
         }
@@ -335,8 +338,8 @@ namespace optixu {
 
     uint32_t GeometryAccelerationStructure::Priv::calcNumSBTRecords(uint32_t matSetIdx) const {
         uint32_t numSBTRecords = 0;
-        for (const _GeometryInstance* child : children)
-            numSBTRecords += child->getNumSBTRecords();
+        for (const Child &child : children)
+            numSBTRecords += child.geomInst->getNumSBTRecords();
         numSBTRecords *= numRayTypesPerMaterialSet[matSetIdx];
 
         return numSBTRecords;
@@ -349,8 +352,9 @@ namespace optixu {
 
         uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
         uint32_t sumRecords = 0;
-        for (const _GeometryInstance* child : children) {
-            uint32_t numRecords = child->fillSBTRecords(pipeline, matSetIdx, numRayTypes, records);
+        for (uint32_t sbtGasIdx = 0; sbtGasIdx < children.size(); ++sbtGasIdx) {
+            const Child &child = children[sbtGasIdx];
+            uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx, sbtGasIdx, numRayTypes, records);
             records += numRecords;
             sumRecords += numRecords;
         }
@@ -400,26 +404,34 @@ namespace optixu {
         m->scene->markSBTLayoutDirty();
     }
 
-    void GeometryAccelerationStructure::addChild(GeometryInstance geomInst) const {
+    void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
         auto _geomInst = extract(geomInst);
         THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
         THROW_RUNTIME_ERROR(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance.");
         THROW_RUNTIME_ERROR(_geomInst->isCustomPrimitiveInstance() == m->forCustomPrimitives,
                             "This GAS was created for %s.", m->forCustomPrimitives ? "custom primitives" : "triangles");
-        THROW_RUNTIME_ERROR(m->children.count(_geomInst) == 0, "Geometry instance %p has been already added.", _geomInst);
+        Priv::Child child;
+        child.geomInst = _geomInst;
+        child.preTransform = preTransform;
+        auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
+        THROW_RUNTIME_ERROR(idx == m->children.cend(), "Geometry instance %p with transform %p has been already added.", _geomInst, preTransform);
 
-        m->children.insert(_geomInst);
+        m->children.push_back(child);
 
         m->markDirty();
     }
 
-    void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst) const {
+    void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
         auto _geomInst = extract(geomInst);
         THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
         THROW_RUNTIME_ERROR(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance.");
-        THROW_RUNTIME_ERROR(m->children.count(_geomInst) > 0, "Geometry instance %p has not been added.", _geomInst);
+        Priv::Child child;
+        child.geomInst = _geomInst;
+        child.preTransform = preTransform;
+        auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
+        THROW_RUNTIME_ERROR(idx != m->children.cend(), "Geometry instance %p has not been added.", _geomInst);
 
-        m->children.erase(_geomInst);
+        m->children.erase(idx);
 
         m->markDirty();
     }
@@ -427,8 +439,8 @@ namespace optixu {
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
         uint32_t childIdx = 0;
-        for (const _GeometryInstance* child : m->children)
-            child->fillBuildInput(&m->buildInputs[childIdx++]);
+        for (const Priv::Child &child : m->children)
+            child.geomInst->fillBuildInput(&m->buildInputs[childIdx++], child.preTransform);
 
         m->buildOptions = {};
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
@@ -460,8 +472,8 @@ namespace optixu {
         // EN: User is not required to call prepareForBuild() when performing rebuild
         //     for purpose of update so updating build inputs should be here.
         uint32_t childIdx = 0;
-        for (const _GeometryInstance* child : m->children)
-            child->updateBuildInput(&m->buildInputs[childIdx++]);
+        for (const Priv::Child &child : m->children)
+            child.geomInst->updateBuildInput(&m->buildInputs[childIdx++], child.preTransform);
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
@@ -539,8 +551,8 @@ namespace optixu {
                             "Size of the given scratch buffer is not enough.");
 
         uint32_t childIdx = 0;
-        for (const _GeometryInstance* child : m->children)
-            child->updateBuildInput(&m->buildInputs[childIdx++]);
+        for (const Priv::Child &child : m->children)
+            child.geomInst->updateBuildInput(&m->buildInputs[childIdx++], child.preTransform);
 
         const Buffer* accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         OptixTraversableHandle &handle = m->compactedAvailable ? m->compactedHandle : m->handle;

@@ -16,6 +16,7 @@ TODO:
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
 
 ----------------------------------------------------------------
+- コンテキスト、コンテキストから作られるオブジェクトは全てoperator bool()を定義しており、初期化済みか判定可能。
 - GASの構築と更新
   - ジオメトリの変形
     - シングルバッファリング
@@ -144,6 +145,7 @@ namespace optixu {
 
 
     struct HitGroupSBTRecordData {
+        uint32_t sbtGasIndex;
         uint32_t materialData;
         uint32_t geomInstData;
     };
@@ -708,6 +710,16 @@ public: \
 private: \
     Priv* m = nullptr
 
+#define OPTIX_COMMON_FUNCTIONS(SelfType) \
+    operator bool() const { return m; } \
+    bool operator==(const SelfType &r) const { return m == r.m; } \
+    bool operator!=(const SelfType &r) const { return m != r.m; } \
+    bool operator<(const SelfType &r) const { \
+        static_assert(std::is_same<decltype(r), decltype(*this)>::value, \
+                      "This function can be defined only for the self type."); \
+        return m < r.m; \
+    }
+
 
 
     class Context {
@@ -716,6 +728,7 @@ private: \
     public:
         static Context create(CUcontext cudaContext);
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(Context);
 
         Material createMaterial() const;
         Scene createScene() const;
@@ -732,6 +745,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(Material);
 
         void setHitGroup(uint32_t rayType, ProgramGroup hitGroup);
         void setUserData(uint32_t data) const;
@@ -744,6 +758,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(Scene);
 
         GeometryInstance createGeometryInstance(bool forCustomPrimitives = false) const;
         GeometryAccelerationStructure createGeometryAccelerationStructure(bool forCustomPrimitives = false) const;
@@ -760,6 +775,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(GeometryInstance);
 
         void setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
         void setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
@@ -780,13 +796,14 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(GeometryAccelerationStructure);
 
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
-        void addChild(GeometryInstance geomInst) const;
-        void removeChild(GeometryInstance geomInst) const;
+        void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
+        void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
 
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -806,6 +823,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(Instance);
 
         void setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx = 0) const;
         void setTransform(const float transform[12]) const;
@@ -818,6 +836,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(InstanceAccelerationStructure);
 
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
 
@@ -851,6 +870,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(Pipeline);
 
         void setMaxTraceDepth(uint32_t maxTraceDepth) const;
         void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
@@ -896,6 +916,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(Module);
     };
 
 
@@ -905,6 +926,7 @@ private: \
 
     public:
         void destroy();
+        OPTIX_COMMON_FUNCTIONS(ProgramGroup);
 
         void getStackSize(OptixStackSizes* sizes) const;
     };

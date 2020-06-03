@@ -374,22 +374,31 @@ namespace optixu {
         bool isCustomPrimitiveInstance() const {
             return forCustomPrimitives;
         }
-        void fillBuildInput(OptixBuildInput* input) const;
-        void updateBuildInput(OptixBuildInput* input) const;
+        void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
+        void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
         uint32_t getNumSBTRecords() const;
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t numRayTypes,
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t sbtGasIndex, uint32_t numRayTypes,
                                 HitGroupSBTRecord* records) const;
     };
 
 
 
     class GeometryAccelerationStructure::Priv {
+        struct Child {
+            _GeometryInstance* geomInst;
+            CUdeviceptr preTransform;
+
+            bool operator==(const Child &rChild) const {
+                return geomInst == rChild.geomInst && preTransform == rChild.preTransform;
+            }
+        };
+
         _Scene* scene;
 
         std::vector<uint32_t> numRayTypesPerMaterialSet;
 
-        std::unordered_set<_GeometryInstance*> children;
+        std::vector<Child> children;
         std::vector<OptixBuildInput> buildInputs;
 
         OptixAccelBuildOptions buildOptions;
