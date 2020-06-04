@@ -376,7 +376,12 @@ namespace optixu {
         m = nullptr;
     }
 
-    void GeometryAccelerationStructure::setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const {
+    void GeometryAccelerationStructure::setConfiguration(bool preferFastTrace,
+                                                         bool allowUpdate,
+                                                         bool allowCompaction,
+                                                         bool allowRandomVertexAccess) const {
+        THROW_RUNTIME_ERROR(!(m->forCustomPrimitives && allowRandomVertexAccess),
+                            "Random vertex access is the feature only for triangle GAS.");
         bool changed = false;
         changed |= m->preferFastTrace != preferFastTrace;
         m->preferFastTrace = preferFastTrace;
@@ -384,6 +389,8 @@ namespace optixu {
         m->allowUpdate = allowUpdate;
         changed |= m->allowCompaction != allowCompaction;
         m->allowCompaction = allowCompaction;
+        changed |= m->allowRandomVertexAccess != allowRandomVertexAccess;
+        m->allowRandomVertexAccess = allowRandomVertexAccess;
 
         if (changed)
             m->markDirty();
@@ -446,7 +453,8 @@ namespace optixu {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
                                       (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                      (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+                                      (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0) |
+                                      (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0));
         //m->buildOptions.motionOptions
 
         OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
@@ -649,9 +657,10 @@ namespace optixu {
         _Instance* _inst = extract(instance);
         THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
         THROW_RUNTIME_ERROR(_inst->getScene() == m->scene, "Scene mismatch for the given instance.");
-        THROW_RUNTIME_ERROR(m->children.count(_inst) == 0, "Instance %p has been already added.", _inst);
+        auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
+        THROW_RUNTIME_ERROR(idx == m->children.cend(), "Instance %p has been already added.", _inst);
 
-        m->children.insert(_inst);
+        m->children.push_back(_inst);
 
         m->markDirty();
     }
@@ -660,9 +669,10 @@ namespace optixu {
         _Instance* _inst = extract(instance);
         THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
         THROW_RUNTIME_ERROR(_inst->getScene() == m->scene, "Scene mismatch for the given instance.");
-        THROW_RUNTIME_ERROR(m->children.count(_inst) > 0, "Instance %p has not been added.", _inst);
+        auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
+        THROW_RUNTIME_ERROR(idx != m->children.cend(), "Instance %p has not been added.", _inst);
 
-        m->children.erase(_inst);
+        m->children.erase(idx);
 
         m->markDirty();
     }

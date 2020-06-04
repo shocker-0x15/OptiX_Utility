@@ -798,7 +798,7 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(GeometryAccelerationStructure);
 
-        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
+        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 

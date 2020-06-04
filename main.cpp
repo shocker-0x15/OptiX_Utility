@@ -1399,7 +1399,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasCornellBoxMem;
     cudau::Buffer gasCornellBoxCompactedMem;
-    gasCornellBox.setConfiguration(true, false, true);
+    gasCornellBox.setConfiguration(true, false, true, false);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
@@ -1411,7 +1411,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasAreaLightMem;
     cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(true, false, true);
+    gasAreaLight.setConfiguration(true, false, true, false);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
@@ -1422,7 +1422,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasObjectMem;
-    gasObject.setConfiguration(false, true, false);
+    gasObject.setConfiguration(false, true, false, false);
     gasObject.setNumMaterialSets(2);
     gasObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasObject.setNumRayTypes(1, Shared::NumRayTypes);
@@ -1437,7 +1437,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasCustomPrimObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(true);
     cudau::Buffer gasCustomPrimObjectMem;
-    gasCustomPrimObject.setConfiguration(false, true, false);
+    gasCustomPrimObject.setConfiguration(false, true, false, false);
     gasCustomPrimObject.setNumMaterialSets(1);
     gasCustomPrimObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasCustomPrimObject.addChild(customPrimInstance);

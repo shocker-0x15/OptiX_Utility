@@ -418,6 +418,7 @@ namespace optixu {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
+            unsigned int allowRandomVertexAccess : 1;
             unsigned int readyToBuild : 1;
             unsigned int available : 1;
             unsigned int readyToCompact : 1;
@@ -442,6 +443,7 @@ namespace optixu {
             preferFastTrace = true;
             allowUpdate = false;
             allowCompaction = false;
+            allowRandomVertexAccess = false;
 
             readyToBuild = false;
             available = false;
@@ -543,7 +545,7 @@ namespace optixu {
     class InstanceAccelerationStructure::Priv {
         _Scene* scene;
 
-        std::unordered_set<_Instance*> children;
+        std::vector<_Instance*> children;
         OptixBuildInput buildInput;
         std::vector<OptixInstance> instances;
 
