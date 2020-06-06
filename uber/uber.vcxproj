@@ -10,12 +10,62 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\cuda_util.cpp" />
+    <ClCompile Include="..\ext\gl3w\gl3w.c" />
+    <ClCompile Include="..\ext\imgui\imgui.cpp" />
+    <ClCompile Include="..\ext\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\ext\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\ext\imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\ext\imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="..\ext\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\ext\tiny_obj_loader.cc" />
+    <ClCompile Include="..\optix_util.cpp" />
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\cuda_util.h" />
+    <ClInclude Include="..\ext\gl3w\include\GL\gl3w.h" />
+    <ClInclude Include="..\ext\gl3w\include\GL\glcorearb.h" />
+    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3.h" />
+    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3native.h" />
+    <ClInclude Include="..\ext\imgui\imconfig.h" />
+    <ClInclude Include="..\ext\imgui\imgui.h" />
+    <ClInclude Include="..\ext\imgui\imgui_impl_glfw.h" />
+    <ClInclude Include="..\ext\imgui\imgui_impl_opengl3.h" />
+    <ClInclude Include="..\ext\imgui\imgui_internal.h" />
+    <ClInclude Include="..\ext\imgui\imstb_rectpack.h" />
+    <ClInclude Include="..\ext\imgui\imstb_textedit.h" />
+    <ClInclude Include="..\ext\imgui\imstb_truetype.h" />
+    <ClInclude Include="..\ext\stb_image.h" />
+    <ClInclude Include="..\ext\tiny_obj_loader.h" />
+    <ClInclude Include="..\GLToolkit.h" />
+    <ClInclude Include="..\optix_util.h" />
+    <ClInclude Include="..\optix_util_private.h" />
+    <ClInclude Include="..\stopwatch.h" />
+    <ClInclude Include="shared.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\ext\imgui\natvis\imgui.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="deform.cu" />
+    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="post_process.cu" />
+    <CudaCompile Include="sphere_bounding_box.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\drawOptiXResult.frag" />
+    <None Include="shaders\drawOptiXResult.vert" />
+    <None Include="shaders\scale.frag" />
+    <None Include="shaders\scale.vert" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{38359F87-43FE-4312-AD65-AF8A77FA75CC}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>OptiX7_GLFW_ImGui</ProjectName>
+    <ProjectName>uber</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -70,7 +120,7 @@
     <PostBuildEvent>
       <Command>echo copy shaders
 
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
+xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -81,7 +131,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
-      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\ptxes\%(Filename).ptx</CompileOut>
+      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)\ptxes\%(Filename).ptx</CompileOut>
       <AdditionalOptions>--use_fast_math -Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
     <CudaLink>
@@ -109,7 +159,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <PostBuildEvent>
       <Command>echo copy shaders
 
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
+xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -120,73 +170,13 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)shaders"</Command>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
-      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\ptxes\%(Filename).ptx</CompileOut>
+      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)\ptxes\%(Filename).ptx</CompileOut>
       <AdditionalOptions>--use_fast_math -Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
     </CudaLink>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="cuda_util.cpp" />
-    <ClCompile Include="ext\gl3w\gl3w.c" />
-    <ClCompile Include="ext\imgui\imgui.cpp" />
-    <ClCompile Include="ext\imgui\imgui_demo.cpp" />
-    <ClCompile Include="ext\imgui\imgui_draw.cpp" />
-    <ClCompile Include="ext\imgui\imgui_impl_glfw.cpp" />
-    <ClCompile Include="ext\imgui\imgui_impl_opengl3.cpp" />
-    <ClCompile Include="ext\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="ext\tiny_obj_loader.cc" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="optix_util.cpp">
-      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819</DisableSpecificWarnings>
-      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819</DisableSpecificWarnings>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="cuda_util.h" />
-    <ClInclude Include="ext\gl3w\include\GL\gl3w.h" />
-    <ClInclude Include="ext\gl3w\include\GL\glcorearb.h" />
-    <ClInclude Include="ext\glfw\include\GLFW\glfw3.h" />
-    <ClInclude Include="ext\glfw\include\GLFW\glfw3native.h" />
-    <ClInclude Include="ext\imgui\imconfig.h" />
-    <ClInclude Include="ext\imgui\imgui.h" />
-    <ClInclude Include="ext\imgui\imgui_impl_glfw.h" />
-    <ClInclude Include="ext\imgui\imgui_impl_opengl3.h" />
-    <ClInclude Include="ext\imgui\imgui_internal.h" />
-    <ClInclude Include="ext\imgui\imstb_rectpack.h" />
-    <ClInclude Include="ext\imgui\imstb_textedit.h" />
-    <ClInclude Include="ext\imgui\imstb_truetype.h" />
-    <ClInclude Include="ext\stb_image.h" />
-    <ClInclude Include="ext\tiny_obj_loader.h" />
-    <ClInclude Include="GLToolkit.h" />
-    <ClInclude Include="optix_util.h" />
-    <ClInclude Include="optix_util_private.h" />
-    <ClInclude Include="shared.h" />
-    <ClInclude Include="stopwatch.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="ext\imgui\natvis\imgui.natvis" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="README.md" />
-    <None Include="shaders\drawOptiXResult.frag" />
-    <None Include="shaders\drawOptiXResult.vert" />
-    <None Include="shaders\scale.frag" />
-    <None Include="shaders\scale.vert" />
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="deform.cu" />
-    <CudaCompile Include="optix_kernels.cu">
-      <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-      </AdditionalCompilerOptions>
-      <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-      </AdditionalCompilerOptions>
-      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
-    </CudaCompile>
-    <CudaCompile Include="post_process.cu" />
-    <CudaCompile Include="sphere_bounding_box.cu" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 10.1.targets" />

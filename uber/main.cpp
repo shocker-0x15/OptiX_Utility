@@ -41,17 +41,15 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include "GLToolkit.h"
-#include "cuda_util.h"
-#include "optix_util.h"
+#include "../GLToolkit.h"
 #include <cuda_runtime.h>
 
 #include "shared.h"
-#include "stopwatch.h"
+#include "../stopwatch.h"
 
-#include "ext/tiny_obj_loader.h"
+#include "../ext/tiny_obj_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
-#include "ext/stb_image.h"
+#include "../ext/stb_image.h"
 
 
 
@@ -866,7 +864,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/optix_kernels.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
                                                                     OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 
@@ -950,17 +948,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 2);
 
     CUmodule modulePostProcess;
-    CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "ptxes/post_process.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "uber/ptxes/post_process.ptx").string().c_str()));
     cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", cudau::dim3(8, 8), 0);
 
     CUmodule moduleDeform;
-    CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "ptxes/deform.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "uber/ptxes/deform.ptx").string().c_str()));
     cudau::Kernel kernelDeform(moduleDeform, "deform", cudau::dim3(32), 0);
     cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", cudau::dim3(32), 0);
     cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", cudau::dim3(32), 0);
 
     CUmodule moduleBoundingBoxProgram;
-    CUDADRV_CHECK(cuModuleLoad(&moduleBoundingBoxProgram, (getExecutableDirectory() / "ptxes/sphere_bounding_box.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(&moduleBoundingBoxProgram, (getExecutableDirectory() / "uber/ptxes/sphere_bounding_box.ptx").string().c_str()));
     cudau::Kernel kernelCalculateBoundingBoxesForSpheres(moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", cudau::dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
@@ -989,7 +987,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         int32_t width, height, mipCount;
         size_t* sizes;
         DDS::Format format;
-        uint8_t** ddsData = DDS::load("data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
+        uint8_t** ddsData = DDS::load("../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
                                        width, height, 1/*mipCount*/);
@@ -999,12 +997,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         DDS::free(ddsData, mipCount, sizes);
 #else
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
-                                     width, height);
-        auto data = arrayCheckerBoard.map<uint8_t>();
-        std::copy_n(linearImageData, width * height * 4, data);
-        arrayCheckerBoard.unmap();
+        uint8_t* linearImageData = stbi_load("../data/checkerboard_line.png", &width, &height, &n, 4);
+        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
+                                       width, height, 1);
+        arrayCheckerBoard.transfer<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
     }
@@ -1023,7 +1019,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         int32_t width, height, mipCount;
         size_t* sizes;
         DDS::Format format;
-        uint8_t** ddsData = DDS::load("data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
+        uint8_t** ddsData = DDS::load("../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
                                width, height, 1/*mipCount*/);
@@ -1033,12 +1029,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         DDS::free(ddsData, mipCount, sizes);
 #else
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
-                             width, height);
-        auto data = arrayGrid.map<uint8_t>();
-        std::copy_n(linearImageData, width * height * 4, data);
-        arrayGrid.unmap();
+        uint8_t* linearImageData = stbi_load("../data/grid.png", &width, &height, &n, 4);
+        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
+                               width, height, 1);
+        arrayGrid.transfer<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
     }
@@ -1248,7 +1242,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::vector<tinyobj::material_t> materials;
         std::string warn;
         std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "data/subd_cube.obj");
+        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../data/subd_cube.obj");
 
         constexpr float scale = 0.3f;
         
@@ -1579,14 +1573,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
     GLTK::GraphicsShader drawOptiXResultShader;
-    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "shaders/drawOptiXResult.vert"),
-                                         readTxtFile(exeDir / "shaders/drawOptiXResult.frag"));
+    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "uber/shaders/drawOptiXResult.vert"),
+                                         readTxtFile(exeDir / "uber/shaders/drawOptiXResult.frag"));
 
     // JP: アップスケール用のシェーダー。
     // EN: Shader for upscale.
     GLTK::GraphicsShader scaleShader;
-    scaleShader.initializeVSPS(readTxtFile(exeDir / "shaders/scale.vert"),
-                               readTxtFile(exeDir / "shaders/scale.frag"));
+    scaleShader.initializeVSPS(readTxtFile(exeDir / "uber/shaders/scale.vert"),
+                               readTxtFile(exeDir / "uber/shaders/scale.frag"));
 
     // JP: アップスケール用のサンプラー。
     //     texelFetch()を使う場合には設定値は無関係。だがバインドは必要な様子。

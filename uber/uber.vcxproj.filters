@@ -1,0 +1,158 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ext">
+      <UniqueIdentifier>{deedc77f-7d7e-4e3b-af11-4814f3b6d9c6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ext\gl3w">
+      <UniqueIdentifier>{e3c080d0-415e-499d-9b2d-90531eb5fc5b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ext\glfw">
+      <UniqueIdentifier>{e2c02e55-41f0-4568-a4ac-1df5452bce34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ext\imgui">
+      <UniqueIdentifier>{7e3b6433-5b72-4468-a55a-df86488fb6f7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ext\imgui\core">
+      <UniqueIdentifier>{8bf58b5c-c656-450f-a58e-cbe738adc15a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="util">
+      <UniqueIdentifier>{4b27c78f-aa9b-4702-a1f9-06ffbecb9072}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non essentials">
+      <UniqueIdentifier>{204572b1-033d-45c2-891c-f73eabeb563e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non essentials\shaders">
+      <UniqueIdentifier>{f6d52ae3-a435-4ecb-b8df-9f95abd259d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="GPU kernels">
+      <UniqueIdentifier>{5af041ea-60c3-43fd-a968-f655372e94a3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ext\gl3w\gl3w.c">
+      <Filter>ext\gl3w</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\imgui\imgui_demo.cpp">
+      <Filter>ext\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\imgui\imgui_impl_glfw.cpp">
+      <Filter>ext\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\imgui\imgui_impl_opengl3.cpp">
+      <Filter>ext\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\imgui\imgui_draw.cpp">
+      <Filter>ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\imgui\imgui_widgets.cpp">
+      <Filter>ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\imgui\imgui.cpp">
+      <Filter>ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ext\tiny_obj_loader.cc">
+      <Filter>ext</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cuda_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\optix_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\ext\gl3w\include\GL\gl3w.h">
+      <Filter>ext\gl3w</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\gl3w\include\GL\glcorearb.h">
+      <Filter>ext\gl3w</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3.h">
+      <Filter>ext\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3native.h">
+      <Filter>ext\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imgui_impl_glfw.h">
+      <Filter>ext\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imgui_impl_opengl3.h">
+      <Filter>ext\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imgui_internal.h">
+      <Filter>ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imgui.h">
+      <Filter>ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imstb_rectpack.h">
+      <Filter>ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imstb_textedit.h">
+      <Filter>ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imstb_truetype.h">
+      <Filter>ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\imgui\imconfig.h">
+      <Filter>ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\stb_image.h">
+      <Filter>ext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ext\tiny_obj_loader.h">
+      <Filter>ext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\optix_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\optix_util_private.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cuda_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\GLToolkit.h">
+      <Filter>non essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="shared.h" />
+    <ClInclude Include="..\stopwatch.h">
+      <Filter>non essentials</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\ext\imgui\natvis\imgui.natvis">
+      <Filter>ext\imgui</Filter>
+    </Natvis>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="deform.cu">
+      <Filter>GPU kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="optix_kernels.cu">
+      <Filter>GPU kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="sphere_bounding_box.cu">
+      <Filter>GPU kernels</Filter>
+    </CudaCompile>
+    <CudaCompile Include="post_process.cu">
+      <Filter>GPU kernels</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\drawOptiXResult.vert">
+      <Filter>non essentials\shaders</Filter>
+    </None>
+    <None Include="shaders\scale.frag">
+      <Filter>non essentials\shaders</Filter>
+    </None>
+    <None Include="shaders\scale.vert">
+      <Filter>non essentials\shaders</Filter>
+    </None>
+    <None Include="shaders\drawOptiXResult.frag">
+      <Filter>non essentials\shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
