@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "shared.h"
+#include "uber_shared.h"
 
 extern "C" __global__ void deform(const Shared::Vertex* originalVertices, Shared::Vertex* vertices, uint32_t numVertices,
                                   float t) {

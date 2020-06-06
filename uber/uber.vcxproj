@@ -21,7 +21,7 @@
     <ClCompile Include="..\ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\optix_util.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="uber_main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\cuda_util.h" />
@@ -43,7 +43,7 @@
     <ClInclude Include="..\optix_util.h" />
     <ClInclude Include="..\optix_util_private.h" />
     <ClInclude Include="..\stopwatch.h" />
-    <ClInclude Include="shared.h" />
+    <ClInclude Include="uber_shared.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\ext\imgui\natvis\imgui.natvis" />
@@ -65,7 +65,7 @@
     <ProjectGuid>{38359F87-43FE-4312-AD65-AF8A77FA75CC}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>uber</ProjectName>
+    <ProjectName>10.uber</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -97,10 +97,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\lib\x64;$(SolutionDir)ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)ext\gl3w\include;$(SolutionDir)ext\glfw\include;$(SolutionDir)ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.0.0\include;$(IncludePath)</IncludePath>
+    <TargetName>uber</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\lib\x64;$(SolutionDir)ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)ext\gl3w\include;$(SolutionDir)ext\glfw\include;$(SolutionDir)ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.0.0\include;$(IncludePath)</IncludePath>
+    <TargetName>uber</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -120,7 +122,7 @@
     <PostBuildEvent>
       <Command>echo copy shaders
 
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
+xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -131,7 +133,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
-      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)\ptxes\%(Filename).ptx</CompileOut>
+      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <AdditionalOptions>--use_fast_math -Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
     <CudaLink>
@@ -159,7 +161,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
     <PostBuildEvent>
       <Command>echo copy shaders
 
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
+xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -170,7 +172,7 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(ProjectName)\shaders"</Command>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
-      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)\ptxes\%(Filename).ptx</CompileOut>
+      <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <AdditionalOptions>--use_fast_math -Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
     <CudaLink>

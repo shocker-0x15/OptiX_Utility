@@ -42,9 +42,9 @@
 #include "imgui_impl_opengl3.h"
 
 #include "../GLToolkit.h"
-#include <cuda_runtime.h>
+#include <cuda_runtime.h> // only for vector types.
 
-#include "shared.h"
+#include "uber_shared.h"
 #include "../stopwatch.h"
 
 #include "../ext/tiny_obj_loader.h"
@@ -55,6 +55,9 @@
 
 #ifdef _DEBUG
 #   define ENABLE_ASSERT
+#   define DEBUG_SELECT(A, B) A
+#else
+#   define DEBUG_SELECT(A, B) B
 #endif
 
 #ifdef HP_Platform_Windows_MSVC
@@ -89,32 +92,6 @@ template <typename T, size_t size>
 constexpr size_t lengthof(const T(&array)[size]) {
     return size;
 }
-
-
-
-#define OPTIX_CHECK(call) \
-    do { \
-        OptixResult error = call; \
-        if (error != OPTIX_SUCCESS) { \
-            std::stringstream ss; \
-            ss << "OptiX call (" << #call << ") failed: " \
-               << "(" __FILE__ << ":" << __LINE__ << ")\n"; \
-            throw std::runtime_error(ss.str().c_str()); \
-        } \
-    } while (0)
-
-#define OPTIX_CHECK_LOG(call) \
-    do { \
-        OptixResult error = call; \
-        if (error != OPTIX_SUCCESS) { \
-            std::stringstream ss; \
-            ss << "OptiX call (" << #call << ") failed: " \
-               << "(" __FILE__ << ":" << __LINE__ << ")\n" \
-               << "Log: " << log << (logSize > sizeof(log) ? "<TRUNCATED>" : "") \
-               << "\n"; \
-            throw std::runtime_error(ss.str().c_str()); \
-        } \
-    } while (0)
 
 
 
@@ -608,12 +585,6 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 
-static void optixLogCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
-    hpprintf("[%2u][%12s]: %s\n", level, tag, message);
-}
-
-
-
 float sRGB_degamma_s(float value) {
     Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
     if (value <= 0.04045f)
@@ -861,12 +832,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     pipeline.setPipelineOptions(6, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                OPTIX_EXCEPTION_FLAG_DEBUG);
+                                DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
+                                              OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+                                              OPTIX_EXCEPTION_FLAG_DEBUG),
+                                             OPTIX_EXCEPTION_FLAG_NONE));
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.ptx");
-    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-                                                                    OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
+    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
+        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     optixu::Module emptyModule;
 
@@ -898,7 +873,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
-    pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
+    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
+                  false);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.

@@ -1,10 +1,8 @@
 ﻿#pragma once
 
-#include "shared.h"
+#include "uber_shared.h"
 
 #define M_PI 3.14159265
-
-namespace Sample {
 
 using namespace Shared;
 
@@ -352,6 +350,4 @@ RT_PROGRAM void RT_EX_NAME(print)() {
     uint3 launchIndex = optixGetLaunchIndex();
     int32_t code = optixGetExceptionCode();
     printf("(%u, %u, %u): Exception: %u\n", launchIndex.x, launchIndex.y, launchIndex.z, code);
-}
-
 }
