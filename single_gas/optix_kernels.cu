@@ -49,11 +49,7 @@ RT_PROGRAM void RT_RG_NAME(raygen)() {
         RayType_Primary, NumRayTypes, RayType_Primary,
         color);
 
-#if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    plp.accumBuffer.write(launchIndex, make_float4(color, 1.0f));
-#else
     plp.accumBuffer[launchIndex] = make_float4(color, 1.0f);
-#endif
 }
 
 RT_PROGRAM void RT_MS_NAME(miss)() {

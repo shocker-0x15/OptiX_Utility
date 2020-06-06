@@ -486,16 +486,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
-#if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    cudau::Array arrayAccumBuffer;
-    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Float32, 4, cudau::ArraySurface::Enable,
-                                renderTargetSizeX, renderTargetSizeY);
-    cudau::SurfaceView surfViewAccumBuffer;
-    surfViewAccumBuffer.setArray(arrayAccumBuffer);
-#else
     optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
     accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
-#endif
 
 
 
@@ -505,11 +497,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.geomPreTransforms = preTransformBuffer.getDevicePointer();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
-#if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    plp.accumBuffer = surfViewAccumBuffer.getSurfaceObject();
-#else
     plp.accumBuffer = accumBuffer.getBlockBuffer2D();
-#endif
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5);
@@ -549,12 +537,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-#if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    surfViewAccumBuffer.destroySurfaceObject();
-    arrayAccumBuffer.finalize();
-#else
     accumBuffer.finalize();
-#endif
 
     shaderBindingTable.finalize();
 
