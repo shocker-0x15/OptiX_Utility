@@ -436,7 +436,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gas.setConfiguration(true, false, true, false);
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
-    gas.addChild(geomInst0/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identify transform can be ommited.
+    gas.addChild(geomInst0/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
     // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
     //     指定されたTransformを用いてAcceleration Structureが作られる。
     //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。

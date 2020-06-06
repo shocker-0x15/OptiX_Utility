@@ -32,7 +32,7 @@ namespace cudau {
 
 
     Buffer::Buffer() :
-        m_cudaContext(nullptr),
+        m_cuContext(nullptr),
         m_hostPointer(nullptr), m_devicePointer(0), m_mappedPointer(nullptr),
         m_GLBufferID(0), m_cudaGfxResource(nullptr),
         m_initialized(false), m_mapped(false) {
@@ -44,7 +44,7 @@ namespace cudau {
     }
 
     Buffer::Buffer(Buffer &&b) {
-        m_cudaContext = b.m_cudaContext;
+        m_cuContext = b.m_cuContext;
         m_type = b.m_type;
         m_numElements = b.m_numElements;
         m_stride = b.m_stride;
@@ -62,7 +62,7 @@ namespace cudau {
     Buffer &Buffer::operator=(Buffer &&b) {
         finalize();
 
-        m_cudaContext = b.m_cudaContext;
+        m_cuContext = b.m_cuContext;
         m_type = b.m_type;
         m_numElements = b.m_numElements;
         m_stride = b.m_stride;
@@ -84,10 +84,10 @@ namespace cudau {
         if (m_initialized)
             throw std::runtime_error("Buffer is already initialized.");
 
-        m_cudaContext = context;
+        m_cuContext = context;
         m_type = type;
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         // If using GL Interop, expect that the active device is also the display device.
         if (m_type == BufferType::GL_Interop) {
@@ -104,19 +104,25 @@ namespace cudau {
 
         m_GLBufferID = glBufferID;
 
-        if (m_type == BufferType::Device || m_type == BufferType::P2P)
-            CUDADRV_CHECK(cuMemAlloc(&m_devicePointer, m_numElements * m_stride));
+        size_t size = static_cast<size_t>(m_numElements) * m_stride;
 
-        if (m_type == BufferType::GL_Interop)
+        if (m_type == BufferType::Device) {
+            CUDADRV_CHECK(cuMemAlloc(&m_devicePointer, size));
+        }
+        else  if (m_type == BufferType::GL_Interop) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             CUDADRV_CHECK(cuGraphicsGLRegisterBuffer(&m_cudaGfxResource, m_GLBufferID, CU_GRAPHICS_REGISTER_FLAGS_NONE));
 #else
             CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
 #endif
-
-        if (m_type == BufferType::ZeroCopy) {
-            CUDADRV_CHECK(cuMemHostAlloc(&m_hostPointer, m_numElements * m_stride, CU_MEMHOSTALLOC_PORTABLE | CU_MEMHOSTALLOC_DEVICEMAP));
+        }
+        else if (m_type == BufferType::ZeroCopy) {
+            CUDADRV_CHECK(cuMemHostAlloc(&m_hostPointer, size, CU_MEMHOSTALLOC_PORTABLE | CU_MEMHOSTALLOC_DEVICEMAP));
             CUDADRV_CHECK(cuMemHostGetDevicePointer(&m_devicePointer, m_hostPointer, 0));
+        }
+        else { // m_type == BufferType::Managed
+            CUDADRV_CHECK(cuMemAllocManaged(&m_devicePointer, size, CU_MEM_ATTACH_GLOBAL));
+            m_hostPointer = reinterpret_cast<void*>(m_devicePointer);
         }
 
         m_initialized = true;
@@ -126,25 +132,28 @@ namespace cudau {
         if (!m_initialized)
             return;
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         if (m_mapped)
             unmap();
 
-        if (m_type == BufferType::ZeroCopy) {
+        if (m_type == BufferType::Device) {
+            CUDADRV_CHECK(cuMemFree(m_devicePointer));
+            m_devicePointer = 0;
+        }
+        else if (m_type == BufferType::GL_Interop) {
+            CUDADRV_CHECK(cuGraphicsUnregisterResource(m_cudaGfxResource));
+            m_devicePointer = 0;
+        }
+        else if (m_type == BufferType::ZeroCopy) {
             CUDADRV_CHECK(cuMemFreeHost(m_hostPointer));
             m_devicePointer = 0;
             m_hostPointer = nullptr;
         }
-
-        if (m_type == BufferType::GL_Interop) {
-            CUDADRV_CHECK(cuGraphicsUnregisterResource(m_cudaGfxResource));
-            m_devicePointer = 0;
-        }
-
-        if (m_type == BufferType::Device || m_type == BufferType::P2P) {
+        else { // m_type == BufferType::Managed
             CUDADRV_CHECK(cuMemFree(m_devicePointer));
             m_devicePointer = 0;
+            m_hostPointer = nullptr;
         }
 
         m_mappedPointer = nullptr;
@@ -166,7 +175,7 @@ namespace cudau {
             return;
 
         Buffer newBuffer;
-        newBuffer.initialize(m_cudaContext, m_type, numElements, stride, m_GLBufferID);
+        newBuffer.initialize(m_cuContext, m_type, numElements, stride, m_GLBufferID);
 
         uint32_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
@@ -191,7 +200,7 @@ namespace cudau {
         if (m_type != BufferType::GL_Interop)
             throw std::runtime_error("This is not an OpenGL-interop buffer.");
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         size_t bufferSize = 0;
         CUDADRV_CHECK(cuGraphicsMapResources(1, &m_cudaGfxResource, stream));
@@ -202,7 +211,7 @@ namespace cudau {
         if (m_type != BufferType::GL_Interop)
             throw std::runtime_error("This is not an OpenGL-interop buffer.");
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
@@ -214,11 +223,10 @@ namespace cudau {
         m_mapped = true;
 
         if (m_type == BufferType::Device ||
-            m_type == BufferType::P2P ||
             m_type == BufferType::GL_Interop) {
-            CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+            CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
-            size_t size = (size_t)m_numElements * m_stride;
+            size_t size = static_cast<size_t>(m_numElements) * m_stride;
             m_mappedPointer = new uint8_t[size];
 
             if (m_type == BufferType::GL_Interop)
@@ -240,11 +248,10 @@ namespace cudau {
         m_mapped = false;
 
         if (m_type == BufferType::Device ||
-            m_type == BufferType::P2P ||
             m_type == BufferType::GL_Interop) {
-            CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+            CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
-            size_t size = (size_t)m_numElements * m_stride;
+            size_t size = static_cast<size_t>(m_numElements) * m_stride;
 
             CUDADRV_CHECK(cuMemcpyHtoD(m_devicePointer, m_mappedPointer, size));
 
@@ -261,12 +268,11 @@ namespace cudau {
             throw std::runtime_error("Copying OpenGL buffer is not supported.");
 
         Buffer ret;
-        ret.initialize(m_cudaContext, m_type, m_numElements, m_stride, m_GLBufferID);
+        ret.initialize(m_cuContext, m_type, m_numElements, m_stride, m_GLBufferID);
 
-        size_t size = m_stride * m_numElements;
-        if (m_type == BufferType::Device ||
-            m_type == BufferType::P2P) {
-            CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        size_t size = static_cast<size_t>(m_numElements) * m_stride;
+        if (m_type == BufferType::Device) {
+            CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
             CUDADRV_CHECK(cuMemcpyDtoD(ret.m_devicePointer, m_devicePointer, size));
         }
@@ -395,7 +401,7 @@ namespace cudau {
     }
     
     Array::Array() :
-        m_cudaContext(nullptr),
+        m_cuContext(nullptr),
         m_array(0), m_mappedPointers(nullptr), m_mappedArrays(nullptr),
         m_GLTexID(0), m_cudaGfxResource(nullptr),
         m_surfaceLoadStore(false), m_cubemap(false), m_layered(false),
@@ -408,7 +414,7 @@ namespace cudau {
     }
 
     Array::Array(Array &&b) {
-        m_cudaContext = b.m_cudaContext;
+        m_cuContext = b.m_cuContext;
         m_width = b.m_width;
         m_height = b.m_height;
         m_depth = b.m_depth;
@@ -434,7 +440,7 @@ namespace cudau {
     Array &Array::operator=(Array &&b) {
         finalize();
 
-        m_cudaContext = b.m_cudaContext;
+        m_cuContext = b.m_cuContext;
         m_width = b.m_width;
         m_height = b.m_height;
         m_depth = b.m_depth;
@@ -471,9 +477,9 @@ namespace cudau {
             numChannels != 1)
             throw std::runtime_error("numChannels must be 1 for BC format.");
 
-        m_cudaContext = context;
+        m_cuContext = context;
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         m_width = width;
         m_height = height;
@@ -588,7 +594,7 @@ namespace cudau {
         delete[] m_mappedArrays;
         delete[] m_mappedPointers;
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         if (m_GLTexID != 0) {
             CUDADRV_CHECK(cuGraphicsUnregisterResource(m_cudaGfxResource));
@@ -620,7 +626,7 @@ namespace cudau {
             return;
 
         Array newArray;
-        newArray.initialize(m_cudaContext, m_elemType, m_numChannels, width, height, m_depth, m_numMipmapLevels,
+        newArray.initialize(m_cuContext, m_elemType, m_numChannels, width, height, m_depth, m_numMipmapLevels,
                             m_surfaceLoadStore, m_cubemap, m_layered, 0);
 
         size_t sizePerRow = std::min(m_width, width) * static_cast<size_t>(m_stride);
@@ -655,7 +661,7 @@ namespace cudau {
         if (m_GLTexID == 0)
             throw std::runtime_error("This is not an OpenGL-interop buffer.");
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         CUDADRV_CHECK(cuGraphicsMapResources(1, &m_cudaGfxResource, stream));
         CUDADRV_CHECK(cuGraphicsSubResourceGetMappedArray(&m_mappedArrays[mipmapLevel], m_cudaGfxResource, 0, mipmapLevel));
@@ -665,7 +671,7 @@ namespace cudau {
         if (m_GLTexID == 0)
             throw std::runtime_error("This is not an OpenGL-interop buffer.");
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         m_mappedArrays[mipmapLevel] = nullptr;
         CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
@@ -677,7 +683,7 @@ namespace cudau {
         if (mipmapLevel >= m_numMipmapLevels)
             throw std::runtime_error("Specified mip-map level is out of bound.");
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         // JP: CUDAはミップマップレベル数の計算に問題を抱えているように見える。
         //     例: 64x64, BCフォーマットのテクスチャー(16x16ブロック)は次のミップレベルを持つことができる。
@@ -735,7 +741,7 @@ namespace cudau {
         if (mipmapLevel >= m_numMipmapLevels)
             throw std::runtime_error("Specified mip-map level is out of bound.");
 
-        CUDADRV_CHECK(cuCtxSetCurrent(m_cudaContext));
+        CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
         uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
         uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);

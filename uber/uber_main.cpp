@@ -446,6 +446,8 @@ float3 g_cameraPosition;
 
 
 
+constexpr cudau::BufferType g_bufferType = cudau::BufferType::Device;
+
 struct SceneContext {
     optixu::Scene optixScene;
     Shared::ProgDecodeHitPoint decodeHitPointTriangle;
@@ -454,7 +456,7 @@ struct SceneContext {
 };
 
 class TriangleMesh {
-    CUcontext m_cudaContext;
+    CUcontext m_cuContext;
     SceneContext* m_sceneContext;
 
     struct MaterialGroup {
@@ -470,7 +472,7 @@ class TriangleMesh {
     TriangleMesh &operator=(const TriangleMesh &) = delete;
 public:
     TriangleMesh(CUcontext cudaContext, SceneContext* sceneContext) :
-        m_cudaContext(cudaContext), m_sceneContext(sceneContext) {}
+        m_cuContext(cudaContext), m_sceneContext(sceneContext) {}
 
     void destroy() {
         for (auto it = m_materialGroups.rbegin(); it != m_materialGroups.rend(); ++it) {
@@ -485,7 +487,7 @@ public:
     }
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
-        m_vertexBuffer.initialize(m_cudaContext, cudau::BufferType::Device, numVertices);
+        m_vertexBuffer.initialize(m_cuContext, g_bufferType, numVertices);
         m_vertexBuffer.transfer(vertices, numVertices);
     }
 
@@ -500,7 +502,7 @@ public:
 
         auto triangleBuffer = new cudau::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
-        triangleBuffer->initialize(m_cudaContext, cudau::BufferType::Device, numTriangles);
+        triangleBuffer->initialize(m_cuContext, g_bufferType, numTriangles);
         triangleBuffer->transfer(triangles, numTriangles);
 
         group.material = material;
@@ -949,7 +951,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     hpprintf("Setup materials.\n");
 
     cudau::TypedBuffer<CUtexObject> textureObjectBuffer;
-    textureObjectBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
+    textureObjectBuffer.initialize(cuContext, g_bufferType, 128);
     uint32_t textureID = 0;
 
 #define USE_BLOCK_COMPRESSED_TEXTURE
@@ -1030,7 +1032,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     cudau::TypedBuffer<Shared::MaterialData> materialDataBuffer;
-    materialDataBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
+    materialDataBuffer.initialize(cuContext, g_bufferType, 128);
     uint32_t materialID = 0;
 
     Shared::MaterialData* matData = materialDataBuffer.map();
@@ -1128,7 +1130,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     SceneContext sceneContext;
     sceneContext.optixScene = scene;
     sceneContext.decodeHitPointTriangle = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointTriangleIndex);
-    sceneContext.geometryDataBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
+    sceneContext.geometryDataBuffer.initialize(cuContext, g_bufferType, 128);
     sceneContext.geometryID = 0;
     
     TriangleMesh meshCornellBox(cuContext, &sceneContext);
@@ -1316,8 +1318,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::TypedBuffer<Shared::SphereParameter> customPrimParameters;
     {
         constexpr uint32_t numPrimitives = 25;
-        customPrimAABBs.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
-        customPrimParameters.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
+        customPrimAABBs.initialize(cuContext, g_bufferType, numPrimitives);
+        customPrimParameters.initialize(cuContext, g_bufferType, numPrimitives);
 
         Shared::SphereParameter* params = customPrimParameters.map();
         std::mt19937 rng(1290527201);
@@ -1358,7 +1360,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     cudau::Buffer asBuildScratchMem;
     cudau::TypedBuffer<OptixTraversableHandle> travHandleBuffer;
-    travHandleBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
+    travHandleBuffer.initialize(cuContext, g_bufferType, 128);
     OptixTraversableHandle* travHandles = travHandleBuffer.map();
 
     // JP: コーネルボックスと面光源にサンプルとして敢えて別々のGASを使う。
@@ -1426,7 +1428,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //     スクラッチバッファーは共用する。
     // EN: Build geometry acceleration structures.
     //     Share the scratch buffer among them.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+    asBuildScratchMem.initialize(cuContext, g_bufferType, maxSizeOfScratchBuffer, 1);
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
@@ -1449,7 +1451,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
     scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    shaderBindingTable.initialize(cuContext, g_bufferType, sbtSize, 1);
     
     // JP: GASからインスタンスを作成する。
     // EN: Make instances from GASs.
@@ -1500,7 +1502,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     iasScene.addChild(instObject1);
     iasScene.addChild(instCustomPrimObject);
     iasScene.prepareForBuild(&asMemReqs, &numInstances);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    instanceBuffer.initialize(cuContext, g_bufferType, numInstances);
     iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
     if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {
@@ -1568,7 +1570,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
-    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+    rngBuffer.initialize(cuContext, g_bufferType, renderTargetSizeX, renderTargetSizeY);
     const auto initializeRNGSeeds = [&renderTargetSizeX, &renderTargetSizeY](optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> &buffer) {
         std::mt19937_64 rng(591842031321323413);
 
@@ -1588,7 +1590,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     surfViewAccumBuffer.setArray(arrayAccumBuffer);
 #else
     optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
-    accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+    accumBuffer.initialize(cuContext, g_bufferType, renderTargetSizeX, renderTargetSizeY);
 #endif
 
 

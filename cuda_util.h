@@ -206,14 +206,14 @@ namespace cudau {
 
 
     enum class BufferType {
-        Device = 0,     // not preferred, typically slower than ZERO_COPY
-        GL_Interop = 1, // single device only, preferred for single device
-        ZeroCopy = 2,   // general case, preferred for multi-gpu if not fully nvlink connected
-        P2P = 3         // fully connected only, preferred for fully nvlink connected
+        Device = 0,
+        GL_Interop = 1,
+        ZeroCopy = 2,
+        Managed = 3, // TODO: test
     };
 
     class Buffer {
-        CUcontext m_cudaContext;
+        CUcontext m_cuContext;
         BufferType m_type;
 
         uint32_t m_numElements;
@@ -266,7 +266,7 @@ namespace cudau {
         void resize(uint32_t numElements, uint32_t stride);
 
         CUcontext getCUcontext() const {
-            return m_cudaContext;
+            return m_cuContext;
         }
         BufferType getBufferType() const {
             return m_type;
@@ -453,7 +453,7 @@ namespace cudau {
     void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels);
     
     class Array {
-        CUcontext m_cudaContext;
+        CUcontext m_cuContext;
 
         uint32_t m_width;
         uint32_t m_height;
