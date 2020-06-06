@@ -74,8 +74,8 @@ RT_PROGRAM void RT_CH_NAME(closesthit0)() {
     //     ただしGASのビルド設定でRandom Vertex Accessを有効にしている場合はoptixGetTriangleVertexData()
     //     を呼ぶことで位置に関しては変換後の値を取得することができる。
     // EN: Transform from GeometryInstance to GAS space should be manually implemented by the user.
-    //     However, it is possible to get post-transformed values only for positions if
-    //     random vertex access is enabled for GAS build configuration using optixGetTriangleVertexData().
+    //     However, it is possible to get post-transformed values using optixGetTriangleVertexData()
+    //     only for positions if random vertex access is enabled for GAS build configuration.
     const GeometryPreTransform &preTransform = plp.geomPreTransforms[sbtr.sbtGasIndex];
     sn = normalize(preTransform.transformNormal(sn));
 
