@@ -70,9 +70,19 @@ RT_PROGRAM void RT_CH_NAME(closesthit0)() {
     float b0 = 1 - (hp.b1 + hp.b2);
     float3 sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
 
+    // JP: GeometryInstanceからGAS空間への変換は自前で実装する必要がある。
+    //     ただしGASのビルド設定でRandom Vertex Accessを有効にしている場合はoptixGetTriangleVertexData()
+    //     を呼ぶことで位置に関しては変換後の値を取得することができる。
+    // EN: Transform from GeometryInstance to GAS space should be manually implemented by the user.
+    //     However, it is possible to get post-transformed values only for positions if
+    //     random vertex access is enabled for GAS build configuration using optixGetTriangleVertexData().
     const GeometryPreTransform &preTransform = plp.geomPreTransforms[sbtr.sbtGasIndex];
     sn = normalize(preTransform.transformNormal(sn));
 
+    // JP: 法線を可視化。
+    //     このサンプルでは単一のGASしか使っていないためオブジェクト空間からワールド空間への変換は無い。
+    // EN: Visualize the normal.
+    //     There is no object to world space transform since this sample uses only a single GAS.
     float3 color = 0.5f * sn + make_float3(0.5f);
     optixu::setPayloads<PayloadSignature>(&color);
 }

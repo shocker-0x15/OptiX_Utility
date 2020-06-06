@@ -121,15 +121,6 @@ static std::string readTxtFile(const std::filesystem::path& filepath) {
 
 
 
-float sRGB_degamma_s(float value) {
-    Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
-    if (value <= 0.04045f)
-        return value / 12.92f;
-    return std::pow((value + 0.055f) / 1.055f, 2.4f);
-};
-
-
-
 int32_t mainFunc(int32_t argc, const char* argv[]) {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
@@ -401,9 +392,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             Shared::Vertex &v1 = vertices[tri.index1];
             Shared::Vertex &v2 = vertices[tri.index2];
             float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-            v0.normal = v0.normal + gn;
-            v1.normal = v1.normal + gn;
-            v2.normal = v2.normal + gn;
+            v0.normal += gn;
+            v1.normal += gn;
+            v2.normal += gn;
         }
         for (int vIdx = 0; vIdx < vertices.size(); ++vIdx) {
             Shared::Vertex &v = vertices[vIdx];
@@ -423,7 +414,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         geomData[geomInstIndex].vertexBuffer = vertexBuffer2.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer2.getDevicePointer();
 
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(scale3x3(0.03f), make_float3(0.0f, -1.0f, 0.0f));
+        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(rotateY3x3(M_PI / 4) * scale3x3(0.04f),
+                                                                    make_float3(0.0f, -1.0f, 0.0f));
 
         ++geomInstIndex;
     }
