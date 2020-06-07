@@ -34,7 +34,7 @@
 
 #include <cuda_runtime.h> // only for vector types.
 
-#include "single_gas_shared.h"
+#include "single_level_instancing_shared.h"
 #include "../stopwatch.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -139,14 +139,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: このサンプルでは単一のGASのみを使用する。
-    // EN: This sample uses only a single GAS.
+    // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
+    // EN: This sample uses two-level AS (single-level instancing).
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "single_gas/ptxes/optix_kernels.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "single_level_instancing/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
@@ -203,10 +203,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::TypedBuffer<Shared::GeometryData> geomDataBuffer;
     geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
     Shared::GeometryData* geomData = geomDataBuffer.map();
-
-    cudau::TypedBuffer<Shared::GeometryPreTransform> preTransformBuffer;
-    preTransformBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
-    Shared::GeometryPreTransform* preTransforms = preTransformBuffer.map();
 
     uint32_t geomInstIndex = 0;
 
@@ -268,8 +264,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         geomData[geomInstIndex].vertexBuffer = vertexBuffer0.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer0.getDevicePointer();
 
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.0f, 0.0f));
-
         ++geomInstIndex;
     }
 
@@ -300,8 +294,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         geomData[geomInstIndex].vertexBuffer = vertexBuffer1.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer1.getDevicePointer();
-
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.999f, 0.0f));
 
         ++geomInstIndex;
     }
@@ -414,13 +406,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         geomData[geomInstIndex].vertexBuffer = vertexBuffer2.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer2.getDevicePointer();
 
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(rotateY3x3(M_PI / 4) * scale3x3(0.04f),
-                                                                    make_float3(0.0f, -1.0f, 0.0f));
-
         ++geomInstIndex;
     }
 
-    preTransformBuffer.unmap();
     geomDataBuffer.unmap();
 
 
@@ -431,45 +419,123 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer asBuildScratchMem;
 
     // JP: Geometry Acceleration Structureを生成する。
-    // EN: Create an geometry acceleration structure.
-    optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasMem;
-    cudau::Buffer gasCompactedMem;
-    gas.setConfiguration(true, false, true, false);
-    gas.setNumMaterialSets(1);
-    gas.setNumRayTypes(0, Shared::NumRayTypes);
-    gas.addChild(geomInst0/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
-    // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
-    //     指定されたTransformを用いてAcceleration Structureが作られる。
-    //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
-    // EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
-    //     Acceleration structure is built using the specified transform.
-    //     Note that geometry that given by the user in a kernel is not transformed.
-    gas.addChild(geomInst1, preTransformBuffer.getCUdeviceptrAt(1));
-    gas.addChild(geomInst2, preTransformBuffer.getCUdeviceptrAt(2));
-    gas.prepareForBuild(&asMemReqs);
-    gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    // EN: Create geometry acceleration structures.
+    optixu::GeometryAccelerationStructure gas0 = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gas0Mem;
+    cudau::Buffer gas0CompactedMem;
+    gas0.setConfiguration(true, false, true, false);
+    gas0.setNumMaterialSets(1);
+    gas0.setNumRayTypes(0, Shared::NumRayTypes);
+    gas0.addChild(geomInst0);
+    gas0.prepareForBuild(&asMemReqs);
+    gas0Mem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::GeometryAccelerationStructure gas1 = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gas1Mem;
+    cudau::Buffer gas1CompactedMem;
+    gas1.setConfiguration(true, false, true, false);
+    gas1.setNumMaterialSets(1);
+    gas1.setNumRayTypes(0, Shared::NumRayTypes);
+    gas1.addChild(geomInst1);
+    gas1.prepareForBuild(&asMemReqs);
+    gas1Mem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::GeometryAccelerationStructure gas2 = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gas2Mem;
+    cudau::Buffer gas2CompactedMem;
+    gas2.setConfiguration(true, false, true, false);
+    gas2.setNumMaterialSets(1);
+    gas2.setNumRayTypes(0, Shared::NumRayTypes);
+    gas2.addChild(geomInst2);
+    gas2.prepareForBuild(&asMemReqs);
+    gas2Mem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    OptixTraversableHandle travHandle = gas.rebuild(cuStream, gasMem, asBuildScratchMem);
+    gas0.rebuild(cuStream, gas0Mem, asBuildScratchMem);
+    gas1.rebuild(cuStream, gas1Mem, asBuildScratchMem);
+    gas2.rebuild(cuStream, gas2Mem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
-    size_t compactedASSize;
-    gas.prepareForCompact(&compactedASSize);
-    gasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    travHandle = gas.compact(cuStream, gasCompactedMem);
-    gas.removeUncompacted();
+    size_t gas0CompactedSize;
+    gas0.prepareForCompact(&gas0CompactedSize);
+    gas0CompactedMem.initialize(cuContext, cudau::BufferType::Device, gas0CompactedSize, 1);
+    size_t gas1CompactedSize;
+    gas1.prepareForCompact(&gas1CompactedSize);
+    gas1CompactedMem.initialize(cuContext, cudau::BufferType::Device, gas1CompactedSize, 1);
+    size_t gas2CompactedSize;
+    gas2.prepareForCompact(&gas2CompactedSize);
+    gas2CompactedMem.initialize(cuContext, cudau::BufferType::Device, gas2CompactedSize, 1);
+
+    gas0.compact(cuStream, gas0CompactedMem);
+    gas0.removeUncompacted();
+    gas1.compact(cuStream, gas1CompactedMem);
+    gas1.removeUncompacted();
+    gas2.compact(cuStream, gas2CompactedMem);
+    gas2.removeUncompacted();
 
 
 
+    // JP: GASを元にインスタンスを作成する。
+    // EN: Create instances based on GASs.
+    optixu::Instance inst0 = scene.createInstance();
+    inst0.setGAS(gas0);
+    
+    float inst1Tr[] = {
+        1, 0, 0, 0,
+        0, 1, 0, 0.999,
+        0, 0, 1, 0
+    };
+    optixu::Instance inst1 = scene.createInstance();
+    inst1.setGAS(gas1);
+    inst1.setTransform(inst1Tr);
+
+    float inst2Tr[] = {
+        0.04f, 0, 0, 0,
+        0, 0.04f, 0, -1,
+        0, 0, 0.04f, 0
+    };
+    optixu::Instance inst2 = scene.createInstance();
+    inst2.setGAS(gas2);
+    inst2.setTransform(inst2Tr);
+
+
+
+    // JP: IAS作成時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
+    //     確定している必要がある。
+    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
+    //     when creating an IAS.
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
     scene.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+
+
+
+    // JP: Instance Acceleration Structureを生成する。
+    // EN: Create an instance acceleration structure.
+    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+    cudau::Buffer iasMem;
+    uint32_t numInstances;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    ias.setConfiguration(true, false, false);
+    ias.addChild(inst0);
+    ias.addChild(inst1);
+    ias.addChild(inst2);
+    ias.prepareForBuild(&asMemReqs, &numInstances);
+    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
+        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
+
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -488,7 +554,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
     plp.geomInstData = geomDataBuffer.getDevicePointer();
-    plp.geomPreTransforms = preTransformBuffer.getDevicePointer();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.accumBuffer = accumBuffer.getBlockBuffer2D();
@@ -533,12 +598,23 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     accumBuffer.finalize();
 
+    asBuildScratchMem.finalize();
+
+    instanceBuffer.finalize();
+    iasMem.finalize();
+    ias.destroy();
+
     shaderBindingTable.finalize();
 
-    gasCompactedMem.finalize();
-    asBuildScratchMem.finalize();
-    gasMem.finalize();
-    gas.destroy();
+    gas2CompactedMem.finalize();
+    gas1CompactedMem.finalize();
+    gas0CompactedMem.finalize();
+    gas2Mem.finalize();
+    gas2.destroy();
+    gas1Mem.finalize();
+    gas1.destroy();
+    gas0Mem.finalize();
+    gas0.destroy();
 
     triangleBuffer2.finalize();
     vertexBuffer2.finalize();
@@ -552,7 +628,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     vertexBuffer0.finalize();
     geomInst0.destroy();
 
-    preTransformBuffer.finalize();
     geomDataBuffer.finalize();
 
     scene.destroy();

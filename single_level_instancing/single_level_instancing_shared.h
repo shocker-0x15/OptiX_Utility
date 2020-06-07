@@ -262,30 +262,11 @@ namespace Shared {
         const Triangle* triangleBuffer;
     };
 
-    struct alignas(OPTIX_GEOMETRY_TRANSFORM_BYTE_ALIGNMENT) GeometryPreTransform {
-        float matSRT[12]; // row major (used by OptiX internal)
-        Matrix3x3 matSR_N; // column major
-
-        GeometryPreTransform() {}
-        GeometryPreTransform(const Matrix3x3 &matSR, const float3 &translate) {
-            matSRT[0] = matSR.m00; matSRT[1] = matSR.m01; matSRT[ 2] = matSR.m02; matSRT[ 3] = translate.x;
-            matSRT[4] = matSR.m10; matSRT[5] = matSR.m11; matSRT[ 6] = matSR.m12; matSRT[ 7] = translate.y;
-            matSRT[8] = matSR.m20; matSRT[9] = matSR.m21; matSRT[10] = matSR.m22; matSRT[11] = translate.z;
-            matSR_N = transpose(inverse(matSR));
-        }
-
-        RT_FUNCTION float3 transformNormal(const float3 &n) const {
-            return matSR_N * n;
-        }
-    };
-    static_assert(sizeof(GeometryPreTransform) == 96, "Unexpected sizeof(GeometryPreTransform).");
-
 
 
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
         const GeometryData* geomInstData;
-        const GeometryPreTransform* geomPreTransforms;
         int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
         optixu::BlockBuffer2D<float4, 1> accumBuffer;
         PerspectiveCamera camera;
