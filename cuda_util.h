@@ -258,8 +258,11 @@ namespace cudau {
             glBindBuffer(GL_ARRAY_BUFFER, currentBuffer);
             if (size % stride != 0)
                 throw std::runtime_error("Given buffer's size is not a multiple of the given stride.");
-            initialize(context, BufferType::GL_Interop, size, 1, glBufferID);
+            initialize(context, BufferType::GL_Interop, size / stride, stride, glBufferID);
 #else
+            (void)context;
+            (void)stride;
+            (void)glBufferID;
             throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
 #endif
         }
@@ -533,6 +536,9 @@ namespace cudau {
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
                        surfaceLoadStore == ArraySurface::Enable, false, false, glTexID);
 #else
+            (void)context;
+            (void)glTexID;
+            (void)surfaceLoadStore;
             throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
 #endif
         }
