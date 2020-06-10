@@ -113,7 +113,7 @@ namespace cudau {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             CUDADRV_CHECK(cuGraphicsGLRegisterBuffer(&m_cudaGfxResource, m_GLBufferID, CU_GRAPHICS_REGISTER_FLAGS_NONE));
 #else
-            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
+            throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
 #endif
         }
         else if (m_type == BufferType::ZeroCopy) {
@@ -369,6 +369,7 @@ namespace cudau {
 
 
 
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
     void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels) {
 #define CUDA_UTIL_EXPR0(glEnum, arrayEnum, numCh) \
     case glEnum: \
@@ -399,6 +400,7 @@ namespace cudau {
 #undef CUDA_UTIL_EXPR1
 #undef CUDA_UTIL_EXPR0
     }
+#endif
     
     Array::Array() :
         m_cuContext(nullptr),
@@ -566,9 +568,13 @@ namespace cudau {
         m_stride *= numChannels;
 
         if (glTexID != 0) {
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
             uint32_t flags = surfaceLoadStore ? CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST : CU_GRAPHICS_REGISTER_FLAGS_READ_ONLY;
             CUDADRV_CHECK(cuGraphicsGLRegisterImage(&m_cudaGfxResource, glTexID, GL_TEXTURE_2D, flags));
             m_GLTexID = glTexID;
+#else
+            throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of the header if you use CUDA/OpenGL interoperability.");
+#endif
         }
         else {
             if (m_numMipmapLevels > 1)

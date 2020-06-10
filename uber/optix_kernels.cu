@@ -6,7 +6,7 @@
 
 using namespace Shared;
 
-extern "C" __constant__ PipelineLaunchParameters plp;
+extern "C" RT_CONSTANT_MEMORY PipelineLaunchParameters plp;
 
 
 
@@ -37,8 +37,8 @@ RT_PROGRAM void RT_RG_NAME(pathtracing)() {
 
     PCG32RNG rng = plp.rngBuffer[launchIndex];
 
-    float x = (float)(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
-    float y = (float)(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
+    float x = static_cast<float>(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
+    float y = static_cast<float>(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 

@@ -1685,7 +1685,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
 
+            outputTexture.finalize();
             outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F);
+            outputArray.finalize();
             outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(), cudau::ArraySurface::Enable);
 
             frameBuffer.finalize();

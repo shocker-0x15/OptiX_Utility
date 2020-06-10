@@ -248,7 +248,7 @@ namespace cudau {
                         uint32_t numElements, uint32_t stride) {
             initialize(context, type, numElements, stride, 0);
         }
-        void initializeFromGLBuffer(CUcontext context, uint32_t glBufferID) {
+        void initializeFromGLBuffer(CUcontext context, uint32_t stride, uint32_t glBufferID) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             GLint currentBuffer;
             glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &currentBuffer);
@@ -257,8 +257,10 @@ namespace cudau {
             glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
             glBindBuffer(GL_ARRAY_BUFFER, currentBuffer);
             initialize(context, BufferType::GL_Interop, size, 1, glBufferID);
+            if (size % stride != 0)
+                throw std::runtime_error("Given buffer's size is not a multiple of the given stride.");
 #else
-            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
+            throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
 #endif
         }
         void finalize();
@@ -302,8 +304,8 @@ namespace cudau {
         void unmap();
         template <typename T>
         void transfer(const T* srcValues, uint32_t numValues) {
-            CUDAUAssert(sizeof(T) * numValues <= static_cast<size_t>(m_stride) * m_numElements,
-                        "Too large transfer.");
+            if (sizeof(T) * numValues > static_cast<size_t>(m_stride) * m_numElements)
+                throw std::runtime_error("Too large transfer.");
             auto dstValues = map<T>();
             std::copy_n(srcValues, numValues, dstValues);
             unmap();
@@ -450,7 +452,9 @@ namespace cudau {
         Disable,
     };
 
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
     void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels);
+#endif
     
     class Array {
         CUcontext m_cuContext;
@@ -529,7 +533,7 @@ namespace cudau {
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
                        surfaceLoadStore == ArraySurface::Enable, false, false, glTexID);
 #else
-            CUDAUAssert(false, "Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
+            throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
 #endif
         }
         void finalize();
@@ -583,8 +587,8 @@ namespace cudau {
             uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
             uint32_t depth = std::max<uint32_t>(1, m_depth);
             size_t size = static_cast<size_t>(m_stride) * depth * height * width;
-            CUDAUAssert(sizeof(T) * numValues <= size,
-                        "Too large transfer.");
+            if (sizeof(T) * numValues > size)
+                throw std::runtime_error("Too large transfer.");
             auto dstValues = map<T>(mipmapLevel);
             std::copy_n(srcValues, numValues, dstValues);
             unmap();
