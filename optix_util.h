@@ -121,16 +121,16 @@ namespace optixu {
 #endif
 
 #if 1
-#   define optixPrintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
+#   define optixPrintf(fmt, ...) do { optixu::devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
 #else
 #   define optixPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
 #if defined(OPTIX_ENABLE_ASSERT)
 #   if defined(__CUDA_ARCH__)
-#   define optixAssert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); } 0
+#   define optixAssert(expr, fmt, ...) if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); } 0
 #   else
-#   define optixAssert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
+#   define optixAssert(expr, fmt, ...) if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
 #   endif
 #else
 #   define optixAssert(expr, fmt, ...)

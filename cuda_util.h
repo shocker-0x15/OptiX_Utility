@@ -256,9 +256,9 @@ namespace cudau {
             GLint size;
             glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
             glBindBuffer(GL_ARRAY_BUFFER, currentBuffer);
-            initialize(context, BufferType::GL_Interop, size, 1, glBufferID);
             if (size % stride != 0)
                 throw std::runtime_error("Given buffer's size is not a multiple of the given stride.");
+            initialize(context, BufferType::GL_Interop, size, 1, glBufferID);
 #else
             throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
 #endif
