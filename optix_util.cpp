@@ -161,6 +161,8 @@ namespace optixu {
             input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
             OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
 
+            primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
+
             aabbArray.aabbBuffers = primitiveAabbBufferArray;
             aabbArray.numPrimitives = numPrimitives;
             aabbArray.strideInBytes = primitiveAABBBuffer->stride();
@@ -184,6 +186,8 @@ namespace optixu {
         else {
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
+
+            vertexBufferArray[0] = vertexBuffer->getCUdeviceptr() + offsetInBytesForVertices;
 
             triArray.vertexBuffers = vertexBufferArray;
             triArray.numVertices = numVertices;
@@ -219,6 +223,7 @@ namespace optixu {
         if (forCustomPrimitives) {
             OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
 
+            primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
             aabbArray.aabbBuffers = primitiveAabbBufferArray;
 
             if (aabbArray.numSbtRecords > 1) {
@@ -229,6 +234,7 @@ namespace optixu {
         else {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
+            vertexBufferArray[0] = vertexBuffer->getCUdeviceptr() + offsetInBytesForVertices;
             triArray.vertexBuffers = vertexBufferArray;
 
             triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
@@ -276,7 +282,6 @@ namespace optixu {
     void GeometryInstance::setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes, uint32_t numVertices) const {
         THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->vertexBuffer = vertexBuffer;
-        m->vertexBufferArray[0] = vertexBuffer->getCUdeviceptr() + offsetInBytes;
         m->offsetInBytesForVertices = offsetInBytes;
         m->numVertices = std::min<uint32_t>(vertexBuffer->numElements(), numVertices);
     }
@@ -291,7 +296,6 @@ namespace optixu {
     void GeometryInstance::setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
         THROW_RUNTIME_ERROR(m->forCustomPrimitives, "This geometry instance was created for triangles.");
         m->primitiveAABBBuffer = primitiveAABBBuffer;
-        m->primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytes;
         m->offsetInBytesForPrimitives = offsetInBytes;
         m->numPrimitives = std::min<uint32_t>(primitiveAABBBuffer->numElements(), numPrimitives);;
     }

@@ -319,14 +319,14 @@ namespace optixu {
         // TODO: support deformation blur (multiple vertex buffers)
         union {
             struct {
-                CUdeviceptr vertexBufferArray[1];
+                CUdeviceptr* vertexBufferArray;
                 const Buffer* vertexBuffer;
                 const Buffer* triangleBuffer;
                 uint32_t offsetInBytesForVertices;
                 uint32_t numVertices;
             };
             struct {
-                CUdeviceptr primitiveAabbBufferArray[1];
+                CUdeviceptr* primitiveAabbBufferArray;
                 const Buffer* primitiveAABBBuffer;
             };
         };
@@ -351,16 +351,23 @@ namespace optixu {
             materialIndexOffsetBuffer(nullptr),
             forCustomPrimitives(_forCustomPrimitives) {
             if (forCustomPrimitives) {
+                primitiveAabbBufferArray = new CUdeviceptr[1];
                 primitiveAabbBufferArray[0] = 0;
                 primitiveAABBBuffer = nullptr;
             }
             else {
+                vertexBufferArray = new CUdeviceptr[1];
                 vertexBufferArray[0] = 0;
                 vertexBuffer = nullptr;
                 triangleBuffer = nullptr;
             }
         }
-        ~Priv() {}
+        ~Priv() {
+            if (forCustomPrimitives)
+                delete[] primitiveAabbBufferArray;
+            else
+                delete[] vertexBufferArray;
+        }
 
         const _Scene* getScene() const {
             return scene;

@@ -299,26 +299,33 @@ namespace cudau {
         void beginCUDAAccess(CUstream stream);
         void endCUDAAccess(CUstream stream);
 
-        void* map();
+        void* map(CUstream stream = 0);
         template <typename T>
-        T* map() {
-            return reinterpret_cast<T*>(map());
+        T* map(CUstream stream = 0) {
+            return reinterpret_cast<T*>(map(stream));
         }
-        void unmap();
+        void unmap(CUstream stream = 0);
+        void* getMappedPointer() const {
+            return m_mappedPointer;
+        }
         template <typename T>
-        void transfer(const T* srcValues, uint32_t numValues) {
+        T* getMappedPointer() const {
+            return reinterpret_cast<T*>(m_mappedPointer);
+        }
+        template <typename T>
+        void transfer(const T* srcValues, uint32_t numValues, CUstream stream = 0) {
             if (sizeof(T) * numValues > static_cast<size_t>(m_stride) * m_numElements)
                 throw std::runtime_error("Too large transfer.");
-            auto dstValues = map<T>();
+            auto dstValues = map<T>(stream);
             std::copy_n(srcValues, numValues, dstValues);
-            unmap();
+            unmap(stream);
         }
         template <typename T>
-        void fill(const T &value) {
+        void fill(const T &value, CUstream stream = 0) {
             size_t numValues = (static_cast<size_t>(m_stride) * m_numElements) / sizeof(T);
-            auto dstValues = map<T>();
+            auto dstValues = map<T>(stream);
             std::fill_n(dstValues, numValues, value);
-            unmap();
+            unmap(stream);
         }
 
         Buffer copy() const;
@@ -374,14 +381,17 @@ namespace cudau {
             return reinterpret_cast<T*>(getCUdeviceptrAt(idx));
         }
 
-        T* map() {
-            return Buffer::map<T>();
+        T* map(CUstream stream = 0) {
+            return Buffer::map<T>(stream);
         }
-        void transfer(const T* srcValues, uint32_t numValues) {
-            Buffer::transfer<T>(srcValues, numValues);
+        T* getMappedPointer() const {
+            return Buffer::getMappedPointer<T>();
         }
-        void fill(const T &value) {
-            Buffer::fill<T>(value);
+        void transfer(const T* srcValues, uint32_t numValues, CUstream stream = 0) {
+            Buffer::transfer<T>(srcValues, numValues, stream);
+        }
+        void fill(const T &value, CUstream stream = 0) {
+            Buffer::fill<T>(value, stream);
         }
 
         T operator[](uint32_t idx) {
@@ -581,34 +591,34 @@ namespace cudau {
         void beginCUDAAccess(CUstream stream, uint32_t mipmapLevel);
         void endCUDAAccess(CUstream stream, uint32_t mipmapLevel);
 
-        void* map(uint32_t mipmapLevel = 0);
+        void* map(uint32_t mipmapLevel = 0, CUstream stream = 0);
         template <typename T>
-        T* map(uint32_t mipmapLevel = 0) {
-            return reinterpret_cast<T*>(map(mipmapLevel));
+        T* map(uint32_t mipmapLevel = 0, CUstream stream = 0) {
+            return reinterpret_cast<T*>(map(mipmapLevel, stream));
         }
-        void unmap(uint32_t mipmapLevel = 0);
+        void unmap(uint32_t mipmapLevel = 0, CUstream stream = 0);
         template <typename T>
-        void transfer(const T* srcValues, uint32_t numValues, uint32_t mipmapLevel = 0) {
+        void transfer(const T* srcValues, uint32_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) {
             uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
             uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
             uint32_t depth = std::max<uint32_t>(1, m_depth);
             size_t size = static_cast<size_t>(m_stride) * depth * height * width;
             if (sizeof(T) * numValues > size)
                 throw std::runtime_error("Too large transfer.");
-            auto dstValues = map<T>(mipmapLevel);
+            auto dstValues = map<T>(mipmapLevel, stream);
             std::copy_n(srcValues, numValues, dstValues);
-            unmap();
+            unmap(mipmapLevel, stream);
         }
         template <typename T>
-        void fill(const T &value, uint32_t mipmapLevel = 0) {
+        void fill(const T &value, uint32_t mipmapLevel = 0, CUstream stream = 0) {
             uint32_t width = std::max<uint32_t>(1, m_width >> mipmapLevel);
             uint32_t height = std::max<uint32_t>(1, m_height >> mipmapLevel);
             uint32_t depth = std::max<uint32_t>(1, m_depth);
             size_t size = static_cast<size_t>(m_stride) * depth * height * width;
             size_t numValues = size / sizeof(T);
-            auto dstValues = map<T>(mipmapLevel);
+            auto dstValues = map<T>(mipmapLevel, stream);
             std::fill_n(dstValues, numValues, value);
-            unmap();
+            unmap(mipmapLevel, stream);
         }
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;

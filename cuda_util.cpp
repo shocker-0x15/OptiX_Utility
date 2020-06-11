@@ -216,7 +216,7 @@ namespace cudau {
         CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
 
-    void* Buffer::map() {
+    void* Buffer::map(CUstream stream) {
         if (m_mapped)
             throw std::runtime_error("This buffer is already mapped.");
 
@@ -232,7 +232,7 @@ namespace cudau {
             if (m_type == BufferType::GL_Interop)
                 beginCUDAAccess(0);
 
-            CUDADRV_CHECK(cuMemcpyDtoH(m_mappedPointer, m_devicePointer, size));
+            CUDADRV_CHECK(cuMemcpyDtoHAsync(m_mappedPointer, m_devicePointer, size, stream));
 
             return m_mappedPointer;
         }
@@ -241,7 +241,7 @@ namespace cudau {
         }
     }
 
-    void Buffer::unmap() {
+    void Buffer::unmap(CUstream stream) {
         if (!m_mapped)
             throw std::runtime_error("This buffer is not mapped.");
 
@@ -253,7 +253,7 @@ namespace cudau {
 
             size_t size = static_cast<size_t>(m_numElements) * m_stride;
 
-            CUDADRV_CHECK(cuMemcpyHtoD(m_devicePointer, m_mappedPointer, size));
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(m_devicePointer, m_mappedPointer, size, stream));
 
             if (m_type == BufferType::GL_Interop)
                 endCUDAAccess(0);
@@ -683,7 +683,7 @@ namespace cudau {
         CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
 
-    void* Array::map(uint32_t mipmapLevel) {
+    void* Array::map(uint32_t mipmapLevel, CUstream stream) {
         if (m_mappedPointers[mipmapLevel])
             throw std::runtime_error("This mip-map level is already mapped.");
         if (mipmapLevel >= m_numMipmapLevels)
@@ -736,12 +736,12 @@ namespace cudau {
         params.dstZ = 0;
         // dstArray, dstDevice, dstLOD are not used in this case.
 
-        CUDADRV_CHECK(cuMemcpy3D(&params));
+        CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
 
         return m_mappedPointers[mipmapLevel];
     }
 
-    void Array::unmap(uint32_t mipmapLevel) {
+    void Array::unmap(uint32_t mipmapLevel, CUstream stream) {
         if (!m_mappedPointers[mipmapLevel])
             throw std::runtime_error("This mip-map level is not mapped.");
         if (mipmapLevel >= m_numMipmapLevels)
@@ -775,7 +775,7 @@ namespace cudau {
         params.dstZ = 0;
         // dstDevice, dstHeight, dstHost, dstLOD, dstPitch are not used in this case.
 
-        CUDADRV_CHECK(cuMemcpy3D(&params));
+        CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
 
         delete[] m_mappedPointers[mipmapLevel];
         m_mappedPointers[mipmapLevel] = nullptr;
