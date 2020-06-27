@@ -958,8 +958,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     CUtexObject* textureObjects = textureObjectBuffer.map();
 
+    cudau::TextureSampler texSampler;
+    texSampler.setFilterMode(cudau::TextureFilterMode::Point,
+                             cudau::TextureFilterMode::Point);
+    texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+    texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
+
     cudau::Array arrayCheckerBoard;
-    cudau::TextureSampler texCheckerBoard;
     {
 #if defined(USE_BLOCK_COMPRESSED_TEXTURE)
         int32_t width, height, mipCount;
@@ -967,7 +972,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         DDS::Format format;
         uint8_t** ddsData = DDS::load("../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
-        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
+        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                       cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                        width, height, 1/*mipCount*/);
         for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
             arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
@@ -976,22 +982,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 #else
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("../data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
+        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                                       cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                        width, height, 1);
         arrayCheckerBoard.transfer<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
     }
-    texCheckerBoard.setArray(arrayCheckerBoard);
-    texCheckerBoard.setFilterMode(cudau::TextureFilterMode::Point,
-                                  cudau::TextureFilterMode::Point);
-    texCheckerBoard.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
-    texCheckerBoard.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
     uint32_t texCheckerBoardIndex = textureID++;
-    textureObjects[texCheckerBoardIndex] = texCheckerBoard.getTextureObject();
+    textureObjects[texCheckerBoardIndex] = texSampler.createTextureObject(arrayCheckerBoard);
 
     cudau::Array arrayGrid;
-    cudau::TextureSampler texGrid;
     {
 #if defined(USE_BLOCK_COMPRESSED_TEXTURE)
         int32_t width, height, mipCount;
@@ -999,7 +1000,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         DDS::Format format;
         uint8_t** ddsData = DDS::load("../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
 
-        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1, cudau::ArraySurface::Disable,
+        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                width, height, 1/*mipCount*/);
         for (int i = 0; i < arrayGrid.getNumMipmapLevels(); ++i)
             arrayGrid.transfer<uint8_t>(ddsData[i], sizes[i], i);
@@ -1008,19 +1010,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 #else
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("../data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4, cudau::ArraySurface::Disable,
+        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                width, height, 1);
         arrayGrid.transfer<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
     }
-    texGrid.setArray(arrayGrid);
-    texGrid.setFilterMode(cudau::TextureFilterMode::Point,
-                          cudau::TextureFilterMode::Point);
-    texGrid.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
-    texGrid.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
     uint32_t texGridIndex = textureID++;
-    textureObjects[texGridIndex] = texGrid.getTextureObject();
+    textureObjects[texGridIndex] = texSampler.createTextureObject(arrayGrid);
 
     const char* textureNames[] = {
         "Checkerboard",
@@ -1529,7 +1527,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     GLTK::Texture2D outputTexture;
     cudau::Array outputArray;
     outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F); GLTK::errorCheck();
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(), cudau::ArraySurface::Enable);
+    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(),
+                                          cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
 
     
@@ -1605,7 +1604,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.numAccumFrames = 1;
     plp.rngBuffer = rngBuffer.getBlockBuffer2D();
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    plp.accumBuffer = surfViewAccumBuffer.getSurfaceObject();
+    plp.accumBuffer = surfViewAccumBuffer.createSurfaceObject();
 #else
     plp.accumBuffer = accumBuffer.getBlockBuffer2D();
 #endif
@@ -1624,7 +1623,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     hpprintf("Render loop.\n");
 
-    CUsurfObject outputBufferSurface[2];
+    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
+    outputBufferSurfaceHolder.initialize(&outputArray);
     
     StopWatchHiRes<> sw;
     std::mt19937_64 rng(3092384202);
@@ -1688,7 +1688,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             outputTexture.finalize();
             outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(), cudau::ArraySurface::Enable);
+            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(),
+                                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             frameBuffer.finalize();
             frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
@@ -1708,7 +1709,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             plp.numAccumFrames = 1;
             plp.rngBuffer = rngBuffer.getBlockBuffer2D();
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-            plp.accumBuffer = surfViewAccumBuffer.getSurfaceObject();
+            plp.accumBuffer = surfViewAccumBuffer.createSurfaceObject();
 #else
             plp.accumBuffer = accumBuffer.getBlockBuffer2D();
 #endif
@@ -2114,19 +2115,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         sw.start();
         curGPUTimer.postProcess.start(curCuStream);
         cudau::dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
-        outputArray.beginCUDAAccess(curCuStream, 0);
-        if (frameIndex >= 2)
-            CUDADRV_CHECK(cuSurfObjectDestroy(outputBufferSurface[bufferIndex]));
-        outputBufferSurface[bufferIndex] = outputArray.getSurfaceObject(0);
+        outputBufferSurfaceHolder.beginCUDAAccess(curCuStream);
         kernelPostProcess(curCuStream, dimPostProcess,
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-                          surfViewAccumBuffer.getSurfaceObject(),
+                          surfViewAccumBuffer.createSurfaceObject(),
 #else
                           accumBuffer.getBlockBuffer2D(),
 #endif
                           renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
-                          outputBufferSurface[bufferIndex]);
-        outputArray.endCUDAAccess(curCuStream, 0);
+                          outputBufferSurfaceHolder.getNext());
+        outputBufferSurfaceHolder.endCUDAAccess(curCuStream);
         curGPUTimer.postProcess.stop(curCuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;
@@ -2212,6 +2210,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         sw.clearAllMeasurements();
     }
 
+    outputBufferSurfaceHolder.finalize();
+
 
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
@@ -2287,9 +2287,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     materialDataBuffer.finalize();
 
-    texGrid.destroyTextureObject();
+    textureObjects = textureObjectBuffer.map();
+    for (int i = textureID - 1; i >= 0; --i)
+        CUDADRV_CHECK(cuTexObjectDestroy(textureObjects[i]));
+    textureObjectBuffer.unmap();
     arrayGrid.finalize();
-    texCheckerBoard.destroyTextureObject();
     arrayCheckerBoard.finalize();
 
     textureObjectBuffer.finalize();

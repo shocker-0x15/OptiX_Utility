@@ -469,7 +469,7 @@ namespace cudau {
     
     void Array::initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
                            uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels,
-                           bool surfaceLoadStore, bool cubemap, bool layered, uint32_t glTexID) {
+                           bool surfaceLoadStore, bool useTextureGather, bool cubemap, bool layered, uint32_t glTexID) {
         if (m_initialized)
             throw std::runtime_error("Array is already initialized.");
         if (numChannels != 1 && numChannels != 2 && numChannels != 4)
@@ -490,12 +490,15 @@ namespace cudau {
         m_elemType = elemType;
         m_numChannels = numChannels;
         m_surfaceLoadStore = surfaceLoadStore;
+        m_useTextureGather = useTextureGather;
         m_cubemap = cubemap;
         m_layered = layered;
 
         CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
         if (surfaceLoadStore)
             arrayDesc.Flags |= CUDA_ARRAY3D_SURFACE_LDST;
+        if (useTextureGather)
+            arrayDesc.Flags |= CUDA_ARRAY3D_TEXTURE_GATHER;
         if (layered)
             arrayDesc.Flags |= CUDA_ARRAY3D_LAYERED;
         if (cubemap)
@@ -569,7 +572,8 @@ namespace cudau {
 
         if (glTexID != 0) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
-            uint32_t flags = surfaceLoadStore ? CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST : CU_GRAPHICS_REGISTER_FLAGS_READ_ONLY;
+            uint32_t flags = ((surfaceLoadStore ? CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST : CU_GRAPHICS_REGISTER_FLAGS_READ_ONLY) |
+                              (useTextureGather ? CU_GRAPHICS_REGISTER_FLAGS_TEXTURE_GATHER : 0));
             CUDADRV_CHECK(cuGraphicsGLRegisterImage(&m_cudaGfxResource, glTexID, GL_TEXTURE_2D, flags));
             m_GLTexID = glTexID;
 #else
@@ -633,7 +637,7 @@ namespace cudau {
 
         Array newArray;
         newArray.initialize(m_cuContext, m_elemType, m_numChannels, width, height, m_depth, m_numMipmapLevels,
-                            m_surfaceLoadStore, m_cubemap, m_layered, 0);
+                            m_surfaceLoadStore, m_useTextureGather, m_cubemap, m_layered, 0);
 
         size_t sizePerRow = std::min(m_width, width) * static_cast<size_t>(m_stride);
 

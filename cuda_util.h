@@ -465,6 +465,11 @@ namespace cudau {
         Disable,
     };
 
+    enum class ArrayTextureGather {
+        Enable = 0,
+        Disable,
+    };
+
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
     void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels);
 #endif
@@ -492,6 +497,7 @@ namespace cudau {
 
         struct {
             unsigned int m_surfaceLoadStore : 1;
+            unsigned int m_useTextureGather : 1;
             unsigned int m_cubemap : 1;
             unsigned int m_layered : 1;
             unsigned int m_initialized : 1;
@@ -502,7 +508,7 @@ namespace cudau {
 
         void initialize(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
                         uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels,
-                        bool writable, bool cubemap, bool layered, uint32_t glTexID);
+                        bool writable, bool useTextureGather, bool cubemap, bool layered, uint32_t glTexID);
 
     public:
         Array();
@@ -511,22 +517,28 @@ namespace cudau {
         Array(Array &&b);
         Array &operator=(Array &&b);
 
-        void initialize1D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
+        void initialize1D(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
+                          ArraySurface surfaceLoadStore,
                           uint32_t length, uint32_t numMipmapLevels) {
             initialize(context, elemType, numChannels, length, 0, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false, 0);
+                       surfaceLoadStore == ArraySurface::Enable, false, false, false, 0);
         }
-        void initialize2D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
+        void initialize2D(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
+                          ArraySurface surfaceLoadStore, ArrayTextureGather useTextureGather,
                           uint32_t width, uint32_t height, uint32_t numMipmapLevels) {
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false, 0);
+                       surfaceLoadStore == ArraySurface::Enable,
+                       useTextureGather == ArrayTextureGather::Enable,
+                       false, false, 0);
         }
-        void initialize3D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, ArraySurface surfaceLoadStore,
+        void initialize3D(CUcontext context, ArrayElementType elemType, uint32_t numChannels,
+                          ArraySurface surfaceLoadStore,
                           uint32_t width, uint32_t height, uint32_t depth, uint32_t numMipmapLevels) {
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false, 0);
+                       surfaceLoadStore == ArraySurface::Enable, false, false, false, 0);
         }
-        void initializeFromGLTexture2D(CUcontext context, uint32_t glTexID, ArraySurface surfaceLoadStore) {
+        void initializeFromGLTexture2D(CUcontext context, uint32_t glTexID,
+                                       ArraySurface surfaceLoadStore, ArrayTextureGather useTextureGather) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             GLint currentTexture;
             glGetIntegerv(GL_TEXTURE_BINDING_2D, &currentTexture);
@@ -544,7 +556,9 @@ namespace cudau {
             uint32_t numChannels;
             getArrayElementFormat((GLenum)format, &elemType, &numChannels);
             initialize(context, elemType, numChannels, width, height, 0, numMipmapLevels,
-                       surfaceLoadStore == ArraySurface::Enable, false, false, glTexID);
+                       surfaceLoadStore == ArraySurface::Enable,
+                       useTextureGather == ArrayTextureGather::Enable,
+                       false, false, glTexID);
 #else
             (void)context;
             (void)glTexID;
@@ -559,13 +573,20 @@ namespace cudau {
         void resize(uint32_t width, uint32_t height, uint32_t depth);
 
         CUarray getCUarray(uint32_t mipmapLevel) const {
-            if (m_numMipmapLevels > 1) {
-                CUarray ret;
-                CUDADRV_CHECK(cuMipmappedArrayGetLevel(&ret, m_mipmappedArray, mipmapLevel));
-                return ret;
+            if (m_GLTexID) {
+                if (m_mappedArrays[mipmapLevel] == nullptr)
+                    throw std::runtime_error("This mip level of this interop array is not mapped.");
+                return m_mappedArrays[mipmapLevel];
             }
             else {
-                return m_array;
+                if (m_numMipmapLevels > 1) {
+                    CUarray ret;
+                    CUDADRV_CHECK(cuMipmappedArrayGetLevel(&ret, m_mipmappedArray, mipmapLevel));
+                    return ret;
+                }
+                else {
+                    return m_array;
+                }
             }
         }
         CUmipmappedArray getCUmipmappedArray() const {
@@ -623,7 +644,7 @@ namespace cudau {
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
 
-        CUsurfObject getSurfaceObject(uint32_t mipmapLevel) const {
+        CUsurfObject createSurfaceObject(uint32_t mipmapLevel) const {
             CUsurfObject ret;
             CUDA_RESOURCE_DESC resDesc = {};
             resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
@@ -633,6 +654,45 @@ namespace cudau {
                 resDesc.res.array.hArray = m_mappedArrays[mipmapLevel];
             CUDADRV_CHECK(cuSurfObjectCreate(&ret, &resDesc));
             return ret;
+        }
+    };
+
+    // MIP-level 0 only
+    template <uint32_t NumBuffers>
+    class InteropSurfaceObjectHolder {
+        Array* m_array;
+        CUsurfObject m_surfObjs[NumBuffers];
+        uint32_t m_bufferIndex;
+
+    public:
+        void initialize(Array* array) {
+            m_array = array;
+            m_bufferIndex = 0;
+            for (int i = 0; i < NumBuffers; ++i)
+                m_surfObjs[i] = 0;
+        }
+        void finalize() {
+            for (int i = 0; i < NumBuffers; ++i) {
+                CUDADRV_CHECK(cuSurfObjectDestroy(m_surfObjs[i]));
+                m_surfObjs[i] = 0;
+            }
+            m_bufferIndex = 0;
+            m_array = nullptr;
+        }
+
+        void beginCUDAAccess(CUstream stream) {
+            m_array->beginCUDAAccess(stream, 0);
+        }
+        void endCUDAAccess(CUstream stream) {
+            m_array->endCUDAAccess(stream, 0);
+        }
+        CUsurfObject getNext() {
+            CUsurfObject &curSurfObj = m_surfObjs[m_bufferIndex];
+            if (curSurfObj)
+                CUDADRV_CHECK(cuSurfObjectDestroy(curSurfObj));
+            curSurfObj = m_array->createSurfaceObject(0);
+            m_bufferIndex = (m_bufferIndex + 1) % NumBuffers;
+            return curSurfObj;
         }
     };
 
@@ -662,98 +722,36 @@ namespace cudau {
     };
     
     class TextureSampler {
-        CUDA_RESOURCE_DESC m_resDesc;
         CUDA_TEXTURE_DESC m_texDesc;
-        CUDA_RESOURCE_VIEW_DESC m_resViewDesc;
-        CUtexObject m_texObject;
-        struct {
-            unsigned int m_texObjectCreated : 1;
-            unsigned int m_texObjectIsUpToDate : 1;
-        };
-
-        TextureSampler(const TextureSampler &) = delete;
-        TextureSampler &operator=(const TextureSampler &) = delete;
 
     public:
-        TextureSampler() : 
-            m_texObjectCreated(false), m_texObjectIsUpToDate(false) {
-            m_resDesc = {};
+        TextureSampler() {
             m_texDesc = {};
             m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
-            m_resViewDesc = {};
         }
         ~TextureSampler() {
-            if (m_texObjectCreated)
-                cuTexObjectDestroy(m_texObject);
-        }
-
-        void destroyTextureObject() {
-            if (m_texObjectCreated) {
-                CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
-                m_texObjectIsUpToDate = false;
-                m_texObjectCreated = false;
-            }
-        }
-
-        TextureSampler(TextureSampler &&t) {
-            m_resDesc = t.m_resDesc;
-            m_texDesc = t.m_texDesc;
-            m_resViewDesc = t.m_resViewDesc;
-            m_texObject = t.m_texObject;
-            m_texObjectCreated = t.m_texObjectCreated;
-            m_texObjectIsUpToDate = t.m_texObjectIsUpToDate;
-
-            t.m_texObjectCreated = false;
-        }
-        TextureSampler &operator=(TextureSampler &&t) {
-            m_resDesc = t.m_resDesc;
-            m_texDesc = t.m_texDesc;
-            m_resViewDesc = t.m_resViewDesc;
-            m_texObject = t.m_texObject;
-            m_texObjectCreated = t.m_texObjectCreated;
-            m_texObjectIsUpToDate = t.m_texObjectIsUpToDate;
-
-            t.m_texObjectCreated = false;
-        }
-
-        void setArray(const Array &array) {
-            if (array.getNumMipmapLevels() > 1) {
-                m_resDesc.resType = CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
-                m_resDesc.res.mipmap.hMipmappedArray = array.getCUmipmappedArray();
-                m_texDesc.maxMipmapLevelClamp = array.getNumMipmapLevels() - 1;
-            }
-            else {
-                m_resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
-                m_resDesc.res.array.hArray = array.getCUarray(0);
-            }
-            m_resViewDesc = array.getResourceViewDesc();
-            m_texObjectIsUpToDate = false;
         }
 
         void setFilterMode(TextureFilterMode xy, TextureFilterMode mipmap) {
             m_texDesc.filterMode = static_cast<CUfilter_mode>(xy);
             m_texDesc.mipmapFilterMode = static_cast<CUfilter_mode>(mipmap);
-            m_texObjectIsUpToDate = false;
         }
         void setWrapMode(uint32_t dim, TextureWrapMode mode) {
             if (dim >= 3)
                 return;
             m_texDesc.addressMode[dim] = static_cast<CUaddress_mode>(mode);
-            m_texObjectIsUpToDate = false;
         }
         void setBorderColor(float r, float g, float b, float a) {
             m_texDesc.borderColor[0] = r;
             m_texDesc.borderColor[1] = g;
             m_texDesc.borderColor[2] = b;
             m_texDesc.borderColor[3] = a;
-            m_texObjectIsUpToDate = false;
         }
         void setIndexingMode(TextureIndexingMode mode) {
             if (mode == TextureIndexingMode::ArrayIndex)
                 m_texDesc.flags &= ~CU_TRSF_NORMALIZED_COORDINATES;
             else
                 m_texDesc.flags |= CU_TRSF_NORMALIZED_COORDINATES;
-            m_texObjectIsUpToDate = false;
         }
         void setReadMode(TextureReadMode mode) {
             if (mode == TextureReadMode::ElementType)
@@ -765,18 +763,74 @@ namespace cudau {
                 m_texDesc.flags |= CU_TRSF_SRGB;
             else
                 m_texDesc.flags &= ~CU_TRSF_SRGB;
-            m_texObjectIsUpToDate = false;
         }
 
-        CUtexObject getTextureObject() {
-            if (m_texObjectCreated && !m_texObjectIsUpToDate)
-                CUDADRV_CHECK(cuTexObjectDestroy(m_texObject));
-            if (!m_texObjectIsUpToDate) {
-                CUDADRV_CHECK(cuTexObjectCreate(&m_texObject, &m_resDesc, &m_texDesc, &m_resViewDesc));
-                m_texObjectCreated = true;
-                m_texObjectIsUpToDate = true;
+        CUtexObject createTextureObject(const Array &array) {
+            CUDA_RESOURCE_DESC resDesc = {};
+            CUDA_RESOURCE_VIEW_DESC resViewDesc = {};
+            if (array.getNumMipmapLevels() > 1) {
+                resDesc.resType = CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
+                resDesc.res.mipmap.hMipmappedArray = array.getCUmipmappedArray();
+                m_texDesc.maxMipmapLevelClamp = array.getNumMipmapLevels() - 1;
             }
-            return m_texObject;
+            else {
+                resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+                resDesc.res.array.hArray = array.getCUarray(0);
+            }
+            resViewDesc = array.getResourceViewDesc();
+
+            CUtexObject texObj;
+            CUDADRV_CHECK(cuTexObjectCreate(&texObj, &resDesc, &m_texDesc, &resViewDesc));
+            return texObj;
+        }
+    };
+
+    template <uint32_t NumBuffers>
+    class InteropTextureObjectHolder {
+        Array* m_arrays;
+        TextureSampler* m_texSampler;
+        CUtexObject m_texObjs[NumBuffers];
+        uint32_t m_numArrays;
+        uint32_t m_arrayIndex;
+        uint32_t m_bufferIndex;
+
+    public:
+        void initialize(Array* arrays, uint32_t numArrays, uint32_t initIndex, TextureSampler* texSampler) {
+            m_arrays = arrays;
+            m_texSampler = texSampler;
+            m_numArrays = numArrays;
+            m_arrayIndex = initIndex;
+            m_bufferIndex = 0;
+            for (int i = 0; i < NumBuffers; ++i)
+                m_texObjs[i] = 0;
+        }
+        void finalize() {
+            for (int i = 0; i < NumBuffers; ++i) {
+                CUDADRV_CHECK(cuTexObjectDestroy(m_texObjs[i]));
+                m_texObjs[i] = 0;
+            }
+            m_bufferIndex = 0;
+            m_arrayIndex = 0;
+            m_texSampler = nullptr;
+            m_arrays = nullptr;
+        }
+
+        void beginCUDAAccess(CUstream stream) {
+            m_arrays[m_arrayIndex].beginCUDAAccess(stream, 0);
+        }
+        void endCUDAAccess(CUstream stream, bool endFrame) {
+            m_arrays[m_arrayIndex].endCUDAAccess(stream, 0);
+            if (endFrame) {
+                m_arrayIndex = (m_arrayIndex + 1) % m_numArrays;
+                m_bufferIndex = (m_bufferIndex + 1) % NumBuffers;
+            }
+        }
+        CUtexObject getNext() {
+            CUsurfObject &curTexObj = m_texObjs[m_bufferIndex];
+            if (curTexObj)
+                CUDADRV_CHECK(cuTexObjectDestroy(curTexObj));
+            curTexObj = m_texSampler->createTextureObject(m_arrays[m_arrayIndex]);
+            return curTexObj;
         }
     };
 }
