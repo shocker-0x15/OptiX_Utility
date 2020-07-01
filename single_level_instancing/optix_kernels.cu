@@ -45,7 +45,7 @@ RT_PROGRAM void RT_RG_NAME(raygen)() {
     float3 color;
     optixu::trace<PayloadSignature>(
         plp.travHandle, origin, direction,
-        0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+        0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
         color);
 

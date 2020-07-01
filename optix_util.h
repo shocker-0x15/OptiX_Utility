@@ -66,6 +66,7 @@ AS/SBT Layoutのdirty状態はUtil側で検知できるdirty状態をカーネ�
 #include <optix.h>
 #include <cuda.h>
 #include <cstdint>
+#include <cfloat>
 
 #if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
@@ -128,7 +129,7 @@ namespace optixu {
 
 #if defined(OPTIX_ENABLE_ASSERT)
 #   if defined(__CUDA_ARCH__)
-#   define optixAssert(expr, fmt, ...) if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); } 0
+#   define optixAssert(expr, fmt, ...) if (!(expr)) { printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); printf(fmt"\n", ##__VA_ARGS__); assert(0); } 0
 #   else
 #   define optixAssert(expr, fmt, ...) if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
 #   endif
@@ -231,14 +232,14 @@ namespace optixu {
         uint32_t m_numXBlocks;
 
 #if defined(__CUDA_ARCH__)
-        RT_FUNCTION constexpr uint32_t calcLinearIndex(uint2 idx) const {
+        RT_FUNCTION constexpr uint32_t calcLinearIndex(uint32_t idxX, uint32_t idxY) const {
             constexpr uint32_t blockWidth = 1 << log2BlockWidth;
             constexpr uint32_t mask = blockWidth - 1;
-            uint32_t blockIdxX = idx.x >> log2BlockWidth;
-            uint32_t blockIdxY = idx.y >> log2BlockWidth;
+            uint32_t blockIdxX = idxX >> log2BlockWidth;
+            uint32_t blockIdxY = idxY >> log2BlockWidth;
             uint32_t blockOffset = (blockIdxY * m_numXBlocks + blockIdxX) * (blockWidth * blockWidth);
-            uint32_t idxXInBlock = idx.x & mask;
-            uint32_t idxYInBlock = idx.y & mask;
+            uint32_t idxXInBlock = idxX & mask;
+            uint32_t idxYInBlock = idxY & mask;
             uint32_t linearIndexInBlock = idxYInBlock * blockWidth + idxXInBlock;
             return blockOffset + linearIndexInBlock;
         }
@@ -255,10 +256,24 @@ namespace optixu {
 
 #if defined(__CUDA_ARCH__)
         RT_FUNCTION const T &operator[](uint2 idx) const {
-            return m_rawBuffer[calcLinearIndex(idx)];
+            optixAssert(idx.x < m_width && idx.y < m_height,
+                        "Out of bound: %u, %u", idx.x, idx.y);
+            return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_FUNCTION T &operator[](uint2 idx) {
-            return m_rawBuffer[calcLinearIndex(idx)];
+            optixAssert(idx.x < m_width && idx.y < m_height,
+                        "Out of bound: %u, %u", idx.x, idx.y);
+            return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
+        }
+        RT_FUNCTION const T &operator[](int2 idx) const {
+            optixAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
+                        "Out of bound: %d, %d", idx.x, idx.y);
+            return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
+        }
+        RT_FUNCTION T &operator[](int2 idx) {
+            optixAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
+                        "Out of bound: %d, %d", idx.x, idx.y);
+            return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
 #endif
     };

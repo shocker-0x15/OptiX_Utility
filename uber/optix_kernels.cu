@@ -62,7 +62,7 @@ RT_PROGRAM void RT_RG_NAME(pathtracing)() {
         //     However pass the third payload as pointer because its direct size cannot fit in.
         optixu::trace<SearchRayPayloadSignature>(
             traversable, origin, direction,
-            0.0f, INFINITY, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
             traversable, rng, payloadPtr);
         if (payload.terminate || payload.pathLength >= 10)
