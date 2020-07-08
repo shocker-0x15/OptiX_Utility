@@ -14,7 +14,7 @@ extern "C" __global__ void postProcess(
     uint32_t ipy = blockDim.y * blockIdx.y + threadIdx.y;
     if (ipx >= imageSizeX || ipy >= imageSizeY)
         return;
-    float3 pix = getXYZ(accumBuffer[make_uint2(ipx, ipy)]) / (float)numAccumFrames;
+    float3 pix = getXYZ(accumBuffer.read(make_uint2(ipx, ipy))) / (float)numAccumFrames;
     pix.x = 1 - std::exp(-pix.x);
     pix.y = 1 - std::exp(-pix.y);
     pix.z = 1 - std::exp(-pix.z);

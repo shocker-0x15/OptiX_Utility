@@ -204,19 +204,25 @@ namespace optixu {
         CUsurfObject m_surfObject;
 
     public:
-        NativeBlockBuffer2D() : m_surfObject(0) {}
-        NativeBlockBuffer2D(CUsurfObject surfObject) : m_surfObject(surfObject) {};
+        RT_FUNCTION NativeBlockBuffer2D() : m_surfObject(0) {}
+        RT_FUNCTION NativeBlockBuffer2D(CUsurfObject surfObject) : m_surfObject(surfObject) {};
 
-        NativeBlockBuffer2D &operator=(CUsurfObject surfObject) {
+        RT_FUNCTION NativeBlockBuffer2D &operator=(CUsurfObject surfObject) {
             m_surfObject = surfObject;
             return *this;
         }
 
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
-        RT_FUNCTION T operator[](uint2 idx) const {
+        RT_FUNCTION T read(uint2 idx) const {
             return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
         }
         RT_FUNCTION void write(uint2 idx, const T &value) {
+            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        RT_FUNCTION T read(int2 idx) const {
+            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        RT_FUNCTION void write(int2 idx, const T &value) {
             surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
         }
 #endif

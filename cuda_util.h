@@ -37,6 +37,9 @@
 
 #undef min
 #undef max
+#undef near
+#undef far
+#undef RGB
 
 #ifdef _DEBUG
 #   define CUDAU_ENABLE_ASSERT
@@ -491,6 +494,7 @@ namespace cudau {
         };
         void** m_mappedPointers;
         CUarray* m_mappedArrays;
+        CUsurfObject* m_surfObjs;
 
         uint32_t m_GLTexID;
         CUgraphicsResource m_cudaGfxResource;
@@ -644,16 +648,26 @@ namespace cudau {
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
 
-        CUsurfObject createSurfaceObject(uint32_t mipmapLevel) const {
+        CUsurfObject getSurfaceObject(uint32_t mipmapLevel) const {
+            return m_surfObjs[mipmapLevel];
+        }
+        CUsurfObject createGLSurfaceObject(uint32_t mipmapLevel) const {
+#if defined(CUDA_UTIL_USE_GL_INTEROP)
+            if (m_GLTexID == 0)
+                throw std::runtime_error("This is not an array created from OpenGL object.");
+            if (m_mappedArrays[mipmapLevel] == nullptr)
+                throw std::runtime_error("Use beginCUDAAccess()/endCUDAAccess().");
+
             CUsurfObject ret;
             CUDA_RESOURCE_DESC resDesc = {};
             resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
-            if (m_GLTexID == 0)
-                resDesc.res.array.hArray = getCUarray(mipmapLevel);
-            else
-                resDesc.res.array.hArray = m_mappedArrays[mipmapLevel];
+            resDesc.res.array.hArray = m_mappedArrays[mipmapLevel];
             CUDADRV_CHECK(cuSurfObjectCreate(&ret, &resDesc));
             return ret;
+#else
+            (void)mipmapLevel;
+            throw std::runtime_error("Enable \"CUDA_UTIL_USE_GL_INTEROP\" at the top of this file if you use CUDA/OpenGL interoperability.");
+#endif
         }
     };
 
@@ -690,7 +704,7 @@ namespace cudau {
             CUsurfObject &curSurfObj = m_surfObjs[m_bufferIndex];
             if (curSurfObj)
                 CUDADRV_CHECK(cuSurfObjectDestroy(curSurfObj));
-            curSurfObj = m_array->createSurfaceObject(0);
+            curSurfObj = m_array->createGLSurfaceObject(0);
             m_bufferIndex = (m_bufferIndex + 1) % NumBuffers;
             return curSurfObj;
         }

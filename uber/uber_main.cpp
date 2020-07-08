@@ -1583,10 +1583,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
     cudau::Array arrayAccumBuffer;
-    arrayAccumBuffer.initialize(cuContext, cudau::ArrayElementType::Float32, 4, cudau::ArraySurface::Enable,
-                                renderTargetSizeX, renderTargetSizeY);
-    cudau::SurfaceView surfViewAccumBuffer;
-    surfViewAccumBuffer.setArray(arrayAccumBuffer);
+    arrayAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
+                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                                  renderTargetSizeX, renderTargetSizeY, 1);
 #else
     optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
     accumBuffer.initialize(cuContext, g_bufferType, renderTargetSizeX, renderTargetSizeY);
@@ -1604,7 +1603,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.numAccumFrames = 1;
     plp.rngBuffer = rngBuffer.getBlockBuffer2D();
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    plp.accumBuffer = surfViewAccumBuffer.createSurfaceObject();
+    plp.accumBuffer = arrayAccumBuffer.getSurfaceObject(0);
 #else
     plp.accumBuffer = accumBuffer.getBlockBuffer2D();
 #endif
@@ -1696,7 +1695,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
             arrayAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
-            surfViewAccumBuffer.setArray(arrayAccumBuffer);
 #else
             accumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
 #endif
@@ -1709,7 +1707,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             plp.numAccumFrames = 1;
             plp.rngBuffer = rngBuffer.getBlockBuffer2D();
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-            plp.accumBuffer = surfViewAccumBuffer.createSurfaceObject();
+            plp.accumBuffer = arrayAccumBuffer.getSurfaceObject(0);
 #else
             plp.accumBuffer = accumBuffer.getBlockBuffer2D();
 #endif
@@ -2118,7 +2116,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         outputBufferSurfaceHolder.beginCUDAAccess(curCuStream);
         kernelPostProcess(curCuStream, dimPostProcess,
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-                          surfViewAccumBuffer.createSurfaceObject(),
+                          arrayAccumBuffer.getSurfaceObject(0),
 #else
                           accumBuffer.getBlockBuffer2D(),
 #endif
@@ -2219,7 +2217,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-    surfViewAccumBuffer.destroySurfaceObject();
     arrayAccumBuffer.finalize();
 #else
     accumBuffer.finalize();

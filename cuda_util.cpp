@@ -404,7 +404,7 @@ namespace cudau {
     
     Array::Array() :
         m_cuContext(nullptr),
-        m_array(0), m_mappedPointers(nullptr), m_mappedArrays(nullptr),
+        m_array(0), m_mappedPointers(nullptr), m_mappedArrays(nullptr), m_surfObjs(nullptr),
         m_GLTexID(0), m_cudaGfxResource(nullptr),
         m_surfaceLoadStore(false), m_cubemap(false), m_layered(false),
         m_initialized(false) {
@@ -429,6 +429,7 @@ namespace cudau {
             m_array = b.m_array;
         m_mappedPointers = b.m_mappedPointers;
         m_mappedArrays = b.m_mappedArrays;
+        m_surfObjs = b.m_surfObjs;
         m_GLTexID = b.m_GLTexID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_surfaceLoadStore = b.m_surfaceLoadStore;
@@ -455,6 +456,7 @@ namespace cudau {
             m_array = b.m_array;
         m_mappedPointers = b.m_mappedPointers;
         m_mappedArrays = b.m_mappedArrays;
+        m_surfObjs = b.m_surfObjs;
         m_GLTexID = b.m_GLTexID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_surfaceLoadStore = b.m_surfaceLoadStore;
@@ -486,7 +488,7 @@ namespace cudau {
         m_width = width;
         m_height = height;
         m_depth = depth;
-        m_numMipmapLevels = numMipmapLevels;
+        m_numMipmapLevels = std::max(numMipmapLevels, 0u);
         m_elemType = elemType;
         m_numChannels = numChannels;
         m_surfaceLoadStore = surfaceLoadStore;
@@ -593,6 +595,25 @@ namespace cudau {
             m_mappedPointers[i] = nullptr;
             m_mappedArrays[i] = nullptr;
         }
+        if (surfaceLoadStore && glTexID == 0) {
+            m_surfObjs = new CUsurfObject[m_numMipmapLevels];
+            if (m_numMipmapLevels > 1) {
+                for (int i = 0; i < m_numMipmapLevels; ++i) {
+                    CUarray array;
+                    CUDADRV_CHECK(cuMipmappedArrayGetLevel(&array, m_mipmappedArray, i));
+                    CUDA_RESOURCE_DESC resDesc = {};
+                    resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+                    resDesc.res.array.hArray = array;
+                    CUDADRV_CHECK(cuSurfObjectCreate(&m_surfObjs[i], &resDesc));
+                }
+            }
+            else {
+                CUDA_RESOURCE_DESC resDesc = {};
+                resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+                resDesc.res.array.hArray = m_array;
+                CUDADRV_CHECK(cuSurfObjectCreate(&m_surfObjs[0], &resDesc));
+            }
+        }
 
         m_initialized = true;
     }
@@ -601,8 +622,16 @@ namespace cudau {
         if (!m_initialized)
             return;
 
+        if (m_surfObjs) {
+            for (int i = m_numMipmapLevels - 1; i >= 0; --i)
+                CUDADRV_CHECK(cuSurfObjectDestroy(m_surfObjs[i]));
+            delete[] m_surfObjs;
+            m_surfObjs = nullptr;
+        }
         delete[] m_mappedArrays;
+        m_mappedArrays = nullptr;
         delete[] m_mappedPointers;
+        m_mappedPointers = nullptr;
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
@@ -669,7 +698,7 @@ namespace cudau {
 
     void Array::beginCUDAAccess(CUstream stream, uint32_t mipmapLevel) {
         if (m_GLTexID == 0)
-            throw std::runtime_error("This is not an OpenGL-interop buffer.");
+            throw std::runtime_error("This is not an OpenGL-interop object.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
@@ -679,7 +708,7 @@ namespace cudau {
 
     void Array::endCUDAAccess(CUstream stream, uint32_t mipmapLevel) {
         if (m_GLTexID == 0)
-            throw std::runtime_error("This is not an OpenGL-interop buffer.");
+            throw std::runtime_error("This is not an OpenGL-interop object.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
