@@ -289,7 +289,7 @@ namespace Shared {
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
         RT_FUNCTION static HitPointParameter get() {
             HitPointParameter ret;
-            if (optixIsTriangleHit()) {
+            if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
                 float2 bc = optixGetTriangleBarycentrics();
                 ret.b0 = 1 - bc.x - bc.y;
                 ret.b1 = bc.x;

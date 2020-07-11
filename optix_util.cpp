@@ -159,29 +159,29 @@ namespace optixu {
 
         if (forCustomPrimitives) {
             input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
-            OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
+            OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
 
             primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
 
-            aabbArray.aabbBuffers = primitiveAabbBufferArray;
-            aabbArray.numPrimitives = numPrimitives;
-            aabbArray.strideInBytes = primitiveAABBBuffer->stride();
-            aabbArray.primitiveIndexOffset = primitiveIndexOffset;
+            customPrimArray.aabbBuffers = primitiveAabbBufferArray;
+            customPrimArray.numPrimitives = numPrimitives;
+            customPrimArray.strideInBytes = primitiveAABBBuffer->stride();
+            customPrimArray.primitiveIndexOffset = primitiveIndexOffset;
 
-            aabbArray.numSbtRecords = buildInputFlags.size();
-            if (aabbArray.numSbtRecords > 1) {
+            customPrimArray.numSbtRecords = buildInputFlags.size();
+            if (customPrimArray.numSbtRecords > 1) {
                 optixAssert_NotImplemented();
-                aabbArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
-                aabbArray.sbtIndexOffsetSizeInBytes = 4;
-                aabbArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
+                customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
+                customPrimArray.sbtIndexOffsetSizeInBytes = 4;
+                customPrimArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
             }
             else {
-                aabbArray.sbtIndexOffsetBuffer = 0; // No per-primitive record
-                aabbArray.sbtIndexOffsetSizeInBytes = 0; // No effect
-                aabbArray.sbtIndexOffsetStrideInBytes = 0; // No effect
+                customPrimArray.sbtIndexOffsetBuffer = 0; // No per-primitive record
+                customPrimArray.sbtIndexOffsetSizeInBytes = 0; // No effect
+                customPrimArray.sbtIndexOffsetStrideInBytes = 0; // No effect
             }
 
-            aabbArray.flags = buildInputFlags.data();
+            customPrimArray.flags = buildInputFlags.data();
         }
         else {
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
@@ -214,6 +214,7 @@ namespace optixu {
             }
 
             triArray.preTransform = preTransform;
+            triArray.transformFormat = preTransform ? OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 : OPTIX_TRANSFORM_FORMAT_NONE;
 
             triArray.flags = buildInputFlags.data();
         }
@@ -221,14 +222,14 @@ namespace optixu {
 
     void GeometryInstance::Priv::updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const {
         if (forCustomPrimitives) {
-            OptixBuildInputCustomPrimitiveArray &aabbArray = input->aabbArray;
+            OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
 
             primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
-            aabbArray.aabbBuffers = primitiveAabbBufferArray;
+            customPrimArray.aabbBuffers = primitiveAabbBufferArray;
 
-            if (aabbArray.numSbtRecords > 1) {
+            if (customPrimArray.numSbtRecords > 1) {
                 optixAssert_NotImplemented();
-                aabbArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
+                customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
             }
         }
         else {
@@ -245,6 +246,7 @@ namespace optixu {
             }
 
             triArray.preTransform = preTransform;
+            triArray.transformFormat = preTransform ? OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 : OPTIX_TRANSFORM_FORMAT_NONE;
         }
     }
 
@@ -935,7 +937,8 @@ namespace optixu {
     }
 
     void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-                                      bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const {
+                                      bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
+                                      uint32_t supportedPrimitiveTypeFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
         // EN: Set pipeline compile options common among modules in the pipeline and the pipeline itself.
         m->pipelineCompileOptions = {};
@@ -945,6 +948,7 @@ namespace optixu {
         m->pipelineCompileOptions.usesMotionBlur = useMotionBlur;
         m->pipelineCompileOptions.traversableGraphFlags = traversableGraphFlags;
         m->pipelineCompileOptions.exceptionFlags = exceptionFlags;
+        m->pipelineCompileOptions.usesPrimitiveTypeFlags = supportedPrimitiveTypeFlags;
 
         m->sizeOfPipelineLaunchParams = sizeOfLaunchParams;
     }
@@ -1129,7 +1133,6 @@ namespace optixu {
             OptixPipelineLinkOptions pipelineLinkOptions = {};
             pipelineLinkOptions.maxTraceDepth = m->maxTraceDepth;
             pipelineLinkOptions.debugLevel = debugLevel;
-            pipelineLinkOptions.overrideUsesMotionBlur = overrideUseMotionBlur;
 
             std::vector<OptixProgramGroup> groups;
             groups.resize(m->programGroups.size());

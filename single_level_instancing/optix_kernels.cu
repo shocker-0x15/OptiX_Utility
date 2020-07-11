@@ -14,7 +14,7 @@ struct HitPointParameter {
 
     RT_FUNCTION static HitPointParameter get() {
         HitPointParameter ret;
-        if (optixIsTriangleHit()) {
+        if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
             float2 bc = optixGetTriangleBarycentrics();
             ret.b1 = bc.x;
             ret.b2 = bc.y;

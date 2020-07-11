@@ -837,7 +837,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
                                               OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                               OPTIX_EXCEPTION_FLAG_DEBUG),
-                                             OPTIX_EXCEPTION_FLAG_NONE));
+                                             OPTIX_EXCEPTION_FLAG_NONE),
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(

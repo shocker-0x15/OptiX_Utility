@@ -7,6 +7,8 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- Curve Primitiveサポート。
+- Triangle Soupサポート。
 - HitGroup以外のプログラムの非同期更新。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
@@ -895,7 +897,8 @@ private: \
 
         void setMaxTraceDepth(uint32_t maxTraceDepth) const;
         void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-                                bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags) const;
+                                bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
+                                uint32_t supportedPrimitiveTypeFlags) const;
 
         Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
 

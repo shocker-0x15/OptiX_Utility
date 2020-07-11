@@ -32,7 +32,8 @@ optixu::Pipeline pipeline = optixContext.createPipeline();
 pipeline.setPipelineOptions(6, 2, "plp", sizeof(PipelineLaunchParameters),
                             false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                            OPTIX_EXCEPTION_FLAG_DEBUG);
+                            OPTIX_EXCEPTION_FLAG_DEBUG,
+                            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 optixu::Module module = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
                                                            OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
@@ -120,6 +121,20 @@ cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream);
 pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 //...
 ```
+
+## 動作環境 / Confirmed Environment
+現状以下の環境で動作を確認しています。\
+I've confirmed that the program runs correctly on the following environment.
+
+* Windows 10 (1909) & Visual Studio 2019 (16.6.3)
+* Core i9-9900K, 32GB, RTX 2070 8GB
+* NVIDIA Driver 451.48
+
+動作させるにあたっては以下のライブラリが必要です。\
+It requires the following libraries.
+
+* CUDA 11.0
+* OptiX 7.1.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ----
 2020 [@Shocker_0x15](https://twitter.com/Shocker_0x15)

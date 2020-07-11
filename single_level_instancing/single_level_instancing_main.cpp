@@ -144,7 +144,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                OPTIX_EXCEPTION_FLAG_DEBUG);
+                                OPTIX_EXCEPTION_FLAG_DEBUG,
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "single_level_instancing/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
