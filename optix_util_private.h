@@ -272,7 +272,7 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(Scene);
 
-        Priv(const _Context* ctxt) : context(ctxt), sbtLayoutIsUpToDate(false) {}
+        Priv(const _Context* ctxt) : context(ctxt), numSBTRecords(0), sbtLayoutIsUpToDate(false) {}
         ~Priv() {}
 
         CUcontext getCUDAContext() const {
@@ -348,6 +348,9 @@ namespace optixu {
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
             scene(_scene),
             userData(0),
+            offsetInBytesForPrimitives(0),
+            numPrimitives(0),
+            primitiveIndexOffset(0),
             materialIndexOffsetBuffer(nullptr),
             forCustomPrimitives(_forCustomPrimitives) {
             if (forCustomPrimitives) {
@@ -360,6 +363,8 @@ namespace optixu {
                 vertexBufferArray[0] = 0;
                 vertexBuffer = nullptr;
                 triangleBuffer = nullptr;
+                offsetInBytesForVertices = 0;
+                numVertices = 0;
             }
         }
         ~Priv() {
@@ -436,7 +441,13 @@ namespace optixu {
         OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
-            scene(_scene), forCustomPrimitives(_forCustomPrimitives) {
+            scene(_scene),
+            handle(0), compactedHandle(0),
+            accelBuffer(nullptr), compactedAccelBuffer(nullptr),
+            forCustomPrimitives(_forCustomPrimitives),
+            preferFastTrace(true), allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
+            readyToBuild(false), available(false), 
+            readyToCompact(false), compactedAvailable(false) {
             scene->addGAS(this);
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
@@ -446,16 +457,6 @@ namespace optixu {
             propertyCompactedSize = OptixAccelEmitDesc{};
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
             propertyCompactedSize.result = compactedSizeOnDevice.getCUdeviceptr();
-
-            preferFastTrace = true;
-            allowUpdate = false;
-            allowCompaction = false;
-            allowRandomVertexAccess = false;
-
-            readyToBuild = false;
-            available = false;
-            readyToCompact = false;
-            compactedAvailable = false;
         }
         ~Priv() {
             compactedSizeOnDevice.finalize();
@@ -527,7 +528,9 @@ namespace optixu {
 
         Priv(_Scene* _scene) :
             scene(_scene),
-            matSetIndex(0xFFFFFFFF), type(InstanceType::Invalid), gas(nullptr) {
+            type(InstanceType::Invalid) {
+            gas = nullptr;
+            matSetIndex = 0xFFFFFFFF;
             float identity[] = {
                 1, 0, 0, 0,
                 0, 1, 0, 0,
@@ -582,7 +585,13 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
-        Priv(_Scene* _scene) : scene(_scene) {
+        Priv(_Scene* _scene) :
+            scene(_scene),
+            handle(0), compactedHandle(0),
+            instanceBuffer(nullptr), accelBuffer(nullptr), compactedAccelBuffer(nullptr),
+            preferFastTrace(true), allowUpdate(false), allowCompaction(false),
+            readyToBuild(false), available(false),
+            readyToCompact(false), compactedAvailable(false) {
             scene->addIAS(this);
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
@@ -592,15 +601,6 @@ namespace optixu {
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
             propertyCompactedSize.result = compactedSizeOnDevice.getCUdeviceptr();
-
-            preferFastTrace = true;
-            allowUpdate = false;
-            allowCompaction = false;
-
-            readyToBuild = false;
-            available = false;
-            readyToCompact = false;
-            compactedAvailable = false;
         }
         ~Priv() {
             compactedSizeOnDevice.finalize();
@@ -674,8 +674,9 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(Pipeline);
 
-        Priv(const _Context* ctxt) : context(ctxt),
-            maxTraceDepth(0),
+        Priv(const _Context* ctxt) :
+            context(ctxt), rawPipeline(nullptr),
+            maxTraceDepth(0), sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
             pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
@@ -716,7 +717,8 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(Module);
 
-        Priv(const _Pipeline* pl, OptixModule _rawModule) : pipeline(pl), rawModule(_rawModule) {}
+        Priv(const _Pipeline* pl, OptixModule _rawModule) :
+            pipeline(pl), rawModule(_rawModule) {}
 
 
 
@@ -738,7 +740,8 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(ProgramGroup);
 
-        Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) : pipeline(pl), rawGroup(_rawGroup) {}
+        Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) :
+            pipeline(pl), rawGroup(_rawGroup) {}
 
 
 
