@@ -211,7 +211,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t geomInstIndex = 0;
 
-    optixu::GeometryInstance geomInst0 = scene.createGeometryInstance();
+    optixu::GeometryInstance geomInstBox = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBuffer0;
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer0;
     {
@@ -259,12 +259,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         vertexBuffer0.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         triangleBuffer0.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomInst0.setVertexBuffer(&vertexBuffer0);
-        geomInst0.setTriangleBuffer(&triangleBuffer0);
-        geomInst0.setNumMaterials(1, nullptr);
-        geomInst0.setMaterial(0, 0, mat0);
-        geomInst0.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInst0.setUserData(geomInstIndex);
+        geomInstBox.setVertexBuffer(&vertexBuffer0);
+        geomInstBox.setTriangleBuffer(&triangleBuffer0);
+        geomInstBox.setNumMaterials(1, nullptr);
+        geomInstBox.setMaterial(0, 0, mat0);
+        geomInstBox.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstBox.setUserData(geomInstIndex);
 
         geomData[geomInstIndex].vertexBuffer = vertexBuffer0.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer0.getDevicePointer();
@@ -274,7 +274,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++geomInstIndex;
     }
 
-    optixu::GeometryInstance geomInst1 = scene.createGeometryInstance();
+    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBuffer1;
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer1;
     {
@@ -292,12 +292,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         vertexBuffer1.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         triangleBuffer1.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomInst1.setVertexBuffer(&vertexBuffer1);
-        geomInst1.setTriangleBuffer(&triangleBuffer1);
-        geomInst1.setNumMaterials(1, nullptr);
-        geomInst1.setMaterial(0, 0, mat0);
-        geomInst1.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInst1.setUserData(geomInstIndex);
+        geomInstAreaLight.setVertexBuffer(&vertexBuffer1);
+        geomInstAreaLight.setTriangleBuffer(&triangleBuffer1);
+        geomInstAreaLight.setNumMaterials(1, nullptr);
+        geomInstAreaLight.setMaterial(0, 0, mat0);
+        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstAreaLight.setUserData(geomInstIndex);
 
         geomData[geomInstIndex].vertexBuffer = vertexBuffer1.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer1.getDevicePointer();
@@ -307,7 +307,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++geomInstIndex;
     }
 
-    optixu::GeometryInstance geomInst2 = scene.createGeometryInstance();
+    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBuffer2;
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer2;
     {
@@ -405,12 +405,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         vertexBuffer2.initialize(cuContext, cudau::BufferType::Device, vertices);
         triangleBuffer2.initialize(cuContext, cudau::BufferType::Device, triangles);
 
-        geomInst2.setVertexBuffer(&vertexBuffer2);
-        geomInst2.setTriangleBuffer(&triangleBuffer2);
-        geomInst2.setNumMaterials(1, nullptr);
-        geomInst2.setMaterial(0, 0, mat0);
-        geomInst2.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInst2.setUserData(geomInstIndex);
+        geomInstBunny.setVertexBuffer(&vertexBuffer2);
+        geomInstBunny.setTriangleBuffer(&triangleBuffer2);
+        geomInstBunny.setNumMaterials(1, nullptr);
+        geomInstBunny.setMaterial(0, 0, mat0);
+        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstBunny.setUserData(geomInstIndex);
 
         geomData[geomInstIndex].vertexBuffer = vertexBuffer2.getDevicePointer();
         geomData[geomInstIndex].triangleBuffer = triangleBuffer2.getDevicePointer();
@@ -439,15 +439,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gas.setConfiguration(true, false, true, false);
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
-    gas.addChild(geomInst0/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
+    gas.addChild(geomInstBox/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
     // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
     //     指定されたTransformを用いてAcceleration Structureが作られる。
     //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
     // EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
     //     Acceleration structure is built using the specified transform.
     //     Note that geometry that given by the user in a kernel is not transformed.
-    gas.addChild(geomInst1, preTransformBuffer.getCUdeviceptrAt(1));
-    gas.addChild(geomInst2, preTransformBuffer.getCUdeviceptrAt(2));
+    gas.addChild(geomInstAreaLight, preTransformBuffer.getCUdeviceptrAt(1));
+    gas.addChild(geomInstBunny, preTransformBuffer.getCUdeviceptrAt(2));
     gas.prepareForBuild(&asMemReqs);
     gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
@@ -543,15 +543,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     triangleBuffer2.finalize();
     vertexBuffer2.finalize();
-    geomInst2.destroy();
+    geomInstBunny.destroy();
     
     triangleBuffer1.finalize();
     vertexBuffer1.finalize();
-    geomInst1.destroy();
+    geomInstAreaLight.destroy();
 
     triangleBuffer0.finalize();
     vertexBuffer0.finalize();
-    geomInst0.destroy();
+    geomInstBox.destroy();
 
     preTransformBuffer.finalize();
     geomDataBuffer.finalize();
