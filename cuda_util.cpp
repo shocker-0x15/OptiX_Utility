@@ -161,6 +161,7 @@ namespace cudau {
             m_persistentMappedMemory)
             delete[] m_mappedPointer;
         m_mappedPointer = nullptr;
+        m_persistentMappedMemory = false;
 
         if (m_type == BufferType::Device) {
             CUDADRV_CHECK(cuMemFree(m_devicePointer));
@@ -183,6 +184,8 @@ namespace cudau {
 
         m_stride = 0;
         m_numElements = 0;
+
+        m_cuContext = nullptr;
 
         m_initialized = false;
     }
