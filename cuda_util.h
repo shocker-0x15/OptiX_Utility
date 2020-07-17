@@ -229,7 +229,7 @@ namespace cudau {
     enum class BufferType {
         Device = 0,
         GL_Interop = 1,
-        ZeroCopy = 2,
+        ZeroCopy = 2, // TODO: test
         Managed = 3, // TODO: test
     };
 
@@ -249,6 +249,7 @@ namespace cudau {
 
         struct {
             unsigned int m_initialized : 1;
+            unsigned int m_persistentMappedMemory : 1;
             unsigned int m_mapped : 1;
         };
 
@@ -320,6 +321,7 @@ namespace cudau {
         void beginCUDAAccess(CUstream stream);
         void endCUDAAccess(CUstream stream);
 
+        void setMappedMemoryPersistent(bool b);
         void* map(CUstream stream = 0);
         template <typename T>
         T* map(CUstream stream = 0) {

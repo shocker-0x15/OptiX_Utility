@@ -699,9 +699,13 @@ namespace optixu {
             rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
             pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
             rayGenRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
+            rayGenRecord.setMappedMemoryPersistent(true);
             exceptionRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
+            exceptionRecord.setMappedMemoryPersistent(true);
             missRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
+            missRecords.setMappedMemoryPersistent(true);
             callableRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
+            callableRecords.setMappedMemoryPersistent(true);
         }
         ~Priv() {
             if (pipelineLinked)

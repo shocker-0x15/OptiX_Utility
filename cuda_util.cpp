@@ -53,7 +53,7 @@ namespace cudau {
         m_cuContext(nullptr),
         m_hostPointer(nullptr), m_devicePointer(0), m_mappedPointer(nullptr),
         m_GLBufferID(0), m_cudaGfxResource(nullptr),
-        m_initialized(false), m_mapped(false) {
+        m_initialized(false), m_persistentMappedMemory(false), m_mapped(false) {
     }
 
     Buffer::~Buffer() {
@@ -72,6 +72,7 @@ namespace cudau {
         m_GLBufferID = b.m_GLBufferID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_initialized = b.m_initialized;
+        m_persistentMappedMemory = b.m_persistentMappedMemory;
         m_mapped = b.m_mapped;
 
         b.m_initialized = false;
@@ -90,6 +91,7 @@ namespace cudau {
         m_GLBufferID = b.m_GLBufferID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_initialized = b.m_initialized;
+        m_persistentMappedMemory = b.m_persistentMappedMemory;
         m_mapped = b.m_mapped;
 
         b.m_initialized = false;
@@ -155,6 +157,11 @@ namespace cudau {
         if (m_mapped)
             unmap();
 
+        if ((m_type == BufferType::Device || m_type == BufferType::GL_Interop) &&
+            m_persistentMappedMemory)
+            delete[] m_mappedPointer;
+        m_mappedPointer = nullptr;
+
         if (m_type == BufferType::Device) {
             CUDADRV_CHECK(cuMemFree(m_devicePointer));
             m_devicePointer = 0;
@@ -174,7 +181,6 @@ namespace cudau {
             m_hostPointer = nullptr;
         }
 
-        m_mappedPointer = nullptr;
         m_stride = 0;
         m_numElements = 0;
 
@@ -194,6 +200,7 @@ namespace cudau {
 
         Buffer newBuffer;
         newBuffer.initialize(m_cuContext, m_type, numElements, stride, m_GLBufferID);
+        newBuffer.setMappedMemoryPersistent(m_persistentMappedMemory);
 
         uint32_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
@@ -234,6 +241,22 @@ namespace cudau {
         CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
 
+    void Buffer::setMappedMemoryPersistent(bool b) {
+        if (m_type != BufferType::Device &&
+            m_type != BufferType::GL_Interop)
+            return;
+
+        m_persistentMappedMemory = b;
+        if (m_persistentMappedMemory && !m_mapped) {
+            size_t size = static_cast<size_t>(m_numElements) * m_stride;
+            m_mappedPointer = new uint8_t[size];
+        }
+        if (!m_persistentMappedMemory && !m_mapped) {
+            delete[] m_mappedPointer;
+            m_mappedPointer = nullptr;
+        }
+    }
+
     void* Buffer::map(CUstream stream) {
         if (m_mapped)
             throw std::runtime_error("This buffer is already mapped.");
@@ -245,10 +268,11 @@ namespace cudau {
             CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
             size_t size = static_cast<size_t>(m_numElements) * m_stride;
-            m_mappedPointer = new uint8_t[size];
+            if (!m_persistentMappedMemory)
+                m_mappedPointer = new uint8_t[size];
 
             if (m_type == BufferType::GL_Interop)
-                beginCUDAAccess(0);
+                beginCUDAAccess(stream);
 
             CUDADRV_CHECK(cuMemcpyDtoHAsync(m_mappedPointer, m_devicePointer, size, stream));
 
@@ -274,10 +298,12 @@ namespace cudau {
             CUDADRV_CHECK(cuMemcpyHtoDAsync(m_devicePointer, m_mappedPointer, size, stream));
 
             if (m_type == BufferType::GL_Interop)
-                endCUDAAccess(0);
+                endCUDAAccess(stream);
 
-            delete[] m_mappedPointer;
-            m_mappedPointer = nullptr;
+            if (!m_persistentMappedMemory) {
+                delete[] m_mappedPointer;
+                m_mappedPointer = nullptr;
+            }
         }
     }
 
@@ -287,6 +313,7 @@ namespace cudau {
 
         Buffer ret;
         ret.initialize(m_cuContext, m_type, m_numElements, m_stride, m_GLBufferID);
+        ret.setMappedMemoryPersistent(m_persistentMappedMemory);
 
         size_t size = static_cast<size_t>(m_numElements) * m_stride;
         if (m_type == BufferType::Device) {
