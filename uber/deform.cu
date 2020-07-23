@@ -2,8 +2,8 @@
 
 #include "uber_shared.h"
 
-extern "C" __global__ void deform(const Shared::Vertex* originalVertices, Shared::Vertex* vertices, uint32_t numVertices,
-                                  float t) {
+CUDA_DEVICE_KERNEL void deform(const Shared::Vertex* originalVertices, Shared::Vertex* vertices, uint32_t numVertices,
+                               float t) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
         return;
@@ -13,8 +13,8 @@ extern "C" __global__ void deform(const Shared::Vertex* originalVertices, Shared
     vertices[vIdx].normal = make_float3(0, 0, 0);
 }
 
-extern "C" __global__ void accumulateVertexNormals(Shared::Vertex* vertices,
-                                                   Shared::Triangle* triangles, uint32_t numTriangles) {
+CUDA_DEVICE_KERNEL void accumulateVertexNormals(Shared::Vertex* vertices,
+                                                Shared::Triangle* triangles, uint32_t numTriangles) {
     uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
         return;
@@ -42,7 +42,7 @@ extern "C" __global__ void accumulateVertexNormals(Shared::Vertex* vertices,
     atomicAddNormalAsInt32(&v2.normal, vnInt32);
 }
 
-extern "C" __global__ void normalizeVertexNormals(Shared::Vertex* vertices, uint32_t numVertices) {
+CUDA_DEVICE_KERNEL void normalizeVertexNormals(Shared::Vertex* vertices, uint32_t numVertices) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
         return;

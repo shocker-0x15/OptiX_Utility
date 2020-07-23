@@ -34,30 +34,54 @@
 #   define CUDAHPlatform_OpenBSD
 #endif
 
-#include <cstdio>
-#include <cstdint>
-#include <cstdlib>
 
-#include <algorithm>
-#include <vector>
-#include <sstream>
+
+#include <cstdint>
+#include <cfloat>
+#include <cuda.h>
+
+#if !defined(__CUDA_ARCH__)
+#   include <cstdio>
+#   include <cstdlib>
+
+#   include <algorithm>
+#   include <vector>
+#   include <sstream>
 
 // Enable this macro if CUDA/OpenGL interoperability is required.
-#define CUDA_UTIL_USE_GL_INTEROP
-#if defined(CUDA_UTIL_USE_GL_INTEROP)
-#include <GL/gl3w.h>
+#   define CUDA_UTIL_USE_GL_INTEROP
+#   if defined(CUDA_UTIL_USE_GL_INTEROP)
+#       include <GL/gl3w.h>
+#   endif
+
+#   if defined(CUDA_UTIL_USE_GL_INTEROP)
+#       include <cudaGL.h>
+#   endif
+
+#   undef min
+#   undef max
+#   undef near
+#   undef far
+#   undef RGB
 #endif
 
-#include <cuda.h>
-#if defined(CUDA_UTIL_USE_GL_INTEROP)
-#include <cudaGL.h>
+
+
+#if defined(__CUDA_ARCH__)
+#   define CUDA_SHARED_MEM __shared__
+#   define CUDA_CONSTANT_MEM __constant__
+#   define CUDA_DEVICE_MEM __device__
+#   define CUDA_DEVICE_KERNEL extern "C" __global__
+#   define CUDA_DEVICE_FUNCTION __device__ __forceinline__
+#else
+#   define CUDA_SHARED_MEM
+#   define CUDA_CONSTANT_MEM
+#   define CUDA_DEVICE_MEM
+#   define CUDA_DEVICE_KERNEL
+#   define CUDA_DEVICE_FUNCTION
 #endif
 
-#undef min
-#undef max
-#undef near
-#undef far
-#undef RGB
+
 
 #ifdef _DEBUG
 #   define CUDAU_ENABLE_ASSERT
@@ -106,6 +130,7 @@
 
 
 namespace cudau {
+#if !defined(__CUDA_ARCH__)
     void devPrintf(const char* fmt, ...);
 
 
@@ -493,9 +518,9 @@ namespace cudau {
         Disable,
     };
 
-#if defined(CUDA_UTIL_USE_GL_INTEROP)
+#   if defined(CUDA_UTIL_USE_GL_INTEROP)
     void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels);
-#endif
+#   endif
     
     class Array {
         CUcontext m_cuContext;
@@ -867,4 +892,5 @@ namespace cudau {
             return curTexObj;
         }
     };
+#endif
 }

@@ -6,7 +6,7 @@
 
 using namespace Shared;
 
-extern "C" RT_CONSTANT_MEMORY PipelineLaunchParameters plp;
+RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 
@@ -32,7 +32,7 @@ struct VisibilityRayPayload {
 
 
 
-RT_PROGRAM void RT_RG_NAME(pathtracing)() {
+CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     PCG32RNG rng = plp.rngBuffer[launchIndex];
@@ -86,7 +86,7 @@ RT_PROGRAM void RT_RG_NAME(pathtracing)() {
 #endif
 }
 
-RT_PROGRAM void RT_MS_NAME(searchRay)() {
+CUDA_DEVICE_KERNEL void RT_MS_NAME(searchRay)() {
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
     //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
@@ -125,7 +125,7 @@ RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParame
 
 
 
-RT_PROGRAM void RT_CH_NAME(shading_diffuse)() {
+CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const MaterialData &mat = plp.materialData[sbtr.materialData];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
@@ -244,7 +244,7 @@ RT_PROGRAM void RT_CH_NAME(shading_diffuse)() {
 // EN: When implementing a moderately complex path tracing,
 //     it appears better to basically use a common program and callable programs for different behaviors,
 //     but here define another program on purpose for demonstration.
-RT_PROGRAM void RT_CH_NAME(shading_specular)() {
+CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_specular)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const MaterialData &mat = plp.materialData[sbtr.materialData];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
@@ -287,7 +287,7 @@ RT_PROGRAM void RT_CH_NAME(shading_specular)() {
     payload->terminate = false;
 }
 
-RT_PROGRAM void RT_AH_NAME(visibility)() {
+CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
     // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
     // EN: The signature used in setPayloads() must match the one replacing the part of payloads
@@ -300,7 +300,7 @@ RT_PROGRAM void RT_AH_NAME(visibility)() {
 
 
 
-RT_PROGRAM void RT_IS_NAME(custom_primitive)() {
+CUDA_DEVICE_KERNEL void RT_IS_NAME(custom_primitive)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     uint32_t primIndex = optixGetPrimitiveIndex();
@@ -346,7 +346,7 @@ RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParamete
 
 
 
-RT_PROGRAM void RT_EX_NAME(print)() {
+CUDA_DEVICE_KERNEL void RT_EX_NAME(print)() {
     uint3 launchIndex = optixGetLaunchIndex();
     int32_t code = optixGetExceptionCode();
     printf("(%u, %u, %u): Exception: %u\n", launchIndex.x, launchIndex.y, launchIndex.z, code);

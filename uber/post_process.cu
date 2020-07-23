@@ -2,7 +2,7 @@
 
 #include "uber_shared.h"
 
-extern "C" __global__ void postProcess(
+CUDA_DEVICE_KERNEL void postProcess(
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
     optixu::NativeBlockBuffer2D<float4> accumBuffer,
 #else

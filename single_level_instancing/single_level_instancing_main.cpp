@@ -35,7 +35,6 @@
 #include <cuda_runtime.h> // only for vector types.
 
 #include "single_level_instancing_shared.h"
-#include "../stopwatch.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../ext/stb_image_write.h"
@@ -572,7 +571,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.geomInstData = geomDataBuffer.getDevicePointer();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
-    plp.accumBuffer = accumBuffer.getBlockBuffer2D();
+    plp.resultBuffer = accumBuffer.getBlockBuffer2D();
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5);

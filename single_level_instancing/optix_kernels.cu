@@ -4,7 +4,7 @@
 
 using namespace Shared;
 
-extern "C" RT_CONSTANT_MEMORY PipelineLaunchParameters plp;
+RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 
@@ -12,7 +12,7 @@ struct HitPointParameter {
     float b1, b2;
     int32_t primIndex;
 
-    RT_FUNCTION static HitPointParameter get() {
+    CUDA_DEVICE_FUNCTION static HitPointParameter get() {
         HitPointParameter ret;
         if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
             float2 bc = optixGetTriangleBarycentrics();
@@ -31,7 +31,7 @@ struct HitPointParameter {
 
 #define PayloadSignature float3
 
-RT_PROGRAM void RT_RG_NAME(raygen)() {
+CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     float x = static_cast<float>(launchIndex.x + 0.5f) / plp.imageSize.x;
@@ -49,15 +49,15 @@ RT_PROGRAM void RT_RG_NAME(raygen)() {
         RayType_Primary, NumRayTypes, RayType_Primary,
         color);
 
-    plp.accumBuffer[launchIndex] = make_float4(color, 1.0f);
+    plp.resultBuffer[launchIndex] = make_float4(color, 1.0f);
 }
 
-RT_PROGRAM void RT_MS_NAME(miss)() {
+CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
     optixu::setPayloads<PayloadSignature>(&color);
 }
 
-RT_PROGRAM void RT_CH_NAME(closesthit0)() {
+CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     HitPointParameter hp = HitPointParameter::get();

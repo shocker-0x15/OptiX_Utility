@@ -61,6 +61,12 @@
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="uber_main.cpp" />
+    <ClCompile Include="..\common\dds_loader.cpp">
+      <Filter>non essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\common.cpp">
+      <Filter>non essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\ext\gl3w\include\GL\gl3w.h">
@@ -114,13 +120,19 @@
     <ClInclude Include="..\cuda_util.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\GLToolkit.h">
-      <Filter>non essentials</Filter>
-    </ClInclude>
-    <ClInclude Include="..\stopwatch.h">
-      <Filter>non essentials</Filter>
-    </ClInclude>
     <ClInclude Include="uber_shared.h" />
+    <ClInclude Include="..\common\dds_loader.h">
+      <Filter>non essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\common.h">
+      <Filter>non essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\stopwatch.h">
+      <Filter>non essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\GLToolkit.h">
+      <Filter>non essentials</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\ext\imgui\natvis\imgui.natvis">

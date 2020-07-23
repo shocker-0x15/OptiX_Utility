@@ -2,94 +2,94 @@
 
 #include "../optix_util.h"
 
-RT_FUNCTION float3 getXYZ(const float4 &v) {
+CUDA_DEVICE_FUNCTION float3 getXYZ(const float4 &v) {
     return make_float3(v.x, v.y, v.z);
 }
 
-RT_FUNCTION float3 make_float3(float v) {
+CUDA_DEVICE_FUNCTION float3 make_float3(float v) {
     return make_float3(v, v, v);
 }
-RT_FUNCTION float4 make_float4(const float3 &v, float w) {
+CUDA_DEVICE_FUNCTION float4 make_float4(const float3 &v, float w) {
     return make_float4(v.x, v.y, v.z, w);
 }
 
-RT_FUNCTION float2 operator-(const float2 &v) {
+CUDA_DEVICE_FUNCTION float2 operator-(const float2 &v) {
     return make_float2(-v.x, -v.y);
 }
-RT_FUNCTION float2 operator+(const float2 &v0, const float2 &v1) {
+CUDA_DEVICE_FUNCTION float2 operator+(const float2 &v0, const float2 &v1) {
     return make_float2(v0.x + v1.x, v0.y + v1.y);
 }
-RT_FUNCTION float2 operator-(const float2 &v0, const float2 &v1) {
+CUDA_DEVICE_FUNCTION float2 operator-(const float2 &v0, const float2 &v1) {
     return make_float2(v0.x - v1.x, v0.y - v1.y);
 }
-RT_FUNCTION float2 operator*(const float2 &v0, const float2 &v1) {
+CUDA_DEVICE_FUNCTION float2 operator*(const float2 &v0, const float2 &v1) {
     return make_float2(v0.x * v1.x, v0.y * v1.y);
 }
-RT_FUNCTION float2 operator*(float s, const float2 &v) {
+CUDA_DEVICE_FUNCTION float2 operator*(float s, const float2 &v) {
     return make_float2(s * v.x, s * v.y);
 }
-RT_FUNCTION float2 operator*(const float2 &v, float s) {
+CUDA_DEVICE_FUNCTION float2 operator*(const float2 &v, float s) {
     return make_float2(s * v.x, s * v.y);
 }
-RT_FUNCTION float2 operator/(const float2 &v, float s) {
+CUDA_DEVICE_FUNCTION float2 operator/(const float2 &v, float s) {
     float r = 1 / s;
     return r * v;
 }
 
-RT_FUNCTION float3 operator-(const float3 &v) {
+CUDA_DEVICE_FUNCTION float3 operator-(const float3 &v) {
     return make_float3(-v.x, -v.y, -v.z);
 }
-RT_FUNCTION float3 operator+(const float3 &v0, const float3 &v1) {
+CUDA_DEVICE_FUNCTION float3 operator+(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
 }
-RT_FUNCTION float3 &operator+=(float3 &v0, const float3 &v1) {
+CUDA_DEVICE_FUNCTION float3 &operator+=(float3 &v0, const float3 &v1) {
     v0.x += v1.x;
     v0.y += v1.y;
     v0.z += v1.z;
     return v0;
 }
-RT_FUNCTION float3 operator-(const float3 &v0, const float3 &v1) {
+CUDA_DEVICE_FUNCTION float3 operator-(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z);
 }
-RT_FUNCTION float3 operator*(const float3 &v0, const float3 &v1) {
+CUDA_DEVICE_FUNCTION float3 operator*(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z);
 }
-RT_FUNCTION float3 operator*(float s, const float3 &v) {
+CUDA_DEVICE_FUNCTION float3 operator*(float s, const float3 &v) {
     return make_float3(s * v.x, s * v.y, s * v.z);
 }
-RT_FUNCTION float3 operator*(const float3 &v, float s) {
+CUDA_DEVICE_FUNCTION float3 operator*(const float3 &v, float s) {
     return make_float3(s * v.x, s * v.y, s * v.z);
 }
-RT_FUNCTION float3 &operator*=(float3 &v, float s) {
+CUDA_DEVICE_FUNCTION float3 &operator*=(float3 &v, float s) {
     v.x *= s;
     v.y *= s;
     v.z *= s;
     return v;
 }
-RT_FUNCTION float3 operator/(const float3 &v, float s) {
+CUDA_DEVICE_FUNCTION float3 operator/(const float3 &v, float s) {
     float r = 1 / s;
     return r * v;
 }
-RT_FUNCTION float3 &operator/=(float3 &v, float s) {
+CUDA_DEVICE_FUNCTION float3 &operator/=(float3 &v, float s) {
     float r = 1 / s;
     return v *= r;
 }
 
-RT_FUNCTION float dot(const float3 &v0, const float3 &v1) {
+CUDA_DEVICE_FUNCTION float dot(const float3 &v0, const float3 &v1) {
     return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }
-RT_FUNCTION float3 cross(const float3 &v0, const float3 &v1) {
+CUDA_DEVICE_FUNCTION float3 cross(const float3 &v0, const float3 &v1) {
     return make_float3(v0.y * v1.z - v0.z * v1.y,
                        v0.z * v1.x - v0.x * v1.z,
                        v0.x * v1.y - v0.y * v1.x);
 }
-RT_FUNCTION float length(const float3 &v) {
+CUDA_DEVICE_FUNCTION float length(const float3 &v) {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
-RT_FUNCTION float sqLength(const float3 &v) {
+CUDA_DEVICE_FUNCTION float sqLength(const float3 &v) {
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
-RT_FUNCTION float3 normalize(const float3 &v) {
+CUDA_DEVICE_FUNCTION float3 normalize(const float3 &v) {
     return v / length(v);
 }
 
@@ -109,37 +109,37 @@ struct Matrix3x3 {
         float3 c2;
     };
 
-    RT_FUNCTION Matrix3x3() :
+    CUDA_DEVICE_FUNCTION Matrix3x3() :
         c0(make_float3(1, 0, 0)),
         c1(make_float3(0, 1, 0)),
         c2(make_float3(0, 0, 1)) { }
-    RT_FUNCTION Matrix3x3(const float array[9]) :
+    CUDA_DEVICE_FUNCTION Matrix3x3(const float array[9]) :
         m00(array[0]), m10(array[1]), m20(array[2]),
         m01(array[3]), m11(array[4]), m21(array[5]),
         m02(array[6]), m12(array[7]), m22(array[8]) { }
-    RT_FUNCTION Matrix3x3(const float3 &col0, const float3 &col1, const float3 &col2) :
+    CUDA_DEVICE_FUNCTION Matrix3x3(const float3 &col0, const float3 &col1, const float3 &col2) :
         c0(col0), c1(col1), c2(col2)
     { }
 
-    RT_FUNCTION Matrix3x3 operator+() const { return *this; }
-    RT_FUNCTION Matrix3x3 operator-() const { return Matrix3x3(-c0, -c1, -c2); }
+    CUDA_DEVICE_FUNCTION Matrix3x3 operator+() const { return *this; }
+    CUDA_DEVICE_FUNCTION Matrix3x3 operator-() const { return Matrix3x3(-c0, -c1, -c2); }
 
-    RT_FUNCTION Matrix3x3 operator+(const Matrix3x3 &mat) const { return Matrix3x3(c0 + mat.c0, c1 + mat.c1, c2 + mat.c2); }
-    RT_FUNCTION Matrix3x3 operator-(const Matrix3x3 &mat) const { return Matrix3x3(c0 - mat.c0, c1 - mat.c1, c2 - mat.c2); }
-    RT_FUNCTION Matrix3x3 operator*(const Matrix3x3 &mat) const {
+    CUDA_DEVICE_FUNCTION Matrix3x3 operator+(const Matrix3x3 &mat) const { return Matrix3x3(c0 + mat.c0, c1 + mat.c1, c2 + mat.c2); }
+    CUDA_DEVICE_FUNCTION Matrix3x3 operator-(const Matrix3x3 &mat) const { return Matrix3x3(c0 - mat.c0, c1 - mat.c1, c2 - mat.c2); }
+    CUDA_DEVICE_FUNCTION Matrix3x3 operator*(const Matrix3x3 &mat) const {
         const float3 r[] = { row(0), row(1), row(2) };
         return Matrix3x3(make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0)),
                          make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1)),
                          make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2)));
     }
-    RT_FUNCTION float3 operator*(const float3 &v) const {
+    CUDA_DEVICE_FUNCTION float3 operator*(const float3 &v) const {
         const float3 r[] = { row(0), row(1), row(2) };
         return make_float3(dot(r[0], v),
                            dot(r[1], v),
                            dot(r[2], v));
     }
 
-    RT_FUNCTION Matrix3x3 &operator*=(const Matrix3x3 &mat) {
+    CUDA_DEVICE_FUNCTION Matrix3x3 &operator*=(const Matrix3x3 &mat) {
         const float3 r[] = { row(0), row(1), row(2) };
         c0 = make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0));
         c1 = make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1));
@@ -147,7 +147,7 @@ struct Matrix3x3 {
         return *this;
     }
 
-    RT_FUNCTION float3 row(unsigned int r) const {
+    CUDA_DEVICE_FUNCTION float3 row(unsigned int r) const {
         //Assert(r < 3, "\"r\" is out of range [0, 2].");
         switch (r) {
         case 0:
@@ -161,12 +161,12 @@ struct Matrix3x3 {
         }
     }
 
-    RT_FUNCTION Matrix3x3 &transpose() {
+    CUDA_DEVICE_FUNCTION Matrix3x3 &transpose() {
         std::swap(m10, m01); std::swap(m20, m02);
         std::swap(m21, m12);
         return *this;
     }
-    RT_FUNCTION Matrix3x3 &inverse() {
+    CUDA_DEVICE_FUNCTION Matrix3x3 &inverse() {
         float det = 1.0f / (m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 -
                             m02 * m11 * m20 - m01 * m10 * m22 - m00 * m12 * m21);
         Matrix3x3 m;
@@ -179,28 +179,28 @@ struct Matrix3x3 {
     }
 };
 
-RT_FUNCTION Matrix3x3 transpose(const Matrix3x3 &mat) {
+CUDA_DEVICE_FUNCTION Matrix3x3 transpose(const Matrix3x3 &mat) {
     Matrix3x3 ret = mat;
     return ret.transpose();
 }
-RT_FUNCTION Matrix3x3 inverse(const Matrix3x3 &mat) {
+CUDA_DEVICE_FUNCTION Matrix3x3 inverse(const Matrix3x3 &mat) {
     Matrix3x3 ret = mat;
     return ret.inverse();
 }
 
-RT_FUNCTION Matrix3x3 scale3x3(const float3 &s) {
+CUDA_DEVICE_FUNCTION Matrix3x3 scale3x3(const float3 &s) {
     return Matrix3x3(s.x * make_float3(1, 0, 0),
                      s.y * make_float3(0, 1, 0),
                      s.z * make_float3(0, 0, 1));
 }
-RT_FUNCTION Matrix3x3 scale3x3(float sx, float sy, float sz) {
+CUDA_DEVICE_FUNCTION Matrix3x3 scale3x3(float sx, float sy, float sz) {
     return scale3x3(make_float3(sx, sy, sz));
 }
-RT_FUNCTION Matrix3x3 scale3x3(float s) {
+CUDA_DEVICE_FUNCTION Matrix3x3 scale3x3(float s) {
     return scale3x3(make_float3(s, s, s));
 }
 
-RT_FUNCTION Matrix3x3 rotate3x3(float angle, const float3 &axis) {
+CUDA_DEVICE_FUNCTION Matrix3x3 rotate3x3(float angle, const float3 &axis) {
     Matrix3x3 matrix;
     float3 nAxis = normalize(axis);
     float s = std::sin(angle);
@@ -219,12 +219,12 @@ RT_FUNCTION Matrix3x3 rotate3x3(float angle, const float3 &axis) {
 
     return matrix;
 }
-RT_FUNCTION Matrix3x3 rotate3x3(float angle, float ax, float ay, float az) {
+CUDA_DEVICE_FUNCTION Matrix3x3 rotate3x3(float angle, float ax, float ay, float az) {
     return rotate3x3(angle, make_float3(ax, ay, az));
 }
-RT_FUNCTION Matrix3x3 rotateX3x3(float angle) { return rotate3x3(angle, make_float3(1, 0, 0)); }
-RT_FUNCTION Matrix3x3 rotateY3x3(float angle) { return rotate3x3(angle, make_float3(0, 1, 0)); }
-RT_FUNCTION Matrix3x3 rotateZ3x3(float angle) { return rotate3x3(angle, make_float3(0, 0, 1)); }
+CUDA_DEVICE_FUNCTION Matrix3x3 rotateX3x3(float angle) { return rotate3x3(angle, make_float3(1, 0, 0)); }
+CUDA_DEVICE_FUNCTION Matrix3x3 rotateY3x3(float angle) { return rotate3x3(angle, make_float3(0, 1, 0)); }
+CUDA_DEVICE_FUNCTION Matrix3x3 rotateZ3x3(float angle) { return rotate3x3(angle, make_float3(0, 0, 1)); }
 
 
 
@@ -274,7 +274,7 @@ namespace Shared {
             matSR_N = transpose(inverse(matSR));
         }
 
-        RT_FUNCTION float3 transformNormal(const float3 &n) const {
+        CUDA_DEVICE_FUNCTION float3 transformNormal(const float3 &n) const {
             return matSR_N * n;
         }
     };
@@ -287,7 +287,7 @@ namespace Shared {
         const GeometryData* geomInstData;
         const GeometryPreTransform* geomPreTransforms;
         int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
-        optixu::BlockBuffer2D<float4, 1> accumBuffer;
+        optixu::BlockBuffer2D<float4, 1> resultBuffer;
         PerspectiveCamera camera;
     };
 }
