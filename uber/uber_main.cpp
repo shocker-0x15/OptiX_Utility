@@ -1511,6 +1511,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
+            static float rollPitchYaw[3];
+            g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
+            rollPitchYaw[0] *= 180 / M_PI;
+            rollPitchYaw[1] *= 180 / M_PI;
+            rollPitchYaw[2] *= 180 / M_PI;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw, 3))
+                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * M_PI / 180,
+                                                       rollPitchYaw[1] * M_PI / 180,
+                                                       rollPitchYaw[2] * M_PI / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();

@@ -31,10 +31,6 @@ FileDialog::Result FileDialog::drawAndGetResult() {
     ImGui::SetNextWindowSizeConstraints(ImVec2(400, windowMinHeight), ImVec2(1e+6, 1e+6));
     ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal(m_title, nullptr)) {
-        if (m_curDir.empty()) {
-            changeDirectory(fs::current_path());
-        }
-
         fs::path newDir;
         bool fileDoubleClicked = false;
 
@@ -83,51 +79,65 @@ FileDialog::Result FileDialog::drawAndGetResult() {
         float fileListHeight = std::fmax(ImGui::GetWindowSize().y - windowMinHeight, 0) + fileListMinHeight;
         ImGui::BeginChild("File List", ImVec2(ImGui::GetWindowContentRegionWidth(), fileListHeight));
 
+        bool multiplySelected = (m_numSelectedDirs + m_numSelectedFiles) > 1;
         bool selectionChanged = false;
-        for (int i = 0; i < m_files.size(); ++i) {
-            uint8_t &selected = m_fileSelectedStates[i];
-            const fs::directory_entry &entry = m_files[i];
+        for (int i = 0; i < m_entryInfos.size(); ++i) {
+            EntryInfo &entryInfo = m_entryInfos[i];
 
-            std::string name = entry.is_directory() ? "[D] " : "[F] ";
-            name += entry.path().filename().u8string().c_str();
-            if (ImGui::Selectable(name.c_str(), selected, ImGuiSelectableFlags_DontClosePopups)) {
-                if (!ImGui::GetIO().KeyCtrl || ((m_flags & Flag_MultipleSelection) == 0)) {
-                    for (uint8_t &s : m_fileSelectedStates) {
-                        if (&s != &selected || m_multiplySelected)
-                            s = false;
+            std::string name = entryInfo.is_directory() ? "[D] " : "[F] ";
+            name += entryInfo.path().filename().u8string().c_str();
+            if (ImGui::Selectable(name.c_str(), entryInfo.selected, ImGuiSelectableFlags_DontClosePopups)) {
+                if (((m_flags & Flag_DirectorySelection) && entryInfo.is_directory()) ||
+                    ((m_flags & Flag_FileSelection) && !entryInfo.is_directory())) {
+                    // JP: 単一選択した場合は他の選択済み項目を非選択状態に変更する。
+                    if (!ImGui::GetIO().KeyCtrl || ((m_flags & Flag_MultipleSelection) == 0)) {
+                        for (EntryInfo &e : m_entryInfos) {
+                            // JP: 複数選択状態なら選択状態になるようにする。
+                            if (&e != &entryInfo || multiplySelected)
+                                e.selected = false;
+                        }
                     }
-                }
-                if (((m_flags & Flag_DirectorySelection) && entry.is_directory()) ||
-                    ((m_flags & Flag_FileSelection) && !entry.is_directory())) {
-                    selected ^= true;
+                    entryInfo.selected ^= true;
                     selectionChanged = true;
                 }
             }
-            if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered()) {
-                if (entry.is_directory()) {
-                    if (!ImGui::GetIO().KeyCtrl) {
-                        if (entry.path().is_relative())
-                            newDir = m_curDir / entry.path();
-                        else
-                            newDir = entry.path();
-                    }
+            // JP: ダブルクリック時の処理。
+            if (ImGui::IsMouseDoubleClicked(0) && !ImGui::GetIO().KeyCtrl && ImGui::IsItemHovered()) {
+                if (entryInfo.is_directory()) {
+                    if (entryInfo.path().is_relative())
+                        newDir = m_curDir / entryInfo.path();
+                    else
+                        newDir = entryInfo.path();
                 }
                 else {
-                    if (!ImGui::GetIO().KeyCtrl) {
-                        for (uint8_t &s : m_fileSelectedStates) {
-                            if (&s != &selected || m_multiplySelected)
-                                s = false;
-                        }
-                        fileDoubleClicked = true;
+                    // JP: 他の選択済み項目を非選択状態に変更する。
+                    for (EntryInfo &e : m_entryInfos) {
+                        // JP: 複数選択状態なら自身だけ選択状態になるようにする。
+                        if (&e != &entryInfo || multiplySelected)
+                            e.selected = false;
                     }
-                    selected = true;
+                    if ((m_flags & Flag_FileSelection) && !entryInfo.is_directory())
+                        fileDoubleClicked = true;
+                    entryInfo.selected = true;
                     selectionChanged = true;
                 }
             }
         }
 
-        if (selectionChanged)
+        if (selectionChanged) {
+            m_numSelectedFiles = 0;
+            m_numSelectedDirs = 0;
+            for (int i = 0; i < m_entryInfos.size(); ++i) {
+                const EntryInfo &entryInfo = m_entryInfos[i];
+                if (entryInfo.selected) {
+                    if (entryInfo.is_directory())
+                        ++m_numSelectedDirs;
+                    else
+                        ++m_numSelectedFiles;
+                }
+            }
             genFilesText();
+        }
 
         ImGui::EndChild();
 
@@ -136,21 +146,8 @@ FileDialog::Result FileDialog::drawAndGetResult() {
 
         ImGui::Separator();
 
-        uint32_t numSelectedFiles = 0;
-        uint32_t numSelectedDirs = 0;
-        for (int i = 0; i < m_files.size(); ++i) {
-            const uint8_t &selected = m_fileSelectedStates[i];
-            const fs::directory_entry &entry = m_files[i];
-            if (selected) {
-                if (entry.is_directory())
-                    ++numSelectedDirs;
-                else
-                    ++numSelectedFiles;
-            }
-        }
-        m_multiplySelected = (numSelectedDirs + numSelectedFiles) > 1;
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(reducedItemSpacing, reducedItemSpacing));
-        ImGui::Text("%u files, %u dirs selected", numSelectedFiles, numSelectedDirs);
+        ImGui::Text("%u files, %u dirs selected", m_numSelectedFiles, m_numSelectedDirs);
         ImGui::PopStyleVar();
 
         ImGui::PushID("Current Files");
@@ -185,37 +182,36 @@ FileDialog::Result FileDialog::drawAndGetResult() {
 void FileDialog::calcEntries(std::vector<std::filesystem::directory_entry>* entries) {
     namespace fs = std::filesystem;
 
-    if (ImGui::IsPopupOpen(m_title))
-        entries->clear();
+    entries->clear();
 
     std::string filesText = m_curFilesText;
     std::vector<std::string> fileFilters;
     while (!filesText.empty()) {
         size_t p = filesText.find(',');
-        std::string newFilter;
+        std::string file;
         if (p == std::string::npos) {
-            newFilter = filesText;
+            file = filesText;
             filesText = "";
         }
         else {
-            newFilter = filesText.substr(0, p);
+            file = filesText.substr(0, p);
             filesText = filesText.substr(p + 1);
         }
-        if (!newFilter.empty())
-            fileFilters.push_back(newFilter);
+        if (!file.empty())
+            fileFilters.push_back(file);
     }
 
     for (const std::string &filter : fileFilters) {
-        for (const fs::directory_entry &entry : m_files) {
-            if (((m_flags & Flag_DirectorySelection == 0) && entry.is_directory()) ||
-                ((m_flags & Flag_FileSelection == 0) && !entry.is_directory()))
+        for (const EntryInfo &entryInfo : m_entryInfos) {
+            if (((m_flags & Flag_DirectorySelection == 0) && entryInfo.is_directory()) ||
+                ((m_flags & Flag_FileSelection == 0) && !entryInfo.is_directory()))
                 continue;
 
-            if (entry.path().filename().u8string() == filter) {
-                if (entry.path().is_relative())
-                    entries->emplace_back(fs::canonical(m_curDir / entry.path()));
+            if (entryInfo.path().filename().u8string() == filter) {
+                if (entryInfo.path().is_relative())
+                    entries->emplace_back(fs::canonical(m_curDir / entryInfo.path()));
                 else
-                    entries->push_back(entry);
+                    entries->push_back(entryInfo.entry);
                 break;
             }
         }

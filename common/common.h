@@ -30,11 +30,15 @@
 #   include <fstream>
 #   include <sstream>
 #   include <vector>
+#   include <set>
+#   include <unordered_set>
 #   include <random>
 #   include <algorithm>
 #   include <filesystem>
 #   include <thread>
 #   include <chrono>
+
+#   include <immintrin.h>
 
 #   include "GLToolkit.h"
 #   include "stopwatch.h"
@@ -80,6 +84,117 @@ void devPrintf(const char* fmt, ...);
 template <typename T, size_t size>
 constexpr size_t lengthof(const T (&array)[size]) {
     return size;
+}
+
+
+
+CUDA_DEVICE_FUNCTION uint32_t tzcnt(uint32_t x) {
+#if defined(__CUDA_ARCH__)
+    return __clz(__brev(x));
+#else
+    return _tzcnt_u32(x);
+#endif
+}
+
+CUDA_DEVICE_FUNCTION uint32_t lzcnt(uint32_t x) {
+#if defined(__CUDA_ARCH__)
+    return __clz(x);
+#else
+    return _lzcnt_u32(x);
+#endif
+}
+
+CUDA_DEVICE_FUNCTION int32_t popcnt(uint32_t x) {
+#if defined(__CUDA_ARCH__)
+    return __popc(x);
+#else
+    return _mm_popcnt_u32(x);
+#endif
+}
+
+//     0: 0
+//     1: 0
+//  2- 3: 1
+//  4- 7: 2
+//  8-15: 3
+// 16-31: 4
+// ...
+CUDA_DEVICE_FUNCTION uint32_t prevPowOf2Exponent(uint32_t x) {
+    if (x == 0)
+        return 0;
+    return 31 - lzcnt(x);
+}
+
+//    0: 0
+//    1: 0
+//    2: 1
+// 3- 4: 2
+// 5- 8: 3
+// 9-16: 4
+// ...
+CUDA_DEVICE_FUNCTION uint32_t nextPowOf2Exponent(uint32_t x) {
+    if (x == 0)
+        return 0;
+    return 32 - lzcnt(x - 1);
+}
+
+//     0: 0
+//     1: 1
+//  2- 3: 2
+//  4- 7: 4
+//  8-15: 8
+// 16-31: 16
+// ...
+CUDA_DEVICE_FUNCTION uint32_t prevPowerOf2(uint32_t x) {
+    if (x == 0)
+        return 0;
+    return 1 << prevPowOf2Exponent(x);
+}
+
+//    0: 0
+//    1: 1
+//    2: 2
+// 3- 4: 4
+// 5- 8: 8
+// 9-16: 16
+// ...
+CUDA_DEVICE_FUNCTION uint32_t nextPowerOf2(uint32_t x) {
+    if (x == 0)
+        return 0;
+    return 1 << nextPowOf2Exponent(x);
+}
+
+template <typename IntType>
+CUDA_DEVICE_FUNCTION constexpr IntType nextMultiplesForPowOf2(IntType x, uint32_t exponent) {
+    IntType mask = (1 << exponent) - 1;
+    return (x + mask) & ~mask;
+}
+
+template <typename IntType>
+CUDA_DEVICE_FUNCTION constexpr IntType nextMultiplierForPowOf2(IntType x, uint32_t exponent) {
+    return nextMultiplesForPowOf2(x, exponent) >> exponent;
+}
+
+CUDA_DEVICE_FUNCTION uint32_t nthSetBit(uint32_t value, int32_t n) {
+    uint32_t idx = 0;
+    int32_t count;
+    if (n >= popcnt(value))
+        return 0xFFFFFFFF;
+
+    for (uint32_t width = 16; width >= 1; width >>= 1) {
+        if (value == 0)
+            return 0xFFFFFFFF;
+
+        uint32_t mask = (1 << width) - 1;
+        count = popcnt(value & mask);
+        if (n >= count) {
+            value >>= width;
+            n -= count;
+            idx += width;
+        }
+    }
+
+    return idx;
 }
 
 
@@ -169,11 +284,127 @@ inline constexpr float4 make_float4(float x, float y, float z, float w) {
 
 
 
+template <typename T, typename Deleter, typename ...ArgTypes>
+std::shared_ptr<T> make_shared_with_deleter(const Deleter &deleter, ArgTypes&&... args) {
+    return std::shared_ptr<T>(new T(std::forward<ArgTypes>(args)...),
+                              deleter);
+}
+
 std::filesystem::path getExecutableDirectory();
 
 std::string readTxtFile(const std::filesystem::path& filepath);
 
 float sRGB_degamma_s(float value);
+
+
+
+class SlotFinder {
+    uint32_t m_numLayers;
+    uint32_t m_numLowestFlagBins;
+    uint32_t m_numTotalCompiledFlagBins;
+    uint32_t* m_flagBins;
+    uint32_t* m_offsetsToOR_AND;
+    uint32_t* m_numUsedFlagsUnderBinList;
+    uint32_t* m_offsetsToNumUsedFlags;
+    uint32_t* m_numFlagsInLayerList;
+
+    SlotFinder(const SlotFinder &) = delete;
+    SlotFinder &operator=(const SlotFinder &) = delete;
+
+    void aggregate();
+
+    uint32_t getNumLayers() const {
+        return m_numLayers;
+    }
+
+    const uint32_t* getOffsetsToOR_AND() const {
+        return m_offsetsToOR_AND;
+    }
+
+    const uint32_t* getOffsetsToNumUsedFlags() const {
+        return m_offsetsToNumUsedFlags;
+    }
+
+    const uint32_t* getNumFlagsInLayerList() const {
+        return m_numFlagsInLayerList;
+    }
+
+public:
+    static constexpr uint32_t InvalidSlotIndex = 0xFFFFFFFF;
+
+    SlotFinder() :
+        m_numLayers(0), m_numLowestFlagBins(0), m_numTotalCompiledFlagBins(0),
+        m_flagBins(nullptr), m_offsetsToOR_AND(nullptr),
+        m_numUsedFlagsUnderBinList(nullptr), m_offsetsToNumUsedFlags(nullptr),
+        m_numFlagsInLayerList(nullptr) {
+    }
+    ~SlotFinder() {
+    }
+
+    void initialize(uint32_t numSlots);
+
+    void finalize();
+
+    SlotFinder &operator=(SlotFinder &&inst) {
+        finalize();
+
+        m_numLayers = inst.m_numLayers;
+        m_numLowestFlagBins = inst.m_numLowestFlagBins;
+        m_numTotalCompiledFlagBins = inst.m_numTotalCompiledFlagBins;
+        m_flagBins = inst.m_flagBins;
+        m_offsetsToOR_AND = inst.m_offsetsToOR_AND;
+        m_numUsedFlagsUnderBinList = inst.m_numUsedFlagsUnderBinList;
+        m_offsetsToNumUsedFlags = inst.m_offsetsToNumUsedFlags;
+        m_numFlagsInLayerList = inst.m_numFlagsInLayerList;
+        inst.m_flagBins = nullptr;
+        inst.m_offsetsToOR_AND = nullptr;
+        inst.m_numUsedFlagsUnderBinList = nullptr;
+        inst.m_offsetsToNumUsedFlags = nullptr;
+        inst.m_numFlagsInLayerList = nullptr;
+
+        return *this;
+    }
+    SlotFinder(SlotFinder &&inst) {
+        *this = std::move(inst);
+    }
+
+    void resize(uint32_t numSlots);
+
+    void reset() {
+        std::fill_n(m_flagBins, m_numLowestFlagBins + m_numTotalCompiledFlagBins, 0);
+        std::fill_n(m_numUsedFlagsUnderBinList, m_numLowestFlagBins + m_numTotalCompiledFlagBins / 2, 0);
+    }
+
+
+
+    void setInUse(uint32_t slotIdx);
+
+    void setNotInUse(uint32_t slotIdx);
+
+    bool getUsage(uint32_t slotIdx) const {
+        uint32_t binIdx = slotIdx / 32;
+        uint32_t flagIdxInBin = slotIdx % 32;
+        uint32_t flagBin = m_flagBins[binIdx];
+
+        return (bool)((flagBin >> flagIdxInBin) & 0x1);
+    }
+
+    uint32_t getFirstAvailableSlot() const;
+
+    uint32_t getFirstUsedSlot() const;
+
+    uint32_t find_nthUsedSlot(uint32_t n) const;
+
+    uint32_t getNumSlots() const {
+        return m_numFlagsInLayerList[0];
+    }
+
+    uint32_t getNumUsed() const {
+        return m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[m_numLayers - 1]];
+    }
+
+    void debugPrint() const;
+};
 
 #endif
 
@@ -249,6 +480,12 @@ CUDA_DEVICE_FUNCTION float3 operator/(const float3 &v, float s) {
 CUDA_DEVICE_FUNCTION float3 &operator/=(float3 &v, float s) {
     float r = 1 / s;
     return v *= r;
+}
+CUDA_DEVICE_FUNCTION bool allFinite(const float3 &v) {
+#if !defined(__CUDA_ARCH__)
+    using std::isfinite;
+#endif
+    return isfinite(v.x) && isfinite(v.y) && isfinite(v.z);
 }
 
 CUDA_DEVICE_FUNCTION float4 make_float4(float v) {

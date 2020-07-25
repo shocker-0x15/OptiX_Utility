@@ -190,7 +190,7 @@ namespace cudau {
         m_initialized = false;
     }
 
-    void Buffer::resize(uint32_t numElements, uint32_t stride) {
+    void Buffer::resize(uint32_t numElements, uint32_t stride, CUstream stream) {
         if (!m_initialized)
             throw std::runtime_error("Buffer is not initialized.");
         if (m_type == BufferType::GL_Interop)
@@ -211,14 +211,14 @@ namespace cudau {
             CUDADRV_CHECK(cuMemcpyDtoD(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy));
         }
         else {
-            auto src = map<const uint8_t>();
-            auto dst = newBuffer.map<uint8_t>();
+            auto src = map<const uint8_t>(stream);
+            auto dst = newBuffer.map<uint8_t>(stream);
             for (int i = 0; i < numElementsToCopy; ++i) {
                 std::memset(dst, 0, stride);
                 std::memcpy(dst, src, m_stride);
             }
-            newBuffer.unmap();
-            unmap();
+            newBuffer.unmap(stream);
+            unmap(stream);
         }
 
         *this = std::move(newBuffer);
@@ -697,13 +697,13 @@ namespace cudau {
         m_initialized = false;
     }
 
-    void Array::resize(uint32_t length) {
+    void Array::resize(uint32_t length, CUstream stream) {
         if (m_height > 0 || m_depth > 0)
             throw std::runtime_error("Array dimension cannot be changed.");
         CUDAUAssert_NotImplemented();
     }
 
-    void Array::resize(uint32_t width, uint32_t height) {
+    void Array::resize(uint32_t width, uint32_t height, CUstream stream) {
         if (m_depth > 0)
             throw std::runtime_error("Array dimension cannot be changed.");
         if (m_numMipmapLevels > 1)
@@ -737,10 +737,12 @@ namespace cudau {
         params.dstZ = 0;
         // dstDevice, dstHeight, dstHost, dstLOD, dstPitch are not used in this case.
 
+        CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
+
         *this = std::move(newArray);
     }
 
-    void Array::resize(uint32_t width, uint32_t height, uint32_t depth) {
+    void Array::resize(uint32_t width, uint32_t height, uint32_t depth, CUstream stream) {
         CUDAUAssert_NotImplemented();
     }
 

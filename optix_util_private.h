@@ -323,7 +323,7 @@ namespace optixu {
             return sbtOffsets.at(SBTOffsetKey{ gas, matSetIdx });
         }
 
-        void setupHitGroupSBT(const _Pipeline* pipeline, Buffer* sbt);
+        void setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, Buffer* sbt);
 
         bool isReady();
     };
@@ -673,6 +673,7 @@ namespace optixu {
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
         std::vector<_ProgramGroup*> callablePrograms;
+        // TODO: CPU/GPU asynchronous update
         Buffer rayGenRecord;
         Buffer exceptionRecord;
         Buffer missRecords;
@@ -687,7 +688,7 @@ namespace optixu {
             unsigned int sbtIsUpToDate : 1;
         };
 
-        void setupShaderBindingTable();
+        void setupShaderBindingTable(CUstream stream);
 
     public:
         OPTIX_OPAQUE_BRIDGE(Pipeline);

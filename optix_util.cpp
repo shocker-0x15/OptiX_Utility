@@ -93,11 +93,11 @@ namespace optixu {
             _ias->markDirty();
     }
 
-    void Scene::Priv::setupHitGroupSBT(const _Pipeline* pipeline, Buffer* sbt) {
+    void Scene::Priv::setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, Buffer* sbt) {
         THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= sizeof(HitGroupSBTRecord) * numSBTRecords,
                             "Shader binding table size is not enough.");
 
-        auto records = sbt->map<HitGroupSBTRecord>();
+        auto records = sbt->map<HitGroupSBTRecord>(stream);
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
@@ -107,7 +107,7 @@ namespace optixu {
             }
         }
 
-        sbt->unmap();
+        sbt->unmap(stream);
     }
 
     bool Scene::Priv::isReady() {
@@ -882,7 +882,7 @@ namespace optixu {
         OPTIX_CHECK(optixProgramGroupDestroy(group));
     }
     
-    void Pipeline::Priv::setupShaderBindingTable() {
+    void Pipeline::Priv::setupShaderBindingTable(CUstream stream) {
         if (!sbtAllocDone) {
             missRecords.resize(numMissRayTypes, missRecords.stride());
             if (callablePrograms.size())
@@ -915,7 +915,7 @@ namespace optixu {
                     missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
                 missRecords.unmap();
 
-                scene->setupHitGroupSBT(this, hitGroupSbt);
+                scene->setupHitGroupSBT(stream, this, hitGroupSbt);
 
                 auto callableRecordsOnHost = callableRecords.map<uint8_t>();
                 for (int i = 0; i < callablePrograms.size(); ++i)
@@ -1236,7 +1236,7 @@ namespace optixu {
         THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
         THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
 
-        m->setupShaderBindingTable();
+        m->setupShaderBindingTable(stream);
 
         OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
                                 &m->sbt, dimX, dimY, dimZ));

@@ -7,9 +7,9 @@
 class FileDialog {
 public:
     enum Flag {
-        Flag_FileSelection = 1 << 0,
+        Flag_FileSelection      = 1 << 0,
         Flag_DirectorySelection = 1 << 1,
-        Flag_MultipleSelection = 1 << 2,
+        Flag_MultipleSelection  = 1 << 2,
     };
 
     enum Result {
@@ -19,24 +19,42 @@ public:
     };
 
 private:
+    struct EntryInfo {
+        std::filesystem::directory_entry entry;
+        union {
+            uint32_t flags;
+            struct {
+                unsigned int selected : 1;
+            };
+        };
+        EntryInfo() : flags(0) {}
+
+        bool is_directory() const {
+            return entry.is_directory();
+        }
+        const std::filesystem::path &path() const noexcept {
+            return entry.path();
+        }
+    };
+
     std::filesystem::path m_curDir;
     std::vector<std::string> m_curDirBlocks;
-    std::vector<std::filesystem::directory_entry> m_files;
-    std::vector<uint8_t> m_fileSelectedStates;
+    std::vector<EntryInfo> m_entryInfos;
+    uint32_t m_numSelectedFiles;
+    uint32_t m_numSelectedDirs;
     char m_curDirText[1024];
     char m_curFilesText[1024];
-    bool m_multiplySelected;
     const char* m_title;
     ImFont* m_font;
     Flag m_flags;
 
     template <size_t Size>
-    static void strToChars(const std::string &src, char(&dst)[Size]) {
+    static void strToChars(const std::string &src, char (&dst)[Size]) {
         strncpy_s(dst, src.c_str(), Size - 1);
         dst[Size - 1] = '\0';
     }
     template <size_t Size>
-    static void pathToChars(const std::filesystem::path &path, char(&dst)[Size]) {
+    static void pathToChars(const std::filesystem::path &path, char (&dst)[Size]) {
         strncpy_s(dst, path.u8string().c_str(), Size - 1);
         dst[Size - 1] = '\0';
     }
@@ -46,15 +64,14 @@ private:
 
         std::string text;
         bool firstFile = true;
-        for (int i = 0; i < m_files.size(); ++i) {
-            const uint8_t &selected = m_fileSelectedStates[i];
-            const fs::directory_entry &entry = m_files[i];
-            if (!selected)
+        for (int i = 0; i < m_entryInfos.size(); ++i) {
+            const EntryInfo &entryInfo = m_entryInfos[i];
+            if (!entryInfo.selected)
                 continue;
 
             if (!firstFile)
                 text += ",";
-            text += entry.path().filename().u8string();
+            text += entryInfo.entry.path().filename().u8string();
             firstFile = false;
         }
 
@@ -75,15 +92,20 @@ private:
             m_curDirBlocks.push_back(str);
         }
 
-        m_files.clear();
-        m_fileSelectedStates.clear();
-        fs::directory_entry up{ ".." };
-        m_files.push_back(up);
-        m_fileSelectedStates.push_back(false);
-        m_multiplySelected = false;
+        m_entryInfos.clear();
+        EntryInfo upDirInfo;
+        upDirInfo.entry = fs::directory_entry{ ".." };
+        upDirInfo.selected = false;
+        m_entryInfos.push_back(upDirInfo);
+        m_numSelectedFiles = 0;
+        m_numSelectedDirs = 0;
         for (const auto &entry : fs::directory_iterator(m_curDir)) {
-            m_files.push_back(entry);
-            m_fileSelectedStates.push_back(false);
+            if ((m_flags & Flag_FileSelection) == 0 && !entry.is_directory())
+                continue;
+            EntryInfo info;
+            info.entry = entry;
+            info.selected = false;
+            m_entryInfos.push_back(info);
         }
 
         pathToChars(m_curDir, m_curDirText);
@@ -93,6 +115,7 @@ private:
 public:
     FileDialog() : m_curDir(""), m_font(nullptr) {
         m_title = "Default Title";
+        m_flags = Flag_FileSelection;
     }
 
     void setFont(ImFont* font) {
@@ -101,9 +124,14 @@ public:
 
     void setFlags(uint32_t flags) {
         m_flags = static_cast<Flag>(flags);
+        if (m_flags == 0)
+            m_flags = Flag_FileSelection;
     }
 
     void show() {
+        namespace fs = std::filesystem;
+
+        changeDirectory(m_curDir.empty() ? fs::current_path() : m_curDir);
         ImGui::OpenPopup(m_title);
     }
 

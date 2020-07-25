@@ -315,7 +315,7 @@ namespace cudau {
         }
         void finalize();
 
-        void resize(uint32_t numElements, uint32_t stride);
+        void resize(uint32_t numElements, uint32_t stride, CUstream stream = 0);
 
         CUcontext getCUcontext() const {
             return m_cuContext;
@@ -617,9 +617,9 @@ namespace cudau {
         }
         void finalize();
 
-        void resize(uint32_t length);
-        void resize(uint32_t width, uint32_t height);
-        void resize(uint32_t width, uint32_t height, uint32_t depth);
+        void resize(uint32_t length, CUstream stream = 0);
+        void resize(uint32_t width, uint32_t height, CUstream stream = 0);
+        void resize(uint32_t width, uint32_t height, uint32_t depth, CUstream stream = 0);
 
         CUarray getCUarray(uint32_t mipmapLevel) const {
             if (m_GLTexID) {
