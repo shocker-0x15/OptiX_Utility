@@ -84,6 +84,7 @@ struct GeometryInstance {
     VertexBufferRef vertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
     uint32_t geomInstIndex;
+    bool dataTransfered = false;
     bool selected;
 
     static void finalize(GeometryInstance* p);
@@ -302,6 +303,7 @@ void loadObjFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         geomInst->optixGeomInst.setNumMaterials(1, nullptr);
         geomInst->optixGeomInst.setMaterial(0, 0, optixEnv->material);
         geomInst->optixGeomInst.setUserData(geomInstIndex);
+        geomInst->dataTransfered = false;
         geomInst->selected = false;
 
         optixEnv->geomInsts[optixEnv->geomInstSerialID++] = geomInst;
@@ -533,7 +535,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+                                false,
+                                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS |
+                                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
                                               OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                               OPTIX_EXCEPTION_FLAG_DEBUG),
@@ -668,9 +672,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint64_t frameIndex = 0;
     glfwSetWindowUserPointer(window, &frameIndex);
     int32_t requestedSize[2];
-    bool sbtSwapped = true;
+    bool sbtLayoutUpdated = true;
     uint32_t sbtIndex = 0;
     cudau::Buffer* curShaderBindingTable = &optixEnv.shaderBindingTable[sbtIndex];
+    OptixTraversableHandle curTravHandle = 0;
     while (true) {
         uint32_t bufferIndex = frameIndex % 2;
 
@@ -821,13 +826,28 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
             if (ImGui::Button("Open"))
                 fileDialog.show();
-
             if (fileDialog.drawAndGetResult() == FileDialog::Result::Result_OK) {
                 static std::vector<std::filesystem::directory_entry> entries;
                 fileDialog.calcEntries(&entries);
                 
                 loadObjFile(entries[0], &optixEnv);
             }
+
+            static int32_t travIndex = -1;
+            static std::vector<std::string> traversableNames;
+            static std::vector<OptixTraversableHandle> traversables;
+            if (ImGui::Combo("Target", &travIndex,
+                             [](void* data, int idx, const char** out_text) {
+                                 if (idx < 0)
+                                     return false;
+                                 auto nameList = reinterpret_cast<std::string*>(data);
+                                 *out_text = nameList[idx].c_str();
+                                 return true;
+                             }, traversableNames.data(), traversables.size())) {
+                curTravHandle = traversables[travIndex];
+            }
+
+            bool traversablesUpdated = false;
 
             if (ImGui::BeginTabBar("Scene", ImGuiTabBarFlags_None)) {
                 const auto ImGui_PushDisabledStyle = []() {
@@ -940,7 +960,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 const GeometryInstanceRef &geomInst = optixEnv.geomInsts.at(sID);
                                 geomGroup->geomInsts.push_back(geomInst);
                                 geomGroup->optixGAS.addChild(geomInst->optixGeomInst);
+                                if (!geomInst->dataTransfered) {
+                                    Shared::GeometryData geomData;
+                                    geomData.vertexBuffer = geomInst->vertexBuffer->getDevicePointer();
+                                    geomData.triangleBuffer = geomInst->triangleBuffer.getDevicePointer();
+                                    CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.geometryDataBuffer.getCUdeviceptrAt(geomInst->geomInstIndex),
+                                                                    &geomData, sizeof(geomData), curCuStream));
+                                }
                             }
+
+                            optixEnv.scene.generateShaderBindingTableLayout(&sbtSize);
+                            sbtLayoutUpdated = true;
 
                             OptixAccelBufferSizes bufferSizes;
                             geomGroup->optixGAS.prepareForBuild(&bufferSizes);
@@ -950,6 +980,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                             geomGroup->optixGAS.rebuild(curCuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
 
                             optixEnv.geomGroups[serialID] = geomGroup;
+                            traversablesUpdated = true;
                         }
                     }
                     if (!enabled)
@@ -1114,6 +1145,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 optixEnv.geomGroups.erase(sid);
                             selectedItems.clear();
                             allSelected = false;
+                            traversablesUpdated = true;
                         }
                     }
                     if (!enabled)
@@ -1225,8 +1257,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 group->optixIAS.addChild(inst->optixInst);
                             }
 
-                            optixEnv.scene.generateShaderBindingTableLayout(&sbtSize);
-
                             OptixAccelBufferSizes bufferSizes;
                             uint32_t numInstances;
                             group->optixIAS.prepareForBuild(&bufferSizes, &numInstances);
@@ -1237,6 +1267,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                             group->optixIAS.rebuild(curCuStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
 
                             optixEnv.groups[serialID] = group;
+                            traversablesUpdated = true;
                         }
                     }
                     if (!enabled)
@@ -1355,6 +1386,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 optixEnv.groups.erase(sid);
                             selectedItems.clear();
                             allSelected = false;
+                            traversablesUpdated = true;
                         }
                     }
                     if (!enabled)
@@ -1363,6 +1395,31 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
+
+
+
+                if (traversablesUpdated) {
+                    traversables.clear();
+                    traversableNames.clear();
+                    for (const auto &kv : optixEnv.groups) {
+                        const GroupRef &group = kv.second;
+                        traversables.push_back(group->optixIAS.getHandle());
+                        traversableNames.push_back(group->name);
+                    }
+                    for (const auto &kv : optixEnv.geomGroups) {
+                        const GeometryGroupRef &group = kv.second;
+                        traversables.push_back(group->optixGAS.getHandle());
+                        traversableNames.push_back(group->name);
+                    }
+
+                    travIndex = -1;
+                    for (int i = 0; i < traversables.size(); ++i) {
+                        if (traversables[i] == curTravHandle) {
+                            travIndex = i;
+                            break;
+                        }
+                    }
+                }
             }
 
             ImGui::End();
@@ -1372,14 +1429,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         outputBufferSurfaceHolder.beginCUDAAccess(curCuStream);
 
+        plp.travHandle = curTravHandle;
         plp.resultBuffer = outputBufferSurfaceHolder.getNext();
 
         // Render
-        if (sbtSwapped) {
-            if (curShaderBindingTable->sizeInBytes() < sbtSize)
-                curShaderBindingTable->resize(sbtSize, 1, curCuStream);
+        if (sbtLayoutUpdated) {
+            curShaderBindingTable->resize(sbtSize, 1, curCuStream);
             pipeline.setHitGroupShaderBindingTable(curShaderBindingTable);
-            sbtSwapped = false;
+            sbtLayoutUpdated = false;
         }
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
         pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
@@ -1397,6 +1454,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         glViewport(0, 0, curFBWidth, curFBHeight);
 
         drawOptiXResultShader.useProgram();
+
+        glUniform2ui(0, curFBWidth, curFBHeight);
 
         glActiveTexture(GL_TEXTURE0);
         outputTexture.bind();

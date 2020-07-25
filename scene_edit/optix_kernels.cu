@@ -35,12 +35,12 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     float x = static_cast<float>(launchIndex.x + 0.5f) / plp.imageSize.x;
-    float y = static_cast<float>(launchIndex.y + 0.5f) / plp.imageSize.y;
+    float y = static_cast<float>(plp.imageSize.y - launchIndex.y - 0.5f) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
     float3 origin = plp.camera.position;
-    float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
+    float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (y - 0.5f), 1));
 
     float3 color;
     optixu::trace<PayloadSignature>(
