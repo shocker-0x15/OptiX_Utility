@@ -604,6 +604,10 @@ namespace optixu {
         return m->isReady();
     }
 
+    void GeometryAccelerationStructure::markDirty() const {
+        m->markDirty();
+    }
+
     OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
         return m->getHandle();
     }
@@ -857,6 +861,10 @@ namespace optixu {
 
     bool InstanceAccelerationStructure::isReady() const {
         return m->isReady();
+    }
+
+    void InstanceAccelerationStructure::markDirty() const {
+        m->markDirty();
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {

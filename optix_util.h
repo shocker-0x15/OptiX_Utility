@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- ASのmarkDirty()に関して、どんな操作に関しては呼ばないといけないのかを明示的に記述。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
 - Motion Transformサポート。
@@ -860,6 +861,7 @@ private: \
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
+        void markDirty() const;
         OptixTraversableHandle getHandle() const;
     };
 
@@ -907,6 +909,7 @@ private: \
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
+        void markDirty() const;
         OptixTraversableHandle getHandle() const;
     };
 

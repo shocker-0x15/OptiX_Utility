@@ -35,6 +35,7 @@
 #   include <random>
 #   include <algorithm>
 #   include <filesystem>
+#   include <functional>
 #   include <thread>
 #   include <chrono>
 
