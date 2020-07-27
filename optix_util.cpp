@@ -272,7 +272,7 @@ namespace optixu {
         return static_cast<uint32_t>(buildInputFlags.size());
     }
 
-    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t sbtGasIndex, uint32_t numRayTypes,
+    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t gasUserData, uint32_t numRayTypes,
                                                     HitGroupSBTRecord* records) const {
         THROW_RUNTIME_ERROR(matSetIdx < materialSets.size(),
                             "Out of material set bound: [0, %u)", static_cast<uint32_t>(materialSets.size()));
@@ -286,6 +286,7 @@ namespace optixu {
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 mat->setRecordData(pipeline, rIdx, recordPtr);
                 recordPtr->data.geomInstData = userData;
+                recordPtr->data.gasData = gasUserData;
                 ++recordPtr;
             }
         }
@@ -377,7 +378,7 @@ namespace optixu {
         uint32_t sumRecords = 0;
         for (uint32_t sbtGasIdx = 0; sbtGasIdx < children.size(); ++sbtGasIdx) {
             const Child &child = children[sbtGasIdx];
-            uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx, sbtGasIdx, numRayTypes, records);
+            uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx, userData, numRayTypes, records);
             records += numRecords;
             sumRecords += numRecords;
         }
@@ -432,6 +433,10 @@ namespace optixu {
         m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
 
         m->scene->markSBTLayoutDirty();
+    }
+
+    void GeometryAccelerationStructure::setUserData(uint32_t data) const {
+        m->userData = data;
     }
 
     void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {

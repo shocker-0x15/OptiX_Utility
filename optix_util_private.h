@@ -408,7 +408,7 @@ namespace optixu {
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
         uint32_t getNumSBTRecords() const;
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t sbtGasIndex, uint32_t numRayTypes,
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t gasUserData, uint32_t numRayTypes,
                                 HitGroupSBTRecord* records) const;
     };
 
@@ -425,6 +425,7 @@ namespace optixu {
         };
 
         _Scene* scene;
+        uint32_t userData;
 
         std::vector<uint32_t> numRayTypesPerMaterialSet;
 
@@ -460,6 +461,7 @@ namespace optixu {
 
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
             scene(_scene),
+            userData(0),
             handle(0), compactedHandle(0),
             accelBuffer(nullptr), compactedAccelBuffer(nullptr),
             forCustomPrimitives(_forCustomPrimitives),

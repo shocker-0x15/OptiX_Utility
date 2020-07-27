@@ -163,6 +163,7 @@ namespace optixu {
     struct HitGroupSBTRecordData {
         uint32_t materialData;
         uint32_t geomInstData;
+        uint32_t gasData;
     };
 
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
@@ -848,6 +849,8 @@ private: \
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
+
+        void setUserData(uint32_t userData) const;
 
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
