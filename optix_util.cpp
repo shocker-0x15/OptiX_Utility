@@ -286,7 +286,6 @@ namespace optixu {
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 mat->setRecordData(pipeline, rIdx, recordPtr);
                 recordPtr->data.geomInstData = userData;
-                recordPtr->data.sbtGasIndex = sbtGasIndex;
                 ++recordPtr;
             }
         }

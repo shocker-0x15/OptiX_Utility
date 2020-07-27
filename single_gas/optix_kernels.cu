@@ -76,7 +76,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     // EN: Transform from GeometryInstance to GAS space should be manually implemented by the user.
     //     However, it is possible to get post-transformed values using optixGetTriangleVertexData()
     //     only for positions if random vertex access is enabled for GAS build configuration.
-    const GeometryPreTransform &preTransform = plp.geomPreTransforms[sbtr.sbtGasIndex];
+    const GeometryPreTransform &preTransform = plp.geomPreTransforms[optixGetSbtGASIndex()];
     sn = normalize(preTransform.transformNormal(sn));
 
     // JP: 法線を可視化。

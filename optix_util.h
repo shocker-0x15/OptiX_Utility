@@ -161,7 +161,6 @@ namespace optixu {
 
 
     struct HitGroupSBTRecordData {
-        uint32_t sbtGasIndex;
         uint32_t materialData;
         uint32_t geomInstData;
     };
