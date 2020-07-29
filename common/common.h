@@ -474,6 +474,9 @@ CUDA_DEVICE_FUNCTION float3 &operator*=(float3 &v, float s) {
     v.z *= s;
     return v;
 }
+CUDA_DEVICE_FUNCTION float3 operator/(const float3 &v0, const float3 &v1) {
+    return make_float3(v0.x / v1.x, v0.y / v1.y, v0.z / v1.z);
+}
 CUDA_DEVICE_FUNCTION float3 operator/(const float3 &v, float s) {
     float r = 1 / s;
     return r * v;

@@ -91,12 +91,12 @@ using GroupWRef = std::weak_ptr<Group>;
 
 struct GeometryInstance {
     OptiXEnv* optixEnv;
+    uint32_t geomInstIndex;
     uint32_t serialID;
     std::string name;
     optixu::GeometryInstance optixGeomInst;
     VertexBufferRef vertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
-    uint32_t geomInstIndex;
     bool dataTransfered = false;
 
     static void finalize(GeometryInstance* p);
@@ -104,12 +104,16 @@ struct GeometryInstance {
 
 struct GeometryGroup {
     OptiXEnv* optixEnv;
+    uint32_t gasIndex;
     uint32_t serialID;
     std::string name;
     optixu::GeometryAccelerationStructure optixGAS;
     std::vector<GeometryInstanceRef> geomInsts;
+    std::vector<Shared::GeometryInstancePreTransform> preTransforms;
+    cudau::TypedBuffer<Shared::GeometryInstancePreTransform> preTransformBuffer;
     std::set<InstanceWRef, std::owner_less<InstanceWRef>> parentInsts;
     cudau::Buffer optixGasMem;
+    bool dataTransfered = false;
 
     static void finalize(GeometryGroup* p);
 };
@@ -147,6 +151,8 @@ struct OptiXEnv {
     optixu::Scene scene;
     cudau::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
     SlotFinder geometryInstSlotFinder;
+    cudau::TypedBuffer<Shared::GASData> gasDataBuffer;
+    SlotFinder gasSlotFinder;
 
     uint32_t geomInstSerialID;
     uint32_t gasSerialID;
@@ -170,7 +176,9 @@ void GeometryInstance::finalize(GeometryInstance* p) {
 }
 void GeometryGroup::finalize(GeometryGroup* p) {
     p->optixGasMem.finalize();
+    p->preTransformBuffer.finalize();
     p->optixGAS.destroy();
+    p->optixEnv->gasSlotFinder.setNotInUse(p->gasIndex);
     delete p;
 }
 void Instance::finalize(Instance* p) {
@@ -306,11 +314,11 @@ void loadObjFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         uint32_t geomInstIndex = optixEnv->geometryInstSlotFinder.getFirstAvailableSlot();
         optixEnv->geometryInstSlotFinder.setInUse(geomInstIndex);
         geomInst->optixEnv = optixEnv;
+        geomInst->geomInstIndex = geomInstIndex;
         geomInst->serialID = optixEnv->geomInstSerialID++;
         geomInst->name = name;
         geomInst->vertexBuffer = vertexBuffer;
         geomInst->triangleBuffer.initialize(optixEnv->cuContext, g_bufferType, groups[i]);
-        geomInst->geomInstIndex = geomInstIndex;
         geomInst->optixGeomInst = optixEnv->scene.createGeometryInstance();
         geomInst->optixGeomInst.setVertexBuffer(&*vertexBuffer);
         geomInst->optixGeomInst.setTriangleBuffer(&geomInst->triangleBuffer);
@@ -329,7 +337,7 @@ void loadObjFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
 class GeometryInstanceList {
     const OptiXEnv &m_optixEnv;
     bool m_allSelected;
-    std::set<uint32_t> m_selectedItems;
+    std::vector<uint32_t> m_selectedItems;
 
 public:
     GeometryInstanceList(const OptiXEnv &optixEnv) :
@@ -359,7 +367,7 @@ public:
                 if (ImGui::Checkbox("##check", &m_allSelected)) {
                     if (m_allSelected) {
                         for (const auto &kv : m_optixEnv.geomInsts)
-                            m_selectedItems.insert(kv.first);
+                            m_selectedItems.push_back(kv.first);
                     }
                     else {
                         m_selectedItems.clear();
@@ -383,13 +391,14 @@ public:
                 ImGui::TableSetColumnIndex(0);
                 ImGui::PushID(kv.first);
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 1));
-                bool selected = m_selectedItems.count(kv.first) > 0;
+                auto itemIndex = std::find(m_selectedItems.cbegin(), m_selectedItems.cend(), kv.first);
+                bool selected = itemIndex != m_selectedItems.cend();
                 if (ImGui::Checkbox("##check", &selected)) {
                     if (selected)
-                        m_selectedItems.insert(kv.first);
+                        m_selectedItems.push_back(kv.first);
                     else
-                        m_selectedItems.erase(kv.first);
-                    m_allSelected = m_selectedItems.size() == m_optixEnv.geomInsts.size();
+                        m_selectedItems.erase(itemIndex);
+                    m_allSelected = m_selectedItems.size() == m_optixEnv.geomGroups.size();
                 }
                 ImGui::PopStyleVar();
                 ImGui::PopID();
@@ -415,9 +424,9 @@ public:
     uint32_t getNumSelected() const {
         return static_cast<uint32_t>(m_selectedItems.size());
     }
-    void loopForSelected(const std::function<bool(const GeometryInstanceRef &)> &func) {
-        for (const auto &sid : m_selectedItems) {
-            bool b = func(m_optixEnv.geomInsts.at(sid));
+    void loopForSelected(const std::function<bool(uint32_t, const GeometryInstanceRef &)> &func) {
+        for (int i = 0; i < m_selectedItems.size(); ++i) {
+            bool b = func(i, m_optixEnv.geomInsts.at(m_selectedItems[i]));
             if (!b)
                 break;
         }
@@ -495,7 +504,7 @@ public:
                         m_selectedItems.insert(kv.first);
                     else
                         m_selectedItems.erase(kv.first);
-                    m_allSelected = m_selectedItems.size() == m_optixEnv.geomGroups.size();
+                    m_allSelected = m_selectedItems.size() == m_optixEnv.geomInsts.size();
                 }
                 ImGui::PopStyleVar();
                 ImGui::PopID();
@@ -1038,12 +1047,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: シーンのセットアップ。
     // EN: Setup a scene.
 
-    constexpr uint32_t MaxNumGeometryInstances = 512;
-    constexpr uint32_t MaxNumInstances = 512;
+    constexpr uint32_t MaxNumGeometryInstances = 8192;
+    constexpr uint32_t MaxNumGASs = 512;
     
     optixEnv.scene = optixContext.createScene();
     optixEnv.geometryDataBuffer.initialize(cuContext, g_bufferType, MaxNumGeometryInstances);
     optixEnv.geometryInstSlotFinder.initialize(MaxNumGeometryInstances);
+    optixEnv.gasDataBuffer.initialize(cuContext, g_bufferType, MaxNumGASs);
+    optixEnv.gasSlotFinder.initialize(MaxNumGASs);
     optixEnv.geomInstSerialID = 0;
     optixEnv.gasSerialID = 0;
     optixEnv.instSerialID = 0;
@@ -1088,6 +1099,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = 0;
     plp.geomInstData = optixEnv.geometryDataBuffer.getDevicePointer();
+    plp.gasData = optixEnv.gasDataBuffer.getDevicePointer();
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
@@ -1300,7 +1312,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                     bool geomInstsSelected = geomInstList.getNumSelected() > 0;
                     bool allUnused = geomInstList.getNumSelected() > 0;
                     geomInstList.loopForSelected(
-                        [&allUnused](const GeometryInstanceRef &geomInst) {
+                        [&allUnused](uint32_t idx, const GeometryInstanceRef &geomInst) {
                             allUnused &= geomInst.use_count() == 1;
                             return allUnused;
                         });
@@ -1312,29 +1324,40 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                         if (geomInstsSelected) {
                             uint32_t serialID = optixEnv.gasSerialID++;
                             GeometryGroupRef geomGroup = make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
-                            geomGroup->optixEnv = &optixEnv;
+                            uint32_t gasIndex = optixEnv.gasSlotFinder.getFirstAvailableSlot();
+                            optixEnv.gasSlotFinder.setInUse(gasIndex);
                             char name[256];
                             sprintf_s(name, "GAS-%u", serialID);
+                            geomGroup->optixEnv = &optixEnv;
+                            geomGroup->gasIndex = gasIndex;
                             geomGroup->serialID = serialID;
                             geomGroup->name = name;
                             geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
                             geomGroup->optixGAS.setConfiguration(false, false, false, false);
                             geomGroup->optixGAS.setNumMaterialSets(1);
                             geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
+                            geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, geomInstList.getNumSelected());
+                            geomGroup->dataTransfered = false;
 
                             geomInstList.loopForSelected(
-                                [&optixEnv, &geomGroup, &curCuStream](const GeometryInstanceRef &geomInst) {
+                                [&optixEnv, &geomGroup, &curCuStream](uint32_t idx, const GeometryInstanceRef &geomInst) {
                                     geomGroup->geomInsts.push_back(geomInst);
-                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst);
+                                    geomGroup->preTransforms.emplace_back();
+                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst, geomGroup->preTransformBuffer.getCUdeviceptrAt(idx));
                                     if (!geomInst->dataTransfered) {
                                         Shared::GeometryData geomData;
                                         geomData.vertexBuffer = geomInst->vertexBuffer->getDevicePointer();
                                         geomData.triangleBuffer = geomInst->triangleBuffer.getDevicePointer();
                                         CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.geometryDataBuffer.getCUdeviceptrAt(geomInst->geomInstIndex),
                                                                         &geomData, sizeof(geomData), curCuStream));
+                                        geomInst->dataTransfered = true;
                                     }
                                     return true;
                                 });
+                            CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
+                                                            geomGroup->preTransforms.data(),
+                                                            geomGroup->preTransformBuffer.sizeInBytes(),
+                                                            curCuStream));
 
                             sbtLayoutUpdated = true;
                             traversablesUpdated = true;
@@ -1351,7 +1374,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                     if (ImGui::Button("Remove")) {
                         if (selectedGeomInstsRemovable) {
                             geomInstList.loopForSelected(
-                                [&optixEnv](const GeometryInstanceRef &geomInst) {
+                                [&optixEnv](uint32_t idx, const GeometryInstanceRef &geomInst) {
                                     optixEnv.geomInsts.erase(geomInst->serialID);
                                     return true;
                                 });
@@ -1410,6 +1433,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                 srMat.m20, srMat.m21, srMat.m22, inst->position.z,
                             };
                             inst->optixInst.setTransform(tr);
+
+                            if (!geomGroup->dataTransfered) {
+                                Shared::GASData gasData;
+                                gasData.preTransforms = geomGroup->preTransformBuffer.getDevicePointer();
+                                CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.gasDataBuffer.getCUdeviceptrAt(geomGroup->gasIndex),
+                                                                &gasData,
+                                                                sizeof(gasData),
+                                                                curCuStream));
+                                geomGroup->dataTransfered = true;
+                            }
 
                             optixEnv.insts[serialID] = inst;
                         }
