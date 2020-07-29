@@ -23,6 +23,10 @@ The purpose of this OptiX Utility is to provide classes and functions which enca
   optix_util.h exposes API to manage OptiX objects on host-side and provides device-side function wrappers as well.\
   This depends on the CUDA Utility above.
 
+## Code example
+### Host-side
+OptiX UtilityはシェーダーバインディングテーブルのセットアップといったOptiXカーネルを実行するまでに必要な面倒な手続きを可能な限り隠蔽します。
+OptiX utility hides troublesome procedures like setting up shader binding table required to execute OptiX kernels as much as possible.
 ```cpp
 // Create an OptiX context from a CUDA context (Driver API).
 optixu::Context optixContext = optixu::Context::create(cuContext);
@@ -120,6 +124,50 @@ cuMemAlloc(&plpOnDevice, sizeof(plp));
 cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream);
 pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 //...
+```
+
+### Device-side
+OptiX Utilityはペイロードのパッキングを簡単にしたりカーネル間通信における型の不一致を回避するため、デバイス側の組み込み関数のラッパーを提供しています。
+OptiX utility provides template wrapper for device-side builtin functions to ease packing of peyloads and to avoid type incosistency for inter-kernel communications.
+```cpp
+#define SearchRayPayloadSignature PCG32RNG, SearchRayPayload*
+#define VisibilityRayPayloadSignature float
+// ...
+CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
+    // ...
+    SearchRayPayload* payloadPtr = &payload;
+    while (true) {
+        // ...
+        optixu::trace<SearchRayPayloadSignature>(
+            traversable, origin, direction,
+            0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            RayType_Search, NumRayTypes, RayType_Search,
+            rng, payloadPtr);
+        // ...
+    }
+    // ...
+}
+// ...
+CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
+    auto sbtr = optixu::getHitGroupSBTRecordData();
+    // ...
+    PCG32RNG rng;
+    SearchRayPayload* payload;
+    optixu::getPayloads<SearchRayPayloadSignature>(&rng, &payload);
+    // ...
+    {
+        // ...
+        float visibility = 1.0f;
+        optixu::trace<VisibilityRayPayloadSignature>(
+            traversable, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            RayType_Visibility, NumRayTypes, RayType_Visibility,
+            visibility);
+        // ...
+    }
+    // ...
+    optixu::setPayloads<SearchRayPayloadSignature>(&rng, nullptr);
+}
+// ...
 ```
 
 ## 動作環境 / Confirmed Environment
