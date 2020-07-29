@@ -130,7 +130,7 @@ pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 ### Device-side
 OptiX Utilityはペイロードのパッキングを簡単にしたりカーネル間通信における型の不一致を回避するため、デバイス側の組み込み関数のラッパーを提供しています。
 
-OptiX utility provides template wrapper for device-side builtin functions to ease packing of peyloads and to avoid type incosistency for inter-kernel communications.
+OptiX utility provides template wrapper for device-side builtin functions to ease packing of payloads and to avoid type incosistency for inter-kernel communications.
 ```cpp
 #define SearchRayPayloadSignature PCG32RNG, SearchRayPayload*
 #define VisibilityRayPayloadSignature float
