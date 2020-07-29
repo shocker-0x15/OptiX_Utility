@@ -39,18 +39,26 @@ pipeline.setPipelineOptions(6, 2, "plp", sizeof(PipelineLaunchParameters),
                             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                             OPTIX_EXCEPTION_FLAG_DEBUG,
                             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-optixu::Module module = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-                                                           OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
+optixu::Module mainModule = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+                                                               OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
-optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(module, RT_CH_NAME_STR("pathtracing"));
+optixu::ProgramGroup searchRayHitProgramGroup =
+    pipeline.createHitProgramGroup(mainModule, RT_CH_NAME_STR("shading"),
+                                   emptyModule, nullptr,
+                                   emptyModule, nullptr);
+optixu::ProgramGroup visibilityRayHitProgramGroup =
+    pipeline.createHitProgramGroup(emptyModule, nullptr,
+                                   mainModule, RT_AH_NAME_STR("visibility"),
+                                   emptyModule, nullptr);
 // ...
 pipeline.setMaxTraceDepth(2);
 pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
 
 // Create materials.
 optix::Material defaultMat = optixContext.createMaterial();
-defaultMat.setHitGroup(RayType::Primary, hitProgramGroup);
+defaultMat.setHitGroup(RayType::Search, searchRayHitProgramGroup);
+defaultMat.setHitGroup(RayType::Visibility, visibilityRayHitProgramGroup);
 // ...
 defaultMat.setUserData(...);
 
@@ -74,10 +82,11 @@ cudau::Buffer asBuildScratchMem;
 
 // Create geometry acceleration structures.
 optixu::GeometryAccelerationStructure gas0 = scene.createGeometryAccelerationStructure();
-gas0.setConfiguration(false, true, true); // Builder preference.
+gas0.setConfiguration(false, true, true, false); // Builder preference.
 gas0.setChild(geomInst0);
 gas0.setChild(geomInst1);
 gas0.setChild(...);
+gas0.setUserData(...);
 optixu::GeometryAccelerationStructure gas1 = scene.createGeometryAccelerationStructure();
 // ...
 cudau::Buffer gas0Mem;
@@ -168,6 +177,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     }
     // ...
     optixu::setPayloads<SearchRayPayloadSignature>(&rng, nullptr);
+}
+// ...
+CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
+    float visibility = 0.0f;
+    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+
+    optixTerminateRay();
 }
 // ...
 ```
