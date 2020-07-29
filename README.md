@@ -26,6 +26,7 @@ The purpose of this OptiX Utility is to provide classes and functions which enca
 ## Code example
 ### Host-side
 OptiX UtilityはシェーダーバインディングテーブルのセットアップといったOptiXカーネルを実行するまでに必要な面倒な手続きを可能な限り隠蔽します。
+
 OptiX utility hides troublesome procedures like setting up shader binding table required to execute OptiX kernels as much as possible.
 ```cpp
 // Create an OptiX context from a CUDA context (Driver API).
@@ -128,6 +129,7 @@ pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 
 ### Device-side
 OptiX Utilityはペイロードのパッキングを簡単にしたりカーネル間通信における型の不一致を回避するため、デバイス側の組み込み関数のラッパーを提供しています。
+
 OptiX utility provides template wrapper for device-side builtin functions to ease packing of peyloads and to avoid type incosistency for inter-kernel communications.
 ```cpp
 #define SearchRayPayloadSignature PCG32RNG, SearchRayPayload*
