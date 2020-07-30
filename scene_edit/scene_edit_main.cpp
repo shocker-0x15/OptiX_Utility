@@ -8,7 +8,9 @@
 #include "imgui_impl_opengl3.h"
 #include "../common/imgui_file_dialog.h"
 
-#include "../ext/tiny_obj_loader.h"
+#include <assimp/scene.h>
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "../ext/stb_image.h"
 #include "../common/dds_loader.h"
@@ -99,6 +101,7 @@ struct GeometryInstance {
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
     bool dataTransfered = false;
 
+    GeometryInstance() : geomInstIndex(SlotFinder::InvalidSlotIndex) {}
     static void finalize(GeometryInstance* p);
 };
 
@@ -115,6 +118,7 @@ struct GeometryGroup {
     cudau::Buffer optixGasMem;
     bool dataTransfered = false;
 
+    GeometryGroup() : gasIndex(SlotFinder::InvalidSlotIndex) {}
     static void finalize(GeometryGroup* p);
 };
 
@@ -169,16 +173,20 @@ struct OptiXEnv {
 };
 
 void GeometryInstance::finalize(GeometryInstance* p) {
-    p->optixGeomInst.destroy();
-    p->triangleBuffer.finalize();
-    p->optixEnv->geometryInstSlotFinder.setNotInUse(p->geomInstIndex);
+    if (p->geomInstIndex != SlotFinder::InvalidSlotIndex) {
+        p->optixGeomInst.destroy();
+        p->triangleBuffer.finalize();
+        p->optixEnv->geometryInstSlotFinder.setNotInUse(p->geomInstIndex);
+    }
     delete p;
 }
 void GeometryGroup::finalize(GeometryGroup* p) {
-    p->optixGasMem.finalize();
-    p->preTransformBuffer.finalize();
-    p->optixGAS.destroy();
-    p->optixEnv->gasSlotFinder.setNotInUse(p->gasIndex);
+    if (p->gasIndex != SlotFinder::InvalidSlotIndex) {
+        p->optixGasMem.finalize();
+        p->preTransformBuffer.finalize();
+        p->optixGAS.destroy();
+        p->optixEnv->gasSlotFinder.setNotInUse(p->gasIndex);
+    }
     delete p;
 }
 void Instance::finalize(Instance* p) {
@@ -194,122 +202,54 @@ void Group::finalize(Group* p) {
 
 
 
-void loadObjFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
-    std::vector<Shared::Vertex> vertices;
-    std::vector<std::vector<Shared::Triangle>> groups;
-    {
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn;
-        std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.string().c_str(),
-                                    nullptr);
-
-        constexpr float scale = 1.0f;
-
-        // Record unified unique vertices.
-        std::map<std::tuple<int32_t, int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
-                    tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
-                    auto key = std::make_tuple(idx.vertex_index, idx.normal_index, idx.texcoord_index);
-                    unifiedVertexMap[key] = Shared::Vertex{
-                        float3(scale * attrib.vertices[3 * idx.vertex_index + 0],
-                               scale * attrib.vertices[3 * idx.vertex_index + 1],
-                               scale * attrib.vertices[3 * idx.vertex_index + 2]),
-                        float3(0, 0, 0),
-                        float2(attrib.texcoords[2 * idx.texcoord_index + 0],
-                               1 - attrib.texcoords[2 * idx.texcoord_index + 1])
-                    };
-                }
-
-                idxOffset += numFaceVertices;
-            }
-        }
-
-        // Assign a vertex index to each of unified unique unifiedVertexMap.
-        std::map<std::tuple<int32_t, int32_t, int32_t>, uint32_t> vertexIndices;
-        vertices.resize(unifiedVertexMap.size());
-        uint32_t vertexIndex = 0;
-        for (const auto &kv : unifiedVertexMap) {
-            vertices[vertexIndex] = kv.second;
-            vertexIndices[kv.first] = vertexIndex++;
-        }
-        unifiedVertexMap.clear();
-
-        uint32_t numTriangles = 0;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            std::vector<Shared::Triangle> triangles;
-
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
-                tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
-                tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-                auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index, idx0.texcoord_index);
-                auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index, idx1.texcoord_index);
-                auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index, idx2.texcoord_index);
-
-                Shared::Triangle triangle = Shared::Triangle{
-                                    vertexIndices.at(key0),
-                                    vertexIndices.at(key1),
-                                    vertexIndices.at(key2) };
-                triangles.push_back(triangle);
-
-                Shared::Vertex &v0 = vertices[triangle.index0];
-                Shared::Vertex &v1 = vertices[triangle.index1];
-                Shared::Vertex &v2 = vertices[triangle.index2];
-
-                float3 gn = normalize(cross(v1.position - v0.position,
-                                            v2.position - v0.position));
-                if (!allFinite(gn))
-                    gn = float3(0, 0, 1);
-                v0.normal += gn;
-                v1.normal += gn;
-                v2.normal += gn;
-
-                idxOffset += numFaceVertices;
-            }
-
-            numTriangles += triangles.size();
-            groups.push_back(std::move(triangles));
-        }
-        vertexIndices.clear();
-        for (int vIdx = 0; vIdx < vertices.size(); ++vIdx) {
-            Shared::Vertex &v = vertices[vIdx];
-            v.normal = normalize(v.normal);
-            if (!allFinite(v.normal))
-                v.normal = float3(0, 0, 1);
-        }
+void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(filepath.string(),
+                                             aiProcess_Triangulate |
+                                             aiProcess_GenNormals | aiProcess_GenSmoothNormals |
+                                             aiProcess_PreTransformVertices);
+    if (!scene) {
+        hpprintf("Failed to load %s.\n", filepath.c_str());
+        return;
     }
 
-    VertexBufferRef vertexBuffer = make_shared_with_deleter<cudau::TypedBuffer<Shared::Vertex>>(
-        [](cudau::TypedBuffer<Shared::Vertex>* p) {
-            p->finalize();
-        });
-    vertexBuffer->initialize(optixEnv->cuContext, g_bufferType, vertices);
-
     std::string basename = filepath.stem().string();
-    for (int i = 0; i < groups.size(); ++i) {
+
+    for (int meshIdx = 0; meshIdx < scene->mNumMeshes; ++meshIdx) {
+        const aiMesh* mesh = scene->mMeshes[meshIdx];
+
+        std::vector<Shared::Vertex> vertices(mesh->mNumVertices);
+        for (int vIdx = 0; vIdx < mesh->mNumVertices; ++vIdx) {
+            Shared::Vertex vtx;
+            vtx.position = *reinterpret_cast<float3*>(&mesh->mVertices[vIdx]);
+            vtx.normal = *reinterpret_cast<float3*>(&mesh->mNormals[vIdx]);
+            if (mesh->mTextureCoords[0])
+                vtx.texCoord = *reinterpret_cast<float2*>(&mesh->mTextureCoords[0][vIdx]);
+            else
+                vtx.texCoord = float2(0.0f, 0.0f);
+            vertices[vIdx] = vtx;
+        }
+
+        std::vector<Shared::Triangle> triangles(mesh->mNumFaces);
+        for (int fIdx = 0; fIdx < mesh->mNumFaces; ++fIdx) {
+            const aiFace &face = mesh->mFaces[fIdx];
+
+            Shared::Triangle tri;
+            tri.index0 = face.mIndices[0];
+            tri.index1 = face.mIndices[1];
+            tri.index2 = face.mIndices[2];
+
+            triangles[fIdx] = tri;
+        }
+
+        VertexBufferRef vertexBuffer = make_shared_with_deleter<cudau::TypedBuffer<Shared::Vertex>>(
+            [](cudau::TypedBuffer<Shared::Vertex>* p) {
+                p->finalize();
+            });
+        vertexBuffer->initialize(optixEnv->cuContext, g_bufferType, vertices);
+
         char name[256];
-        sprintf_s(name, "%s-%d", basename.c_str(), i);
+        sprintf_s(name, "%s-%d", basename.c_str(), meshIdx);
         GeometryInstanceRef geomInst = make_shared_with_deleter<GeometryInstance>(GeometryInstance::finalize);
         uint32_t geomInstIndex = optixEnv->geometryInstSlotFinder.getFirstAvailableSlot();
         optixEnv->geometryInstSlotFinder.setInUse(geomInstIndex);
@@ -318,7 +258,7 @@ void loadObjFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         geomInst->serialID = optixEnv->geomInstSerialID++;
         geomInst->name = name;
         geomInst->vertexBuffer = vertexBuffer;
-        geomInst->triangleBuffer.initialize(optixEnv->cuContext, g_bufferType, groups[i]);
+        geomInst->triangleBuffer.initialize(optixEnv->cuContext, g_bufferType, triangles);
         geomInst->optixGeomInst = optixEnv->scene.createGeometryInstance();
         geomInst->optixGeomInst.setVertexBuffer(&*vertexBuffer);
         geomInst->optixGeomInst.setTriangleBuffer(&geomInst->triangleBuffer);
@@ -1283,7 +1223,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                 static std::vector<std::filesystem::directory_entry> entries;
                 fileDialog.calcEntries(&entries);
                 
-                loadObjFile(entries[0], &optixEnv);
+                loadFile(entries[0], &optixEnv);
             }
 
             if (ImGui::Combo("Target", &travIndex,
@@ -1882,6 +1822,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixEnv.asScratchBuffer.finalize();
     optixEnv.shaderBindingTable[1].finalize();
     optixEnv.shaderBindingTable[0].finalize();
+    optixEnv.gasSlotFinder.finalize();
+    optixEnv.gasDataBuffer.finalize();
     optixEnv.geometryInstSlotFinder.finalize();
     optixEnv.geometryDataBuffer.finalize();
     optixEnv.scene.destroy();

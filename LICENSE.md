@@ -1,3 +1,9 @@
+OptiX Utility's license is based on Apache License described below
+except for all files under ./ext directory.
+All files there follow their respective licenses.
+
+********************************************************************************
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
