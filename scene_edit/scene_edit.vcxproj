@@ -133,7 +133,7 @@ copy "$(SolutionDir)ext\assimp\assimp-vc142-mt.dll" "$(OutDir)assimp-vc142-mt.dl
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
-      <AdditionalOptions>-Xcompiler "/wd 4819" -D_DEBUG %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>--use_fast_math -Xcompiler "/wd 4819" -D_DEBUG %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
     </CudaCompile>
     <CudaLink>
@@ -174,7 +174,7 @@ copy "$(SolutionDir)ext\assimp\assimp-vc142-mt.dll" "$(OutDir)assimp-vc142-mt.dl
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
-      <AdditionalOptions>-Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>--use_fast_math -Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
     </CudaCompile>
     <CudaLink>
