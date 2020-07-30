@@ -245,6 +245,7 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         VertexBufferRef vertexBuffer = make_shared_with_deleter<cudau::TypedBuffer<Shared::Vertex>>(
             [](cudau::TypedBuffer<Shared::Vertex>* p) {
                 p->finalize();
+                delete p;
             });
         vertexBuffer->initialize(optixEnv->cuContext, g_bufferType, vertices);
 
