@@ -123,6 +123,9 @@ namespace optixu {
             }
         }
 
+        if (!sbtLayoutIsUpToDate)
+            return false;
+
         return true;
     }
 
@@ -332,10 +335,6 @@ namespace optixu {
         m->materialIndexOffsetBuffer = matIdxOffsetBuffer;
     }
 
-    void GeometryInstance::setUserData(uint32_t data) const {
-        m->userData = data;
-    }
-
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
         size_t numMaterials = m->buildInputFlags.size();
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
@@ -356,6 +355,10 @@ namespace optixu {
                 m->materialSets[i].resize(numMaterials, nullptr);
         }
         m->materialSets[matSetIdx][matIdx] = extract(mat);
+    }
+
+    void GeometryInstance::setUserData(uint32_t data) const {
+        m->userData = data;
     }
 
 
@@ -420,25 +423,6 @@ namespace optixu {
             m->markDirty();
     }
 
-    void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
-        m->numRayTypesPerMaterialSet.resize(numMatSets, 0);
-
-        m->scene->markSBTLayoutDirty();
-    }
-
-    void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
-        THROW_RUNTIME_ERROR(matSetIdx < m->numRayTypesPerMaterialSet.size(),
-                            "Material set index %u is out of bounds [0, %u).",
-                            matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
-        m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
-
-        m->scene->markSBTLayoutDirty();
-    }
-
-    void GeometryAccelerationStructure::setUserData(uint32_t data) const {
-        m->userData = data;
-    }
-
     void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
         auto _geomInst = extract(geomInst);
         THROW_RUNTIME_ERROR(_geomInst, "Invalid geometry instance %p.", _geomInst);
@@ -469,6 +453,21 @@ namespace optixu {
         m->children.erase(idx);
 
         m->markDirty();
+    }
+
+    void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
+        m->numRayTypesPerMaterialSet.resize(numMatSets, 0);
+
+        m->scene->markSBTLayoutDirty();
+    }
+
+    void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
+        THROW_RUNTIME_ERROR(matSetIdx < m->numRayTypesPerMaterialSet.size(),
+                            "Material set index %u is out of bounds [0, %u).",
+                            matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
+        m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
+
+        m->scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
@@ -602,6 +601,10 @@ namespace optixu {
                                     nullptr, 0));
 
         return handle;
+    }
+
+    void GeometryAccelerationStructure::setUserData(uint32_t data) const {
+        m->userData = data;
     }
 
     bool GeometryAccelerationStructure::isReady() const {
@@ -1222,16 +1225,16 @@ namespace optixu {
         THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
-        if (index >= m->callablePrograms.size()) {
+        if (index >= m->callablePrograms.size())
             m->callablePrograms.resize(index + 1);
-            m->sbtIsUpToDate = false;
-        }
         m->callablePrograms[index] = _program;
         m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setScene(const Scene &scene) const {
         m->scene = extract(scene);
+        m->hitGroupSbt = nullptr;
+        m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const {
@@ -1241,17 +1244,6 @@ namespace optixu {
 
     void Pipeline::markHitGroupShaderBindingTableDirty() const {
         m->sbtIsUpToDate = false;
-    }
-
-    void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
-        THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
-        THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
-        THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
-
-        m->setupShaderBindingTable(stream);
-
-        OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
-                                &m->sbt, dimX, dimY, dimZ));
     }
 
     void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,
@@ -1267,6 +1259,17 @@ namespace optixu {
                                               directCallableStackSizeFromState,
                                               continuationStackSize,
                                               maxTraversableGraphDepth));
+    }
+
+    void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
+        THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
+        THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
+        THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
+
+        m->setupShaderBindingTable(stream);
+
+        OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
+                                &m->sbt, dimX, dimY, dimZ));
     }
 
 

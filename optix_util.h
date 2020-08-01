@@ -25,7 +25,6 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
-- ASのmarkDirty()に関して、どんな操作に関しては呼ばないといけないのかを明示的に記述。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
 - Motion Transformサポート。
@@ -835,16 +834,21 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(GeometryInstance);
 
+        // JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a GAS to which the geometry instance belong is required when calling the following APIs.
         void setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
         void setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, const TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
-
-        void setUserData(uint32_t data) const;
-
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
+
+        // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+        //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+        // EN: Updating a shader binding table is required when calling the following APIs.
+        //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
+        void setUserData(uint32_t data) const;
     };
 
 
@@ -856,21 +860,32 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(GeometryAccelerationStructure);
 
+        // JP: 以下のAPIを呼んだ場合はGASがdirty状態になる。
+        // EN: Calling the following APIs marks the GAS dirty.
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
-        void setNumMaterialSets(uint32_t numMatSets) const;
-        void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
-
-        void setUserData(uint32_t userData) const;
-
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
 
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが無効化される。
+        // EN: Calling the following APIs invalidate the shader binding table layout of hit group.
+        void setNumMaterialSets(uint32_t numMatSets) const;
+        void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
+
+        // JP: リビルド・コンパクト・アップデートを行った場合は所属するIASのmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a IAS to which the GAS (indirectly) belong is required when performing
+        //     rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted() const;
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
+
+        // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+        //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+        // EN: Updating a shader binding table is required when calling the following APIs.
+        //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+        void setUserData(uint32_t userData) const;
 
         bool isReady() const;
         void markDirty() const;
@@ -886,7 +901,12 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(Instance);
 
+        // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a IAS to which the instance belong is required.
         void setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx = 0) const;
+
+        // JP: 所属するIASをリビルドもしくはアップデートする必要がある。
+        // EN: Rebulding or Updating of a IAS to which the instance belong is required.
         void setTransform(const float transform[12]) const;
     };
 
@@ -899,8 +919,9 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(InstanceAccelerationStructure);
 
+        // JP: 以下のAPIを呼んだ場合はIASがdirty状態になる。
+        // EN: Calling the following APIs marks the IAS dirty.
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
-
         void addChild(Instance instance) const;
         void removeChild(Instance instance) const;
 
@@ -963,12 +984,12 @@ private: \
         void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
         void markHitGroupShaderBindingTableDirty() const;
 
-        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
-
         void setStackSize(uint32_t directCallableStackSizeFromTraversal,
                           uint32_t directCallableStackSizeFromState,
                           uint32_t continuationStackSize,
                           uint32_t maxTraversableGraphDepth) const;
+
+        void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
     };
 
 

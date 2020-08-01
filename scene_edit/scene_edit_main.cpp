@@ -1351,7 +1351,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                             sprintf_s(name, "Instance-%u", serialID);
                             inst->serialID = serialID;
                             inst->name = name;
-                            inst->optixInst = optixEnv.scene.createInstance();
                             inst->scale = float3(1.0f, 1.0f, 1.0f);
                             inst->rollPitchYaw[0] = 0.0f;
                             inst->rollPitchYaw[1] = 0.0f;
@@ -1367,6 +1366,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                             const GeometryGroupRef &geomGroup = geomGroupList.getFirstSelectedItem();
                             inst->geomGroup = geomGroup;
                             geomGroup->parentInsts.insert(inst);
+                            inst->optixInst = optixEnv.scene.createInstance();
                             inst->optixInst.setGAS(geomGroup->optixGAS);
                             float tr[] = {
                                 srMat.m00, srMat.m01, srMat.m02, inst->position.x,
