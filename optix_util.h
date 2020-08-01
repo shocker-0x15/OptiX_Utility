@@ -453,6 +453,7 @@ namespace optixu {
     // JP: デバイス関数のラッパー
     // EN: Device-side function wrappers
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+
     template <typename HeadType0, typename... TailTypes>
     CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
         uint32_t ret = sizeof(HeadType0) / 4;
@@ -480,13 +481,20 @@ namespace optixu {
         if constexpr (sizeof...(tailPayloads) > 0)
             _traceSetPayloads<start + numDwords>(p, tailPayloads...);
     }
+    
+    // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
+    //     が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするためただの参照で受け取る。
+    // EN: 
+    template <typename... PayloadTypes>
+    CUDA_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
+                                    const float3 &origin, const float3 &direction,
+                                    float tmin, float tmax, float rayTime,
+                                    OptixVisibilityMask visibilityMask, uint32_t rayFlags,
+                                    uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
+                                    PayloadTypes &... payloads) {
+        constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
+        static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
 
-#define OPTIXU_TRACE_PARAMETERS \
-    OptixTraversableHandle handle, \
-    const float3 &origin, const float3 &direction, \
-    float tmin, float tmax, float rayTime, \
-    OptixVisibilityMask visibilityMask, uint32_t rayFlags, \
-    uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex
 #define OPTIXU_TRACE_ARGUMENTS \
     handle, \
     origin, direction, \
@@ -494,40 +502,31 @@ namespace optixu {
     visibilityMask, rayFlags, \
     SBToffset, SBTstride, missSBTIndex
 
-    template <uint32_t numDwords, typename... PayloadTypes>
-    CUDA_DEVICE_FUNCTION void _trace(OPTIXU_TRACE_PARAMETERS, PayloadTypes &... payloads) {
-        uint32_t* p[numDwords];
-        if constexpr (numDwords > 0)
+        if constexpr (numDwords == 0) {
+            optixTrace(OPTIXU_TRACE_ARGUMENTS);
+        }
+        else {
+            uint32_t* p[numDwords];
             _traceSetPayloads<0>(p, payloads...);
 
-        if constexpr (numDwords == 0)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS);
-        if constexpr (numDwords == 1)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0]);
-        if constexpr (numDwords == 2)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1]);
-        if constexpr (numDwords == 3)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2]);
-        if constexpr (numDwords == 4)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3]);
-        if constexpr (numDwords == 5)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4]);
-        if constexpr (numDwords == 6)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5]);
-        if constexpr (numDwords == 7)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6]);
-        if constexpr (numDwords == 8)
-            optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6], *p[7]);
-    }
-    
-    // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
-    //     が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするためただの参照で受け取る。
-    // EN: 
-    template <typename... PayloadTypes>
-    CUDA_DEVICE_FUNCTION void trace(OPTIXU_TRACE_PARAMETERS, PayloadTypes &... payloads) {
-        constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
-        static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
-        _trace<numDwords>(OPTIXU_TRACE_ARGUMENTS, payloads...);
+            if constexpr (numDwords == 1)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0]);
+            if constexpr (numDwords == 2)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1]);
+            if constexpr (numDwords == 3)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2]);
+            if constexpr (numDwords == 4)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3]);
+            if constexpr (numDwords == 5)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4]);
+            if constexpr (numDwords == 6)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5]);
+            if constexpr (numDwords == 7)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6]);
+            if constexpr (numDwords == 8)
+                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6], *p[7]);
+        }
+#undef OPTIXU_TRACE_ARGUMENTS
     }
 
 
@@ -639,38 +638,35 @@ namespace optixu {
             _setAttributes<start + numDwords>(a, tailAttributes...);
     }
     
-    template <uint32_t numDwords, typename... AttributeTypes>
-    CUDA_DEVICE_FUNCTION void _reportIntersection(float hitT, uint32_t hitKind, const AttributeTypes &... attributes) {
-        uint32_t a[numDwords];
-        if constexpr (numDwords > 0)
-            _setAttributes<0>(a, attributes...);
-
-        if constexpr (numDwords == 0)
-            optixReportIntersection(hitT, hitKind);
-        if constexpr (numDwords == 1)
-            optixReportIntersection(hitT, hitKind, a[0]);
-        if constexpr (numDwords == 2)
-            optixReportIntersection(hitT, hitKind, a[0], a[1]);
-        if constexpr (numDwords == 3)
-            optixReportIntersection(hitT, hitKind, a[0], a[1], a[2]);
-        if constexpr (numDwords == 4)
-            optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3]);
-        if constexpr (numDwords == 5)
-            optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4]);
-        if constexpr (numDwords == 6)
-            optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5]);
-        if constexpr (numDwords == 7)
-            optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
-        if constexpr (numDwords == 8)
-            optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
-    }
-    
     template <typename... AttributeTypes>
     CUDA_DEVICE_FUNCTION void reportIntersection(float hitT, uint32_t hitKind,
                                                  const AttributeTypes &... attributes) {
         constexpr size_t numDwords = _calcSumDwords<AttributeTypes...>();
         static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
-        _reportIntersection<numDwords>(hitT, hitKind, attributes...);
+        if constexpr (numDwords == 0) {
+            optixReportIntersection(hitT, hitKind);
+        }
+        else {
+            uint32_t a[numDwords];
+            _setAttributes<0>(a, attributes...);
+
+            if constexpr (numDwords == 1)
+                optixReportIntersection(hitT, hitKind, a[0]);
+            if constexpr (numDwords == 2)
+                optixReportIntersection(hitT, hitKind, a[0], a[1]);
+            if constexpr (numDwords == 3)
+                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2]);
+            if constexpr (numDwords == 4)
+                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3]);
+            if constexpr (numDwords == 5)
+                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4]);
+            if constexpr (numDwords == 6)
+                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5]);
+            if constexpr (numDwords == 7)
+                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
+            if constexpr (numDwords == 8)
+                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+        }
     }
 
 
@@ -721,6 +717,7 @@ namespace optixu {
         if constexpr (numDwords > 0)
             _getAttributes<0>(attributes...);
     }
+
 #endif // #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
     // END: Device-side function wrappers
     // ----------------------------------------------------------------
