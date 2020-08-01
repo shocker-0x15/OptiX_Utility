@@ -152,7 +152,7 @@ namespace optixu {
 
     void Scene::generateShaderBindingTableLayout(size_t* memorySize) const {
         if (m->sbtLayoutIsUpToDate) {
-            *memorySize = sizeof(HitGroupSBTRecord) * m->numSBTRecords;
+            *memorySize = sizeof(HitGroupSBTRecord) * std::max(m->numSBTRecords, 1u);
             return;
         }
 
@@ -170,7 +170,7 @@ namespace optixu {
         m->numSBTRecords = sbtOffset;
         m->sbtLayoutIsUpToDate = true;
 
-        *memorySize = sizeof(HitGroupSBTRecord) * m->numSBTRecords;
+        *memorySize = sizeof(HitGroupSBTRecord) * std::max(m->numSBTRecords, 1u);
     }
 
 
@@ -448,7 +448,7 @@ namespace optixu {
         child.geomInst = _geomInst;
         child.preTransform = preTransform;
         auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
-        THROW_RUNTIME_ERROR(idx != m->children.cend(), "Geometry instance %p has not been added.", _geomInst);
+        THROW_RUNTIME_ERROR(idx != m->children.cend(), "Geometry instance %p with transform %p has not been added.", _geomInst, preTransform);
 
         m->children.erase(idx);
 

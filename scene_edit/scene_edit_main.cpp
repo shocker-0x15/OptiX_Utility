@@ -1700,7 +1700,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
             size_t sbtSize;
             optixEnv.scene.generateShaderBindingTableLayout(&sbtSize);
-            sbtSize = std::max<size_t>(64, sbtSize); // set a dummy size for no geometry scene.
             if (curShaderBindingTable->isInitialized())
                 curShaderBindingTable->resize(sbtSize, 1, curCuStream);
             else

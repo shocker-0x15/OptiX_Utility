@@ -66,7 +66,7 @@ defaultMat.setUserData(...);
 optixu::Scene scene = optixContext.createScene();
 
 // Create geometry instances (triangle mesh or user-defined custom primitives).
-optixu::GeometryInstance geomInst0 = scene.createGeoometryInstance();
+optixu::GeometryInstance geomInst0 = scene.createGeometryInstance();
 cudau::TypedBuffer<Vertex> vertexBuffer;
 cudau::TypedBuffer<Triangle> triangleBuffer;
 // ...
@@ -203,7 +203,7 @@ It requires the following libraries.
 * OptiX 7.1.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
-Released under the Apache License, Version 2.0 (See LICENSE.md)
+Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
 
 ----
 2020 [@Shocker_0x15](https://twitter.com/Shocker_0x15)
