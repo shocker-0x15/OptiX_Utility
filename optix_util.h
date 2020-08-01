@@ -457,6 +457,9 @@ namespace optixu {
     CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
         return sizeof(T) / 4;
     }
+
+    template <typename... PayloadTypes>
+    CUDA_DEVICE_FUNCTION constexpr size_t _calcSumDwords();
     
     template <typename HeadType0, typename... TailTypes>
     CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
@@ -669,7 +672,7 @@ namespace optixu {
     
     template <typename... AttributeTypes>
     CUDA_DEVICE_FUNCTION void reportIntersection(float hitT, uint32_t hitKind,
-                                        const AttributeTypes &... attributes) {
+                                                 const AttributeTypes &... attributes) {
         constexpr size_t numDwords = _calcSumDwords<AttributeTypes...>();
         static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         _reportIntersection<numDwords>(hitT, hitKind, attributes...);
