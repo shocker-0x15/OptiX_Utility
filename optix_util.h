@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- 3-level以上のTraversable Graphのサポート。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
 - Motion Transformサポート。
@@ -804,6 +805,10 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(Material);
 
+        // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+        //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+        // EN: Updating a shader binding table is required when calling the following APIs.
+        //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         void setHitGroup(uint32_t rayType, ProgramGroup hitGroup);
         void setUserData(uint32_t data) const;
     };
@@ -872,7 +877,7 @@ private: \
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
-        // JP: リビルド・コンパクト・アップデートを行った場合は所属するIASのmarkDirty()を呼ぶ必要がある。
+        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するIASのmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a IAS to which the GAS (indirectly) belongs is required when performing
         //     rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;

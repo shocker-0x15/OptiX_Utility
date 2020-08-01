@@ -6,10 +6,11 @@
     メッシュ中のマテリアルの「区別」とジオメトリフラグはジオメトリに属するものとする。
     マテリアルそのものはジオメトリとは切り離される。
 - 面倒なところ、特にShader Binding Tableは隠蔽したい。
-- SBTの部分的なアップデートを可能にする。
+- ~~SBTの部分的なアップデートを可能にする。~~\
+  これはちょっと綺麗に実装する方法が思いつかなかった。一旦シンプルに作る。
 - ~~本来ある自由度は基本的には維持する。\
   例: SBT中のレコードはレイタイプ(= optixTrace時のオフセット)ごとに異なる値を持てる。~~\
-  一旦シンプルなものを作る。
+  レイタイプ全体で同じでもあまり困らなさそうなので一旦シンプルなものを作る。
 
 
 
@@ -60,6 +61,7 @@
 - インスタンシング時にマテリアルを切り替えられるように、マテリアルセットの概念を取り入れる。
   マテリアルセット数を設定するAPIを持つ。
 - マテリアルセットごとにレイタイプ数を設定する。
+- 固有のSBTデータを持つことができる。持つデータはパイプライン間で同じとする(パイプラインごとに異なるデータとすることも容易か)。
 
 ### InstanceAccelerationStructure (IAS)
 - OptiXTraversableHandleを持つ。
@@ -130,7 +132,7 @@ HitGroup SBTに関しては各レコードのヘッダーやデータ部分が�
 GASのDirty化条件:
 1. GASのビルド設定の更新 (Auto)
 1. GASに対するGeomInstの追加・削除 (Auto)
-1. GASに所属するGeomInstのジオメトリ・ジオメトリフラグの更新
+1. GASに所属するGeomInstのジオメトリ・ジオメトリフラグ・マテリアル数の更新
 
 HitGroup SBT LayoutのDirty化条件:
 1. Sceneに所属するGASのDirty化 (Auto)
@@ -141,7 +143,7 @@ IASのDirty化条件:
 1. HitGroup SBT LayoutがDirty化 (Auto)
 1. IASに対するInstanceの追加・削除 (Auto)
 1. IASのビルド設定の更新 (Auto)
-1. IASに所属するInstanceのデータの更新
+1. IASに所属するInstanceのデータの更新・Instanceが持つGASのTraversableHandleの更新
 
 HitGroup SBTのDirty化条件:
 1. HitGroup SBT LayoutのDirty化
@@ -152,6 +154,7 @@ HitGroup SBTのDirty化条件:
    これはレコード内に直接データを記録しないようにしたことで不要になる。
    ただしレコードへのインデックスを更新する場合はSBTを直接書き換える必要があるためDirty化する。
 1. MaterialのHitGroupのアップデート
+1. GASのデータ更新
 
 (Auto)は該当の条件によるDirty化が自動で行われることを示す。
 例: GASに対するGeomInstの追加・削除 (Auto)
