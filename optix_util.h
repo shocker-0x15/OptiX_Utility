@@ -835,7 +835,8 @@ private: \
         OPTIX_COMMON_FUNCTIONS(GeometryInstance);
 
         // JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a GAS to which the geometry instance belong is required when calling the following APIs.
+        // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
+        //     required when calling the following APIs.
         void setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
         void setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
@@ -872,7 +873,7 @@ private: \
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
         // JP: リビルド・コンパクト・アップデートを行った場合は所属するIASのmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a IAS to which the GAS (indirectly) belong is required when performing
+        // EN: Calling markDirty() of a IAS to which the GAS (indirectly) belongs is required when performing
         //     rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -902,11 +903,11 @@ private: \
         OPTIX_COMMON_FUNCTIONS(Instance);
 
         // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a IAS to which the instance belong is required.
+        // EN: Calling markDirty() of a IAS to which the instance belongs is required.
         void setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx = 0) const;
 
         // JP: 所属するIASをリビルドもしくはアップデートする必要がある。
-        // EN: Rebulding or Updating of a IAS to which the instance belong is required.
+        // EN: Rebulding or Updating of a IAS to which the instance belongs is required.
         void setTransform(const float transform[12]) const;
     };
 
