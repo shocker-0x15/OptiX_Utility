@@ -160,6 +160,10 @@ namespace optixu {
 
 
 
+    // ----------------------------------------------------------------
+    // JP: ホスト・デバイス共有のクラス定義
+    // EN: Definitions of Host-/Device-shared classes
+    
     struct HitGroupSBTRecordData {
         uint32_t materialData;
         uint32_t geomInstData;
@@ -437,11 +441,17 @@ namespace optixu {
             return BlockBuffer2D<T, log2BlockWidth>(m_rawBuffer.getDevicePointer(), m_width, m_height);
         }
     };
-#endif
+#endif // !defined(__CUDA_ARCH__)
+
+    // END: Definitions of Host-/Device-shared classes
+    // ----------------------------------------------------------------
 
 
 
-    // Device-side function wrappers
+
+    // ----------------------------------------------------------------
+    // JP: デバイス関数のラッパー
+    // EN: Device-side function wrappers
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
     template <typename T>
     CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
@@ -713,10 +723,15 @@ namespace optixu {
         if constexpr (numDwords > 0)
             _getAttributes<0>(attributes...);
     }
-#endif
+#endif // #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+    // END: Device-side function wrappers
+    // ----------------------------------------------------------------
 
 
 
+    // ----------------------------------------------------------------
+    // JP: ホスト側API
+    // EN: Host-side APIs.
 #if !defined(__CUDA_ARCH__)
     /*
 
@@ -990,4 +1005,6 @@ private: \
 #undef OPTIX_PIMPL
 
 #endif // #if !defined(__CUDA_ARCH__)
-}
+    // END: Host-side APIs.
+    // ----------------------------------------------------------------
+} // namespace optixu

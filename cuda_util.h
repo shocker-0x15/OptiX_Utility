@@ -36,9 +36,15 @@
 
 
 
+#if defined(__CUDACC_RTC__)
+// Including cstdint and cfloat (cuda/std) is left to the user.
+typedef unsigned long long CUtexObject;
+typedef unsigned long long CUsurfObject;
+#else
 #include <cstdint>
 #include <cfloat>
 #include <cuda.h>
+#endif
 
 #if !defined(__CUDA_ARCH__)
 #   include <cstdio>
@@ -892,5 +898,5 @@ namespace cudau {
             return curTexObj;
         }
     };
-#endif
-}
+#endif // #if !defined(__CUDA_ARCH__)
+} // namespace cudau
