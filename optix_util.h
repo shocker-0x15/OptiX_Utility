@@ -453,17 +453,12 @@ namespace optixu {
     // JP: デバイス関数のラッパー
     // EN: Device-side function wrappers
 #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
-    template <typename T>
-    CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
-        return sizeof(T) / 4;
-    }
-
-    template <typename... PayloadTypes>
-    CUDA_DEVICE_FUNCTION constexpr size_t _calcSumDwords();
-    
     template <typename HeadType0, typename... TailTypes>
     CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
-        return sizeof(HeadType0) / 4 + _calcSumDwords<TailTypes...>();
+        uint32_t ret = sizeof(HeadType0) / 4;
+        if constexpr (sizeof...(TailTypes) > 0)
+            ret += __calcSumDwords<TailTypes...>();
+        return ret;
     }
 
     template <typename... PayloadTypes>
