@@ -1367,7 +1367,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                             inst->geomGroup = geomGroup;
                             geomGroup->parentInsts.insert(inst);
                             inst->optixInst = optixEnv.scene.createInstance();
-                            inst->optixInst.setGAS(geomGroup->optixGAS);
+                            inst->optixInst.setChild(geomGroup->optixGAS);
                             float tr[] = {
                                 srMat.m00, srMat.m01, srMat.m02, inst->position.x,
                                 srMat.m10, srMat.m11, srMat.m12, inst->position.y,

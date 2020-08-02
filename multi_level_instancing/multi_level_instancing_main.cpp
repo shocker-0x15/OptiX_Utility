@@ -31,10 +31,11 @@
 #include <random>
 #include <thread>
 #include <chrono>
+#include <random>
 
 #include <cuda_runtime.h> // only for vector types.
 
-#include "single_level_instancing_shared.h"
+#include "multi_level_instancing_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../ext/stb_image_write.h"
@@ -141,12 +142,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+                                true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG,
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "single_level_instancing/ptxes/optix_kernels.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "multi_level_instancing/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
@@ -207,8 +208,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t geomInstIndex = 0;
 
     optixu::GeometryInstance geomInstBox = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBuffer0;
-    cudau::TypedBuffer<Shared::Triangle> triangleBuffer0;
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferBox;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferBox;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -251,25 +252,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        vertexBuffer0.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBuffer0.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        vertexBufferBox.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        triangleBufferBox.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomInstBox.setVertexBuffer(&vertexBuffer0);
-        geomInstBox.setTriangleBuffer(&triangleBuffer0);
+        geomInstBox.setVertexBuffer(&vertexBufferBox);
+        geomInstBox.setTriangleBuffer(&triangleBufferBox);
         geomInstBox.setNumMaterials(1, nullptr);
         geomInstBox.setMaterial(0, 0, mat0);
         geomInstBox.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstBox.setUserData(geomInstIndex);
 
-        geomData[geomInstIndex].vertexBuffer = vertexBuffer0.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBuffer0.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = vertexBufferBox.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = triangleBufferBox.getDevicePointer();
 
         ++geomInstIndex;
     }
 
     optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBuffer1;
-    cudau::TypedBuffer<Shared::Triangle> triangleBuffer1;
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -282,25 +283,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBuffer1.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBuffer1.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomInstAreaLight.setVertexBuffer(&vertexBuffer1);
-        geomInstAreaLight.setTriangleBuffer(&triangleBuffer1);
+        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
+        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
         geomInstAreaLight.setNumMaterials(1, nullptr);
         geomInstAreaLight.setMaterial(0, 0, mat0);
         geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstAreaLight.setUserData(geomInstIndex);
 
-        geomData[geomInstIndex].vertexBuffer = vertexBuffer1.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBuffer1.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
 
         ++geomInstIndex;
     }
 
-    optixu::GeometryInstance geomInstBunyy = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBuffer2;
-    cudau::TypedBuffer<Shared::Triangle> triangleBuffer2;
+    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
@@ -393,18 +394,18 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             v.normal = normalize(v.normal);
         }
 
-        vertexBuffer2.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBuffer2.initialize(cuContext, cudau::BufferType::Device, triangles);
+        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
+        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
 
-        geomInstBunyy.setVertexBuffer(&vertexBuffer2);
-        geomInstBunyy.setTriangleBuffer(&triangleBuffer2);
-        geomInstBunyy.setNumMaterials(1, nullptr);
-        geomInstBunyy.setMaterial(0, 0, mat0);
-        geomInstBunyy.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunyy.setUserData(geomInstIndex);
+        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
+        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
+        geomInstBunny.setNumMaterials(1, nullptr);
+        geomInstBunny.setMaterial(0, 0, mat0);
+        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstBunny.setUserData(geomInstIndex);
 
-        geomData[geomInstIndex].vertexBuffer = vertexBuffer2.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBuffer2.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = vertexBufferBunny.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = triangleBufferBunny.getDevicePointer();
 
         ++geomInstIndex;
     }
@@ -448,7 +449,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasBunny.setConfiguration(true, false, true, false);
     gasBunny.setNumMaterialSets(1);
     gasBunny.setNumRayTypes(0, Shared::NumRayTypes);
-    gasBunny.addChild(geomInstBunyy);
+    gasBunny.addChild(geomInstBunny);
     gasBunny.prepareForBuild(&asMemReqs);
     gasBunnyMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
@@ -481,8 +482,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    // JP: GASを元にインスタンスを作成する。
-    // EN: Create instances based on GASs.
+    // JP: IAS作成前には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
+    //     確定している必要がある。
+    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
+    //     before creating an IAS.
+    cudau::Buffer shaderBindingTable;
+    size_t sbtSize;
+    scene.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+
+
+
+    // JP: インスタンスを作成する。
+    // EN: Create instances.
     optixu::Instance instBox = scene.createInstance();
     instBox.setChild(gasBox);
 
@@ -495,10 +507,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     instAreaLight.setChild(gasAreaLight);
     instAreaLight.setTransform(instAreaLightTr);
 
-    std::vector<optixu::Instance> instsBunny;
+    constexpr uint32_t NumBunnies = 100;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
-    constexpr uint32_t NumBunnies = 100;
+    std::vector<optixu::Transform> transformsBunny;
+    cudau::TypedBuffer<optixu::TransformMemory> transformMem;
+    std::vector<optixu::Instance> instsBunny;
+    transformMem.initialize(cuContext, cudau::BufferType::Device, NumBunnies);
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
@@ -507,27 +522,26 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.01f + tt * 0.002f;
-        float instBunnyTr[] = {
-            scale, 0, 0, x,
-            0, scale, 0, -1 + (1 - tt),
-            0, 0, scale, z
-        };
+        float beginScale[3] = { scale , scale , scale };
+        float endScale[3] = { scale, scale, scale };
+        float beginOri[4] = { 0, 0, 0, 1 };
+        float endOri[4] = { 0, 0, 0, 1 };
+        //float beginTrans[3] = { x, 0, z };
+        float beginTrans[3] = { x, -1 + (1 - tt), z };
+        float endTrans[3] = { x, -1 + (1 - tt), z };
+
+        optixu::Transform transform = scene.createTransform();
+        transform.setChild(gasBunny);
+        transform.setSRTMotion(beginScale, beginOri, beginTrans,
+                               endScale, endOri, endTrans);
+        transform.setMotionOptions(2, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+        transform.rebuild(cuStream, transformMem.getDevicePointerAt(i));
+        transformsBunny.push_back(transform);
+        
         optixu::Instance instBunny = scene.createInstance();
-        instBunny.setChild(gasBunny);
-        instBunny.setTransform(instBunnyTr);
+        instBunny.setChild(transform);
         instsBunny.push_back(instBunny);
     }
-
-
-
-    // JP: IAS作成時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
-    //     確定している必要がある。
-    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     when creating an IAS.
-    cudau::Buffer shaderBindingTable;
-    size_t sbtSize;
-    scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
 
 
 
@@ -536,23 +550,52 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     uint32_t numInstances;
+    uint32_t numAABBs;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    cudau::TypedBuffer<OptixAabb> aabbBuffer;
     ias.setConfiguration(true, false, false);
+    ias.setMotionOptions(2, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
     ias.addChild(instBox);
     ias.addChild(instAreaLight);
     for (int i = 0; i < instsBunny.size(); ++i)
         ias.addChild(instsBunny[i]);
-    ias.prepareForBuild(&asMemReqs, &numInstances);
+    ias.prepareForBuild(&asMemReqs, &numInstances, &numAABBs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    aabbBuffer.initialize(cuContext, cudau::BufferType::Device, numAABBs);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    {
+        OptixAabb* aabbs = aabbBuffer.map();
+        for (int i = 0; i < aabbBuffer.numElements(); ++i) {
+            OptixAabb &aabb = aabbs[i];
+            aabb.minX = -1;
+            aabb.minY = -1;
+            aabb.minZ = -1;
+            aabb.maxX = 1;
+            aabb.maxY = 1;
+            aabb.maxZ = 1;
+        }
+        aabbBuffer.unmap();
+    }
+
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, aabbBuffer, iasMem, asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+
+    {
+        const OptixAabb* aabbs = aabbBuffer.map();
+        for (int i = 0; i < aabbBuffer.numElements(); ++i) {
+            const OptixAabb &aabb = aabbs[i];
+            hpprintf("%3u: (%g, %g, %g) - (%g, %g, %g)\n", i,
+                     aabb.minX, aabb.minY, aabb.minZ,
+                     aabb.maxX, aabb.maxY, aabb.maxZ);
+        }
+        aabbBuffer.unmap();
+    }
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -561,6 +604,20 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
+    optixu::HostBlockBuffer2D<Shared::PCG32RNG, 4> rngBuffer;
+    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+    {
+        std::mt19937 rng(50932423);
+
+        rngBuffer.map();
+        for (int y = 0; y < renderTargetSizeY; ++y) {
+            for (int x = 0; x < renderTargetSizeX; ++x) {
+                rngBuffer(x, y).setState(rng());
+            }
+        }
+        rngBuffer.unmap();
+    }
+
     optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
     accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
 
@@ -571,7 +628,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.geomInstData = geomDataBuffer.getDevicePointer();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
-    plp.resultBuffer = accumBuffer.getBlockBuffer2D();
+    plp.rngBuffer = rngBuffer.getBlockBuffer2D();
+    plp.accumBuffer = accumBuffer.getBlockBuffer2D();
+    plp.timeBegin = 0.0f;
+    plp.timeEnd = 1.0f;
+    plp.numAccumFrames = 0;
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5);
@@ -583,10 +644,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
 
-
-
-    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-    pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+    for (int frameIndex = 0; frameIndex < 1024; ++frameIndex) {
+        plp.numAccumFrames = frameIndex;
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+    }
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     accumBuffer.map();
@@ -611,18 +673,23 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    rngBuffer.finalize();
     accumBuffer.finalize();
 
     asBuildScratchMem.finalize();
 
+    aabbBuffer.finalize();
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
 
     shaderBindingTable.finalize();
 
-    for (int i = instsBunny.size() - 1; i >= 0; --i)
+    for (int i = instsBunny.size() - 1; i >= 0; --i) {
         instsBunny[i].destroy();
+        transformsBunny[i].destroy();
+    }
+    transformMem.finalize();
     instAreaLight.destroy();
     instBox.destroy();
 
@@ -636,16 +703,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasBoxMem.finalize();
     gasBox.destroy();
 
-    triangleBuffer2.finalize();
-    vertexBuffer2.finalize();
-    geomInstBunyy.destroy();
+    triangleBufferBunny.finalize();
+    vertexBufferBunny.finalize();
+    geomInstBunny.destroy();
     
-    triangleBuffer1.finalize();
-    vertexBuffer1.finalize();
+    triangleBufferAreaLight.finalize();
+    vertexBufferAreaLight.finalize();
     geomInstAreaLight.destroy();
 
-    triangleBuffer0.finalize();
-    vertexBuffer0.finalize();
+    triangleBufferBox.finalize();
+    vertexBufferBox.finalize();
     geomInstBox.destroy();
 
     geomDataBuffer.finalize();

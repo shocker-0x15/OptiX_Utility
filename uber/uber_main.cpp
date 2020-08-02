@@ -1035,7 +1035,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Make instances from GASs.
 
     optixu::Instance instCornellBox = scene.createInstance();
-    instCornellBox.setGAS(gasCornellBox);
+    instCornellBox.setChild(gasCornellBox);
 
     optixu::Instance instAreaLight = scene.createInstance();
     float tfAreaLight[] = {
@@ -1043,7 +1043,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     0, 1, 0, 0.99f,
     0, 0, 1, 0
     };
-    instAreaLight.setGAS(gasAreaLight);
+    instAreaLight.setChild(gasAreaLight);
     instAreaLight.setTransform(tfAreaLight);
 
     // JP: オブジェクトのインスタンスを2つ作成するが、
@@ -1051,9 +1051,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Create two instances using the object but
     //     the one with material set 0, the other with 1.
     optixu::Instance instObject0 = scene.createInstance();
-    instObject0.setGAS(gasObject, 0);
+    instObject0.setChild(gasObject, 0);
     optixu::Instance instObject1 = scene.createInstance();
-    instObject1.setGAS(gasObject, 1);
+    instObject1.setChild(gasObject, 1);
 
     optixu::Instance instCustomPrimObject = scene.createInstance();
     float tfCustomPrimObject[] = {
@@ -1061,7 +1061,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     0, 1, 0, -0.8f,
     0, 0, 1, 0
     };
-    instCustomPrimObject.setGAS(gasCustomPrimObject);
+    instCustomPrimObject.setChild(gasCustomPrimObject);
     instCustomPrimObject.setTransform(tfCustomPrimObject);
 
 

@@ -112,15 +112,18 @@ namespace optixu {
 
     bool Scene::Priv::isReady() {
         for (_GeometryAccelerationStructure* _gas : geomASs) {
-            if (!_gas->isReady()) {
+            if (!_gas->isReady())
                 return false;
-            }
+        }
+
+        for (_Transform* _tr : transforms) {
+            if (!_tr->isReady())
+                return false;
         }
 
         for (_InstanceAccelerationStructure* _ias : instASs) {
-            if (!_ias->isReady()) {
+            if (!_ias->isReady())
                 return false;
-            }
         }
 
         if (!sbtLayoutIsUpToDate)
@@ -140,6 +143,10 @@ namespace optixu {
 
     GeometryAccelerationStructure Scene::createGeometryAccelerationStructure(bool forCustomPrimitives) const {
         return (new _GeometryAccelerationStructure(m, forCustomPrimitives))->getPublicType();
+    }
+
+    Transform Scene::createTransform() const {
+        return (new _Transform(m))->getPublicType();
     }
 
     Instance Scene::createInstance() const {
@@ -455,6 +462,10 @@ namespace optixu {
         m->markDirty();
     }
 
+    void GeometryAccelerationStructure::markDirty() const {
+        m->markDirty();
+    }
+
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
         m->numRayTypesPerMaterialSet.resize(numMatSets, 0);
 
@@ -611,27 +622,148 @@ namespace optixu {
         return m->isReady();
     }
 
-    void GeometryAccelerationStructure::markDirty() const {
-        m->markDirty();
-    }
-
     OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
         return m->getHandle();
     }
 
 
 
-    void Instance::Priv::fillInstance(OptixInstance* instance) const {
-        if (type == InstanceType::GAS) {
-            THROW_RUNTIME_ERROR(gas->isReady(), "GAS %p is not ready.", gas);
+    _GeometryAccelerationStructure* Transform::Priv::getDescendantGAS() const {
+        if (childType == ChildType::GAS)
+            return childGas;
+        if (childType == ChildType::IAS)
+            return nullptr;
+        else if (childType == ChildType::Transform)
+            return childXfm->getDescendantGAS();
+        optixAssert_NotImplemented();
+        return nullptr;
+    }
 
-            *instance = {};
-            instance->instanceId = 0;
-            instance->visibilityMask = 0xFF;
-            std::copy_n(transform, 12, instance->transform);
-            instance->flags = OPTIX_INSTANCE_FLAG_NONE;
-            instance->traversableHandle = gas->getHandle();
-            instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
+    void Transform::Priv::markDirty() {
+        available = false;
+    }
+
+    void Transform::destroy() {
+        delete m;
+        m = nullptr;
+    }
+
+    void Transform::setChild(GeometryAccelerationStructure child) const {
+        m->childType = ChildType::GAS;
+        m->childGas = extract(child);
+
+        markDirty();
+    }
+
+    void Transform::setChild(InstanceAccelerationStructure child) const {
+        m->childType = ChildType::IAS;
+        m->childIas = extract(child);
+
+        markDirty();
+    }
+
+    void Transform::setChild(Transform child) const {
+        m->childType = ChildType::Transform;
+        m->childXfm = extract(child);
+
+        markDirty();
+    }
+
+    void Transform::setSRTMotion(const float beginScale[3], const float beginOrientation[4], const float beginTranslation[3],
+                                 const float endScale[3], const float endOrientation[4], const float endTranslation[3]) const {
+        m->type = TransformType::SRTMotion;
+
+        m->srtData[0].sx = beginScale[0];
+        m->srtData[0].sy = beginScale[1];
+        m->srtData[0].sz = beginScale[2];
+        m->srtData[0].a = m->srtData[0].b = m->srtData[0].c = 0.0f;
+        m->srtData[0].pvx = m->srtData[0].pvy = m->srtData[0].pvz = 0.0f;
+        std::copy_n(beginOrientation, 4, &m->srtData[0].qx);
+        std::copy_n(beginTranslation, 3, &m->srtData[0].tx);
+
+        m->srtData[1].sx = endScale[0];
+        m->srtData[1].sy = endScale[1];
+        m->srtData[1].sz = endScale[2];
+        m->srtData[1].a = m->srtData[1].b = m->srtData[1].c = 0.0f;
+        m->srtData[1].pvx = m->srtData[1].pvy = m->srtData[1].pvz = 0.0f;
+        std::copy_n(endOrientation, 4, &m->srtData[1].qx);
+        std::copy_n(endTranslation, 3, &m->srtData[1].tx);
+
+        markDirty();
+    }
+
+    void Transform::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
+        m->options.numKeys = numKeys;
+        m->options.timeBegin = timeBegin;
+        m->options.timeEnd = timeEnd;
+        m->options.flags = flags;
+
+        markDirty();
+    }
+
+    void Transform::markDirty() const {
+        return m->markDirty();
+    }
+
+    OptixTraversableHandle Transform::rebuild(CUstream stream, const TransformMemory* trDeviceMem) {
+        THROW_RUNTIME_ERROR(m->childType != ChildType::Invalid, "Child is invalid.");
+
+        OptixSRTMotionTransform tr = {};
+        if (m->childType == ChildType::GAS)
+            tr.child = m->childGas->getHandle();
+        else if (m->childType == ChildType::IAS)
+            tr.child = m->childIas->getHandle();
+        else if (m->childType == ChildType::Transform)
+            tr.child = m->childXfm->getHandle();
+        tr.srtData[0] = m->srtData[0];
+        tr.srtData[1] = m->srtData[1];
+        tr.motionOptions = m->options;
+
+        CUdeviceptr dst = reinterpret_cast<CUdeviceptr>(trDeviceMem);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(dst, &tr, sizeof(tr), stream));
+        OPTIX_CHECK(optixConvertPointerToTraversableHandle(m->getRawContext(), dst,
+                                                           OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM,
+                                                           &m->handle));
+        m->available = true;
+
+        return m->handle;
+    }
+
+    bool Transform::isReady() const {
+        return m->isReady();
+    }
+
+    OptixTraversableHandle Transform::getHandle() const {
+        return m->getHandle();
+    }
+
+
+
+    void Instance::Priv::fillInstance(OptixInstance* instance) const {
+        *instance = {};
+        instance->instanceId = 0;
+        instance->visibilityMask = 0xFF;
+        std::copy_n(instTransform, 12, instance->transform);
+        instance->flags = OPTIX_INSTANCE_FLAG_NONE;
+
+        if (type == ChildType::GAS) {
+            THROW_RUNTIME_ERROR(childGas->isReady(), "GAS %p is not ready.", childGas);
+            instance->traversableHandle = childGas->getHandle();
+            instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
+        }
+        else if (type == ChildType::IAS) {
+            THROW_RUNTIME_ERROR(childIas->isReady(), "IAS %p is not ready.", childGas);
+            instance->traversableHandle = childIas->getHandle();
+            instance->sbtOffset = 0;
+        }
+        else if (type == ChildType::Transform) {
+            THROW_RUNTIME_ERROR(childXfm->isReady(), "Transform %p is not ready.", childXfm);
+            instance->traversableHandle = childXfm->getHandle();
+            _GeometryAccelerationStructure* desGas = childXfm->getDescendantGAS();
+            if (desGas)
+                instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
+            else
+                instance->sbtOffset = 0;
         }
         else {
             optixAssert_NotImplemented();
@@ -641,9 +773,21 @@ namespace optixu {
     void Instance::Priv::updateInstance(OptixInstance* instance) const {
         instance->instanceId = 0;
         instance->visibilityMask = 0xFF;
-        std::copy_n(transform, 12, instance->transform);
+        std::copy_n(instTransform, 12, instance->transform);
         //instance->flags = OPTIX_INSTANCE_FLAG_NONE; これは変えられない？
-        //instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
+        //instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
+    }
+
+    bool Instance::Priv::isMotionAS() const {
+        if (type == ChildType::GAS)
+            childGas->hasMotion();
+        else if (type == ChildType::IAS)
+            childIas->hasMotion();
+        return false;
+    }
+
+    bool Instance::Priv::isTransform() const {
+        return type == ChildType::Transform;
     }
 
     void Instance::destroy() {
@@ -651,14 +795,26 @@ namespace optixu {
         m = nullptr;
     }
 
-    void Instance::setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx) const {
-        m->type = InstanceType::GAS;
-        m->gas = extract(gas);
+    void Instance::setChild(GeometryAccelerationStructure child, uint32_t matSetIdx) const {
+        m->type = ChildType::GAS;
+        m->childGas = extract(child);
+        m->matSetIndex = matSetIdx;
+    }
+
+    void Instance::setChild(InstanceAccelerationStructure child) const {
+        m->type = ChildType::IAS;
+        m->childIas = extract(child);
+        m->matSetIndex = 0;
+    }
+
+    void Instance::setChild(Transform child, uint32_t matSetIdx) const {
+        m->type = ChildType::Transform;
+        m->childXfm = extract(child);
         m->matSetIndex = matSetIdx;
     }
 
     void Instance::setTransform(const float transform[12]) const {
-        std::copy_n(transform, 12, m->transform);
+        std::copy_n(transform, 12, m->instTransform);
     }
 
 
@@ -688,6 +844,15 @@ namespace optixu {
             m->markDirty();
     }
 
+    void InstanceAccelerationStructure::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
+        m->motionOptions.numKeys = numKeys;
+        m->motionOptions.timeBegin = timeBegin;
+        m->motionOptions.timeEnd = timeEnd;
+        m->motionOptions.flags = flags;
+
+        markDirty();
+    }
+
     void InstanceAccelerationStructure::addChild(Instance instance) const {
         _Instance* _inst = extract(instance);
         THROW_RUNTIME_ERROR(_inst, "Invalid instance %p.", _inst);
@@ -712,13 +877,28 @@ namespace optixu {
         m->markDirty();
     }
 
-    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const {
+    void InstanceAccelerationStructure::markDirty() const {
+        m->markDirty();
+    }
+
+    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
+                                                        uint32_t* numAABBs) const {
         THROW_RUNTIME_ERROR(m->scene->sbtLayoutGenerationDone(),
                             "Shader binding table layout generation has not been done.");
         m->instances.resize(m->children.size());
         uint32_t childIdx = 0;
-        for (const _Instance* child : m->children)
+        bool transformExists = false;
+        bool motionASExists = false;
+        for (const _Instance* child : m->children) {
             child->fillInstance(&m->instances[childIdx++]);
+            transformExists |= child->isTransform();
+            motionASExists |= child->isMotionAS();
+        }
+        m->aabbsRequired = transformExists || (motionASExists && m->motionOptions.numKeys >= 2);
+        if (m->aabbsRequired) {
+            THROW_RUNTIME_ERROR(numAABBs, "This IAS requires AABB buffer, but numAABBs is not provided.");
+            *numAABBs = m->children.size() * m->motionOptions.numKeys;
+        }
 
         // Fill the build input.
         {
@@ -727,6 +907,9 @@ namespace optixu {
             OptixBuildInputInstanceArray &instArray = m->buildInput.instanceArray;
             instArray.instances = 0;
             instArray.numInstances = static_cast<uint32_t>(m->children.size());
+            instArray.aabbs = 0;
+            if (m->aabbsRequired)
+                instArray.numAabbs = *numAABBs;
         }
 
         m->buildOptions = {};
@@ -734,7 +917,7 @@ namespace optixu {
         m->buildOptions.buildFlags = ((m->preferFastTrace ? OPTIX_BUILD_FLAG_PREFER_FAST_TRACE : OPTIX_BUILD_FLAG_PREFER_FAST_BUILD) |
                                       (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                       (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
-        //m->buildOptions.motionOptions
+        m->buildOptions.motionOptions = m->motionOptions;
 
         OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
                                                  &m->buildInput, 1,
@@ -755,6 +938,7 @@ namespace optixu {
                             "Size of the given scratch buffer is not enough.");
         THROW_RUNTIME_ERROR(instanceBuffer.numElements() >= m->instances.size(),
                             "Size of the given instance buffer is not enough.");
+        THROW_RUNTIME_ERROR(!m->aabbsRequired, "You need to call the motion-enabled variant of this function for this IAS.");
 
         // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
         //     インスタンス情報を更新する処理をここにも書いておく必要がある。
@@ -781,6 +965,56 @@ namespace optixu {
 
         m->instanceBuffer = &instanceBuffer;
         m->accelBuffer = &accelBuffer;
+        m->available = true;
+        m->readyToCompact = false;
+        m->compactedHandle = 0;
+        m->compactedAvailable = false;
+
+        return m->handle;
+    }
+
+    OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer, const TypedBuffer<OptixAabb> &aabbBuffer,
+                                                                  const Buffer &accelBuffer, const Buffer &scratchBuffer) const {
+        THROW_RUNTIME_ERROR(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+        THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+                            "Size of the given buffer is not enough.");
+        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+                            "Size of the given scratch buffer is not enough.");
+        THROW_RUNTIME_ERROR(instanceBuffer.numElements() >= m->instances.size(),
+                            "Size of the given instance buffer is not enough.");
+        uint32_t numAABBs = m->motionOptions.numKeys * m->children.size();
+        THROW_RUNTIME_ERROR(aabbBuffer.numElements() >= numAABBs,
+                            "Size of the given AABB buffer is not enough.");
+        THROW_RUNTIME_ERROR(m->aabbsRequired, "You need to call the motion-disabled variant of this function for this IAS.");
+
+        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
+        //     インスタンス情報を更新する処理をここにも書いておく必要がある。
+        // EN: User is not required to call prepareForBuild() when performing rebuild
+        //     for purpose of update so updating instance information should be here.
+        uint32_t childIdx = 0;
+        for (const _Instance* child : m->children)
+            child->updateInstance(&m->instances[childIdx++]);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
+                                        instanceBuffer.sizeInBytes(),
+                                        stream));
+        m->buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
+        m->buildInput.instanceArray.aabbs = aabbBuffer.getCUdeviceptr();
+        m->buildInput.instanceArray.numAabbs = numAABBs;
+
+        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+
+        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
+                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
+                                    &m->handle,
+                                    compactionEnabled ? &m->propertyCompactedSize : nullptr,
+                                    compactionEnabled ? 1 : 0));
+        CUDADRV_CHECK(cuEventRecord(m->finishEvent, stream));
+
+        m->instanceBuffer = &instanceBuffer;
+        m->accelBuffer = &accelBuffer;
+        m->aabbBuffer = &aabbBuffer;
         m->available = true;
         m->readyToCompact = false;
         m->compactedHandle = 0;
@@ -868,10 +1102,6 @@ namespace optixu {
 
     bool InstanceAccelerationStructure::isReady() const {
         return m->isReady();
-    }
-
-    void InstanceAccelerationStructure::markDirty() const {
-        m->markDirty();
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {

@@ -95,6 +95,7 @@ namespace optixu {
     OPTIX_ALIAS_PIMPL(Scene);
     OPTIX_ALIAS_PIMPL(GeometryInstance);
     OPTIX_ALIAS_PIMPL(GeometryAccelerationStructure);
+    OPTIX_ALIAS_PIMPL(Transform);
     OPTIX_ALIAS_PIMPL(Instance);
     OPTIX_ALIAS_PIMPL(InstanceAccelerationStructure);
     OPTIX_ALIAS_PIMPL(Pipeline);
@@ -282,6 +283,7 @@ namespace optixu {
         std::unordered_set<_GeometryAccelerationStructure*> geomASs;
         std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> sbtOffsets;
         uint32_t numSBTRecords;
+        std::unordered_set<_Transform*> transforms;
         std::unordered_set<_InstanceAccelerationStructure*> instASs;
         struct {
             unsigned int sbtLayoutIsUpToDate : 1;
@@ -307,6 +309,12 @@ namespace optixu {
         }
         void removeGAS(_GeometryAccelerationStructure* gas) {
             geomASs.erase(gas);
+        }
+        void addTransform(_Transform* tr) {
+            transforms.insert(tr);
+        }
+        void removeTransform(_Transform* tr) {
+            transforms.erase(tr);
         }
         void addIAS(_InstanceAccelerationStructure* ias) {
             instASs.insert(ias);
@@ -506,6 +514,9 @@ namespace optixu {
 
         uint32_t calcNumSBTRecords(uint32_t matSetIdx) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, HitGroupSBTRecord* records) const;
+        bool hasMotion() const {
+            return false;
+        }
         
         void markDirty();
         bool isReady() const {
@@ -524,39 +535,124 @@ namespace optixu {
 
 
 
-    enum class InstanceType {
+    enum class ChildType {
         GAS = 0,
-        //MatrixMotionTransform,
-        //SRTMotionTransform,
-        //StaticTransform,
+        IAS,
+        Transform,
         Invalid
     };
 
+
+
+    enum class TransformType {
+        MatrixMotion = 0,
+        SRTMotion,
+        Static
+    };
+
+    class Transform::Priv {
+        _Scene* scene;
+        TransformType type;
+        ChildType childType;
+        union {
+            _GeometryAccelerationStructure* childGas;
+            _InstanceAccelerationStructure* childIas;
+            _Transform* childXfm;
+        };
+        OptixSRTData srtData[2];
+        OptixMotionOptions options;
+
+        OptixTraversableHandle handle;
+        struct {
+            unsigned int available : 1;
+        };
+
+    public:
+        OPTIX_OPAQUE_BRIDGE(Transform);
+
+        Priv(_Scene* _scene) :
+            scene(_scene), type(TransformType::SRTMotion),
+            childType(ChildType::Invalid),
+            childGas(nullptr),
+            handle(0),
+            available(false) {
+            scene->addTransform(this);
+
+            srtData[0].sx = 1.0f; srtData[0].a = 0.0f; srtData[0].b = 0.0f; srtData[0].pvx = 0.0f;
+            srtData[0].sy = 1.0f; srtData[0].c = 0.0f; srtData[0].pvy = 0.0f;
+            srtData[0].sz = 1.0f; srtData[0].pvz = 0.0f;
+            srtData[0].qx = 0.0f; srtData[0].qy = 0.0f; srtData[0].qz = 0.0f;
+            srtData[0].qw = 1.0f;
+            srtData[0].tx = 0.0f; srtData[0].ty = 0.0f; srtData[0].tz = 0.0f;
+
+            srtData[1].sx = 1.0f; srtData[1].a = 0.0f; srtData[1].b = 0.0f; srtData[1].pvx = 0.0f;
+            srtData[1].sy = 1.0f; srtData[1].c = 0.0f; srtData[1].pvy = 0.0f;
+            srtData[1].sz = 1.0f; srtData[1].pvz = 0.0f;
+            srtData[1].qx = 0.0f; srtData[1].qy = 0.0f; srtData[1].qz = 0.0f;
+            srtData[1].qw = 1.0f;
+            srtData[1].tx = 0.0f; srtData[1].ty = 0.0f; srtData[1].tz = 0.0f;
+
+            options.numKeys = 2;
+            options.timeBegin = 0.0f;
+            options.timeEnd = 0.0f;
+            options.flags = OPTIX_MOTION_FLAG_NONE;
+        }
+        ~Priv() {
+            scene->removeTransform(this);
+        }
+
+        const _Scene* getScene() const {
+            return scene;
+        }
+        CUcontext getCUDAContext() const {
+            return scene->getCUDAContext();
+        }
+        OptixDeviceContext getRawContext() const {
+            return scene->getRawContext();
+        }
+
+
+
+        _GeometryAccelerationStructure* getDescendantGAS() const;
+
+        void markDirty();
+        bool isReady() const {
+            return available;
+        }
+
+        OptixTraversableHandle getHandle() const {
+            THROW_RUNTIME_ERROR(isReady(), "Traversable handle is not ready.");
+            return handle;
+        }
+    };
+
+
+
     class Instance::Priv {
         _Scene* scene;
-        InstanceType type;
+        ChildType type;
         union {
-            struct {
-                _GeometryAccelerationStructure* gas;
-                uint32_t matSetIndex;
-            };
+            _GeometryAccelerationStructure* childGas;
+            _InstanceAccelerationStructure* childIas;
+            _Transform* childXfm;
         };
-        float transform[12];
+        uint32_t matSetIndex;
+        float instTransform[12];
 
     public:
         OPTIX_OPAQUE_BRIDGE(Instance);
 
         Priv(_Scene* _scene) :
             scene(_scene),
-            type(InstanceType::Invalid) {
-            gas = nullptr;
+            type(ChildType::Invalid) {
+            childGas = nullptr;
             matSetIndex = 0xFFFFFFFF;
             float identity[] = {
                 1, 0, 0, 0,
                 0, 1, 0, 0,
                 0, 0, 1, 0,
             };
-            std::copy_n(identity, 12, transform);
+            std::copy_n(identity, 12, instTransform);
         }
         ~Priv() {}
 
@@ -568,6 +664,8 @@ namespace optixu {
 
         void fillInstance(OptixInstance* instance) const;
         void updateInstance(OptixInstance* instance) const;
+        bool isMotionAS() const;
+        bool isTransform() const;
     };
 
 
@@ -579,6 +677,7 @@ namespace optixu {
         OptixBuildInput buildInput;
         std::vector<OptixInstance> instances;
 
+        OptixMotionOptions motionOptions;
         OptixAccelBuildOptions buildOptions;
         OptixAccelBufferSizes memoryRequirement;
 
@@ -590,12 +689,14 @@ namespace optixu {
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
         const TypedBuffer<OptixInstance>* instanceBuffer;
+        const TypedBuffer<OptixAabb>* aabbBuffer;
         const Buffer* accelBuffer;
         const Buffer* compactedAccelBuffer;
         struct {
             unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
+            unsigned int aabbsRequired : 1;
             unsigned int readyToBuild : 1;
             unsigned int available : 1;
             unsigned int readyToCompact : 1;
@@ -608,11 +709,13 @@ namespace optixu {
         Priv(_Scene* _scene) :
             scene(_scene),
             handle(0), compactedHandle(0),
-            instanceBuffer(nullptr), accelBuffer(nullptr), compactedAccelBuffer(nullptr),
+            instanceBuffer(nullptr), aabbBuffer(nullptr), accelBuffer(nullptr), compactedAccelBuffer(nullptr),
             preferFastTrace(true), allowUpdate(false), allowCompaction(false),
             readyToBuild(false), available(false),
             readyToCompact(false), compactedAvailable(false) {
             scene->addIAS(this);
+
+            motionOptions = {};
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
                                         CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
@@ -637,6 +740,12 @@ namespace optixu {
         }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
+        }
+
+
+
+        bool hasMotion() const {
+            return motionOptions.numKeys >= 2;
         }
 
 

@@ -742,6 +742,8 @@ namespace optixu {
                              |
                              +-- Instance
                              |
+                             +-- Transform
+                             |
                              +-- GAS
                              |
                              +-- GeomInst
@@ -756,6 +758,7 @@ namespace optixu {
     class Scene;
     class GeometryInstance;
     class GeometryAccelerationStructure;
+    class Transform;
     class Instance;
     class InstanceAccelerationStructure;
     class Pipeline;
@@ -824,6 +827,7 @@ private: \
 
         GeometryInstance createGeometryInstance(bool forCustomPrimitives = false) const;
         GeometryAccelerationStructure createGeometryAccelerationStructure(bool forCustomPrimitives = false) const;
+        Transform createTransform() const;
         Instance createInstance() const;
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
 
@@ -871,6 +875,7 @@ private: \
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
+        void markDirty() const;
 
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが無効化される。
         // EN: Calling the following APIs invalidate the shader binding table layout of hit group.
@@ -894,7 +899,37 @@ private: \
         void setUserData(uint32_t userData) const;
 
         bool isReady() const;
+        OptixTraversableHandle getHandle() const;
+    };
+
+
+
+    struct alignas(OPTIX_TRANSFORM_BYTE_ALIGNMENT) TransformMemory {
+        static constexpr size_t size =
+            std::max(sizeof(OptixMatrixMotionTransform),
+                     std::max(sizeof(OptixSRTMotionTransform),
+                              sizeof(OptixStaticTransform)));
+        uint8_t placeHolder[size];
+    };
+
+    class Transform {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
+        OPTIX_COMMON_FUNCTIONS(Transform);
+
+        void setChild(GeometryAccelerationStructure child) const;
+        void setChild(InstanceAccelerationStructure child) const;
+        void setChild(Transform child) const;
+        void setSRTMotion(const float beginScale[3], const float beginOrientation[4], const float beginTranslation[3],
+                          const float endScale[3], const float endOrientation[4], const float endTranslation[3]) const;
+        void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void markDirty() const;
+
+        OptixTraversableHandle rebuild(CUstream stream, const TransformMemory* trDeviceMem);
+
+        bool isReady() const;
         OptixTraversableHandle getHandle() const;
     };
 
@@ -909,7 +944,9 @@ private: \
 
         // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a IAS to which the instance belongs is required.
-        void setGAS(GeometryAccelerationStructure gas, uint32_t matSetIdx = 0) const;
+        void setChild(GeometryAccelerationStructure child, uint32_t matSetIdx = 0) const;
+        void setChild(InstanceAccelerationStructure child) const;
+        void setChild(Transform child, uint32_t matSetIdx = 0) const;
 
         // JP: 所属するIASをリビルドもしくはアップデートする必要がある。
         // EN: Rebulding or Updating of a IAS to which the instance belongs is required.
@@ -928,10 +965,13 @@ private: \
         // JP: 以下のAPIを呼んだ場合はIASがdirty状態になる。
         // EN: Calling the following APIs marks the IAS dirty.
         void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
+        void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChild(Instance instance) const;
+        void markDirty() const;
 
-        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const;
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
+                             uint32_t* numAABBs = nullptr) const;
         // JP: インスタンスバッファーもユーザー管理にしたいため、今の形になっているが微妙かもしれない。
         //     インスタンスバッファーを内部で1つ持つようにすると、
         //     あるフレームでIASをビルド、次のフレームでインスタンスの追加がありリビルドの必要が生じた場合に
@@ -942,13 +982,14 @@ private: \
         // EN: 
         OptixTraversableHandle rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer,
                                        const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
+        OptixTraversableHandle rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer, const TypedBuffer<OptixAabb> &aabbBuffer,
+                                       const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted() const;
         OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
-        void markDirty() const;
         OptixTraversableHandle getHandle() const;
     };
 
