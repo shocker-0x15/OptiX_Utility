@@ -1277,6 +1277,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                             geomGroup->optixGAS.setConfiguration(false, false, false, false);
                             geomGroup->optixGAS.setNumMaterialSets(1);
                             geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
+                            geomGroup->optixGAS.setUserData(gasIndex);
                             geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, geomInstList.getNumSelected());
                             geomGroup->dataTransfered = false;
 

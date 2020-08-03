@@ -70,7 +70,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     float b0 = 1 - (hp.b1 + hp.b2);
     float3 sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
 
-    const GeometryInstancePreTransform &preTransform = plp.gasData[sbtr.gasData].preTransforms[optixGetSbtGASIndex()];
+    const GASData &gasData = plp.gasData[sbtr.gasData];
+    const GeometryInstancePreTransform &preTransform = gasData.preTransforms[optixGetSbtGASIndex()];
     sn = preTransform.transformNormalFromObjectToWorld(sn);
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
