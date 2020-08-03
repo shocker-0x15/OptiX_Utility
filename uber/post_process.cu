@@ -14,7 +14,11 @@ CUDA_DEVICE_KERNEL void postProcess(
     uint32_t ipy = blockDim.y * blockIdx.y + threadIdx.y;
     if (ipx >= imageSizeX || ipy >= imageSizeY)
         return;
+#if defined(USE_NATIVE_BLOCK_BUFFER2D)
     float3 pix = getXYZ(accumBuffer.read(make_uint2(ipx, ipy))) / (float)numAccumFrames;
+#else
+    float3 pix = getXYZ(accumBuffer[make_uint2(ipx, ipy)]) / (float)numAccumFrames;
+#endif
     pix.x = 1 - std::exp(-pix.x);
     pix.y = 1 - std::exp(-pix.y);
     pix.z = 1 - std::exp(-pix.z);

@@ -76,7 +76,11 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
     plp.rngBuffer[launchIndex] = rng;
     float3 accResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 1) {
+#if defined(USE_NATIVE_BLOCK_BUFFER2D)
         float4 accResultF4 = plp.accumBuffer.read(launchIndex);
+#else
+        float4 accResultF4 = plp.accumBuffer[launchIndex];
+#endif
         accResult = make_float3(accResultF4.x, accResultF4.y, accResultF4.z);
     }
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
