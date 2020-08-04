@@ -669,6 +669,15 @@ namespace optixu {
         markDirty();
     }
 
+    void Transform::setMatrixMotion(const float beginMatrix[12], const float endMatrix[12]) const {
+        m->type = TransformType::MatrixMotion;
+
+        std::copy_n(beginMatrix, 12, m->mmData[0]);
+        std::copy_n(endMatrix, 12, m->mmData[1]);
+
+        markDirty();
+    }
+
     void Transform::setSRTMotion(const float beginScale[3], const float beginOrientation[4], const float beginTranslation[3],
                                  const float endScale[3], const float endOrientation[4], const float endTranslation[3]) const {
         m->type = TransformType::SRTMotion;
@@ -692,6 +701,37 @@ namespace optixu {
         markDirty();
     }
 
+    void Transform::setStaticTransform(const float matrix[12]) const {
+        float invDet = 1.0f / (matrix[ 0] * matrix[ 5] * matrix[10] +
+                               matrix[ 1] * matrix[ 6] * matrix[ 8] +
+                               matrix[ 2] * matrix[ 4] * matrix[ 9] -
+                               matrix[ 2] * matrix[ 5] * matrix[ 8] -
+                               matrix[ 1] * matrix[ 4] * matrix[10] -
+                               matrix[ 0] * matrix[ 6] * matrix[ 9]);
+        THROW_RUNTIME_ERROR(invDet != 0.0f, "Given matrix is not invertible.");
+
+        m->type = TransformType::Static;
+
+        std::copy_n(matrix, 12, m->staticData[0]);
+
+        float invMat[12];
+        invMat[ 0] = invDet * (matrix[ 5] * matrix[10] - matrix[ 6] * matrix[ 9]);
+        invMat[ 1] = invDet * (matrix[ 2] * matrix[ 9] - matrix[ 1] * matrix[10]);
+        invMat[ 2] = invDet * (matrix[ 1] * matrix[ 6] - matrix[ 2] * matrix[ 5]);
+        invMat[ 3] = -matrix[3];
+        invMat[ 4] = invDet * (matrix[ 6] * matrix[ 8] - matrix[ 4] * matrix[10]);
+        invMat[ 5] = invDet * (matrix[ 0] * matrix[10] - matrix[ 2] * matrix[ 8]);
+        invMat[ 6] = invDet * (matrix[ 2] * matrix[ 4] - matrix[ 0] * matrix[ 6]);
+        invMat[ 7] = -matrix[7];
+        invMat[ 8] = invDet * (matrix[ 4] * matrix[ 9] - matrix[ 5] * matrix[ 8]);
+        invMat[ 9] = invDet * (matrix[ 1] * matrix[ 8] - matrix[ 0] * matrix[ 9]);
+        invMat[10] = invDet * (matrix[ 0] * matrix[ 5] - matrix[ 1] * matrix[ 4]);
+        invMat[11] = -matrix[11];
+        std::copy_n(invMat, 12, m->staticData[1]);
+
+        markDirty();
+    }
+
     void Transform::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
         m->options.numKeys = numKeys;
         m->options.timeBegin = timeBegin;
@@ -708,19 +748,37 @@ namespace optixu {
     OptixTraversableHandle Transform::rebuild(CUstream stream, const TransformMemory* trDeviceMem) {
         THROW_RUNTIME_ERROR(m->childType != ChildType::Invalid, "Child is invalid.");
 
-        OptixSRTMotionTransform tr = {};
+        OptixTraversableHandle childHandle = 0;
         if (m->childType == ChildType::GAS)
-            tr.child = m->childGas->getHandle();
+            childHandle = m->childGas->getHandle();
         else if (m->childType == ChildType::IAS)
-            tr.child = m->childIas->getHandle();
+            childHandle = m->childIas->getHandle();
         else if (m->childType == ChildType::Transform)
-            tr.child = m->childXfm->getHandle();
-        tr.srtData[0] = m->srtData[0];
-        tr.srtData[1] = m->srtData[1];
-        tr.motionOptions = m->options;
+            childHandle = m->childXfm->getHandle();
+
+        TransformMemory u;
+        if (m->type == TransformType::MatrixMotion) {
+            u.mmXfm = {};
+            u.mmXfm.child = childHandle;
+            std::copy_n(&m->mmData[0][0], 24, &u.mmXfm.transform[0][0]);
+            u.mmXfm.motionOptions = m->options;
+        }
+        else if (m->type == TransformType::SRTMotion) {
+            u.srtXfm = {};
+            u.srtXfm.child = childHandle;
+            u.srtXfm.srtData[0] = m->srtData[0];
+            u.srtXfm.srtData[1] = m->srtData[1];
+            u.srtXfm.motionOptions = m->options;
+        }
+        else if (m->type == TransformType::Static) {
+            u.staticXfm = {};
+            u.staticXfm.child = childHandle;
+            std::copy_n(m->staticData[0], 12, u.staticXfm.transform);
+            std::copy_n(m->staticData[1], 12, u.staticXfm.invTransform);
+        }
 
         CUdeviceptr dst = reinterpret_cast<CUdeviceptr>(trDeviceMem);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(dst, &tr, sizeof(tr), stream));
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(dst, &u, sizeof(u), stream));
         OPTIX_CHECK(optixConvertPointerToTraversableHandle(m->getRawContext(), dst,
                                                            OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM,
                                                            &m->handle));

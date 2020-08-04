@@ -552,14 +552,18 @@ namespace optixu {
 
     class Transform::Priv {
         _Scene* scene;
-        TransformType type;
-        ChildType childType;
         union {
             _GeometryAccelerationStructure* childGas;
             _InstanceAccelerationStructure* childIas;
             _Transform* childXfm;
         };
-        OptixSRTData srtData[2];
+        ChildType childType;
+        union {
+            float mmData[2][12];
+            OptixSRTData srtData[2];
+            float staticData[2][12];
+        };
+        TransformType type;
         OptixMotionOptions options;
 
         OptixTraversableHandle handle;

@@ -25,10 +25,8 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
-- 3-level以上のTraversable Graphのサポート。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
-- Motion Transformサポート。
 - HitGroup以外のプログラムの非同期更新。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
@@ -904,12 +902,10 @@ private: \
 
 
 
-    struct alignas(OPTIX_TRANSFORM_BYTE_ALIGNMENT) TransformMemory {
-        static constexpr size_t size =
-            std::max(sizeof(OptixMatrixMotionTransform),
-                     std::max(sizeof(OptixSRTMotionTransform),
-                              sizeof(OptixStaticTransform)));
-        uint8_t placeHolder[size];
+    union alignas(OPTIX_TRANSFORM_BYTE_ALIGNMENT) TransformMemory {
+        OptixMatrixMotionTransform mmXfm;
+        OptixSRTMotionTransform srtXfm;
+        OptixStaticTransform staticXfm;
     };
 
     class Transform {
@@ -922,8 +918,10 @@ private: \
         void setChild(GeometryAccelerationStructure child) const;
         void setChild(InstanceAccelerationStructure child) const;
         void setChild(Transform child) const;
+        void setMatrixMotion(const float beginMatrix[12], const float endMatrix[12]) const;
         void setSRTMotion(const float beginScale[3], const float beginOrientation[4], const float beginTranslation[3],
                           const float endScale[3], const float endOrientation[4], const float endTranslation[3]) const;
+        void setStaticTransform(const float matrix[12]) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void markDirty() const;
 
