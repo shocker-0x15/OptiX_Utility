@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- BuildInputのどの内容がアップデート時に変更できるのか確認。
 - 3-level以上のTraversable Graphのサポート。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
@@ -913,6 +914,8 @@ private: \
 
         // JP: 所属するIASをリビルドもしくはアップデートする必要がある。
         // EN: Rebulding or Updating of a IAS to which the instance belongs is required.
+        void setID(uint32_t value) const;
+        void setVisibilityMask(uint32_t mask) const;
         void setTransform(const float transform[12]) const;
     };
 
