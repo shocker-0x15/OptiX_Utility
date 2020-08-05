@@ -882,8 +882,8 @@ private: \
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
-        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するIASのmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a IAS to which the GAS (indirectly) belongs is required when performing
+        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the GAS (indirectly) belongs is required when performing
         //     rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -904,10 +904,11 @@ private: \
 
 
 
-    union alignas(OPTIX_TRANSFORM_BYTE_ALIGNMENT) TransformMemory {
-        OptixMatrixMotionTransform mmXfm;
-        OptixSRTMotionTransform srtXfm;
-        OptixStaticTransform staticXfm;
+    enum class TransformType {
+        MatrixMotion = 0,
+        SRTMotion,
+        Static,
+        Invalid
     };
 
     class Transform {
@@ -917,17 +918,22 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(Transform);
 
+        // JP: 以下のAPIを呼んだ場合はTransformがdirty状態になる。
+        // EN: Calling the following APIs marks the transform dirty.
+        void setConfiguration(TransformType type, uint32_t numKeys,
+                              size_t* transformSize);
+        void setMotionOptions(float timeBegin, float timeEnd, OptixMotionFlags flags) const;
+        void setMatrixMotionKey(uint32_t keyIdx, const float matrix[12]) const;
+        void setSRTMotionKey(uint32_t keyIdx, const float scale[3], const float orientation[4], const float translation[3]) const;
+        void setStaticTransform(const float matrix[12]) const;
         void setChild(GeometryAccelerationStructure child) const;
         void setChild(InstanceAccelerationStructure child) const;
         void setChild(Transform child) const;
-        void setMatrixMotion(const float beginMatrix[12], const float endMatrix[12]) const;
-        void setSRTMotion(const float beginScale[3], const float beginOrientation[4], const float beginTranslation[3],
-                          const float endScale[3], const float endOrientation[4], const float endTranslation[3]) const;
-        void setStaticTransform(const float matrix[12]) const;
-        void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void markDirty() const;
 
-        OptixTraversableHandle rebuild(CUstream stream, const TransformMemory* trDeviceMem);
+        // JP: 所属するTraversableのmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable to which the instance belongs is required.
+        OptixTraversableHandle rebuild(CUstream stream, const Buffer &trDeviceMem);
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
@@ -972,6 +978,9 @@ private: \
         void removeChild(Instance instance) const;
         void markDirty() const;
 
+        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the IAS (indirectly) belongs is required when performing
+        //     rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
                              uint32_t* numAABBs = nullptr) const;
         // JP: インスタンスバッファーもユーザー管理にしたいため、今の形になっているが微妙かもしれない。

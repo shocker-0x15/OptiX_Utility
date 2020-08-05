@@ -78,7 +78,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // RG - CH
     // RG - MS
     uint32_t ccStackSize = cssRG + std::max(cssCH, cssMS);
-    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 3);
+    // IAS - IAS - SRTXfm - GAS
+    uint32_t maxTraversableGraphDepth = 4;
+    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, maxTraversableGraphDepth);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -422,11 +424,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         Quaternion orientation[2];
         float3 translation[2];
         optixu::Transform optixTransform;
+        cudau::Buffer* deviceMem; // TODO?: define move constructor.
     };
     std::vector<Transform> transformsBunny;
-    cudau::TypedBuffer<optixu::TransformMemory> transformMem;
     std::vector<optixu::Instance> instsBunny;
-    transformMem.initialize(cuContext, cudau::BufferType::Device, NumBunnies);
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
@@ -445,16 +446,22 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         tr.orientation[1] = Quaternion(0, 0, 0, 1);
         tr.translation[1] = make_float3(x, y + 0.1f, z);
 
+        size_t trMemSize;
         tr.optixTransform = scene.createTransform();
+        tr.optixTransform.setConfiguration(optixu::TransformType::SRTMotion, 2, &trMemSize);
+        tr.optixTransform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
         tr.optixTransform.setChild(gasBunny);
-        tr.optixTransform.setSRTMotion(reinterpret_cast<float*>(&tr.scale[0]),
-                                       reinterpret_cast<float*>(&tr.orientation[0]),
-                                       reinterpret_cast<float*>(&tr.translation[0]),
-                                       reinterpret_cast<float*>(&tr.scale[1]),
-                                       reinterpret_cast<float*>(&tr.orientation[1]),
-                                       reinterpret_cast<float*>(&tr.translation[1]));
-        tr.optixTransform.setMotionOptions(2, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        tr.optixTransform.rebuild(cuStream, transformMem.getDevicePointerAt(i));
+        tr.optixTransform.setSRTMotionKey(0,
+                                          reinterpret_cast<float*>(&tr.scale[0]),
+                                          reinterpret_cast<float*>(&tr.orientation[0]),
+                                          reinterpret_cast<float*>(&tr.translation[0]));
+        tr.optixTransform.setSRTMotionKey(1,
+                                          reinterpret_cast<float*>(&tr.scale[1]),
+                                          reinterpret_cast<float*>(&tr.orientation[1]),
+                                          reinterpret_cast<float*>(&tr.translation[1]));
+        tr.deviceMem = new cudau::Buffer;
+        tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
+        tr.optixTransform.rebuild(cuStream, *tr.deviceMem);
         transformsBunny.push_back(tr);
         
         optixu::Instance instBunny = scene.createInstance();
@@ -464,22 +471,22 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
-    // JP: Instance Acceleration Structureを生成する。
-    // EN: Create an instance acceleration structure.
-    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+    // JP: 下位のInstance Acceleration Structureを生成する。
+    // EN: Create an instance acceleration structure of the lower layer.
+    optixu::InstanceAccelerationStructure lowerIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     uint32_t numInstances;
     uint32_t numAABBs;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     cudau::TypedBuffer<OptixAabb> aabbBuffer;
     constexpr uint32_t numMotionKeys = 2;
-    ias.setConfiguration(true, false, false);
-    ias.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-    ias.addChild(instBox);
-    ias.addChild(instAreaLight);
+    lowerIas.setConfiguration(true, false, false);
+    lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+    lowerIas.addChild(instBox);
+    lowerIas.addChild(instAreaLight);
     for (int i = 0; i < instsBunny.size(); ++i)
-        ias.addChild(instsBunny[i]);
-    ias.prepareForBuild(&asMemReqs, &numInstances, &numAABBs);
+        lowerIas.addChild(instsBunny[i]);
+    lowerIas.prepareForBuild(&asMemReqs, &numInstances, &numAABBs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
     aabbBuffer.initialize(cuContext, cudau::BufferType::Device, numAABBs);
@@ -488,37 +495,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
+    // JP: IASに属するインスタンスのモーションAABBを計算する。
+    // EN: Compute motion AABBs of each instance belonging to the IAS.
     {
         OptixAabb* aabbs = aabbBuffer.map();
         // First two instances don't require AABBs and its values will be ignored.
-        {
-            aabbs[0].minX = -1.0f;
-            aabbs[0].minY = -1.0f;
-            aabbs[0].minZ = -1.0f;
-            aabbs[0].maxX = 1.0f;
-            aabbs[0].maxY = 1.0f;
-            aabbs[0].maxZ = 1.0f;
-            aabbs[1].minX = -1.0f;
-            aabbs[1].minY = -1.0f;
-            aabbs[1].minZ = -1.0f;
-            aabbs[1].maxX = 1.0f;
-            aabbs[1].maxY = 1.0f;
-            aabbs[1].maxZ = 1.0f;
-        }
-        {
-            aabbs[2].minX = -0.25f;
-            aabbs[2].minY = 0.0f;
-            aabbs[2].minZ = -0.25f;
-            aabbs[2].maxX = 0.25f;
-            aabbs[2].maxY = 0.0f;
-            aabbs[2].maxZ = 0.25f;
-            aabbs[3].minX = -0.25f;
-            aabbs[3].minY = 0.0f;
-            aabbs[3].minZ = -0.25f;
-            aabbs[3].maxX = 0.25f;
-            aabbs[3].maxY = 0.0f;
-            aabbs[3].maxZ = 0.25f;
-        }
         for (int instIdx = 2; instIdx < (2 + instsBunny.size()); ++instIdx) {
             const Transform &trBunny = transformsBunny[instIdx - 2];
             for (int keyIdx = 0; keyIdx < numMotionKeys; ++keyIdx) {
@@ -569,20 +550,48 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         aabbBuffer.unmap();
     }
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, aabbBuffer, iasMem, asBuildScratchMem);
+    lowerIas.rebuild(cuStream, instanceBuffer, aabbBuffer, iasMem, asBuildScratchMem);
+
+
+
+    optixu::Instance topInstA = scene.createInstance();
+    topInstA.setChild(lowerIas);
+    float instATr[] = {
+        1, 0, 0, -1.25f,
+        0, 1, 0, 0,
+        0, 0, 1, 0
+    };
+    topInstA.setTransform(instATr);
+
+    optixu::Instance topInstB = scene.createInstance();
+    topInstB.setChild(lowerIas);
+    float instBTr[] = {
+        1, 0, 0, 1.25f,
+        0, 1, 0, 0,
+        0, 0, 1, 0
+    };
+    topInstB.setTransform(instBTr);
+    
+    // JP: 最上位のInstance Acceleration Structureを生成する。
+    // EN: Create an instance acceleration structure of the top layer.
+    optixu::InstanceAccelerationStructure topIas = scene.createInstanceAccelerationStructure();
+    cudau::Buffer topIasMem;
+    uint32_t numTopInstances;
+    cudau::TypedBuffer<OptixInstance> topInstanceBuffer;
+    topIas.setConfiguration(true, false, false);
+    topIas.addChild(topInstA);
+    topIas.addChild(topInstB);
+    topIas.prepareForBuild(&asMemReqs, &numTopInstances);
+    topIasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    topInstanceBuffer.initialize(cuContext, cudau::BufferType::Device, numTopInstances);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
+        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
+
+    OptixTraversableHandle travHandle = topIas.rebuild(cuStream, topInstanceBuffer, topIasMem, asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
-
-    //{
-    //    const OptixAabb* aabbs = aabbBuffer.map();
-    //    for (int i = 0; i < aabbBuffer.numElements(); ++i) {
-    //        const OptixAabb &aabb = aabbs[i];
-    //        hpprintf("%3u: (%9.6f, %9.6f, %9.6f) - (%9.6f, %9.6f, %9.6f)\n", i,
-    //                 aabb.minX, aabb.minY, aabb.minZ,
-    //                 aabb.maxX, aabb.maxY, aabb.maxZ);
-    //    }
-    //    aabbBuffer.unmap();
-    //}
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -665,18 +674,26 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     asBuildScratchMem.finalize();
 
+    topInstanceBuffer.finalize();
+    topIasMem.finalize();
+    topIas.destroy();
+
+    topInstB.destroy();
+    topInstA.destroy();
+
     aabbBuffer.finalize();
     instanceBuffer.finalize();
     iasMem.finalize();
-    ias.destroy();
+    lowerIas.destroy();
 
     shaderBindingTable.finalize();
 
     for (int i = instsBunny.size() - 1; i >= 0; --i) {
         instsBunny[i].destroy();
+        transformsBunny[i].deviceMem->finalize();
+        delete transformsBunny[i].deviceMem;
         transformsBunny[i].optixTransform.destroy();
     }
-    transformMem.finalize();
     instAreaLight.destroy();
     instBox.destroy();
 

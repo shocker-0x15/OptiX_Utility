@@ -560,12 +560,6 @@ namespace optixu {
 
 
 
-    enum class TransformType {
-        MatrixMotion = 0,
-        SRTMotion,
-        Static
-    };
-
     class Transform::Priv {
         _Scene* scene;
         union {
@@ -574,11 +568,8 @@ namespace optixu {
             _Transform* childXfm;
         };
         ChildType childType;
-        union {
-            float mmData[2][12];
-            OptixSRTData srtData[2];
-            float staticData[2][12];
-        };
+        uint8_t* data;
+        size_t dataSize;
         TransformType type;
         OptixMotionOptions options;
 
@@ -591,26 +582,13 @@ namespace optixu {
         OPTIX_OPAQUE_BRIDGE(Transform);
 
         Priv(_Scene* _scene) :
-            scene(_scene), type(TransformType::SRTMotion),
-            childType(ChildType::Invalid),
+            scene(_scene), type(TransformType::Invalid),
             childGas(nullptr),
+            childType(ChildType::Invalid),
+            data(nullptr), dataSize(0),
             handle(0),
             available(false) {
             scene->addTransform(this);
-
-            srtData[0].sx = 1.0f; srtData[0].a = 0.0f; srtData[0].b = 0.0f; srtData[0].pvx = 0.0f;
-            srtData[0].sy = 1.0f; srtData[0].c = 0.0f; srtData[0].pvy = 0.0f;
-            srtData[0].sz = 1.0f; srtData[0].pvz = 0.0f;
-            srtData[0].qx = 0.0f; srtData[0].qy = 0.0f; srtData[0].qz = 0.0f;
-            srtData[0].qw = 1.0f;
-            srtData[0].tx = 0.0f; srtData[0].ty = 0.0f; srtData[0].tz = 0.0f;
-
-            srtData[1].sx = 1.0f; srtData[1].a = 0.0f; srtData[1].b = 0.0f; srtData[1].pvx = 0.0f;
-            srtData[1].sy = 1.0f; srtData[1].c = 0.0f; srtData[1].pvy = 0.0f;
-            srtData[1].sz = 1.0f; srtData[1].pvz = 0.0f;
-            srtData[1].qx = 0.0f; srtData[1].qy = 0.0f; srtData[1].qz = 0.0f;
-            srtData[1].qw = 1.0f;
-            srtData[1].tx = 0.0f; srtData[1].ty = 0.0f; srtData[1].tz = 0.0f;
 
             options.numKeys = 2;
             options.timeBegin = 0.0f;
@@ -618,6 +596,9 @@ namespace optixu {
             options.flags = OPTIX_MOTION_FLAG_NONE;
         }
         ~Priv() {
+            if (data)
+                delete data;
+            data = nullptr;
             scene->removeTransform(this);
         }
 
