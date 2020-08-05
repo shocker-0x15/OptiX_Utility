@@ -499,6 +499,16 @@ CUDA_DEVICE_FUNCTION float4 make_float4(const float3 &v, float w) {
     return make_float4(v.x, v.y, v.z, w);
 }
 
+CUDA_DEVICE_FUNCTION float3 min(const float3 &v0, const float3 &v1) {
+    return make_float3(std::fmin(v0.x, v1.x),
+                       std::fmin(v0.y, v1.y),
+                       std::fmin(v0.z, v1.z));
+}
+CUDA_DEVICE_FUNCTION float3 max(const float3 &v0, const float3 &v1) {
+    return make_float3(std::fmax(v0.x, v1.x),
+                       std::fmax(v0.y, v1.y),
+                       std::fmax(v0.z, v1.z));
+}
 CUDA_DEVICE_FUNCTION float dot(const float3 &v0, const float3 &v1) {
     return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }

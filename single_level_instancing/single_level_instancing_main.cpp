@@ -309,8 +309,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::string err;
         bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../data/stanford_bunny_309_faces.obj");
 
-        constexpr float scale = 0.3f;
-
         // Record unified unique vertices.
         std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
         for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
@@ -327,9 +325,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                     tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
                     auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
                     unifiedVertexMap[key] = Shared::Vertex{
-                        make_float3(scale * attrib.vertices[3 * idx.vertex_index + 0],
-                        scale * attrib.vertices[3 * idx.vertex_index + 1],
-                        scale * attrib.vertices[3 * idx.vertex_index + 2]),
+                        make_float3(attrib.vertices[3 * idx.vertex_index + 0],
+                                    attrib.vertices[3 * idx.vertex_index + 1],
+                                    attrib.vertices[3 * idx.vertex_index + 2]),
                         make_float3(0, 0, 0),
                         make_float2(0, 0)
                     };
@@ -506,7 +504,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         float z = r * std::sin(GoldenAngle * i);
 
         float tt = std::pow(t, 0.25f);
-        float scale = (1 - tt) * 0.01f + tt * 0.002f;
+        float scale = (1 - tt) * 0.003f + tt * 0.0006f;
         float instBunnyTr[] = {
             scale, 0, 0, x,
             0, scale, 0, -1 + (1 - tt),

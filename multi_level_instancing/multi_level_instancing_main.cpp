@@ -1,125 +1,8 @@
-﻿// Platform defines
-#if defined(_WIN32) || defined(_WIN64)
-#    define HP_Platform_Windows
-#    if defined(_MSC_VER)
-#        define HP_Platform_Windows_MSVC
-#    endif
-#elif defined(__APPLE__)
-#    define HP_Platform_macOS
-#endif
-
-#if defined(HP_Platform_Windows_MSVC)
-#   define NOMINMAX
-#   define _USE_MATH_DEFINES
-#   include <Windows.h>
-#   undef near
-#   undef far
-#   undef RGB
-#endif
-
-
-
-#include <cstdio>
-#include <cstdlib>
-#include <cstdint>
-#include <cmath>
-
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <filesystem>
-#include <random>
-#include <thread>
-#include <chrono>
-#include <random>
-
-#include <cuda_runtime.h> // only for vector types.
-
-#include "multi_level_instancing_shared.h"
+﻿#include "multi_level_instancing_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../ext/stb_image_write.h"
 #include "../ext/tiny_obj_loader.h"
-
-
-
-#ifdef _DEBUG
-#   define ENABLE_ASSERT
-#   define DEBUG_SELECT(A, B) A
-#else
-#   define DEBUG_SELECT(A, B) B
-#endif
-
-#ifdef HP_Platform_Windows_MSVC
-static void devPrintf(const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    char str[4096];
-    vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
-    va_end(args);
-    OutputDebugString(str);
-}
-#else
-#   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
-#endif
-
-#if 1
-#   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
-#else
-#   define hpprintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#endif
-
-#ifdef ENABLE_ASSERT
-#   define Assert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
-#else
-#   define Assert(expr, fmt, ...)
-#endif
-
-#define Assert_ShouldNotBeCalled() Assert(false, "Should not be called!")
-#define Assert_NotImplemented() Assert(false, "Not implemented yet!")
-
-template <typename T, size_t size>
-constexpr size_t lengthof(const T(&array)[size]) {
-    return size;
-}
-
-
-
-static std::filesystem::path getExecutableDirectory() {
-    static std::filesystem::path ret;
-
-    static bool done = false;
-    if (!done) {
-#if defined(HP_Platform_Windows_MSVC)
-        TCHAR filepath[1024];
-        auto length = GetModuleFileName(NULL, filepath, 1024);
-        Assert(length > 0, "Failed to query the executable path.");
-
-        ret = filepath;
-#else
-        static_assert(false, "Not implemented");
-#endif
-        ret = ret.remove_filename();
-
-        done = true;
-    }
-
-    return ret;
-}
-
-static std::string readTxtFile(const std::filesystem::path& filepath) {
-    std::ifstream ifs;
-    ifs.open(filepath, std::ios::in);
-    if (ifs.fail())
-        return "";
-
-    std::stringstream sstream;
-    sstream << ifs.rdbuf();
-
-    return std::string(sstream.str());
-};
-
-
 
 int32_t mainFunc(int32_t argc, const char* argv[]) {
     // ----------------------------------------------------------------
@@ -139,7 +22,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
+    // JP: このサンプルでは多段階のAS、トランスフォームを使用する。
     // EN: This sample uses two-level AS (single-level instancing).
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
@@ -177,6 +60,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
+
+    OptixStackSizes stackSizes;
+
+    rayGenProgram.getStackSize(&stackSizes);
+    uint32_t cssRG = stackSizes.cssRG;
+
+    missProgram.getStackSize(&stackSizes);
+    uint32_t cssMS = stackSizes.cssMS;
+
+    hitProgramGroup0.getStackSize(&stackSizes);
+    uint32_t cssCH = stackSizes.cssCH;
+
+    uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
+    uint32_t dcStackSizeFromState = 0;
+    // Possible Program Paths:
+    // RG - CH
+    // RG - MS
+    uint32_t ccStackSize = cssRG + std::max(cssCH, cssMS);
+    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 3);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -302,6 +204,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
     cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
+    float3 bboxMinBunny = make_float3(INFINITY);
+    float3 bboxMaxBunny  = make_float3(-INFINITY);
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
@@ -310,7 +214,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::string err;
         bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../data/stanford_bunny_309_faces.obj");
 
-        constexpr float scale = 0.3f;
+        constexpr float scale = 1.0f;
 
         // Record unified unique vertices.
         std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
@@ -347,6 +251,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         for (const auto &kv : unifiedVertexMap) {
             vertices[vertexIndex] = kv.second;
             vertexIndices[kv.first] = vertexIndex++;
+            float3 p = kv.second.position;
+            bboxMinBunny = min(bboxMinBunny, p);
+            bboxMaxBunny = max(bboxMaxBunny, p);
         }
         unifiedVertexMap.clear();
 
@@ -500,7 +407,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     float instAreaLightTr[] = {
         1, 0, 0, 0,
-        0, 1, 0, 0.999,
+        0, 1, 0, 0.9f,
         0, 0, 1, 0
     };
     optixu::Instance instAreaLight = scene.createInstance();
@@ -510,7 +417,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     constexpr uint32_t NumBunnies = 100;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
-    std::vector<optixu::Transform> transformsBunny;
+    struct Transform {
+        float3 scale[2];
+        Quaternion orientation[2];
+        float3 translation[2];
+        optixu::Transform optixTransform;
+    };
+    std::vector<Transform> transformsBunny;
     cudau::TypedBuffer<optixu::TransformMemory> transformMem;
     std::vector<optixu::Instance> instsBunny;
     transformMem.initialize(cuContext, cudau::BufferType::Device, NumBunnies);
@@ -521,25 +434,31 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         float z = r * std::sin(GoldenAngle * i);
 
         float tt = std::pow(t, 0.25f);
-        float scale = (1 - tt) * 0.01f + tt * 0.002f;
-        float beginScale[3] = { scale , scale , scale };
-        float endScale[3] = { scale, scale, scale };
-        float beginOri[4] = { 0, 0, 0, 1 };
-        float endOri[4] = { 0, 0, 0, 1 };
-        //float beginTrans[3] = { x, 0, z };
-        float beginTrans[3] = { x, -1 + (1 - tt), z };
-        float endTrans[3] = { x, -1 + (1 - tt), z };
+        float scale = (1 - tt) * 0.003f + tt * 0.0006f;
+        float y = -1 + (1 - tt);
 
-        optixu::Transform transform = scene.createTransform();
-        transform.setChild(gasBunny);
-        transform.setSRTMotion(beginScale, beginOri, beginTrans,
-                               endScale, endOri, endTrans);
-        transform.setMotionOptions(2, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        transform.rebuild(cuStream, transformMem.getDevicePointerAt(i));
-        transformsBunny.push_back(transform);
+        Transform tr;
+        tr.scale[0] = make_float3(scale);
+        tr.orientation[0] = Quaternion(0, 0, 0, 1);
+        tr.translation[0] = make_float3(x, y, z);
+        tr.scale[1] = make_float3(scale);
+        tr.orientation[1] = Quaternion(0, 0, 0, 1);
+        tr.translation[1] = make_float3(x, y + 0.1f, z);
+
+        tr.optixTransform = scene.createTransform();
+        tr.optixTransform.setChild(gasBunny);
+        tr.optixTransform.setSRTMotion(reinterpret_cast<float*>(&tr.scale[0]),
+                                       reinterpret_cast<float*>(&tr.orientation[0]),
+                                       reinterpret_cast<float*>(&tr.translation[0]),
+                                       reinterpret_cast<float*>(&tr.scale[1]),
+                                       reinterpret_cast<float*>(&tr.orientation[1]),
+                                       reinterpret_cast<float*>(&tr.translation[1]));
+        tr.optixTransform.setMotionOptions(2, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+        tr.optixTransform.rebuild(cuStream, transformMem.getDevicePointerAt(i));
+        transformsBunny.push_back(tr);
         
         optixu::Instance instBunny = scene.createInstance();
-        instBunny.setChild(transform);
+        instBunny.setChild(tr.optixTransform);
         instsBunny.push_back(instBunny);
     }
 
@@ -553,8 +472,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t numAABBs;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     cudau::TypedBuffer<OptixAabb> aabbBuffer;
+    constexpr uint32_t numMotionKeys = 2;
     ias.setConfiguration(true, false, false);
-    ias.setMotionOptions(2, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+    ias.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
     ias.addChild(instBox);
     ias.addChild(instAreaLight);
     for (int i = 0; i < instsBunny.size(); ++i)
@@ -570,14 +490,81 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     {
         OptixAabb* aabbs = aabbBuffer.map();
-        for (int i = 0; i < aabbBuffer.numElements(); ++i) {
-            OptixAabb &aabb = aabbs[i];
-            aabb.minX = -1;
-            aabb.minY = -1;
-            aabb.minZ = -1;
-            aabb.maxX = 1;
-            aabb.maxY = 1;
-            aabb.maxZ = 1;
+        // First two instances don't require AABBs and its values will be ignored.
+        {
+            aabbs[0].minX = -1.0f;
+            aabbs[0].minY = -1.0f;
+            aabbs[0].minZ = -1.0f;
+            aabbs[0].maxX = 1.0f;
+            aabbs[0].maxY = 1.0f;
+            aabbs[0].maxZ = 1.0f;
+            aabbs[1].minX = -1.0f;
+            aabbs[1].minY = -1.0f;
+            aabbs[1].minZ = -1.0f;
+            aabbs[1].maxX = 1.0f;
+            aabbs[1].maxY = 1.0f;
+            aabbs[1].maxZ = 1.0f;
+        }
+        {
+            aabbs[2].minX = -0.25f;
+            aabbs[2].minY = 0.0f;
+            aabbs[2].minZ = -0.25f;
+            aabbs[2].maxX = 0.25f;
+            aabbs[2].maxY = 0.0f;
+            aabbs[2].maxZ = 0.25f;
+            aabbs[3].minX = -0.25f;
+            aabbs[3].minY = 0.0f;
+            aabbs[3].minZ = -0.25f;
+            aabbs[3].maxX = 0.25f;
+            aabbs[3].maxY = 0.0f;
+            aabbs[3].maxZ = 0.25f;
+        }
+        for (int instIdx = 2; instIdx < (2 + instsBunny.size()); ++instIdx) {
+            const Transform &trBunny = transformsBunny[instIdx - 2];
+            for (int keyIdx = 0; keyIdx < numMotionKeys; ++keyIdx) {
+                OptixAabb &aabb = aabbs[instIdx * numMotionKeys + keyIdx];
+
+                Matrix3x3 sr =
+                    trBunny.orientation[keyIdx].toMatrix3x3() *
+                    scale3x3(trBunny.scale[keyIdx]);
+                float3 trans = trBunny.translation[keyIdx];
+
+                float3 c;
+                float3 minP = make_float3(INFINITY);
+                float3 maxP = make_float3(-INFINITY);
+
+                c = sr * float3(bboxMinBunny.x, bboxMinBunny.y, bboxMinBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMaxBunny.x, bboxMinBunny.y, bboxMinBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMinBunny.x, bboxMaxBunny.y, bboxMinBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMaxBunny.x, bboxMaxBunny.y, bboxMinBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMinBunny.x, bboxMinBunny.y, bboxMaxBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMaxBunny.x, bboxMinBunny.y, bboxMaxBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMinBunny.x, bboxMaxBunny.y, bboxMaxBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+                c = sr * float3(bboxMaxBunny.x, bboxMaxBunny.y, bboxMaxBunny.z) + trans;
+                minP = min(minP, c);
+                maxP = max(maxP, c);
+
+                aabb.minX = minP.x;
+                aabb.minY = minP.y;
+                aabb.minZ = minP.z;
+                aabb.maxX = maxP.x;
+                aabb.maxY = maxP.y;
+                aabb.maxZ = maxP.z;
+            }
         }
         aabbBuffer.unmap();
     }
@@ -586,16 +573,16 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
-    {
-        const OptixAabb* aabbs = aabbBuffer.map();
-        for (int i = 0; i < aabbBuffer.numElements(); ++i) {
-            const OptixAabb &aabb = aabbs[i];
-            hpprintf("%3u: (%g, %g, %g) - (%g, %g, %g)\n", i,
-                     aabb.minX, aabb.minY, aabb.minZ,
-                     aabb.maxX, aabb.maxY, aabb.maxZ);
-        }
-        aabbBuffer.unmap();
-    }
+    //{
+    //    const OptixAabb* aabbs = aabbBuffer.map();
+    //    for (int i = 0; i < aabbBuffer.numElements(); ++i) {
+    //        const OptixAabb &aabb = aabbs[i];
+    //        hpprintf("%3u: (%9.6f, %9.6f, %9.6f) - (%9.6f, %9.6f, %9.6f)\n", i,
+    //                 aabb.minX, aabb.minY, aabb.minZ,
+    //                 aabb.maxX, aabb.maxY, aabb.maxZ);
+    //    }
+    //    aabbBuffer.unmap();
+    //}
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -687,7 +674,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     for (int i = instsBunny.size() - 1; i >= 0; --i) {
         instsBunny[i].destroy();
-        transformsBunny[i].destroy();
+        transformsBunny[i].optixTransform.destroy();
     }
     transformMem.finalize();
     instAreaLight.destroy();

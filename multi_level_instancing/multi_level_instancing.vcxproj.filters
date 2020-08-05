@@ -7,6 +7,9 @@
     <Filter Include="ext">
       <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="non-essentials">
+      <UniqueIdentifier>{4fd5b0b7-f601-431c-864e-1ac655b731ae}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\cuda_util.cpp">
@@ -19,6 +22,9 @@
       <Filter>ext</Filter>
     </ClCompile>
     <ClCompile Include="multi_level_instancing_main.cpp" />
+    <ClCompile Include="..\common\common.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\cuda_util.h">
@@ -37,6 +43,9 @@
       <Filter>ext</Filter>
     </ClInclude>
     <ClInclude Include="multi_level_instancing_shared.h" />
+    <ClInclude Include="..\common\common.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />

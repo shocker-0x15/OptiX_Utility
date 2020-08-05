@@ -11,12 +11,14 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\cuda_util.cpp" />
     <ClCompile Include="..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\optix_util.cpp" />
     <ClCompile Include="multi_level_instancing_main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\cuda_util.h" />
     <ClInclude Include="..\ext\stb_image_write.h" />
     <ClInclude Include="..\ext\tiny_obj_loader.h" />
