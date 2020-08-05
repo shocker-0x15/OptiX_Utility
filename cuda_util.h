@@ -334,7 +334,7 @@ namespace cudau {
             return m_devicePointer;
         }
         CUdeviceptr getCUdeviceptrAt(uint32_t idx) const {
-            return m_devicePointer + m_stride * idx;
+            return m_devicePointer + static_cast<uintptr_t>(m_stride) * idx;
         }
         size_t sizeInBytes() const {
             return m_numElements * m_stride;

@@ -799,8 +799,8 @@ namespace optixu {
 
     void Instance::Priv::fillInstance(OptixInstance* instance) const {
         *instance = {};
-        instance->instanceId = 0;
-        instance->visibilityMask = 0xFF;
+        instance->instanceId = id;
+        instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
         instance->flags = OPTIX_INSTANCE_FLAG_NONE;
 
@@ -829,8 +829,8 @@ namespace optixu {
     }
 
     void Instance::Priv::updateInstance(OptixInstance* instance) const {
-        instance->instanceId = 0;
-        instance->visibilityMask = 0xFF;
+        instance->instanceId = id;
+        instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
         //instance->flags = OPTIX_INSTANCE_FLAG_NONE; これは変えられない？
         //instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
@@ -873,6 +873,20 @@ namespace optixu {
 
     void Instance::setTransform(const float transform[12]) const {
         std::copy_n(transform, 12, m->instTransform);
+    }
+
+    void Instance::setID(uint32_t value) const {
+        uint32_t maxInstanceID = m->scene->getContext()->getMaxInstanceID();
+        THROW_RUNTIME_ERROR(value <= maxInstanceID,
+                            "Max instance ID value is 0x%08x.", maxInstanceID);
+        m->id = value;
+    }
+
+    void Instance::setVisibilityMask(uint32_t mask) const {
+        uint32_t numVisibilityMaskBits = m->scene->getContext()->getNumVisibilityMaskBits();
+        THROW_RUNTIME_ERROR((mask >> numVisibilityMaskBits) == 0,
+                            "Number of visibility mask bits is %u.", numVisibilityMaskBits);
+        m->visibilityMask = mask;
     }
 
 

@@ -166,6 +166,8 @@ namespace optixu {
     class Context::Priv {
         CUcontext cudaContext;
         OptixDeviceContext rawContext;
+        uint32_t maxInstanceID;
+        uint32_t numVisibilityMaskBits;
 
     public:
         OPTIX_OPAQUE_BRIDGE(Context);
@@ -177,9 +179,20 @@ namespace optixu {
             options.logCallbackFunction = &logCallBack;
             options.logCallbackLevel = 4;
             OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
+            OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
+                                                      &maxInstanceID, sizeof(maxInstanceID)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK,
+                                                      &numVisibilityMaskBits, sizeof(numVisibilityMaskBits)));
         }
         ~Priv() {
             optixDeviceContextDestroy(rawContext);
+        }
+
+        uint32_t getMaxInstanceID() const {
+            return maxInstanceID;
+        }
+        uint32_t getNumVisibilityMaskBits() const {
+            return numVisibilityMaskBits;
         }
 
         CUcontext getCUDAContext() const {
@@ -295,6 +308,9 @@ namespace optixu {
         Priv(const _Context* ctxt) : context(ctxt), numSBTRecords(0), sbtLayoutIsUpToDate(false) {}
         ~Priv() {}
 
+        const _Context* getContext() const {
+            return context;
+        }
         CUcontext getCUDAContext() const {
             return context->getCUDAContext();
         }
@@ -641,6 +657,8 @@ namespace optixu {
             _Transform* childXfm;
         };
         uint32_t matSetIndex;
+        uint32_t id;
+        uint32_t visibilityMask;
         float instTransform[12];
 
     public:
@@ -651,6 +669,8 @@ namespace optixu {
             type(ChildType::Invalid) {
             childGas = nullptr;
             matSetIndex = 0xFFFFFFFF;
+            id = 0;
+            visibilityMask = 0xFF;
             float identity[] = {
                 1, 0, 0, 0,
                 0, 1, 0, 0,
