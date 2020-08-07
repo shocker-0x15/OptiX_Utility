@@ -3,15 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29123.88
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.uber", "uber\uber.vcxproj", "{38359F87-43FE-4312-AD65-AF8A77FA75CC}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.uber", "samples\uber\uber.vcxproj", "{38359F87-43FE-4312-AD65-AF8A77FA75CC}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "00.single_gas", "single_gas\single_gas.vcxproj", "{4AD032A8-49B1-44A3-AB0B-D679E1CA11C1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "00.single_gas", "samples\single_gas\single_gas.vcxproj", "{4AD032A8-49B1-44A3-AB0B-D679E1CA11C1}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "01.single_level_instancing", "single_level_instancing\single_level_instancing.vcxproj", "{B322E6D0-51AF-4484-9AFB-407651A9FCB2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "01.single_level_instancing", "samples\single_level_instancing\single_level_instancing.vcxproj", "{B322E6D0-51AF-4484-9AFB-407651A9FCB2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "03.scene_edit", "scene_edit\scene_edit.vcxproj", "{95A8399F-C511-427E-B39E-34E4F6692064}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "03.scene_edit", "samples\scene_edit\scene_edit.vcxproj", "{95A8399F-C511-427E-B39E-34E4F6692064}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02.multi_level_instancing", "multi_level_instancing\multi_level_instancing.vcxproj", "{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02.multi_level_instancing", "samples\multi_level_instancing\multi_level_instancing.vcxproj", "{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

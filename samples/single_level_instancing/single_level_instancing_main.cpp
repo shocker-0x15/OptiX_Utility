@@ -37,8 +37,8 @@
 #include "single_level_instancing_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../ext/stb_image_write.h"
-#include "../ext/tiny_obj_loader.h"
+#include "../../ext/stb_image_write.h"
+#include "../../ext/tiny_obj_loader.h"
 
 
 
@@ -307,7 +307,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::vector<tinyobj::material_t> materials;
         std::string warn;
         std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../data/stanford_bunny_309_faces.obj");
+        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../../data/stanford_bunny_309_faces.obj");
 
         // Record unified unique vertices.
         std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;

@@ -83,9 +83,9 @@ cudau::Buffer asBuildScratchMem;
 // Create geometry acceleration structures.
 optixu::GeometryAccelerationStructure gas0 = scene.createGeometryAccelerationStructure();
 gas0.setConfiguration(false, true, true, false); // Builder preference.
-gas0.setChild(geomInst0);
-gas0.setChild(geomInst1);
-gas0.setChild(...);
+gas0.addChild(geomInst0);
+gas0.addChild(geomInst1);
+gas0.addChild(...);
 gas0.setUserData(...);
 optixu::GeometryAccelerationStructure gas1 = scene.createGeometryAccelerationStructure();
 // ...
@@ -96,7 +96,7 @@ OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, gas0Mem, asBuildScrat
 
 // Create instances.
 optixu::Instance inst0 = scene.createInstance();
-inst0.setGAS(gas0);
+inst0.setChild(gas0);
 inst0.setTransform(...);
 optixu::Instance inst1 = scene.createInstance();
 // ...
@@ -104,9 +104,9 @@ optixu::Instance inst1 = scene.createInstance();
 // Create instance acceleration structures.
 optixu::InstanceAccelerationStructure ias0 = scene.createInstanceAccelerationStructure();
 ias0.setConfiguration(false, true, true); // Builder preference.
-ias0.setChild(inst0);
-ias0.setChild(inst1);
-ias0.setChild(...);
+ias0.addChild(inst0);
+ias0.addChild(inst1);
+ias0.addChild(...);
 optixu::InstanceAccelerationStructure ias1 = scene.createInstanceAccelerationStructure();
 // ...
 cudau::Buffer ias0Mem;

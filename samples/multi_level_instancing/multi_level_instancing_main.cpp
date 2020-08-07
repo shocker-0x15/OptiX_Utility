@@ -1,8 +1,8 @@
 ﻿#include "multi_level_instancing_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../ext/stb_image_write.h"
-#include "../ext/tiny_obj_loader.h"
+#include "../../ext/stb_image_write.h"
+#include "../../ext/tiny_obj_loader.h"
 
 struct AABB {
     float3 minP;
@@ -378,7 +378,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
-        loadObj("../data/stanford_bunny_309_faces.obj",
+        loadObj("../../data/stanford_bunny_309_faces.obj",
                 &vertices, &triangles,
                 &bunny.bbox);
 
@@ -412,7 +412,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
-        loadObj("../data/subd_cube.obj",
+        loadObj("../../data/subd_cube.obj",
                 &vertices, &triangles,
                 &cube.bbox);
 

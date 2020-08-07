@@ -12,64 +12,29 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\common\common.cpp" />
-    <ClCompile Include="..\common\dds_loader.cpp" />
-    <ClCompile Include="..\cuda_util.cpp" />
-    <ClCompile Include="..\ext\gl3w\gl3w.c" />
-    <ClCompile Include="..\ext\imgui\imgui.cpp" />
-    <ClCompile Include="..\ext\imgui\imgui_demo.cpp" />
-    <ClCompile Include="..\ext\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\ext\imgui\imgui_impl_glfw.cpp" />
-    <ClCompile Include="..\ext\imgui\imgui_impl_opengl3.cpp" />
-    <ClCompile Include="..\ext\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="..\ext\tiny_obj_loader.cc" />
-    <ClCompile Include="..\optix_util.cpp" />
-    <ClCompile Include="uber_main.cpp" />
+    <ClCompile Include="..\..\cuda_util.cpp" />
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
+    <ClCompile Include="..\..\optix_util.cpp" />
+    <ClCompile Include="multi_level_instancing_main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\common.h" />
-    <ClInclude Include="..\common\dds_loader.h" />
-    <ClInclude Include="..\common\GLToolkit.h" />
-    <ClInclude Include="..\common\stopwatch.h" />
-    <ClInclude Include="..\cuda_util.h" />
-    <ClInclude Include="..\ext\gl3w\include\GL\gl3w.h" />
-    <ClInclude Include="..\ext\gl3w\include\GL\glcorearb.h" />
-    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3.h" />
-    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3native.h" />
-    <ClInclude Include="..\ext\imgui\imconfig.h" />
-    <ClInclude Include="..\ext\imgui\imgui.h" />
-    <ClInclude Include="..\ext\imgui\imgui_impl_glfw.h" />
-    <ClInclude Include="..\ext\imgui\imgui_impl_opengl3.h" />
-    <ClInclude Include="..\ext\imgui\imgui_internal.h" />
-    <ClInclude Include="..\ext\imgui\imstb_rectpack.h" />
-    <ClInclude Include="..\ext\imgui\imstb_textedit.h" />
-    <ClInclude Include="..\ext\imgui\imstb_truetype.h" />
-    <ClInclude Include="..\ext\stb_image.h" />
-    <ClInclude Include="..\ext\tiny_obj_loader.h" />
-    <ClInclude Include="..\optix_util.h" />
-    <ClInclude Include="..\optix_util_private.h" />
-    <ClInclude Include="uber_shared.h" />
+    <ClInclude Include="..\..\cuda_util.h" />
+    <ClInclude Include="..\..\ext\stb_image_write.h" />
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
+    <ClInclude Include="..\..\optix_util.h" />
+    <ClInclude Include="..\..\optix_util_private.h" />
+    <ClInclude Include="multi_level_instancing_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="..\ext\imgui\natvis\imgui.natvis" />
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="deform.cu" />
     <CudaCompile Include="optix_kernels.cu" />
-    <CudaCompile Include="post_process.cu" />
-    <CudaCompile Include="sphere_bounding_box.cu" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="shaders\drawOptiXResult.frag" />
-    <None Include="shaders\drawOptiXResult.vert" />
-    <None Include="shaders\scale.frag" />
-    <None Include="shaders\scale.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{38359F87-43FE-4312-AD65-AF8A77FA75CC}</ProjectGuid>
+    <ProjectGuid>{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>10.uber</ProjectName>
+    <ProjectName>02.multi_level_instancing</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -101,12 +66,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0\lib\x64;$(SolutionDir)ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)ext\gl3w\include;$(SolutionDir)ext\glfw\include;$(SolutionDir)ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.1.0\include;$(IncludePath)</IncludePath>
-    <TargetName>uber</TargetName>
+    <TargetName>multi_level_instancing</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0\lib\x64;$(SolutionDir)ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)ext\gl3w\include;$(SolutionDir)ext\glfw\include;$(SolutionDir)ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.1.0\include;$(IncludePath)</IncludePath>
-    <TargetName>uber</TargetName>
+    <TargetName>multi_level_instancing</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -120,13 +85,12 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cuda.lib;cudart_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <PostBuildEvent>
-      <Command>echo copy shaders
-
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -161,12 +125,11 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cuda.lib;cudart_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>echo copy shaders
-
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>

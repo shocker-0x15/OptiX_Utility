@@ -30,34 +30,34 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\ext\gl3w\gl3w.c">
+    <ClCompile Include="..\..\ext\gl3w\gl3w.c">
       <Filter>ext\gl3w</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\imgui\imgui_demo.cpp">
+    <ClCompile Include="..\..\ext\imgui\imgui_demo.cpp">
       <Filter>ext\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\imgui\imgui_impl_glfw.cpp">
+    <ClCompile Include="..\..\ext\imgui\imgui_impl_glfw.cpp">
       <Filter>ext\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\imgui\imgui_impl_opengl3.cpp">
+    <ClCompile Include="..\..\ext\imgui\imgui_impl_opengl3.cpp">
       <Filter>ext\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\imgui\imgui_draw.cpp">
+    <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp">
       <Filter>ext\imgui\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\imgui\imgui_widgets.cpp">
+    <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp">
       <Filter>ext\imgui\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\imgui\imgui.cpp">
+    <ClCompile Include="..\..\ext\imgui\imgui.cpp">
       <Filter>ext\imgui\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\ext\tiny_obj_loader.cc">
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
       <Filter>ext</Filter>
     </ClCompile>
-    <ClCompile Include="..\cuda_util.cpp">
+    <ClCompile Include="..\..\cuda_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="..\optix_util.cpp">
+    <ClCompile Include="..\..\optix_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="uber_main.cpp" />
@@ -69,55 +69,55 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\ext\gl3w\include\GL\gl3w.h">
+    <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
       <Filter>ext\gl3w</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\gl3w\include\GL\glcorearb.h">
+    <ClInclude Include="..\..\ext\gl3w\include\GL\glcorearb.h">
       <Filter>ext\gl3w</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3.h">
+    <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3.h">
       <Filter>ext\glfw</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\glfw\include\GLFW\glfw3native.h">
+    <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3native.h">
       <Filter>ext\glfw</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imgui_impl_glfw.h">
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_glfw.h">
       <Filter>ext\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imgui_impl_opengl3.h">
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3.h">
       <Filter>ext\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imgui_internal.h">
+    <ClInclude Include="..\..\ext\imgui\imgui_internal.h">
       <Filter>ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imgui.h">
+    <ClInclude Include="..\..\ext\imgui\imgui.h">
       <Filter>ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imstb_rectpack.h">
+    <ClInclude Include="..\..\ext\imgui\imstb_rectpack.h">
       <Filter>ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imstb_textedit.h">
+    <ClInclude Include="..\..\ext\imgui\imstb_textedit.h">
       <Filter>ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imstb_truetype.h">
+    <ClInclude Include="..\..\ext\imgui\imstb_truetype.h">
       <Filter>ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\imgui\imconfig.h">
+    <ClInclude Include="..\..\ext\imgui\imconfig.h">
       <Filter>ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\stb_image.h">
+    <ClInclude Include="..\..\ext\stb_image.h">
       <Filter>ext</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\tiny_obj_loader.h">
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
       <Filter>ext</Filter>
     </ClInclude>
-    <ClInclude Include="..\optix_util.h">
+    <ClInclude Include="..\..\optix_util.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\optix_util_private.h">
+    <ClInclude Include="..\..\optix_util_private.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\cuda_util.h">
+    <ClInclude Include="..\..\cuda_util.h">
       <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="uber_shared.h" />
@@ -135,7 +135,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="..\ext\imgui\natvis\imgui.natvis">
+    <Natvis Include="..\..\ext\imgui\natvis\imgui.natvis">
       <Filter>ext\imgui</Filter>
     </Natvis>
   </ItemGroup>

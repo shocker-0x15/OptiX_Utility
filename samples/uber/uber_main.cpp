@@ -7,9 +7,9 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include "../ext/tiny_obj_loader.h"
+#include "../../ext/tiny_obj_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
-#include "../ext/stb_image.h"
+#include "../../ext/stb_image.h"
 #include "../common/dds_loader.h"
 
 
@@ -550,7 +550,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         int32_t width, height, mipCount;
         size_t* sizes;
         dds::Format format;
-        uint8_t** ddsData = dds::load("../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
+        uint8_t** ddsData = dds::load("../../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
                                        cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
@@ -561,7 +561,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         dds::free(ddsData, mipCount, sizes);
 #else
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("../data/checkerboard_line.png", &width, &height, &n, 4);
+        uint8_t* linearImageData = stbi_load("../../data/checkerboard_line.png", &width, &height, &n, 4);
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                        cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                        width, height, 1);
@@ -578,7 +578,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         int32_t width, height, mipCount;
         size_t* sizes;
         dds::Format format;
-        uint8_t** ddsData = dds::load("../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
+        uint8_t** ddsData = dds::load("../../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
 
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
                                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
@@ -589,7 +589,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         dds::free(ddsData, mipCount, sizes);
 #else
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("../data/grid.png", &width, &height, &n, 4);
+        uint8_t* linearImageData = stbi_load("../../data/grid.png", &width, &height, &n, 4);
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                width, height, 1);
@@ -798,7 +798,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::vector<tinyobj::material_t> materials;
         std::string warn;
         std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../data/subd_cube.obj");
+        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../../data/subd_cube.obj");
 
         constexpr float scale = 0.3f;
         

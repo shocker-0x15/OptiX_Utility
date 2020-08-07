@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "../optix_util.h"
+#include "../../optix_util.h"
 
 CUDA_DEVICE_FUNCTION float3 getXYZ(const float4 &v) {
     return make_float3(v.x, v.y, v.z);

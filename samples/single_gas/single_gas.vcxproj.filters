@@ -9,32 +9,32 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\cuda_util.cpp">
+    <ClCompile Include="..\..\cuda_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="..\optix_util.cpp">
+    <ClCompile Include="..\..\optix_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="single_gas_main.cpp" />
-    <ClCompile Include="..\ext\tiny_obj_loader.cc">
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
       <Filter>ext</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\cuda_util.h">
+    <ClInclude Include="..\..\cuda_util.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\optix_util.h">
+    <ClInclude Include="..\..\optix_util.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\optix_util_private.h">
+    <ClInclude Include="..\..\optix_util_private.h">
       <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="single_gas_shared.h" />
-    <ClInclude Include="..\ext\stb_image_write.h">
+    <ClInclude Include="..\..\ext\stb_image_write.h">
       <Filter>ext</Filter>
     </ClInclude>
-    <ClInclude Include="..\ext\tiny_obj_loader.h">
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
       <Filter>ext</Filter>
     </ClInclude>
   </ItemGroup>

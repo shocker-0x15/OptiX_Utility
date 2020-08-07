@@ -45,7 +45,7 @@
 #   include "stopwatch.h"
 #endif
 
-#include "../optix_util.h"
+#include "../../optix_util.h"
 #if !defined(__CUDA_ARCH__)
 #   define CUDA_DEVICE_FUNCTION inline
 #endif

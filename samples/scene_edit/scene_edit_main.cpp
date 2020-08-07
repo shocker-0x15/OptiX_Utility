@@ -12,7 +12,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #define STB_IMAGE_IMPLEMENTATION
-#include "../ext/stb_image.h"
+#include "../../ext/stb_image.h"
 #include "../common/dds_loader.h"
 
 
