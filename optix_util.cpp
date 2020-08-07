@@ -1477,8 +1477,8 @@ namespace optixu {
         return (new _ProgramGroup(m, group))->getPublicType();
     }
 
-    ProgramGroup Pipeline::createCallableGroup(Module module_DC, const char* entryFunctionNameDC,
-                                               Module module_CC, const char* entryFunctionNameCC) const {
+    ProgramGroup Pipeline::createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
+                                                      Module module_CC, const char* entryFunctionNameCC) const {
         _Module* _module_DC = extract(module_DC);
         _Module* _module_CC = extract(module_CC);
         THROW_RUNTIME_ERROR((_module_DC != nullptr) == (entryFunctionNameDC != nullptr),

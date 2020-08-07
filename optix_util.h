@@ -932,7 +932,7 @@ private: \
         void markDirty() const;
 
         // JP: 所属するTraversableのmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a traversable to which the instance belongs is required.
+        // EN: Calling markDirty() of a traversable to which the transform belongs is required.
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &trDeviceMem);
 
         bool isReady() const;
@@ -1026,8 +1026,8 @@ private: \
         ProgramGroup createHitProgramGroup(Module module_CH, const char* entryFunctionNameCH,
                                            Module module_AH, const char* entryFunctionNameAH,
                                            Module module_IS, const char* entryFunctionNameIS) const;
-        ProgramGroup createCallableGroup(Module module_DC, const char* entryFunctionNameDC,
-                                         Module module_CC, const char* entryFunctionNameCC) const;
+        ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
+                                                Module module_CC, const char* entryFunctionNameCC) const;
 
         void link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const;
 

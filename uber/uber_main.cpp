@@ -448,11 +448,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                                                              moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
 
     uint32_t callableProgramSampleTextureIndex = 0;
-    optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointTriangleIndex = 1;
-    optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointSphereIndex = 2;
-    optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
+    optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
     pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),

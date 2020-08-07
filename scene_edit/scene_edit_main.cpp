@@ -813,11 +813,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     io.Fonts->AddFontDefault();
 
+    ImFont* fontForFileDialog = nullptr;
     std::filesystem::path fontPath = exeDir / "fonts/RictyDiminished-Regular.ttf";
-    ImFont* fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.u8string().c_str(), 14.0f, nullptr,
-                                                             io.Fonts->GetGlyphRangesJapanese());
-    if (fontForFileDialog == nullptr)
-        hpprintf("Font Not Found!: %s\n", fontPath.u8string().c_str());
+    if (std::filesystem::exists(fontPath)) {
+        fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.u8string().c_str(), 14.0f, nullptr,
+                                                         io.Fonts->GetGlyphRangesJapanese());
+    }
+    else {
+        hpprintf("Font for Japanese not found: %s\n", fontPath.u8string().c_str());
+    }
 
     // END: Initialize ImGui.
     // ----------------------------------------------------------------
