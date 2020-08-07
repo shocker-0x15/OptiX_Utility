@@ -4,6 +4,120 @@
 #include "../ext/stb_image_write.h"
 #include "../ext/tiny_obj_loader.h"
 
+struct AABB {
+    float3 minP;
+    float3 maxP;
+    AABB() : minP(INFINITY), maxP(-INFINITY) {}
+
+    AABB &unify(const float3 &p) {
+        minP = min(minP, p);
+        maxP = max(maxP, p);
+        return *this;
+    }
+
+    AABB &dilate(float scale) {
+        float3 d = maxP - minP;
+        minP -= 0.5f * d;
+        maxP += 0.5f * d;
+        return *this;
+    }
+};
+
+static void loadObj(const std::string &filepath,
+                    std::vector<Shared::Vertex>* vertices,
+                    std::vector<Shared::Triangle>* triangles,
+                    AABB* bbox) {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn;
+    std::string err;
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str());
+
+    // Record unified unique vertices.
+    std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
+                tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
+                auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
+                unifiedVertexMap[key] = Shared::Vertex{
+                    make_float3(attrib.vertices[3 * idx.vertex_index + 0],
+                                attrib.vertices[3 * idx.vertex_index + 1],
+                                attrib.vertices[3 * idx.vertex_index + 2]),
+                    make_float3(0, 0, 0),
+                    make_float2(0, 0)
+                };
+            }
+
+            idxOffset += numFaceVertices;
+        }
+    }
+
+    // Assign a vertex index to each of unified unique unifiedVertexMap.
+    std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
+    vertices->resize(unifiedVertexMap.size());
+    uint32_t vertexIndex = 0;
+    *bbox = AABB();
+    for (const auto &kv : unifiedVertexMap) {
+        (*vertices)[vertexIndex] = kv.second;
+        vertexIndices[kv.first] = vertexIndex++;
+        bbox->unify(kv.second.position);
+    }
+    unifiedVertexMap.clear();
+
+    // Calculate triangle index buffer.
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
+            tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
+            tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
+            auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
+            auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
+            auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
+
+            triangles->push_back(Shared::Triangle{
+                vertexIndices.at(key0),
+                vertexIndices.at(key1),
+                vertexIndices.at(key2) });
+
+            idxOffset += numFaceVertices;
+        }
+    }
+    vertexIndices.clear();
+
+    for (int tIdx = 0; tIdx < triangles->size(); ++tIdx) {
+        const Shared::Triangle &tri = (*triangles)[tIdx];
+        Shared::Vertex &v0 = (*vertices)[tri.index0];
+        Shared::Vertex &v1 = (*vertices)[tri.index1];
+        Shared::Vertex &v2 = (*vertices)[tri.index2];
+        float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
+        v0.normal += gn;
+        v1.normal += gn;
+        v2.normal += gn;
+    }
+    for (int vIdx = 0; vIdx < vertices->size(); ++vIdx) {
+        Shared::Vertex &v = (*vertices)[vIdx];
+        v.normal = normalize(v.normal);
+    }
+}
+
 int32_t mainFunc(int32_t argc, const char* argv[]) {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
@@ -106,14 +220,39 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::Scene scene = optixContext.createScene();
 
     cudau::TypedBuffer<Shared::GeometryData> geomDataBuffer;
-    geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
+    geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 16);
     Shared::GeometryData* geomData = geomDataBuffer.map();
 
     uint32_t geomInstIndex = 0;
 
-    optixu::GeometryInstance geomInstBox = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferBox;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferBox;
+    size_t maxSizeOfScratchBuffer = 0;
+    OptixAccelBufferSizes asMemReqs;
+
+    // JP: このサンプルではマルチレベルインスタンシングやトランスフォームに焦点を当て、
+    //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
+    // EN: Use one GeometryInstance per GAS for simplicty and
+    //     to focus on multi-level instancing and transforms in this sample.
+    struct Geometry {
+        cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
+        cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
+        AABB bbox;
+        optixu::GeometryInstance optixGeomInst;
+        optixu::GeometryAccelerationStructure optixGas;
+        cudau::Buffer gasMem;
+        cudau::Buffer compactedGasMem;
+        size_t compactedSize;
+
+        void finalize() {
+            compactedGasMem.finalize();
+            gasMem.finalize();
+            optixGas.destroy();
+            triangleBuffer.finalize();
+            vertexBuffer.finalize();
+            optixGeomInst.destroy();
+        }
+    };
+
+    Geometry room;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -156,25 +295,40 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        vertexBufferBox.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferBox.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        for (int i = 0; i < lengthof(triangles); ++i) {
+            const Shared::Triangle &tri = triangles[i];
+            room.bbox.unify(vertices[tri.index0].position);
+            room.bbox.unify(vertices[tri.index1].position);
+            room.bbox.unify(vertices[tri.index2].position);
+        }
 
-        geomInstBox.setVertexBuffer(&vertexBufferBox);
-        geomInstBox.setTriangleBuffer(&triangleBufferBox);
-        geomInstBox.setNumMaterials(1, nullptr);
-        geomInstBox.setMaterial(0, 0, mat0);
-        geomInstBox.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBox.setUserData(geomInstIndex);
+        room.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        room.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomData[geomInstIndex].vertexBuffer = vertexBufferBox.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferBox.getDevicePointer();
+        room.optixGeomInst = scene.createGeometryInstance();
+        room.optixGeomInst.setVertexBuffer(&room.vertexBuffer);
+        room.optixGeomInst.setTriangleBuffer(&room.triangleBuffer);
+        room.optixGeomInst.setNumMaterials(1, nullptr);
+        room.optixGeomInst.setMaterial(0, 0, mat0);
+        room.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        room.optixGeomInst.setUserData(geomInstIndex);
+
+        geomData[geomInstIndex].vertexBuffer = room.vertexBuffer.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = room.triangleBuffer.getDevicePointer();
 
         ++geomInstIndex;
+
+        room.optixGas = scene.createGeometryAccelerationStructure();
+        room.optixGas.setConfiguration(true, false, true, false);
+        room.optixGas.setNumMaterialSets(1);
+        room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        room.optixGas.addChild(room.optixGeomInst);
+        room.optixGas.prepareForBuild(&asMemReqs);
+        room.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
-    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
+    Geometry areaLight;
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -187,207 +341,140 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        for (int i = 0; i < lengthof(triangles); ++i) {
+            const Shared::Triangle &tri = triangles[i];
+            areaLight.bbox.unify(vertices[tri.index0].position);
+            areaLight.bbox.unify(vertices[tri.index1].position);
+            areaLight.bbox.unify(vertices[tri.index2].position);
+        }
 
-        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
-        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
-        geomInstAreaLight.setNumMaterials(1, nullptr);
-        geomInstAreaLight.setMaterial(0, 0, mat0);
-        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomInstIndex);
+        areaLight.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        areaLight.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+        areaLight.optixGeomInst = scene.createGeometryInstance();
+        areaLight.optixGeomInst.setVertexBuffer(&areaLight.vertexBuffer);
+        areaLight.optixGeomInst.setTriangleBuffer(&areaLight.triangleBuffer);
+        areaLight.optixGeomInst.setNumMaterials(1, nullptr);
+        areaLight.optixGeomInst.setMaterial(0, 0, mat0);
+        areaLight.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        areaLight.optixGeomInst.setUserData(geomInstIndex);
+
+        geomData[geomInstIndex].vertexBuffer = areaLight.vertexBuffer.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = areaLight.triangleBuffer.getDevicePointer();
 
         ++geomInstIndex;
+
+        areaLight.optixGas = scene.createGeometryAccelerationStructure();
+        areaLight.optixGas.setConfiguration(true, false, true, false);
+        areaLight.optixGas.setNumMaterialSets(1);
+        areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        areaLight.optixGas.addChild(areaLight.optixGeomInst);
+        areaLight.optixGas.prepareForBuild(&asMemReqs);
+        areaLight.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
-    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
-    float3 bboxMinBunny = make_float3(INFINITY);
-    float3 bboxMaxBunny  = make_float3(-INFINITY);
+    Geometry bunny;
     {
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn;
-        std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../data/stanford_bunny_309_faces.obj");
-
-        constexpr float scale = 1.0f;
-
-        // Record unified unique vertices.
-        std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
-                    tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
-                    auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
-                    unifiedVertexMap[key] = Shared::Vertex{
-                        make_float3(scale * attrib.vertices[3 * idx.vertex_index + 0],
-                        scale * attrib.vertices[3 * idx.vertex_index + 1],
-                        scale * attrib.vertices[3 * idx.vertex_index + 2]),
-                        make_float3(0, 0, 0),
-                        make_float2(0, 0)
-                    };
-                }
-
-                idxOffset += numFaceVertices;
-            }
-        }
-
-        // Assign a vertex index to each of unified unique unifiedVertexMap.
-        std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
-        std::vector<Shared::Vertex> vertices(unifiedVertexMap.size());
-        uint32_t vertexIndex = 0;
-        for (const auto &kv : unifiedVertexMap) {
-            vertices[vertexIndex] = kv.second;
-            vertexIndices[kv.first] = vertexIndex++;
-            float3 p = kv.second.position;
-            bboxMinBunny = min(bboxMinBunny, p);
-            bboxMaxBunny = max(bboxMaxBunny, p);
-        }
-        unifiedVertexMap.clear();
-
-        // Calculate triangle index buffer.
+        std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
+        loadObj("../data/stanford_bunny_309_faces.obj",
+                &vertices, &triangles,
+                &bunny.bbox);
 
-                tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
-                tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
-                tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-                auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
-                auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
-                auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
+        bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        bunny.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
-                triangles.push_back(Shared::Triangle{
-                    vertexIndices.at(key0),
-                    vertexIndices.at(key1),
-                    vertexIndices.at(key2) });
+        bunny.optixGeomInst = scene.createGeometryInstance();
+        bunny.optixGeomInst.setVertexBuffer(&bunny.vertexBuffer);
+        bunny.optixGeomInst.setTriangleBuffer(&bunny.triangleBuffer);
+        bunny.optixGeomInst.setNumMaterials(1, nullptr);
+        bunny.optixGeomInst.setMaterial(0, 0, mat0);
+        bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        bunny.optixGeomInst.setUserData(geomInstIndex);
 
-                idxOffset += numFaceVertices;
-            }
-        }
-        vertexIndices.clear();
-
-        for (int tIdx = 0; tIdx < triangles.size(); ++tIdx) {
-            const Shared::Triangle &tri = triangles[tIdx];
-            Shared::Vertex &v0 = vertices[tri.index0];
-            Shared::Vertex &v1 = vertices[tri.index1];
-            Shared::Vertex &v2 = vertices[tri.index2];
-            float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-            v0.normal += gn;
-            v1.normal += gn;
-            v2.normal += gn;
-        }
-        for (int vIdx = 0; vIdx < vertices.size(); ++vIdx) {
-            Shared::Vertex &v = vertices[vIdx];
-            v.normal = normalize(v.normal);
-        }
-
-        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
-
-        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
-        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
-        geomInstBunny.setNumMaterials(1, nullptr);
-        geomInstBunny.setMaterial(0, 0, mat0);
-        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunny.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferBunny.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferBunny.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = bunny.vertexBuffer.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = bunny.triangleBuffer.getDevicePointer();
 
         ++geomInstIndex;
+
+        bunny.optixGas = scene.createGeometryAccelerationStructure();
+        bunny.optixGas.setConfiguration(true, false, true, false);
+        bunny.optixGas.setNumMaterialSets(1);
+        bunny.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        bunny.optixGas.addChild(bunny.optixGeomInst);
+        bunny.optixGas.prepareForBuild(&asMemReqs);
+        bunny.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    }
+
+    Geometry cube;
+    {
+        std::vector<Shared::Vertex> vertices;
+        std::vector<Shared::Triangle> triangles;
+        loadObj("../data/subd_cube.obj",
+                &vertices, &triangles,
+                &cube.bbox);
+
+        cube.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        cube.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
+
+        cube.optixGeomInst = scene.createGeometryInstance();
+        cube.optixGeomInst.setVertexBuffer(&cube.vertexBuffer);
+        cube.optixGeomInst.setTriangleBuffer(&cube.triangleBuffer);
+        cube.optixGeomInst.setNumMaterials(1, nullptr);
+        cube.optixGeomInst.setMaterial(0, 0, mat0);
+        cube.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        cube.optixGeomInst.setUserData(geomInstIndex);
+
+        geomData[geomInstIndex].vertexBuffer = cube.vertexBuffer.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = cube.triangleBuffer.getDevicePointer();
+
+        ++geomInstIndex;
+
+        cube.optixGas = scene.createGeometryAccelerationStructure();
+        cube.optixGas.setConfiguration(true, false, true, false);
+        cube.optixGas.setNumMaterialSets(1);
+        cube.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        cube.optixGas.addChild(cube.optixGeomInst);
+        cube.optixGas.prepareForBuild(&asMemReqs);
+        cube.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
     geomDataBuffer.unmap();
 
 
 
-    size_t maxSizeOfScratchBuffer = 0;
-    OptixAccelBufferSizes asMemReqs;
-
     cudau::Buffer asBuildScratchMem;
-
-    // JP: Geometry Acceleration Structureを生成する。
-    // EN: Create geometry acceleration structures.
-    optixu::GeometryAccelerationStructure gasBox = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasBoxMem;
-    cudau::Buffer gasBoxCompactedMem;
-    gasBox.setConfiguration(true, false, true, false);
-    gasBox.setNumMaterialSets(1);
-    gasBox.setNumRayTypes(0, Shared::NumRayTypes);
-    gasBox.addChild(geomInstBox);
-    gasBox.prepareForBuild(&asMemReqs);
-    gasBoxMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasAreaLightMem;
-    cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(true, false, true, false);
-    gasAreaLight.setNumMaterialSets(1);
-    gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
-    gasAreaLight.addChild(geomInstAreaLight);
-    gasAreaLight.prepareForBuild(&asMemReqs);
-    gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    optixu::GeometryAccelerationStructure gasBunny = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasBunnyMem;
-    cudau::Buffer gasBunnyCompactedMem;
-    gasBunny.setConfiguration(true, false, true, false);
-    gasBunny.setNumMaterialSets(1);
-    gasBunny.setNumRayTypes(0, Shared::NumRayTypes);
-    gasBunny.addChild(geomInstBunny);
-    gasBunny.prepareForBuild(&asMemReqs);
-    gasBunnyMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    gasBox.rebuild(cuStream, gasBoxMem, asBuildScratchMem);
-    gasAreaLight.rebuild(cuStream, gasAreaLightMem, asBuildScratchMem);
-    gasBunny.rebuild(cuStream, gasBunnyMem, asBuildScratchMem);
+    room.optixGas.rebuild(cuStream, room.gasMem, asBuildScratchMem);
+    areaLight.optixGas.rebuild(cuStream, areaLight.gasMem, asBuildScratchMem);
+    bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
+    cube.optixGas.rebuild(cuStream, cube.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
-    size_t gasBoxCompactedSize;
-    gasBox.prepareForCompact(&gasBoxCompactedSize);
-    gasBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasBoxCompactedSize, 1);
-    size_t gasAreaLightCompactedSize;
-    gasAreaLight.prepareForCompact(&gasAreaLightCompactedSize);
-    gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasAreaLightCompactedSize, 1);
-    size_t gasBunnyCompactedSize;
-    gasBunny.prepareForCompact(&gasBunnyCompactedSize);
-    gasBunnyCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasBunnyCompactedSize, 1);
+    room.optixGas.prepareForCompact(&room.compactedSize);
+    room.compactedGasMem.initialize(cuContext, cudau::BufferType::Device, room.compactedSize, 1);
+    areaLight.optixGas.prepareForCompact(&areaLight.compactedSize);
+    areaLight.compactedGasMem.initialize(cuContext, cudau::BufferType::Device, areaLight.compactedSize, 1);
+    bunny.optixGas.prepareForCompact(&bunny.compactedSize);
+    bunny.compactedGasMem.initialize(cuContext, cudau::BufferType::Device, bunny.compactedSize, 1);
+    cube.optixGas.prepareForCompact(&cube.compactedSize);
+    cube.compactedGasMem.initialize(cuContext, cudau::BufferType::Device, cube.compactedSize, 1);
 
-    gasBox.compact(cuStream, gasBoxCompactedMem);
-    gasBox.removeUncompacted();
-    gasAreaLight.compact(cuStream, gasAreaLightCompactedMem);
-    gasAreaLight.removeUncompacted();
-    gasBunny.compact(cuStream, gasBunnyCompactedMem);
-    gasBunny.removeUncompacted();
+    room.optixGas.compact(cuStream, room.compactedGasMem);
+    room.optixGas.removeUncompacted();
+    areaLight.optixGas.compact(cuStream, areaLight.compactedGasMem);
+    areaLight.optixGas.removeUncompacted();
+    bunny.optixGas.compact(cuStream, bunny.compactedGasMem);
+    bunny.optixGas.removeUncompacted();
+    cube.optixGas.compact(cuStream, cube.compactedGasMem);
+    cube.optixGas.removeUncompacted();
 
 
 
@@ -404,8 +491,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     // JP: インスタンスを作成する。
     // EN: Create instances.
-    optixu::Instance instBox = scene.createInstance();
-    instBox.setChild(gasBox);
+    optixu::Instance instRoom = scene.createInstance();
+    instRoom.setChild(room.optixGas);
 
     float instAreaLightTr[] = {
         1, 0, 0, 0,
@@ -413,60 +500,113 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         0, 0, 1, 0
     };
     optixu::Instance instAreaLight = scene.createInstance();
-    instAreaLight.setChild(gasAreaLight);
+    instAreaLight.setChild(areaLight.optixGas);
     instAreaLight.setTransform(instAreaLightTr);
 
     constexpr uint32_t NumBunnies = 100;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
     struct Transform {
-        float3 scale[2];
-        Quaternion orientation[2];
-        float3 translation[2];
+        struct SRT {
+            float3 s;
+            Quaternion o;
+            float3 t;
+        };
+        std::vector<SRT> srts;
         optixu::Transform optixTransform;
         cudau::Buffer* deviceMem; // TODO?: define move constructor.
     };
-    std::vector<Transform> transformsBunny;
-    std::vector<optixu::Instance> instsBunny;
-    for (int i = 0; i < NumBunnies; ++i) {
-        float t = static_cast<float>(i) / (NumBunnies - 1);
-        float r = 0.9f * std::pow(t, 0.5f);
-        float x = r * std::cos(GoldenAngle * i);
-        float z = r * std::sin(GoldenAngle * i);
+    std::vector<Transform> transformsObject;
+    std::vector<optixu::Instance> instsObject;
+    std::vector<AABB> baseAABBsObject;
 
-        float tt = std::pow(t, 0.25f);
-        float scale = (1 - tt) * 0.003f + tt * 0.0006f;
-        float y = -1 + (1 - tt);
-
+    // Bunny
+    {
         Transform tr;
-        tr.scale[0] = make_float3(scale);
-        tr.orientation[0] = Quaternion(0, 0, 0, 1);
-        tr.translation[0] = make_float3(x, y, z);
-        tr.scale[1] = make_float3(scale);
-        tr.orientation[1] = Quaternion(0, 0, 0, 1);
-        tr.translation[1] = make_float3(x, y + 0.1f, z);
+        Transform::SRT srt0;
+        srt0.s = make_float3(0.005f);
+        srt0.o = Quaternion(0, 0, 0, 1);
+        srt0.t = make_float3(-0.5f, -1.0f, 0);
+        tr.srts.push_back(srt0);
+        Transform::SRT srt1;
+        srt1.s = make_float3(0.005f);
+        srt1.o = Quaternion(0, 0, 0, 1);
+        srt1.t = make_float3(-0.5f, -1.0f + 0.1f, 0);
+        tr.srts.push_back(srt1);
+        Transform::SRT srt2;
+        srt2.s = make_float3(0.005f);
+        srt2.o = Quaternion(0, 0, 0, 1);
+        srt2.t = make_float3(-0.5f, -1.0f + 0.2f, 0);
+        tr.srts.push_back(srt2);
 
         size_t trMemSize;
         tr.optixTransform = scene.createTransform();
-        tr.optixTransform.setConfiguration(optixu::TransformType::SRTMotion, 2, &trMemSize);
+        tr.optixTransform.setConfiguration(optixu::TransformType::SRTMotion, tr.srts.size(), &trMemSize);
         tr.optixTransform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        tr.optixTransform.setChild(gasBunny);
-        tr.optixTransform.setSRTMotionKey(0,
-                                          reinterpret_cast<float*>(&tr.scale[0]),
-                                          reinterpret_cast<float*>(&tr.orientation[0]),
-                                          reinterpret_cast<float*>(&tr.translation[0]));
-        tr.optixTransform.setSRTMotionKey(1,
-                                          reinterpret_cast<float*>(&tr.scale[1]),
-                                          reinterpret_cast<float*>(&tr.orientation[1]),
-                                          reinterpret_cast<float*>(&tr.translation[1]));
+        tr.optixTransform.setChild(bunny.optixGas);
+        for (int keyIdx = 0; keyIdx < tr.srts.size(); ++keyIdx)
+            tr.optixTransform.setSRTMotionKey(keyIdx,
+                                              reinterpret_cast<float*>(&tr.srts[keyIdx].s),
+                                              reinterpret_cast<float*>(&tr.srts[keyIdx].o),
+                                              reinterpret_cast<float*>(&tr.srts[keyIdx].t));
         tr.deviceMem = new cudau::Buffer;
         tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
         tr.optixTransform.rebuild(cuStream, *tr.deviceMem);
-        transformsBunny.push_back(tr);
-        
-        optixu::Instance instBunny = scene.createInstance();
-        instBunny.setChild(tr.optixTransform);
-        instsBunny.push_back(instBunny);
+        transformsObject.push_back(tr);
+
+        optixu::Instance inst = scene.createInstance();
+        inst.setChild(tr.optixTransform);
+        instsObject.push_back(inst);
+
+        baseAABBsObject.push_back(bunny.bbox);
+    }
+
+    // Cube
+    {
+        Transform tr;
+        Transform::SRT srt0;
+        srt0.s = make_float3(0.25f);
+        srt0.o = Quaternion(0, 0, 0, 1);
+        srt0.t = make_float3(0, -0.5f, 0);
+        tr.srts.push_back(srt0);
+        Transform::SRT srt1;
+        srt1.s = make_float3(0.25f);
+        srt1.o = qRotateX(M_PI / 2);
+        srt1.t = make_float3(0, -0.5f, 0);
+        tr.srts.push_back(srt1);
+        Transform::SRT srt2;
+        srt2.s = make_float3(0.25f);
+        srt2.o = qRotateX(M_PI);
+        srt2.t = make_float3(0, -0.5f, 0);
+        tr.srts.push_back(srt2);
+
+        size_t trMemSize;
+        tr.optixTransform = scene.createTransform();
+        tr.optixTransform.setConfiguration(optixu::TransformType::SRTMotion, tr.srts.size(), &trMemSize);
+        tr.optixTransform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+        tr.optixTransform.setChild(cube.optixGas);
+        for (int keyIdx = 0; keyIdx < tr.srts.size(); ++keyIdx)
+            tr.optixTransform.setSRTMotionKey(keyIdx,
+                                              reinterpret_cast<float*>(&tr.srts[keyIdx].s),
+                                              reinterpret_cast<float*>(&tr.srts[keyIdx].o),
+                                              reinterpret_cast<float*>(&tr.srts[keyIdx].t));
+        tr.deviceMem = new cudau::Buffer;
+        tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
+        tr.optixTransform.rebuild(cuStream, *tr.deviceMem);
+        transformsObject.push_back(tr);
+
+        optixu::Instance inst = scene.createInstance();
+        inst.setChild(tr.optixTransform);
+        Matrix3x3 rotMat = rotate3x3(M_PI / 2, 0, 1, 0);
+        float instXfm[] = {
+            rotMat.m00, rotMat.m01, rotMat.m02, 0.5f,
+            rotMat.m10, rotMat.m11, rotMat.m12, 0.0f,
+            rotMat.m20, rotMat.m21, rotMat.m22, 0.0f,
+        };
+        inst.setTransform(instXfm);
+        instsObject.push_back(inst);
+
+        baseAABBsObject.push_back(cube.bbox);
     }
 
 
@@ -479,13 +619,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t numAABBs;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     cudau::TypedBuffer<OptixAabb> aabbBuffer;
-    constexpr uint32_t numMotionKeys = 2;
+    constexpr uint32_t numMotionKeys = 3;
     lowerIas.setConfiguration(true, false, false);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-    lowerIas.addChild(instBox);
+    lowerIas.addChild(instRoom);
     lowerIas.addChild(instAreaLight);
-    for (int i = 0; i < instsBunny.size(); ++i)
-        lowerIas.addChild(instsBunny[i]);
+    for (int i = 0; i < instsObject.size(); ++i)
+        lowerIas.addChild(instsObject[i]);
     lowerIas.prepareForBuild(&asMemReqs, &numInstances, &numAABBs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
@@ -500,51 +640,51 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     {
         OptixAabb* aabbs = aabbBuffer.map();
         // First two instances don't require AABBs and its values will be ignored.
-        for (int instIdx = 2; instIdx < (2 + instsBunny.size()); ++instIdx) {
-            const Transform &trBunny = transformsBunny[instIdx - 2];
+        for (int instIdx = 2; instIdx < (2 + instsObject.size()); ++instIdx) {
+            const Transform &tr = transformsObject[instIdx - 2];
+            const AABB &baseAABB = baseAABBsObject[instIdx - 2];
             for (int keyIdx = 0; keyIdx < numMotionKeys; ++keyIdx) {
                 OptixAabb &aabb = aabbs[instIdx * numMotionKeys + keyIdx];
 
+                const Transform::SRT &srt = tr.srts[keyIdx];
                 Matrix3x3 sr =
-                    trBunny.orientation[keyIdx].toMatrix3x3() *
-                    scale3x3(trBunny.scale[keyIdx]);
-                float3 trans = trBunny.translation[keyIdx];
+                    srt.o.toMatrix3x3() *
+                    scale3x3(srt.s);
+                float3 trans = srt.t;
 
                 float3 c;
-                float3 minP = make_float3(INFINITY);
-                float3 maxP = make_float3(-INFINITY);
+                AABB trBBox;
 
-                c = sr * float3(bboxMinBunny.x, bboxMinBunny.y, bboxMinBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMaxBunny.x, bboxMinBunny.y, bboxMinBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMinBunny.x, bboxMaxBunny.y, bboxMinBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMaxBunny.x, bboxMaxBunny.y, bboxMinBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMinBunny.x, bboxMinBunny.y, bboxMaxBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMaxBunny.x, bboxMinBunny.y, bboxMaxBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMinBunny.x, bboxMaxBunny.y, bboxMaxBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
-                c = sr * float3(bboxMaxBunny.x, bboxMaxBunny.y, bboxMaxBunny.z) + trans;
-                minP = min(minP, c);
-                maxP = max(maxP, c);
+                c = sr * float3(baseAABB.minP.x, baseAABB.minP.y, baseAABB.minP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.maxP.x, baseAABB.minP.y, baseAABB.minP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.minP.x, baseAABB.maxP.y, baseAABB.minP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.maxP.x, baseAABB.maxP.y, baseAABB.minP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.minP.x, baseAABB.minP.y, baseAABB.maxP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.maxP.x, baseAABB.minP.y, baseAABB.maxP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.minP.x, baseAABB.maxP.y, baseAABB.maxP.z) + trans;
+                trBBox.unify(c);
+                c = sr * float3(baseAABB.maxP.x, baseAABB.maxP.y, baseAABB.maxP.z) + trans;
+                trBBox.unify(c);
 
-                aabb.minX = minP.x;
-                aabb.minY = minP.y;
-                aabb.minZ = minP.z;
-                aabb.maxX = maxP.x;
-                aabb.maxY = maxP.y;
-                aabb.maxZ = maxP.z;
+                // JP: 回転が絡む場合、キーフレーム間の頂点の軌跡をすべて内包する最小限のAABBを計算するのは
+                //     結構複雑になる。ここでは簡単のために各キーにおけるAABBを単純に2倍に拡大する。
+                // EN: It is fairly complex to compute a tight AABB which contains all trajectories of vertices
+                //     between keyframes when rotation is involved.
+                //     Simply dilate the AABB of each key by 2 for simplicity here.
+                trBBox.dilate(2.0f);
+
+                aabb.minX = trBBox.minP.x;
+                aabb.minY = trBBox.minP.y;
+                aabb.minZ = trBBox.minP.z;
+                aabb.maxX = trBBox.maxP.x;
+                aabb.maxY = trBBox.maxP.y;
+                aabb.maxZ = trBBox.maxP.z;
             }
         }
         aabbBuffer.unmap();
@@ -558,7 +698,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     topInstA.setChild(lowerIas);
     float instATr[] = {
         1, 0, 0, -1.25f,
-        0, 1, 0, 0,
+        0, 1, 0, -1.25f,
         0, 0, 1, 0
     };
     topInstA.setTransform(instATr);
@@ -567,10 +707,28 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     topInstB.setChild(lowerIas);
     float instBTr[] = {
         1, 0, 0, 1.25f,
-        0, 1, 0, 0,
+        0, 1, 0, -1.25f,
         0, 0, 1, 0
     };
     topInstB.setTransform(instBTr);
+
+    optixu::Instance topInstC = scene.createInstance();
+    topInstC.setChild(lowerIas);
+    float instCTr[] = {
+        1, 0, 0, -1.25f,
+        0, 1, 0, 1.25f,
+        0, 0, 1, 0
+    };
+    topInstC.setTransform(instCTr);
+
+    optixu::Instance topInstD = scene.createInstance();
+    topInstD.setChild(lowerIas);
+    float instDTr[] = {
+        1, 0, 0, 1.25f,
+        0, 1, 0, 1.25f,
+        0, 0, 1, 0
+    };
+    topInstD.setTransform(instDTr);
     
     // JP: 最上位のInstance Acceleration Structureを生成する。
     // EN: Create an instance acceleration structure of the top layer.
@@ -581,6 +739,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     topIas.setConfiguration(true, false, false);
     topIas.addChild(topInstA);
     topIas.addChild(topInstB);
+    topIas.addChild(topInstC);
+    topIas.addChild(topInstD);
     topIas.prepareForBuild(&asMemReqs, &numTopInstances);
     topIasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     topInstanceBuffer.initialize(cuContext, cudau::BufferType::Device, numTopInstances);
@@ -631,7 +791,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.numAccumFrames = 0;
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 0, 3.5);
+    plp.camera.position = make_float3(0, 0, 6.0);
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
@@ -678,6 +838,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     topIasMem.finalize();
     topIas.destroy();
 
+    topInstD.destroy();
+    topInstC.destroy();
     topInstB.destroy();
     topInstA.destroy();
 
@@ -688,36 +850,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     shaderBindingTable.finalize();
 
-    for (int i = instsBunny.size() - 1; i >= 0; --i) {
-        instsBunny[i].destroy();
-        transformsBunny[i].deviceMem->finalize();
-        delete transformsBunny[i].deviceMem;
-        transformsBunny[i].optixTransform.destroy();
+    for (int i = instsObject.size() - 1; i >= 0; --i) {
+        instsObject[i].destroy();
+        transformsObject[i].deviceMem->finalize();
+        delete transformsObject[i].deviceMem;
+        transformsObject[i].optixTransform.destroy();
     }
     instAreaLight.destroy();
-    instBox.destroy();
+    instRoom.destroy();
 
-    gasBunnyCompactedMem.finalize();
-    gasAreaLightCompactedMem.finalize();
-    gasBoxCompactedMem.finalize();
-    gasBunnyMem.finalize();
-    gasBunny.destroy();
-    gasAreaLightMem.finalize();
-    gasAreaLight.destroy();
-    gasBoxMem.finalize();
-    gasBox.destroy();
-
-    triangleBufferBunny.finalize();
-    vertexBufferBunny.finalize();
-    geomInstBunny.destroy();
-    
-    triangleBufferAreaLight.finalize();
-    vertexBufferAreaLight.finalize();
-    geomInstAreaLight.destroy();
-
-    triangleBufferBox.finalize();
-    vertexBufferBox.finalize();
-    geomInstBox.destroy();
+    cube.finalize();
+    bunny.finalize();
+    areaLight.finalize();
+    room.finalize();
 
     geomDataBuffer.finalize();
 

@@ -80,7 +80,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     float b0 = 1 - (hp.b1 + hp.b2);
     float3 sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
 
-    sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
+    sn = normalize(sn);
 
     // JP: 法線を可視化。
     // EN: Visualize the normal.
