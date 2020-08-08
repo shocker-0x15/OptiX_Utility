@@ -101,6 +101,7 @@ namespace optixu {
     OPTIX_ALIAS_PIMPL(Pipeline);
     OPTIX_ALIAS_PIMPL(Module);
     OPTIX_ALIAS_PIMPL(ProgramGroup);
+    OPTIX_ALIAS_PIMPL(Denoiser);
 
 
 
@@ -894,6 +895,44 @@ namespace optixu {
 
         void packHeader(uint8_t* record) const {
             OPTIX_CHECK(optixSbtRecordPackHeader(rawGroup, record));
+        }
+    };
+
+
+
+    class Denoiser::Priv {
+        const _Context* context;
+        OptixDenoiser rawDenoiser;
+
+        uint32_t maxInputWidth;
+        uint32_t maxInputHeight;
+        OptixDenoiserSizes memoryRequirement;
+
+        const Buffer* stateBuffer;
+        const Buffer* scratchBuffer;
+        struct {
+            unsigned int readyToDenoise : 1;
+        };
+
+    public:
+        OPTIX_OPAQUE_BRIDGE(Denoiser);
+
+        Priv(const _Context* ctxt, OptixDenoiserInputKind inputKind) :
+            context(ctxt),
+            readyToDenoise(false) {
+            OptixDenoiserOptions options = {};
+            options.inputKind = inputKind;
+            OPTIX_CHECK(optixDenoiserCreate(context->getRawContext(), &options, &rawDenoiser));
+        }
+        ~Priv() {
+            optixDenoiserDestroy(rawDenoiser);
+        }
+
+        CUcontext getCUDAContext() const {
+            return context->getCUDAContext();
+        }
+        OptixDeviceContext getRawContext() const {
+            return context->getRawContext();
         }
     };
 }

@@ -53,6 +53,10 @@ namespace optixu {
         return (new _Pipeline(m))->getPublicType();
     }
 
+    Denoiser Context::createDenoiser(OptixDenoiserInputKind inputKind) const {
+        return (new _Denoiser(m, inputKind))->getPublicType();
+    }
+
     CUcontext Context::getCUcontext() const {
         return m->cudaContext;
     }
@@ -1650,5 +1654,67 @@ namespace optixu {
 
     void ProgramGroup::getStackSize(OptixStackSizes* sizes) const {
         OPTIX_CHECK(optixProgramGroupGetStackSize(m->rawGroup, sizes));
+    }
+
+
+
+    void Denoiser::destroy() {
+        delete m;
+        m = nullptr;
+    }
+
+    void Denoiser::setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const {
+        THROW_RUNTIME_ERROR(kind != OPTIX_DENOISER_MODEL_KIND_USER ^ data != nullptr,
+                            "When a user model is used, data must be provided, otherwise data must be null.");
+        OPTIX_CHECK(optixDenoiserSetModel(m->rawDenoiser, kind, data, sizeInBytes));
+
+        m->readyToDenoise = false;
+    }
+
+    void Denoiser::computeMemoryResources(uint32_t maxInputWidth, uint32_t maxInputHeight, OptixDenoiserSizes* sizes) const {
+        m->maxInputWidth = maxInputWidth;
+        m->maxInputHeight = maxInputHeight;
+        OPTIX_CHECK(optixDenoiserComputeMemoryResources(m->rawDenoiser, m->maxInputWidth, m->maxInputHeight, &m->memoryRequirement));
+        *sizes = m->memoryRequirement;
+    }
+
+    void Denoiser::setup(CUstream stream, uint32_t width, uint32_t height,
+                         const Buffer &stateBuffer, const Buffer &scratchBuffer) const {
+        THROW_RUNTIME_ERROR(stateBuffer.sizeInBytes() >= m->memoryRequirement.stateSizeInBytes,
+                            "Size of the given state buffer is not enough.");
+        //THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.,
+        //                    "Size of the given state buffer is not enough.");
+        OPTIX_CHECK(optixDenoiserSetup(m->rawDenoiser, stream,
+                                       width, height,
+                                       stateBuffer.getCUdeviceptr(), stateBuffer.sizeInBytes(),
+                                       scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
+
+        m->stateBuffer = &stateBuffer;
+        m->scratchBuffer = &scratchBuffer;
+        m->readyToDenoise = true;
+    }
+
+    void Denoiser::computeIntensity(CUstream stream, const OptixImage2D &inputImage, CUdeviceptr outputIntensity) {
+        OPTIX_CHECK(optixDenoiserComputeIntensity(m->rawDenoiser, stream,
+                                                  &inputImage, outputIntensity,
+                                                  m->scratchBuffer->getCUdeviceptr(), m->scratchBuffer->sizeInBytes()));
+    }
+
+    void Denoiser::invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
+                          const OptixImage2D* inputLayers, uint32_t numInputLayers,
+                          uint32_t inputOffsetX, uint32_t inputOffsetY,
+                          const OptixImage2D* outputLayer) {
+        THROW_RUNTIME_ERROR(m->readyToDenoise, "You need to call setup() before invoke.");
+        OptixDenoiserParams params = {};
+        params.denoiseAlpha = denoiseAlpha;
+        params.hdrIntensity = hdrIntensity;
+        params.blendFactor = blendFactor;
+        OPTIX_CHECK(optixDenoiserInvoke(m->rawDenoiser, stream,
+                                        &params,
+                                        m->stateBuffer->getCUdeviceptr(), m->stateBuffer->sizeInBytes(),
+                                        inputLayers, numInputLayers,
+                                        inputOffsetX, inputOffsetY,
+                                        outputLayer,
+                                        m->scratchBuffer->getCUdeviceptr(), m->scratchBuffer->sizeInBytes()));
     }
 }

@@ -484,7 +484,7 @@ namespace optixu {
     
     // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
     //     が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするためただの参照で受け取る。
-    // EN: Taking payloads as rvalue reference make it possible to take rvalue while reflecting value changes.
+    // EN: Taking payloads as rvalue reference makes it possible to take rvalue while reflecting value changes.
     //     However take them as normal reference to ease consistency check of template arguments and for
     //     conforming optixTrace.
     template <typename... PayloadTypes>
@@ -766,6 +766,7 @@ namespace optixu {
     class Pipeline;
     class Module;
     class ProgramGroup;
+    class Denoiser;
 
 #define OPTIX_PIMPL() \
 public: \
@@ -797,6 +798,7 @@ private: \
         Scene createScene() const;
 
         Pipeline createPipeline() const;
+        Denoiser createDenoiser(OptixDenoiserInputKind inputKind) const;
 
         CUcontext getCUcontext() const;
     };
@@ -1082,6 +1084,26 @@ private: \
         OPTIX_COMMON_FUNCTIONS(ProgramGroup);
 
         void getStackSize(OptixStackSizes* sizes) const;
+    };
+
+
+
+    class Denoiser {
+        OPTIX_PIMPL();
+
+    public:
+        void destroy();
+        OPTIX_COMMON_FUNCTIONS(Denoiser);
+
+        void setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const;
+        void computeMemoryResources(uint32_t width, uint32_t height, OptixDenoiserSizes* sizes) const;
+        void setup(CUstream stream, uint32_t width, uint32_t height,
+                   const Buffer &stateBuffer, const Buffer &scratchBuffer) const;
+        void computeIntensity(CUstream stream, const OptixImage2D &inputImage, CUdeviceptr outputIntensity);
+        void invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
+                    const OptixImage2D* inputLayers, uint32_t numInputLayers,
+                    uint32_t inputOffsetX, uint32_t inputOffsetY,
+                    const OptixImage2D* outputLayer);
     };
 
 
