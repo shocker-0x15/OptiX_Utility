@@ -49,7 +49,7 @@ namespace Shared {
                  0.0f, 1.0f, 0.0f, 0.0f,
                  0.0f, 0.0f, 1.0f, 0.0f },
             scale(make_float3(1.0f, 1.0f, 1.0f)) {}
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         CUDA_DEVICE_FUNCTION float3 transformNormalFromObjectToWorld(const float3 &n) const {
             float3 sn = n / scale;
             return orientation.toMatrix3x3() * sn;

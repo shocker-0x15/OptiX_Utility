@@ -25,6 +25,7 @@
 #       define CUDAHPlatform_Windows_MinGW
 #   elif defined(_MSC_VER)
 #       define CUDAHPlatform_Windows_MSVC
+#       define CUDAH_CODE_COMPLETION __INTELLISENSE__
 #   endif
 #elif defined(__linux__)
 #   define CUDAHPlatform_Linux

@@ -200,7 +200,7 @@ CUDA_DEVICE_FUNCTION uint32_t nthSetBit(uint32_t value, int32_t n) {
 
 
 
-#if !defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if !defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
 
 #if 1
 #   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)

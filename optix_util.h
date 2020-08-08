@@ -80,6 +80,7 @@ AS/SBT Layoutのdirty状態はUtil側で検知できるdirty状態をカーネ�
 #    define OPTIX_Platform_Windows
 #    if defined(_MSC_VER)
 #        define OPTIX_Platform_Windows_MSVC
+#        define OPTIX_CODE_COMPLETION __INTELLISENSE__
 #    endif
 #elif defined(__APPLE__)
 #    define OPTIX_Platform_macOS
@@ -170,7 +171,7 @@ namespace optixu {
         uint32_t gasData;
     };
 
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
     CUDA_DEVICE_FUNCTION HitGroupSBTRecordData getHitGroupSBTRecordData() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
@@ -190,7 +191,7 @@ namespace optixu {
         CUDA_DEVICE_FUNCTION explicit DirectCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
         CUDA_DEVICE_FUNCTION explicit operator uint32_t() const { return m_sbtIndex; }
 
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         CUDA_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
             return optixDirectCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
         }
@@ -209,7 +210,7 @@ namespace optixu {
         CUDA_DEVICE_FUNCTION explicit ContinuationCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
         CUDA_DEVICE_FUNCTION explicit operator uint32_t() const { return m_sbtIndex; }
 
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         CUDA_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
             return optixContinuationCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
         }
@@ -231,7 +232,7 @@ namespace optixu {
             return *this;
         }
 
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         CUDA_DEVICE_FUNCTION T read(uint2 idx) const {
             return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
         }
@@ -452,7 +453,7 @@ namespace optixu {
     // ----------------------------------------------------------------
     // JP: デバイス関数のラッパー
     // EN: Device-side function wrappers
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
 
     template <typename HeadType0, typename... TailTypes>
     CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
@@ -720,7 +721,7 @@ namespace optixu {
             _getAttributes<0>(attributes...);
     }
 
-#endif // #if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#endif // #if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
     // END: Device-side function wrappers
     // ----------------------------------------------------------------
 
