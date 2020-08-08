@@ -17,8 +17,8 @@ struct AABB {
 
     AABB &dilate(float scale) {
         float3 d = maxP - minP;
-        minP -= 0.5f * d;
-        maxP += 0.5f * d;
+        minP -= 0.5f * (scale - 1) * d;
+        maxP += 0.5f * (scale - 1) * d;
         return *this;
     }
 };
@@ -136,8 +136,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: このサンプルでは多段階のAS、トランスフォームを使用する。
-    // EN: This sample uses two-level AS (single-level instancing).
+    // JP: このサンプルでは多段階のASとトランスフォームを使用する。
+    // EN: This sample uses multi-level AS and transforms.
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
@@ -192,7 +192,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // RG - CH
     // RG - MS
     uint32_t ccStackSize = cssRG + std::max(cssCH, cssMS);
-    // IAS - IAS - SRTXfm - GAS
+    // The deepest path: IAS - IAS - SRTXfm - GAS
     uint32_t maxTraversableGraphDepth = 4;
     pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, maxTraversableGraphDepth);
 
