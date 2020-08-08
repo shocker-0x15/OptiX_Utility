@@ -844,11 +844,16 @@ private: \
         OPTIX_COMMON_FUNCTIONS(GeometryInstance);
 
         // JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
+        //     (頂点/AABBバッファーの変更のみの場合は、markDirty()を呼ばずにGASのアップデートだけでも良い。)
         // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
         //     required when calling the following APIs.
-        void setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
-        void setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
-        void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer, uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        //     (It is okay to use update instead of calling markDirty() when changing only vertex/AABB buffer.)
+        void setVertexBuffer(const Buffer* vertexBuffer,
+                             uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
+        void setTriangleBuffer(const Buffer* triangleBuffer,
+                               uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer,
+                                          uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, const TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
@@ -882,9 +887,10 @@ private: \
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
-        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the GAS (indirectly) belongs is required when performing
-        //     rebuild / compact / update.
+        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)
+        //     のmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the GAS (indirectly) belongs
+        //     is required when performing rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
@@ -978,9 +984,10 @@ private: \
         void removeChild(Instance instance) const;
         void markDirty() const;
 
-        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the IAS (indirectly) belongs is required when performing
-        //     rebuild / compact / update.
+        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)
+        //     のmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the IAS (indirectly) belongs
+        //     is required when performing rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
                              uint32_t* numAABBs = nullptr) const;
         // JP: インスタンスバッファーもユーザー管理にしたいため、今の形になっているが微妙かもしれない。
@@ -1014,11 +1021,13 @@ private: \
         OPTIX_COMMON_FUNCTIONS(Pipeline);
 
         void setMaxTraceDepth(uint32_t maxTraceDepth) const;
-        void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
+        void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
+                                const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                 bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
                                 uint32_t supportedPrimitiveTypeFlags) const;
 
-        Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
+        Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
+                                         OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
 
         ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;
         ProgramGroup createExceptionProgram(Module module, const char* entryFunctionName) const;

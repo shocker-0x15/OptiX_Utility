@@ -69,6 +69,10 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
     float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
     float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
 
+    // JP: ペイロードと同様に、対応するreportIntersection()/getAttributes()で
+    //     明示的にテンプレート引数を渡すことで型の不一致を検出できるようにすることを推奨する。
+    // EN: It is recommended to explicitly pass template arguments to corresponding
+    //     reportIntersection()/getAttributes() to detect type mismatch similar to payloads.
     optixu::reportIntersection<SphereAttributeSignature>(t, isFront ? 0 : 1, theta, phi);
 }
 

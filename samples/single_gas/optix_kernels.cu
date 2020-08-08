@@ -38,6 +38,10 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
     float3 color;
+    // JP: ペイロードとともにトレースを呼び出す。
+    //     ペイロード数は最大で8DW。
+    // EN: Trace call with payloads.
+    //     The maximum number of payloads is 8 dwords in total.
     optixu::trace<PayloadSignature>(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
@@ -49,10 +53,25 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
     float3 color = make_float3(0, 0, 0.1f);
+
+    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
+    //     型の不一致を検出できるようにすることを推奨する。
+    //     しかしここでは書き換えていないペイロードに関してはnullポインターを渡す。
+    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
+    //     It is recommended to explicitly pass the same template arguments to 
+    //     corresponding trace/getPayloads/setPayloads to notice type mismatch.
+    //     However pass the null pointers for the payloads which were read only.
     optixu::setPayloads<PayloadSignature>(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
+    // JP: optixu::getHitGroupSBTRecordData()よりMaterialやGeometryInstanceやGASのsetUserData()
+    //     で設定した値を取得できる。
+    // EN: The values set at setUserData() of Material, GeometryInstance and GAS can be obtained from
+    //     optixu::getHitGroupSBTRecordData()
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     HitPointParameter hp = HitPointParameter::get();
@@ -79,5 +98,16 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     // EN: Visualize the normal.
     //     There is no object to world space transform since this sample uses only a single GAS.
     float3 color = 0.5f * sn + make_float3(0.5f);
+
+    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
+    //     ポインターとしたものに一致しなければならない。
+    //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
+    //     型の不一致を検出できるようにすることを推奨する。
+    //     しかしここでは書き換えていないペイロードに関してはnullポインターを渡す。
+    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
+    //     in optixu::trace() to pointer types.
+    //     It is recommended to explicitly pass the same template arguments to 
+    //     corresponding trace/getPayloads/setPayloads to notice type mismatch.
+    //     However pass the null pointers for the payloads which were read only.
     optixu::setPayloads<PayloadSignature>(&color);
 }

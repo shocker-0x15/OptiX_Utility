@@ -1325,7 +1325,8 @@ namespace optixu {
         m->maxTraceDepth = maxTraceDepth;
     }
 
-    void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues, const char* launchParamsVariableName, size_t sizeOfLaunchParams,
+    void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
+                                      const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                       bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
                                       uint32_t supportedPrimitiveTypeFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
@@ -1344,7 +1345,8 @@ namespace optixu {
 
 
 
-    Module Pipeline::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount, OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const {
+    Module Pipeline::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
+                                               OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const {
         OptixModuleCompileOptions moduleCompileOptions = {};
         moduleCompileOptions.maxRegisterCount = maxRegisterCount;
         moduleCompileOptions.optLevel = optLevel;
