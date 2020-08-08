@@ -484,7 +484,9 @@ namespace optixu {
     
     // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
     //     が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするためただの参照で受け取る。
-    // EN: 
+    // EN: Taking payloads as rvalue reference make it possible to take rvalue while reflecting value changes.
+    //     However take them as normal reference to ease consistency check of template arguments and for
+    //     conforming optixTrace.
     template <typename... PayloadTypes>
     CUDA_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
                                     const float3 &origin, const float3 &direction,
