@@ -892,7 +892,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: カスタムプリミティブによるGeometryInstanceのセットアップ。
     // EN: Setup a geometry instance with custom primitives.
     optixu::GeometryInstance customPrimInstance = scene.createGeometryInstance(true);
-    cudau::TypedBuffer<Shared::AABB> customPrimAABBs;
+    cudau::TypedBuffer<AABB> customPrimAABBs;
     cudau::TypedBuffer<Shared::SphereParameter> customPrimParameters;
     {
         constexpr uint32_t numPrimitives = 25;
@@ -913,7 +913,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         }
         customPrimParameters.unmap();
 
-        static_assert(sizeof(Shared::AABB) == sizeof(OptixAabb),
+        static_assert(sizeof(AABB) == sizeof(OptixAabb),
                       "Custom AABB buffer must obey the same format as OptixAabb.");
         customPrimInstance.setCustomPrimitiveAABBBuffer(reinterpret_cast<cudau::TypedBuffer<OptixAabb>*>(&customPrimAABBs));
         customPrimInstance.setNumMaterials(1, nullptr);

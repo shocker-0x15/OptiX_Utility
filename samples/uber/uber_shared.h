@@ -27,11 +27,6 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
-    struct AABB {
-        float3 minP;
-        float3 maxP;
-    };
-
 
 
     class PCG32RNG {
