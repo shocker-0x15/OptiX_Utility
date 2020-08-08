@@ -1517,7 +1517,7 @@ namespace optixu {
 
 
 
-    void Pipeline::link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const {
+    void Pipeline::link(OptixCompileDebugLevel debugLevel) const {
         THROW_RUNTIME_ERROR(!m->pipelineLinked, "This pipeline has been already linked.");
 
         if (!m->pipelineLinked) {

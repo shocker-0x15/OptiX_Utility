@@ -1,6 +1,7 @@
 ﻿#include "scene_edit_shared.h"
 
 // Include glfw3.h after our OpenGL definitions
+#include "../common/GLToolkit.h"
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
@@ -958,8 +959,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                                            emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(1);
-    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
-                  false);
+    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.

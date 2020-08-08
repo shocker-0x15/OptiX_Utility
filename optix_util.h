@@ -1043,7 +1043,7 @@ private: \
         ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
                                                 Module module_CC, const char* entryFunctionNameCC) const;
 
-        void link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const;
+        void link(OptixCompileDebugLevel debugLevel) const;
 
         void setNumMissRayTypes(uint32_t numMissRayTypes) const;
 

@@ -41,7 +41,6 @@
 
 #   include <immintrin.h>
 
-#   include "GLToolkit.h"
 #   include "stopwatch.h"
 #endif
 
@@ -623,12 +622,32 @@ struct Matrix3x3 {
         }
     }
 
+    CUDA_DEVICE_FUNCTION Matrix3x3 &inverse() {
+        float det = 1.0f / (m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 -
+                            m02 * m11 * m20 - m01 * m10 * m22 - m00 * m12 * m21);
+        Matrix3x3 m;
+        m.m00 = det * (m11 * m22 - m12 * m21); m.m01 = -det * (m01 * m22 - m02 * m21); m.m02 = det * (m01 * m12 - m02 * m11);
+        m.m10 = -det * (m10 * m22 - m12 * m20); m.m11 = det * (m00 * m22 - m02 * m20); m.m12 = -det * (m00 * m12 - m02 * m10);
+        m.m20 = det * (m10 * m21 - m11 * m20); m.m21 = -det * (m00 * m21 - m01 * m20); m.m22 = det * (m00 * m11 - m01 * m10);
+        *this = m;
+
+        return *this;
+    }
     CUDA_DEVICE_FUNCTION Matrix3x3 &transpose() {
         std::swap(m10, m01); std::swap(m20, m02);
         std::swap(m21, m12);
         return *this;
     }
 };
+
+CUDA_DEVICE_FUNCTION Matrix3x3 transpose(const Matrix3x3 &mat) {
+    Matrix3x3 ret = mat;
+    return ret.transpose();
+}
+CUDA_DEVICE_FUNCTION Matrix3x3 inverse(const Matrix3x3 &mat) {
+    Matrix3x3 ret = mat;
+    return ret.inverse();
+}
 
 CUDA_DEVICE_FUNCTION Matrix3x3 scale3x3(const float3 &s) {
     return Matrix3x3(s.x * make_float3(1, 0, 0),
