@@ -4,25 +4,6 @@
 #include "../../ext/stb_image_write.h"
 #include "../../ext/tiny_obj_loader.h"
 
-struct AABB {
-    float3 minP;
-    float3 maxP;
-    AABB() : minP(INFINITY), maxP(-INFINITY) {}
-
-    AABB &unify(const float3 &p) {
-        minP = min(minP, p);
-        maxP = max(maxP, p);
-        return *this;
-    }
-
-    AABB &dilate(float scale) {
-        float3 d = maxP - minP;
-        minP -= 0.5f * (scale - 1) * d;
-        maxP += 0.5f * (scale - 1) * d;
-        return *this;
-    }
-};
-
 static void loadObj(const std::string &filepath,
                     std::vector<Shared::Vertex>* vertices,
                     std::vector<Shared::Triangle>* triangles,
@@ -158,8 +139,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
     // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup0 = pipeline.createHitProgramGroup(
-        moduleOptiX, RT_CH_NAME_STR("closesthit0"),
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         emptyModule, nullptr);
 
@@ -183,7 +164,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     missProgram.getStackSize(&stackSizes);
     uint32_t cssMS = stackSizes.cssMS;
 
-    hitProgramGroup0.getStackSize(&stackSizes);
+    hitProgramGroup.getStackSize(&stackSizes);
     uint32_t cssCH = stackSizes.cssCH;
 
     uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
@@ -206,7 +187,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Setup materials.
 
     optixu::Material mat0 = optixContext.createMaterial();
-    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup0);
+    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -870,7 +851,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     mat0.destroy();
 
-    hitProgramGroup0.destroy();
+    hitProgramGroup.destroy();
 
     missProgram.destroy();
     rayGenProgram.destroy();

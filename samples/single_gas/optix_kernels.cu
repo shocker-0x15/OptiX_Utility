@@ -14,14 +14,9 @@ struct HitPointParameter {
 
     CUDA_DEVICE_FUNCTION static HitPointParameter get() {
         HitPointParameter ret;
-        if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
-            float2 bc = optixGetTriangleBarycentrics();
-            ret.b1 = bc.x;
-            ret.b2 = bc.y;
-        }
-        else {
-            optixu::getAttributes(&ret.b1, &ret.b2);
-        }
+        float2 bc = optixGetTriangleBarycentrics();
+        ret.b1 = bc.x;
+        ret.b2 = bc.y;
         ret.primIndex = optixGetPrimitiveIndex();
         return ret;
     }
@@ -31,7 +26,7 @@ struct HitPointParameter {
 
 #define PayloadSignature float3
 
-CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
+CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     float x = static_cast<float>(launchIndex.x + 0.5f) / plp.imageSize.x;
@@ -52,7 +47,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     plp.resultBuffer[launchIndex] = make_float4(color, 1.0f);
 }
 
-CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
+CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
     float3 color = make_float3(0, 0, 0.1f);
     optixu::setPayloads<PayloadSignature>(&color);
 }

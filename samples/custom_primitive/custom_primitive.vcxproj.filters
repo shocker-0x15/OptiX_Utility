@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="util">
+      <UniqueIdentifier>{6f26d21a-72b8-449a-b8dd-7ac1d7c4bfb2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ext">
+      <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials">
+      <UniqueIdentifier>{43d36296-5e14-4ab5-aaee-da19028afa26}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\cuda_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\optix_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="custom_primitive_main.cpp" />
+    <ClCompile Include="..\common\common.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\cuda_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util_private.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="custom_primitive_shared.h" />
+    <ClInclude Include="..\..\ext\stb_image_write.h">
+      <Filter>ext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\common.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="optix_kernels.cu" />
+  </ItemGroup>
+</Project>

@@ -14,14 +14,9 @@ struct HitPointParameter {
 
     CUDA_DEVICE_FUNCTION static HitPointParameter get() {
         HitPointParameter ret;
-        if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
-            float2 bc = optixGetTriangleBarycentrics();
-            ret.b1 = bc.x;
-            ret.b2 = bc.y;
-        }
-        else {
-            optixu::getAttributes(&ret.b1, &ret.b2);
-        }
+        float2 bc = optixGetTriangleBarycentrics();
+        ret.b1 = bc.x;
+        ret.b2 = bc.y;
         ret.primIndex = optixGetPrimitiveIndex();
         return ret;
     }
@@ -57,7 +52,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     optixu::setPayloads<PayloadSignature>(&color);
 }
 
-CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
+CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     HitPointParameter hp = HitPointParameter::get();

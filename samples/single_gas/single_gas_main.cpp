@@ -154,13 +154,13 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen0"));
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
 
-    // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
-    // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup0 = pipeline.createHitProgramGroup(
+    // JP: このヒットグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
+    // EN: This hit group is for ray-triangle intersection, so we don't need custom intersection program.
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
         moduleOptiX, RT_CH_NAME_STR("closesthit0"),
         emptyModule, nullptr,
         emptyModule, nullptr);
@@ -187,7 +187,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Setup materials.
 
     optixu::Material mat0 = optixContext.createMaterial();
-    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup0);
+    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -210,9 +210,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     uint32_t geomInstIndex = 0;
 
-    optixu::GeometryInstance geomInstBox = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBuffer0;
-    cudau::TypedBuffer<Shared::Triangle> triangleBuffer0;
+    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -255,18 +255,18 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        vertexBuffer0.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBuffer0.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomInstBox.setVertexBuffer(&vertexBuffer0);
-        geomInstBox.setTriangleBuffer(&triangleBuffer0);
-        geomInstBox.setNumMaterials(1, nullptr);
-        geomInstBox.setMaterial(0, 0, mat0);
-        geomInstBox.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBox.setUserData(geomInstIndex);
+        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
+        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
+        geomInstRoom.setNumMaterials(1, nullptr);
+        geomInstRoom.setMaterial(0, 0, mat0);
+        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstRoom.setUserData(geomInstIndex);
 
-        geomData[geomInstIndex].vertexBuffer = vertexBuffer0.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBuffer0.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = vertexBufferRoom.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = triangleBufferRoom.getDevicePointer();
 
         preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.0f, 0.0f));
 
@@ -274,8 +274,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
 
     optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBuffer1;
-    cudau::TypedBuffer<Shared::Triangle> triangleBuffer1;
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -288,18 +288,18 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBuffer1.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBuffer1.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
-        geomInstAreaLight.setVertexBuffer(&vertexBuffer1);
-        geomInstAreaLight.setTriangleBuffer(&triangleBuffer1);
+        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
+        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
         geomInstAreaLight.setNumMaterials(1, nullptr);
         geomInstAreaLight.setMaterial(0, 0, mat0);
         geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstAreaLight.setUserData(geomInstIndex);
 
-        geomData[geomInstIndex].vertexBuffer = vertexBuffer1.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBuffer1.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
 
         preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.999f, 0.0f));
 
@@ -307,8 +307,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     }
 
     optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBuffer2;
-    cudau::TypedBuffer<Shared::Triangle> triangleBuffer2;
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
@@ -316,8 +316,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         std::string warn;
         std::string err;
         bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../../data/stanford_bunny_309_faces.obj");
-
-        constexpr float scale = 0.3f;
 
         // Record unified unique vertices.
         std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
@@ -335,9 +333,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                     tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
                     auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
                     unifiedVertexMap[key] = Shared::Vertex{
-                        make_float3(scale * attrib.vertices[3 * idx.vertex_index + 0],
-                        scale * attrib.vertices[3 * idx.vertex_index + 1],
-                        scale * attrib.vertices[3 * idx.vertex_index + 2]),
+                        make_float3(attrib.vertices[3 * idx.vertex_index + 0],
+                                    attrib.vertices[3 * idx.vertex_index + 1],
+                                    attrib.vertices[3 * idx.vertex_index + 2]),
                         make_float3(0, 0, 0),
                         make_float2(0, 0)
                     };
@@ -401,20 +399,20 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             v.normal = normalize(v.normal);
         }
 
-        vertexBuffer2.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBuffer2.initialize(cuContext, cudau::BufferType::Device, triangles);
+        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
+        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
 
-        geomInstBunny.setVertexBuffer(&vertexBuffer2);
-        geomInstBunny.setTriangleBuffer(&triangleBuffer2);
+        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
+        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
         geomInstBunny.setNumMaterials(1, nullptr);
         geomInstBunny.setMaterial(0, 0, mat0);
         geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstBunny.setUserData(geomInstIndex);
 
-        geomData[geomInstIndex].vertexBuffer = vertexBuffer2.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBuffer2.getDevicePointer();
+        geomData[geomInstIndex].vertexBuffer = vertexBufferBunny.getDevicePointer();
+        geomData[geomInstIndex].triangleBuffer = triangleBufferBunny.getDevicePointer();
 
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(rotateY3x3(M_PI / 4) * scale3x3(0.04f),
+        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(rotateY3x3(M_PI / 4) * scale3x3(0.012f),
                                                                     make_float3(0.0f, -1.0f, 0.0f));
 
         ++geomInstIndex;
@@ -438,7 +436,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gas.setConfiguration(true, false, true, false);
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
-    gas.addChild(geomInstBox/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
+    gas.addChild(geomInstRoom/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
     // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
     //     指定されたTransformを用いてAcceleration Structureが作られる。
     //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
@@ -540,17 +538,17 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     gasMem.finalize();
     gas.destroy();
 
-    triangleBuffer2.finalize();
-    vertexBuffer2.finalize();
+    triangleBufferBunny.finalize();
+    vertexBufferBunny.finalize();
     geomInstBunny.destroy();
     
-    triangleBuffer1.finalize();
-    vertexBuffer1.finalize();
+    triangleBufferAreaLight.finalize();
+    vertexBufferAreaLight.finalize();
     geomInstAreaLight.destroy();
 
-    triangleBuffer0.finalize();
-    vertexBuffer0.finalize();
-    geomInstBox.destroy();
+    triangleBufferRoom.finalize();
+    vertexBufferRoom.finalize();
+    geomInstRoom.destroy();
 
     preTransformBuffer.finalize();
     geomDataBuffer.finalize();
@@ -559,7 +557,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     mat0.destroy();
 
-    hitProgramGroup0.destroy();
+    hitProgramGroup.destroy();
 
     missProgram.destroy();
     rayGenProgram.destroy();

@@ -11,30 +11,28 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\..\cuda_util.cpp" />
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
-    <ClCompile Include="multi_level_instancing_main.cpp" />
+    <ClCompile Include="..\common\common.cpp" />
+    <ClCompile Include="custom_primitive_main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
-    <ClInclude Include="multi_level_instancing_shared.h" />
+    <ClInclude Include="..\common\common.h" />
+    <ClInclude Include="custom_primitive_shared.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}</ProjectGuid>
+    <ProjectGuid>{69A22E89-BFE0-40C4-A225-02D33982BEAD}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>03.multi_level_instancing</ProjectName>
+    <ProjectName>02.custom_primitive</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -66,12 +64,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.1.0\include;$(IncludePath)</IncludePath>
-    <TargetName>multi_level_instancing</TargetName>
+    <TargetName>custom_primitive</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.1.0\include;$(IncludePath)</IncludePath>
-    <TargetName>multi_level_instancing</TargetName>
+    <TargetName>custom_primitive</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

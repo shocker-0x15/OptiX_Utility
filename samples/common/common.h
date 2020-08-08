@@ -535,6 +535,28 @@ CUDA_DEVICE_FUNCTION float3 normalize(const float3 &v) {
 
 
 
+struct AABB {
+    float3 minP;
+    float3 maxP;
+
+    CUDA_DEVICE_FUNCTION AABB() : minP(make_float3(INFINITY)), maxP(make_float3(-INFINITY)) {}
+
+    CUDA_DEVICE_FUNCTION AABB &unify(const float3 &p) {
+        minP = min(minP, p);
+        maxP = max(maxP, p);
+        return *this;
+    }
+
+    CUDA_DEVICE_FUNCTION AABB &dilate(float scale) {
+        float3 d = maxP - minP;
+        minP -= 0.5f * (scale - 1) * d;
+        maxP += 0.5f * (scale - 1) * d;
+        return *this;
+    }
+};
+
+
+
 struct Matrix3x3 {
     union {
         struct { float m00, m10, m20; };

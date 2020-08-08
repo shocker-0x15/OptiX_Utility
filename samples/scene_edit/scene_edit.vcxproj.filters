@@ -25,9 +25,6 @@
     <Filter Include="non essentials\shaders">
       <UniqueIdentifier>{f6d52ae3-a435-4ecb-b8df-9f95abd259d5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="GPU kernels">
-      <UniqueIdentifier>{5af041ea-60c3-43fd-a968-f655372e94a3}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\ext\gl3w\gl3w.c">
@@ -137,16 +134,14 @@
     </Natvis>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="optix_kernels.cu">
-      <Filter>GPU kernels</Filter>
-    </CudaCompile>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="shaders\drawOptiXResult.vert">
       <Filter>non essentials\shaders</Filter>
     </None>
     <None Include="shaders\drawOptiXResult.frag">
       <Filter>non essentials\shaders</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
 </Project>
