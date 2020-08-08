@@ -4,11 +4,11 @@
     <Filter Include="util">
       <UniqueIdentifier>{6f26d21a-72b8-449a-b8dd-7ac1d7c4bfb2}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ext">
-      <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
-    </Filter>
     <Filter Include="non-essentials">
       <UniqueIdentifier>{6a7a6321-df38-4bc0-946b-5ffa0c754713}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext">
+      <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -19,7 +19,7 @@
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
-      <Filter>ext</Filter>
+      <Filter>non-essentials\ext</Filter>
     </ClCompile>
     <ClCompile Include="single_level_instancing_main.cpp" />
     <ClCompile Include="..\common\common.cpp">
@@ -37,10 +37,10 @@
       <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ext\stb_image_write.h">
-      <Filter>ext</Filter>
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ext\tiny_obj_loader.h">
-      <Filter>ext</Filter>
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
     <ClInclude Include="single_level_instancing_shared.h" />
     <ClInclude Include="..\common\common.h">
