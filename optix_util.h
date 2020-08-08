@@ -77,13 +77,15 @@ AS/SBT Layoutのdirty状態はUtil側で検知できるdirty状態をカーネ�
 
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
-#    define OPTIX_Platform_Windows
-#    if defined(_MSC_VER)
-#        define OPTIX_Platform_Windows_MSVC
-#        define OPTIX_CODE_COMPLETION __INTELLISENSE__
-#    endif
+#   define OPTIX_Platform_Windows
+#   if defined(_MSC_VER)
+#       define OPTIX_Platform_Windows_MSVC
+#       if defined(__INTELLISENSE__)
+#           define OPTIX_CODE_COMPLETION
+#       endif
+#   endif
 #elif defined(__APPLE__)
-#    define OPTIX_Platform_macOS
+#   define OPTIX_Platform_macOS
 #endif
 
 #include <optix.h>
