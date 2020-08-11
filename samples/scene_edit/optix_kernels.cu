@@ -57,7 +57,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     optixu::setPayloads<PayloadSignature>(&color);
 }
 
-CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
+CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = optixu::getHitGroupSBTRecordData();
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     HitPointParameter hp = HitPointParameter::get();

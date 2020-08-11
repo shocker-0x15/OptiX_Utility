@@ -5662,7 +5662,7 @@ bool ImGui::CollapsingHeader(const char* label, bool* p_open, ImGuiTreeNodeFlags
         // FIXME: We can evolve this into user accessible helpers to add extra buttons on title bars, headers, etc.
         // FIXME: CloseButton can overlap into text, need find a way to clip the text somehow.
         ImGuiContext& g = *GImGui;
-        ImGuiItemHoveredDataBackup last_item_backup;
+        ImGuiLastItemDataBackup last_item_backup;
         float button_size = g.FontSize;
         float button_x = ImMax(window->DC.LastItemRect.Min.x, window->DC.LastItemRect.Max.x - g.Style.FramePadding.x * 2.0f - button_size);
         float button_y = window->DC.LastItemRect.Min.y;
@@ -7417,7 +7417,7 @@ bool ImGui::TabItemLabelAndCloseButton(ImDrawList* draw_list, const ImRect& bb, 
                 close_button_visible = true;
     if (close_button_visible)
     {
-        ImGuiItemHoveredDataBackup last_item_backup;
+        ImGuiLastItemDataBackup last_item_backup;
         const float close_button_sz = g.FontSize;
         PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
         if (CloseButton(close_button_id, ImVec2(bb.Max.x - frame_padding.x * 2.0f - close_button_sz, bb.Min.y)))
@@ -8021,7 +8021,14 @@ bool    ImGui::BeginTableEx(const char* name, ImGuiID id, int columns_count, ImG
     }
 
     flags = TableFixFlags(flags);
-    if (outer_window->Flags & ImGuiWindowFlags_NoSavedSettings)
+
+    // Inherit _NoSavedSettings from top-level window (child windows always have _NoSavedSettings set)
+#ifdef IMGUI_HAS_DOCK
+    ImGuiWindow* window_for_settings = outer_window->RootWindowDockStop;
+#else
+    ImGuiWindow* window_for_settings = outer_window->RootWindow;
+#endif
+    if (window_for_settings->Flags & ImGuiWindowFlags_NoSavedSettings)
         flags |= ImGuiTableFlags_NoSavedSettings;
 
     // Acquire storage for the table

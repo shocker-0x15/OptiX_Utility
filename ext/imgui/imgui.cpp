@@ -2972,6 +2972,7 @@ void ImGui::SetActiveID(ImGuiID id, ImGuiWindow* window)
     }
     g.ActiveId = id;
     g.ActiveIdAllowOverlap = false;
+    g.ActiveIdNoClearOnFocusLoss = false;
     g.ActiveIdWindow = window;
     g.ActiveIdHasBeenEditedThisFrame = false;
     if (id)
@@ -2989,7 +2990,7 @@ void ImGui::SetActiveID(ImGuiID id, ImGuiWindow* window)
 
 void ImGui::ClearActiveID()
 {
-    SetActiveID(0, NULL);
+    SetActiveID(0, NULL); // g.ActiveId = 0;
 }
 
 void ImGui::SetHoveredID(ImGuiID id)
@@ -3143,6 +3144,15 @@ bool ImGui::IsClippedEx(const ImRect& bb, ImGuiID id, bool clip_even_when_logged
             if (clip_even_when_logged || !g.LogEnabled)
                 return true;
     return false;
+}
+
+// This is also inlined in ItemAdd()
+// Note: if ImGuiItemStatusFlags_HasDisplayRect is set, user needs to set window->DC.LastItemDisplayRect!
+void ImGui::SetLastItemData(ImGuiWindow* window, ImGuiID item_id, ImGuiItemStatusFlags item_flags, const ImRect& item_rect)
+{
+    window->DC.LastItemId = item_id;
+    window->DC.LastItemStatusFlags = item_flags;
+    window->DC.LastItemRect = item_rect;
 }
 
 // Process TAB/Shift+TAB. Be mindful that this function may _clear_ the ActiveID when tabbing out.
@@ -3337,6 +3347,7 @@ void ImGui::StartMouseMovingWindow(ImGuiWindow* window)
     FocusWindow(window);
     SetActiveID(window->MoveId, window);
     g.NavDisableHighlight = true;
+    g.ActiveIdNoClearOnFocusLoss = true;
     g.ActiveIdClickOffset = g.IO.MousePos - window->RootWindow->Pos;
 
     bool can_move_window = true;
@@ -6021,9 +6032,8 @@ bool ImGui::Begin(const char* name, bool* p_open, ImGuiWindowFlags flags)
 
         // We fill last item data based on Title Bar/Tab, in order for IsItemHovered() and IsItemActive() to be usable after Begin().
         // This is useful to allow creating context menus on title bar only, etc.
-        window->DC.LastItemId = window->MoveId;
-        window->DC.LastItemStatusFlags = IsMouseHoveringRect(title_bar_rect.Min, title_bar_rect.Max, false) ? ImGuiItemStatusFlags_HoveredRect : 0;
-        window->DC.LastItemRect = title_bar_rect;
+        SetLastItemData(window, window->MoveId, IsMouseHoveringRect(title_bar_rect.Min, title_bar_rect.Max, false) ? ImGuiItemStatusFlags_HoveredRect : 0, title_bar_rect);
+
 #ifdef IMGUI_ENABLE_TEST_ENGINE
         if (!(window->Flags & ImGuiWindowFlags_NoTitleBar))
             IMGUI_TEST_ENGINE_ITEM_ADD(window->DC.LastItemRect, window->DC.LastItemId);
@@ -6180,9 +6190,12 @@ void ImGui::FocusWindow(ImGuiWindow* window)
     ImGuiWindow* focus_front_window = window ? window->RootWindow : NULL; // NB: In docking branch this is window->RootWindowDockStop
     ImGuiWindow* display_front_window = window ? window->RootWindow : NULL;
 
-    // Steal focus on active widgets
+    // Steal active widgets. Some of the cases it triggers includes:
+    // - Focus a window while an InputText in another window is active, if focus happens before the old InputText can run.
+    // - When using Nav to activate menu items (due to timing of activating on press->new window appears->losing ActiveId)
     if (g.ActiveId != 0 && g.ActiveIdWindow && g.ActiveIdWindow->RootWindow != focus_front_window)
-        ClearActiveID();
+        if (!g.ActiveIdNoClearOnFocusLoss)
+            ClearActiveID();
 
     // Passing NULL allow to disable keyboard focus
     if (!window)
@@ -7000,6 +7013,7 @@ bool ImGui::ItemAdd(const ImRect& bb, ImGuiID id, const ImRect* nav_bb_arg)
 #endif
     }
 
+    // Equivalent to calling SetLastItemData()
     window->DC.LastItemId = id;
     window->DC.LastItemRect = bb;
     window->DC.LastItemStatusFlags = ImGuiItemStatusFlags_None;
