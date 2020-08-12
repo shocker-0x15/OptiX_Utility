@@ -1370,11 +1370,10 @@ namespace optixu {
 
     ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
-                            "Either of Miss module or entry function name is not provided.");
-        if (_module)
-            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
-                                "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module && entryFunctionName,
+                            "Either of RayGen module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                            "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -1391,11 +1390,10 @@ namespace optixu {
 
     ProgramGroup Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
-                            "Either of Miss module or entry function name is not provided.");
-        if (_module)
-            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
-                                "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module && entryFunctionName,
+                            "Either of Exception module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                            "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
