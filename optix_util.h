@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- uint32_t以外のサイズのuserDataの使用。
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
