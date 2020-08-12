@@ -969,6 +969,7 @@ private: \
         // EN: Rebulding or Updating of a IAS to which the instance belongs is required.
         void setID(uint32_t value) const;
         void setVisibilityMask(uint32_t mask) const;
+        void setFlags(OptixInstanceFlags flags) const;
         void setTransform(const float transform[12]) const;
     };
 

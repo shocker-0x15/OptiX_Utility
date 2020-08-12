@@ -856,7 +856,7 @@ namespace optixu {
         instance->instanceId = id;
         instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
-        instance->flags = OPTIX_INSTANCE_FLAG_NONE;
+        instance->flags = flags;
 
         if (type == ChildType::GAS) {
             THROW_RUNTIME_ERROR(childGas->isReady(), "GAS %p is not ready.", childGas);
@@ -886,7 +886,7 @@ namespace optixu {
         instance->instanceId = id;
         instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
-        //instance->flags = OPTIX_INSTANCE_FLAG_NONE; これは変えられない？
+        //instance->flags = flags; これは変えられない？
         //instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
     }
 
@@ -941,6 +941,10 @@ namespace optixu {
         THROW_RUNTIME_ERROR((mask >> numVisibilityMaskBits) == 0,
                             "Number of visibility mask bits is %u.", numVisibilityMaskBits);
         m->visibilityMask = mask;
+    }
+
+    void Instance::setFlags(OptixInstanceFlags flags) const {
+        m->flags = flags;
     }
 
 
