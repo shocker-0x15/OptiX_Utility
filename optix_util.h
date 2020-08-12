@@ -894,7 +894,7 @@ private: \
 
         // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the GAS (indirectly) belongs
+        // EN: Calling markDirty() of a traversable (e.g. IAS) to which the GAS (indirectly) belongs
         //     is required when performing rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
@@ -991,7 +991,7 @@ private: \
 
         // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a traversable (i.e. IAS) to which the IAS (indirectly) belongs
+        // EN: Calling markDirty() of a traversable (e.g. IAS) to which the IAS (indirectly) belongs
         //     is required when performing rebuild / compact / update.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
                              uint32_t* numAABBs = nullptr) const;
