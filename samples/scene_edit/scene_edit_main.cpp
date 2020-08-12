@@ -999,9 +999,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         return -1;
     }
 
-    glEnable(GL_FRAMEBUFFER_SRGB);
-    GLTK::errorCheck();
-
     // END: Initialize OpenGL and GLFW.
     // ----------------------------------------------------------------
 
@@ -1021,19 +1018,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // Setup style
     // JP: ガンマ補正が有効なレンダーターゲットで、同じUIの見た目を得るためにデガンマされたスタイルも用意する。
     // EN: Prepare a degamma-ed style to have the identical UI appearance on gamma-corrected render target.
-    ImGuiStyle guiStyle, guiStyleWithGamma;
+    ImGuiStyle guiStyle/*, guiStyleWithGamma*/;
     ImGui::StyleColorsDark(&guiStyle);
-    guiStyleWithGamma = guiStyle;
-    const auto degamma = [](const ImVec4 &color) {
-        return ImVec4(sRGB_degamma_s(color.x),
-                      sRGB_degamma_s(color.y),
-                      sRGB_degamma_s(color.z),
-                      color.w);
-    };
-    for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-        guiStyleWithGamma.Colors[i] = degamma(guiStyleWithGamma.Colors[i]);
-    }
-    ImGui::GetStyle() = guiStyleWithGamma;
+    //guiStyleWithGamma = guiStyle;
+    //const auto degamma = [](const ImVec4 &color) {
+    //    return ImVec4(sRGB_degamma_s(color.x),
+    //                  sRGB_degamma_s(color.y),
+    //                  sRGB_degamma_s(color.z),
+    //                  color.w);
+    //};
+    //for (int i = 0; i < ImGuiCol_COUNT; ++i) {
+    //    guiStyleWithGamma.Colors[i] = degamma(guiStyleWithGamma.Colors[i]);
+    //}
+    ImGui::GetStyle() = guiStyle;
 
     io.Fonts->AddFontDefault();
 
@@ -2123,9 +2120,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         // ----------------------------------------------------------------
         // JP: 
-
-        glEnable(GL_FRAMEBUFFER_SRGB);
-        GLTK::errorCheck();
 
         glViewport(0, 0, curFBWidth, curFBHeight);
 
