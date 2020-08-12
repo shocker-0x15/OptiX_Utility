@@ -59,11 +59,14 @@ namespace optixu {
 
 
 
-    void Material::Priv::setRecordData(const _Pipeline* pipeline, uint32_t rayType, HitGroupSBTRecord* record) const {
+    void Material::Priv::setRecordData(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const {
         Key key{ pipeline, rayType };
         const _ProgramGroup* hitGroup = programs.at(key);
-        hitGroup->packHeader(record->header);
-        record->data.materialData = userData;
+        *curSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
+        hitGroup->packHeader(record);
+        uint32_t offset;
+        curSizeAlign->add(userDataSizeAlign, &offset);
+        std::memcpy(record + offset, userData.data(), userDataSizeAlign.size);
     }
     
     void Material::destroy() {
@@ -79,8 +82,14 @@ namespace optixu {
         m->programs[key] = extract(hitGroup);
     }
     
-    void Material::setUserData(uint32_t data) const {
-        m->userData = data;
+    void Material::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
+        THROW_RUNTIME_ERROR(size <= s_maxMaterialUserDataSize,
+                            "Maximum user data size for Material is %u bytes.", s_maxMaterialUserDataSize);
+        THROW_RUNTIME_ERROR(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                            "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        m->userDataSizeAlign = SizeAlign(size, alignment);
+        m->userData.resize(size);
+        std::memcpy(m->userData.data(), data, size);
     }
 
 
@@ -94,16 +103,16 @@ namespace optixu {
     }
 
     void Scene::Priv::setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, Buffer* sbt) {
-        THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= sizeof(HitGroupSBTRecord) * numSBTRecords,
+        THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= singleRecordSize * numSBTRecords,
                             "Shader binding table size is not enough.");
 
-        auto records = sbt->map<HitGroupSBTRecord>(stream);
+        auto records = sbt->map<uint8_t>(stream);
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
             for (int j = 0; j < numMatSets; ++j) {
                 uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records);
-                records += numRecords;
+                records += numRecords * singleRecordSize;
             }
         }
 
@@ -159,12 +168,21 @@ namespace optixu {
 
     void Scene::generateShaderBindingTableLayout(size_t* memorySize) const {
         if (m->sbtLayoutIsUpToDate) {
-            *memorySize = sizeof(HitGroupSBTRecord) * std::max(m->numSBTRecords, 1u);
+            *memorySize = m->singleRecordSize * std::max(m->numSBTRecords, 1u);
             return;
         }
 
         uint32_t sbtOffset = 0;
         m->sbtOffsets.clear();
+        m->singleRecordSize = OPTIX_SBT_RECORD_HEADER_SIZE;
+        for (_GeometryAccelerationStructure* gas : m->geomASs) {
+            uint32_t numMatSets = gas->getNumMaterialSets();
+            SizeAlign maxRecordSizeAlign;
+            for (int matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx)
+                maxRecordSizeAlign = max(maxRecordSizeAlign, gas->calcMaxRecordSizeAlign(matSetIdx));
+            maxRecordSizeAlign.alignUp();
+            m->singleRecordSize = std::max(m->singleRecordSize, maxRecordSizeAlign.size);
+        }
         for (_GeometryAccelerationStructure* gas : m->geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
             for (int matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
@@ -177,7 +195,7 @@ namespace optixu {
         m->numSBTRecords = sbtOffset;
         m->sbtLayoutIsUpToDate = true;
 
-        *memorySize = sizeof(HitGroupSBTRecord) * std::max(m->numSBTRecords, 1u);
+        *memorySize = m->singleRecordSize * std::max(m->numSBTRecords, 1u);
     }
 
 
@@ -278,26 +296,44 @@ namespace optixu {
         }
     }
 
+    SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t matSetIdx) const {
+        SizeAlign maxRecordSizeAlign;
+        const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
+        uint32_t numMaterials = buildInputFlags.size();
+        for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
+            const _Material* mat = materialSet[matIdx];
+            SizeAlign recordSizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
+            recordSizeAlign += mat->getUserDataSizeAlign();
+            maxRecordSizeAlign = max(maxRecordSizeAlign, recordSizeAlign);
+        }
+        maxRecordSizeAlign += userDataSizeAlign;
+        return maxRecordSizeAlign;
+    }
+
     uint32_t GeometryInstance::Priv::getNumSBTRecords() const {
         return static_cast<uint32_t>(buildInputFlags.size());
     }
 
-    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t gasUserData, uint32_t numRayTypes,
-                                                    HitGroupSBTRecord* records) const {
+    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx,
+                                                    const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
+                                                    uint32_t numRayTypes, uint8_t* records) const {
         THROW_RUNTIME_ERROR(matSetIdx < materialSets.size(),
                             "Out of material set bound: [0, %u)", static_cast<uint32_t>(materialSets.size()));
 
         const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
-        HitGroupSBTRecord* recordPtr = records;
         uint32_t numMaterials = buildInputFlags.size();
         for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
             const _Material* mat = materialSet[matIdx];
             THROW_RUNTIME_ERROR(mat, "No material set for %u-%u.", matSetIdx, matIdx);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
-                mat->setRecordData(pipeline, rIdx, recordPtr);
-                recordPtr->data.geomInstData = userData;
-                recordPtr->data.gasData = gasUserData;
-                ++recordPtr;
+                SizeAlign curSizeAlign;
+                mat->setRecordData(pipeline, rIdx, records, &curSizeAlign);
+                uint32_t offset;
+                curSizeAlign.add(userDataSizeAlign, &offset);
+                std::memcpy(records + offset, userData.data(), userDataSizeAlign.size);
+                curSizeAlign.add(gasUserDataSizeAlign, &offset);
+                std::memcpy(records + offset, gasUserData, gasUserDataSizeAlign.size);
+                records += scene->getSingleRecordSize();
             }
         }
 
@@ -364,12 +400,26 @@ namespace optixu {
         m->materialSets[matSetIdx][matIdx] = extract(mat);
     }
 
-    void GeometryInstance::setUserData(uint32_t data) const {
-        m->userData = data;
+    void GeometryInstance::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
+        THROW_RUNTIME_ERROR(size <= s_maxGeometryInstanceUserDataSize,
+                            "Maximum user data size for Material is %u bytes.", s_maxGeometryInstanceUserDataSize);
+        THROW_RUNTIME_ERROR(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                            "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        m->userDataSizeAlign = SizeAlign(size, alignment);
+        m->userData.resize(size);
+        std::memcpy(m->userData.data(), data, size);
     }
 
 
 
+    SizeAlign GeometryAccelerationStructure::Priv::calcMaxRecordSizeAlign(uint32_t matSetIdx) const {
+        SizeAlign maxRecordSizeAlign;
+        for (const Child &child : children)
+            maxRecordSizeAlign = max(maxRecordSizeAlign, child.geomInst->calcMaxRecordSizeAlign(matSetIdx));
+        maxRecordSizeAlign += userDataSizeAlign;
+        return maxRecordSizeAlign;
+    }
+    
     uint32_t GeometryAccelerationStructure::Priv::calcNumSBTRecords(uint32_t matSetIdx) const {
         uint32_t numSBTRecords = 0;
         for (const Child &child : children)
@@ -379,7 +429,7 @@ namespace optixu {
         return numSBTRecords;
     }
 
-    uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, HitGroupSBTRecord* records) const {
+    uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const {
         THROW_RUNTIME_ERROR(matSetIdx < numRayTypesPerMaterialSet.size(),
                             "Material set index %u is out of bound [0, %u).",
                             matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
@@ -388,8 +438,10 @@ namespace optixu {
         uint32_t sumRecords = 0;
         for (uint32_t sbtGasIdx = 0; sbtGasIdx < children.size(); ++sbtGasIdx) {
             const Child &child = children[sbtGasIdx];
-            uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx, userData, numRayTypes, records);
-            records += numRecords;
+            uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx,
+                                                                 userData.data(), userDataSizeAlign,
+                                                                 numRayTypes, records);
+            records += numRecords * scene->getSingleRecordSize();
             sumRecords += numRecords;
         }
 
@@ -614,8 +666,14 @@ namespace optixu {
         return handle;
     }
 
-    void GeometryAccelerationStructure::setUserData(uint32_t data) const {
-        m->userData = data;
+    void GeometryAccelerationStructure::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
+        THROW_RUNTIME_ERROR(size <= s_maxGASUserDataSize,
+                            "Maximum user data size for Material is %u bytes.", s_maxGASUserDataSize);
+        THROW_RUNTIME_ERROR(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                            "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        m->userDataSizeAlign = SizeAlign(size, alignment);
+        m->userData.resize(size);
+        std::memcpy(m->userData.data(), data, size);
     }
 
     bool GeometryAccelerationStructure::isReady() const {
@@ -1308,8 +1366,8 @@ namespace optixu {
                 sbt.missRecordCount = numMissRayTypes;
 
                 sbt.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
-                sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupSBTRecord);
-                sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / sizeof(HitGroupSBTRecord);
+                sbt.hitgroupRecordStrideInBytes = scene->getSingleRecordSize();
+                sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / scene->getSingleRecordSize();
 
                 sbt.callablesRecordBase = callablePrograms.size() ? callableRecords.getCUdeviceptr() : 0;
                 sbt.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;

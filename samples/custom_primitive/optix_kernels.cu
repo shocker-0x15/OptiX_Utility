@@ -34,6 +34,14 @@ struct HitPointParameter {
     }
 };
 
+struct HitGroupSBTRecordData {
+    uint32_t geomInstIndex;
+
+    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    }
+};
+
 
 
 #define PayloadSignature float3
@@ -41,8 +49,8 @@ struct HitPointParameter {
 // JP: レイとカスタムプリミティブとの衝突判定はIntersection Programで記述する。
 // EN: Intersection program is used to describe the intersection between a ray vs a custom primitive.
 CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
     uint32_t primIndex = optixGetPrimitiveIndex();
     const SphereParameter &param = geom.paramBuffer[primIndex];
     const float3 rayOrg = optixGetObjectRayOrigin();
@@ -103,8 +111,8 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
     HitPointParameter hp = HitPointParameter::get();
 
     float3 sn;

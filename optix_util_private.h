@@ -84,7 +84,10 @@ namespace optixu {
         optixPrintf("[%2u][%12s]: %s\n", level, tag, message);
     }
 
-    static BufferType s_BufferType = BufferType::Device;
+    static constexpr BufferType s_BufferType = BufferType::Device;
+    static constexpr size_t s_maxMaterialUserDataSize = 512;
+    static constexpr size_t s_maxGeometryInstanceUserDataSize = 512;
+    static constexpr size_t s_maxGASUserDataSize = 512;
 
 
 
@@ -128,7 +131,7 @@ namespace optixu {
         uint32_t size;
         uint32_t alignment;
 
-        constexpr SizeAlign() : size(0), alignment(0) {}
+        constexpr SizeAlign() : size(0), alignment(1) {}
         constexpr SizeAlign(uint32_t s, uint32_t a) : size(s), alignment(a) {}
 
         SizeAlign &add(const SizeAlign &sa, uint32_t* offset) {
@@ -153,13 +156,6 @@ namespace optixu {
     SizeAlign max(const SizeAlign &sa0, const SizeAlign &sa1) {
         return SizeAlign{ std::max(sa0.size, sa1.size), std::max(sa0.alignment, sa1.alignment) };
     }
-
-
-
-    struct alignas(OPTIX_SBT_RECORD_ALIGNMENT) HitGroupSBTRecord {
-        uint8_t header[OPTIX_SBT_RECORD_HEADER_SIZE];
-        HitGroupSBTRecordData data;
-    };
 
 
 
@@ -239,7 +235,8 @@ namespace optixu {
         };
 
         _Context* context;
-        uint32_t userData;
+        SizeAlign userDataSizeAlign;
+        std::vector<uint8_t> userData;
 
         std::unordered_map<Key, const _ProgramGroup*, Key::Hash> programs;
 
@@ -247,14 +244,17 @@ namespace optixu {
         OPTIX_OPAQUE_BRIDGE(Material);
 
         Priv(_Context* ctxt) :
-            context(ctxt), userData(0) {}
+            context(ctxt), userData(1) {}
         ~Priv() {}
 
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
 
-        void setRecordData(const _Pipeline* pipeline, uint32_t rayType, HitGroupSBTRecord* record) const;
+        SizeAlign getUserDataSizeAlign() const {
+            return userDataSizeAlign;
+        }
+        void setRecordData(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const;
     };
 
 
@@ -295,6 +295,7 @@ namespace optixu {
         const _Context* context;
         std::unordered_set<_GeometryAccelerationStructure*> geomASs;
         std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> sbtOffsets;
+        uint32_t singleRecordSize;
         uint32_t numSBTRecords;
         std::unordered_set<_Transform*> transforms;
         std::unordered_set<_InstanceAccelerationStructure*> instASs;
@@ -305,7 +306,9 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(Scene);
 
-        Priv(const _Context* ctxt) : context(ctxt), numSBTRecords(0), sbtLayoutIsUpToDate(false) {}
+        Priv(const _Context* ctxt) : context(ctxt),
+            singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
+            sbtLayoutIsUpToDate(false) {}
         ~Priv() {}
 
         const _Context* getContext() const {
@@ -347,6 +350,9 @@ namespace optixu {
             return sbtOffsets.at(SBTOffsetKey{ gas, matSetIdx });
         }
 
+        uint32_t getSingleRecordSize() const {
+            return singleRecordSize;
+        }
         void setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, Buffer* sbt);
 
         bool isReady();
@@ -356,7 +362,8 @@ namespace optixu {
 
     class GeometryInstance::Priv {
         _Scene* scene;
-        uint32_t userData;
+        SizeAlign userDataSizeAlign;
+        std::vector<uint8_t> userData;
 
         // TODO: support deformation blur (multiple vertex buffers)
         union {
@@ -389,7 +396,7 @@ namespace optixu {
 
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
             scene(_scene),
-            userData(0),
+            userData(1),
             offsetInBytesForPrimitives(0),
             numPrimitives(0),
             primitiveIndexOffset(0),
@@ -431,9 +438,11 @@ namespace optixu {
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
+        SizeAlign calcMaxRecordSizeAlign(uint32_t matSetIdx) const;
         uint32_t getNumSBTRecords() const;
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint32_t gasUserData, uint32_t numRayTypes,
-                                HitGroupSBTRecord* records) const;
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx,
+                                const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
+                                uint32_t numRayTypes, uint8_t* records) const;
     };
 
 
@@ -449,7 +458,8 @@ namespace optixu {
         };
 
         _Scene* scene;
-        uint32_t userData;
+        SizeAlign userDataSizeAlign;
+        std::vector<uint8_t> userData;
 
         std::vector<uint32_t> numRayTypesPerMaterialSet;
 
@@ -485,7 +495,7 @@ namespace optixu {
 
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
             scene(_scene),
-            userData(0),
+            userData(1),
             handle(0), compactedHandle(0),
             accelBuffer(nullptr), compactedAccelBuffer(nullptr),
             forCustomPrimitives(_forCustomPrimitives),
@@ -528,8 +538,9 @@ namespace optixu {
             return numRayTypesPerMaterialSet[matSetIdx];
         }
 
+        SizeAlign calcMaxRecordSizeAlign(uint32_t matSetIdx) const;
         uint32_t calcNumSBTRecords(uint32_t matSetIdx) const;
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, HitGroupSBTRecord* records) const;
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const;
         bool hasMotion() const {
             return false;
         }

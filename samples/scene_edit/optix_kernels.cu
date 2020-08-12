@@ -27,6 +27,15 @@ struct HitPointParameter {
     }
 };
 
+struct HitGroupSBTRecordData {
+    uint32_t geomInstIndex;
+    uint32_t gasIndex;
+
+    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    }
+};
+
 
 
 #define PayloadSignature float3
@@ -58,8 +67,8 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
     HitPointParameter hp = HitPointParameter::get();
 
     const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
@@ -70,7 +79,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     float b0 = 1 - (hp.b1 + hp.b2);
     float3 sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
 
-    const GASData &gasData = plp.gasData[sbtr.gasData];
+    const GASData &gasData = plp.gasData[sbtr.gasIndex];
     const GeometryInstancePreTransform &preTransform = gasData.preTransforms[optixGetSbtGASIndex()];
     sn = preTransform.transformNormalFromObjectToWorld(sn);
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));

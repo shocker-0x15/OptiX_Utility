@@ -22,6 +22,14 @@ struct HitPointParameter {
     }
 };
 
+struct HitGroupSBTRecordData {
+    uint32_t geomInstIndex;
+
+    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    }
+};
+
 
 
 #define PayloadSignature float3
@@ -72,8 +80,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     //     で設定した値を取得できる。
     // EN: The values set at setUserData() of Material, GeometryInstance and GAS can be obtained from
     //     optixu::getHitGroupSBTRecordData()
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
     HitPointParameter hp = HitPointParameter::get();
 
     const Triangle &triangle = geom.triangleBuffer[hp.primIndex];

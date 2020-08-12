@@ -25,7 +25,6 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
-- uint32_t以外のサイズのuserDataの使用。
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
 - Triangle Soupサポート。
@@ -167,20 +166,6 @@ namespace optixu {
     // ----------------------------------------------------------------
     // JP: ホスト・デバイス共有のクラス定義
     // EN: Definitions of Host-/Device-shared classes
-    
-    struct HitGroupSBTRecordData {
-        uint32_t materialData;
-        uint32_t geomInstData;
-        uint32_t gasData;
-    };
-
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
-    CUDA_DEVICE_FUNCTION HitGroupSBTRecordData getHitGroupSBTRecordData() {
-        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
-    }
-#endif
-
-
 
     template <typename FuncType>
     class DirectCallableProgramID;
@@ -819,7 +804,11 @@ private: \
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         void setHitGroup(uint32_t rayType, ProgramGroup hitGroup);
-        void setUserData(uint32_t data) const;
+        void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
+        template <typename T>
+        void setUserData(const T &data) const {
+            setUserData(&data, sizeof(T), alignof(T));
+        }
     };
 
 
@@ -869,7 +858,11 @@ private: \
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
-        void setUserData(uint32_t data) const;
+        void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
+        template <typename T>
+        void setUserData(const T &data) const {
+            setUserData(&data, sizeof(T), alignof(T));
+        }
     };
 
 
@@ -908,7 +901,11 @@ private: \
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
-        void setUserData(uint32_t userData) const;
+        void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
+        template <typename T>
+        void setUserData(const T &data) const {
+            setUserData(&data, sizeof(T), alignof(T));
+        }
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
