@@ -1,6 +1,7 @@
 ﻿#include "scene_edit_shared.h"
 
 // Include glfw3.h after our OpenGL definitions
+#include "../common/GLToolkit.h"
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
@@ -105,6 +106,18 @@ struct GeometryInstance {
     static void finalize(GeometryInstance* p);
 };
 
+struct GeometryInstanceFileGroup {
+    uint32_t serialID;
+    std::string name;
+    std::vector<GeometryInstanceRef> geomInsts;
+};
+
+struct GeometryInstancePreTransform {
+    float3 scale;
+    float rollPitchYaw[3];
+    float3 position;
+};
+
 struct GeometryGroup {
     OptiXEnv* optixEnv;
     uint32_t gasIndex;
@@ -112,7 +125,7 @@ struct GeometryGroup {
     std::string name;
     optixu::GeometryAccelerationStructure optixGAS;
     std::vector<GeometryInstanceRef> geomInsts;
-    std::vector<Shared::GeometryInstancePreTransform> preTransforms;
+    std::vector<GeometryInstancePreTransform> preTransforms;
     cudau::TypedBuffer<Shared::GeometryInstancePreTransform> preTransformBuffer;
     std::set<InstanceWRef, std::owner_less<InstanceWRef>> parentInsts;
     cudau::Buffer optixGasMem;
@@ -120,6 +133,8 @@ struct GeometryGroup {
 
     GeometryGroup() : gasIndex(SlotFinder::InvalidSlotIndex) {}
     static void finalize(GeometryGroup* p);
+
+    void propagateMarkDirty() const;
 };
 
 struct Instance {
@@ -128,12 +143,15 @@ struct Instance {
     std::string name;
     optixu::Instance optixInst;
     GeometryGroupRef geomGroup;
+    GroupRef group;
     std::set<GroupWRef, std::owner_less<GroupWRef>> parentGroups;
     float3 scale;
     float rollPitchYaw[3];
     float3 position;
 
     static void finalize(Instance* p);
+
+    void propagateMarkDirty() const;
 };
 
 struct Group {
@@ -142,10 +160,13 @@ struct Group {
     std::string name;
     optixu::InstanceAccelerationStructure optixIAS;
     std::vector<InstanceRef> insts;
+    std::set<InstanceWRef, std::owner_less<InstanceWRef>> parentInsts;
     cudau::Buffer optixIasMem;
     cudau::TypedBuffer<OptixInstance> optixInstanceBuffer;
 
     static void finalize(Group* p);
+
+    void propagateMarkDirty() const;
 };
 
 struct OptiXEnv {
@@ -159,10 +180,11 @@ struct OptiXEnv {
     SlotFinder gasSlotFinder;
 
     uint32_t geomInstSerialID;
+    uint32_t geomInstFileGroupSerialID;
     uint32_t gasSerialID;
     uint32_t instSerialID;
     uint32_t iasSerialID;
-    std::map<uint32_t, GeometryInstanceRef> geomInsts;
+    std::map<uint32_t, GeometryInstanceFileGroup> geomInstFileGroups;
     std::map<uint32_t, GeometryGroupRef> geomGroups;
     std::map<uint32_t, InstanceRef> insts;
     std::map<uint32_t, GroupRef> groups;
@@ -189,15 +211,34 @@ void GeometryGroup::finalize(GeometryGroup* p) {
     }
     delete p;
 }
+void GeometryGroup::propagateMarkDirty() const {
+    for (const auto &parentWRef : parentInsts) {
+        InstanceRef parent = parentWRef.lock();
+        parent->propagateMarkDirty();
+    }
+}
 void Instance::finalize(Instance* p) {
     p->optixInst.destroy();
     delete p;
+}
+void Instance::propagateMarkDirty() const {
+    for (const auto &parentWRef : parentGroups) {
+        GroupRef parent = parentWRef.lock();
+        parent->propagateMarkDirty();
+    }
 }
 void Group::finalize(Group* p) {
     p->optixInstanceBuffer.finalize();
     p->optixIasMem.finalize();
     p->optixIAS.destroy();
     delete p;
+}
+void Group::propagateMarkDirty() const {
+    optixIAS.markDirty();
+    for (const auto &parentWRef : parentInsts) {
+        InstanceRef parent = parentWRef.lock();
+        parent->propagateMarkDirty();
+    }
 }
 
 
@@ -214,6 +255,9 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
     }
 
     std::string basename = filepath.stem().string();
+
+    GeometryInstanceFileGroup fileGroup;
+    fileGroup.name = filepath.filename().string();
 
     for (int meshIdx = 0; meshIdx < scene->mNumMeshes; ++meshIdx) {
         const aiMesh* mesh = scene->mMeshes[meshIdx];
@@ -268,308 +312,415 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         geomInst->optixGeomInst.setUserData(geomInstIndex);
         geomInst->dataTransfered = false;
 
-        optixEnv->geomInsts[geomInst->serialID] = geomInst;
+        fileGroup.geomInsts.push_back(geomInst);
     }
+
+    fileGroup.serialID = optixEnv->geomInstFileGroupSerialID++;
+    optixEnv->geomInstFileGroups[fileGroup.serialID] = fileGroup;
 }
 
 
 
 
 class GeometryInstanceList {
+    struct FileGroupState {
+        std::set<uint32_t> selectedIndices;
+    };
+
     const OptiXEnv &m_optixEnv;
-    bool m_allSelected;
-    std::vector<uint32_t> m_selectedItems;
+    // From GeometryInstanceFileGroup's SerialID
+    std::unordered_map<uint32_t, FileGroupState> m_fileGroupStates;
 
 public:
     GeometryInstanceList(const OptiXEnv &optixEnv) :
-        m_optixEnv(optixEnv),
-        m_allSelected(false) {}
+        m_optixEnv(optixEnv) {}
 
     void show() {
-        if (ImGui::BeginTable("##geomInstList", 5,
+        if (ImGui::BeginTable("##geomInstList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
                               ImGuiTableFlags_ScrollY |
                               ImGuiTableFlags_ScrollFreezeTopRow,
-                              ImVec2(0, 300))) {
-            ImGui::TableSetupColumn("CheckAll",
-                                    ImGuiTableColumnFlags_WidthFixed |
-                                    ImGuiTableColumnFlags_NoResize);
-            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
+                              ImVec2(0, 500))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("#Prims", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
+
+            // Header
             {
                 ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+                uint32_t columnIdx = 0;
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+            }
 
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(ImGui::TableGetColumnName(0));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 2));
-                if (ImGui::Checkbox("##check", &m_allSelected)) {
-                    if (m_allSelected) {
-                        for (const auto &kv : m_optixEnv.geomInsts)
-                            m_selectedItems.push_back(kv.first);
+            for (const auto &kv : m_optixEnv.geomInstFileGroups) {
+                const GeometryInstanceFileGroup &fileGroup = kv.second;
+                if (m_fileGroupStates.count(fileGroup.serialID) == 0)
+                    m_fileGroupStates[fileGroup.serialID] = FileGroupState();
+                FileGroupState &fileGroupState = m_fileGroupStates.at(fileGroup.serialID);
+
+                ImGui::TableNextRow();
+                bool allSelected = fileGroupState.selectedIndices.size() == fileGroup.geomInsts.size();
+                ImGuiTreeNodeFlags fileFlags = (ImGuiTreeNodeFlags_SpanFullWidth |
+                                                ImGuiTreeNodeFlags_OpenOnArrow);
+                if (allSelected)
+                    fileFlags |= ImGuiTreeNodeFlags_Selected;
+                bool open = ImGui::TreeNodeEx(fileGroup.name.c_str(), fileFlags);
+                bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
+                if (ImGui::IsItemClicked() && !onArrow) {
+                    if (!ImGui::GetIO().KeyCtrl) {
+                        // JP: Ctrlを押していない状態でクリックした場合は他のファイルの選択を全て解除する。
+                        bool deselectedOthers = false;
+                        for (auto &fileGroupKv : m_fileGroupStates) {
+                            if (fileGroupKv.first != fileGroup.serialID) {
+                                if (fileGroupKv.second.selectedIndices.size()) {
+                                    deselectedOthers |= true;
+                                    fileGroupKv.second.selectedIndices.clear();
+                                }
+                            }
+                        }
+                        // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                        //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                        if (deselectedOthers)
+                            allSelected = false;
+                    }
+
+                    if (allSelected) {
+                        fileGroupState.selectedIndices.clear();
                     }
                     else {
-                        m_selectedItems.clear();
+                        for (int i = 0; i < fileGroup.geomInsts.size(); ++i)
+                            fileGroupState.selectedIndices.insert(i);
                     }
                 }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
+                ImGui::TableNextCell();
+                ImGui::TextUnformatted("--");
+                ImGui::TableNextCell();
+                ImGui::TextUnformatted("--");
+                ImGui::TableNextCell();
+                ImGui::TextUnformatted("--");
+                if (open) {
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 1.0f, 0.5f, 0.25f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 1.0f, 0.5f, 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 1.0f, 0.5f, 0.75f));
+                    for (int i = 0; i < fileGroup.geomInsts.size(); ++i) {
+                        const GeometryInstanceRef &geomInst = fileGroup.geomInsts[i];
+                        ImGuiTreeNodeFlags instFlags = (ImGuiTreeNodeFlags_Leaf |
+                                                        ImGuiTreeNodeFlags_Bullet |
+                                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                                        ImGuiTreeNodeFlags_SpanFullWidth);
+                        bool geomInstSelected = fileGroupState.selectedIndices.count(i) > 0;
+                        if (geomInstSelected)
+                            instFlags |= ImGuiTreeNodeFlags_Selected;
+                        ImGui::TableNextRow();
+                        ImGui::TreeNodeEx(geomInst->name.c_str(), instFlags);
+                        if (ImGui::IsItemClicked()) {
+                            if (!ImGui::GetIO().KeyCtrl) {
+                                bool deselectedOthers = false;
+                                for (auto &fileGroupKv : m_fileGroupStates) {
+                                    if (fileGroupKv.first != fileGroup.serialID) {
+                                        if (fileGroupKv.second.selectedIndices.size()) {
+                                            deselectedOthers |= true;
+                                            fileGroupKv.second.selectedIndices.clear();
+                                        }
+                                    }
+                                    else {
+                                        deselectedOthers |= fileGroupKv.second.selectedIndices.size() > 1;
+                                        fileGroupKv.second.selectedIndices.clear();
+                                        if (geomInstSelected)
+                                            fileGroupKv.second.selectedIndices.insert(i);
+                                    }
+                                }
+                                // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                                //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                                if (deselectedOthers)
+                                    geomInstSelected = false;
+                            }
 
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TableHeader(ImGui::TableGetColumnName(1));
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TableHeader(ImGui::TableGetColumnName(2));
-                ImGui::TableSetColumnIndex(3);
-                ImGui::TableHeader(ImGui::TableGetColumnName(3));
-                ImGui::TableSetColumnIndex(4);
-                ImGui::TableHeader(ImGui::TableGetColumnName(4));
-            }
-            for (const auto &kv : m_optixEnv.geomInsts) {
-                ImGui::TableNextRow();
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(kv.first);
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 1));
-                auto itemIndex = std::find(m_selectedItems.cbegin(), m_selectedItems.cend(), kv.first);
-                bool selected = itemIndex != m_selectedItems.cend();
-                if (ImGui::Checkbox("##check", &selected)) {
-                    if (selected)
-                        m_selectedItems.push_back(kv.first);
-                    else
-                        m_selectedItems.erase(itemIndex);
-                    m_allSelected = m_selectedItems.size() == m_optixEnv.geomGroups.size();
+                            if (geomInstSelected)
+                                fileGroupState.selectedIndices.erase(i);
+                            else
+                                fileGroupState.selectedIndices.insert(i);
+                        }
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", geomInst->serialID);
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", geomInst->triangleBuffer.numElements());
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", geomInst.use_count() - 1);
+                    }
+                    ImGui::PopStyleColor(3);
+                    ImGui::TreePop();
                 }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
-
-                ImGui::TableSetColumnIndex(1);
-                char sid[32];
-                sprintf_s(sid, "%u", kv.first);
-                ImGui::Selectable(sid, false, ImGuiSelectableFlags_None);
-
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", kv.second->name.c_str());
-
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%u", kv.second->triangleBuffer.numElements());
-
-                ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%u", kv.second.use_count() - 1);
             }
+
             ImGui::EndTable();
         }
     }
 
     uint32_t getNumSelected() const {
-        return static_cast<uint32_t>(m_selectedItems.size());
+        uint32_t sum = 0;
+        for (auto it = m_fileGroupStates.cbegin(); it != m_fileGroupStates.cend(); ++it)
+            sum += it->second.selectedIndices.size();
+        return sum;
     }
-    void loopForSelected(const std::function<bool(uint32_t, const GeometryInstanceRef &)> &func) {
-        for (int i = 0; i < m_selectedItems.size(); ++i) {
-            bool b = func(i, m_optixEnv.geomInsts.at(m_selectedItems[i]));
+
+    void clearSelection() {
+        m_fileGroupStates.clear();
+    }
+
+    void loopForSelected(const std::function<bool(uint32_t, const std::set<uint32_t> &)> &func) const {
+        for (auto it = m_fileGroupStates.cbegin(); it != m_fileGroupStates.cend(); ++it) {
+            bool b = func(it->first, it->second.selectedIndices);
             if (!b)
                 break;
         }
-    }
-
-    const GeometryInstanceRef &getFirstSelectedItem() const {
-        return m_optixEnv.geomInsts.at(*m_selectedItems.cbegin());
-    }
-    void clearSelection() {
-        m_allSelected = false;
-        m_selectedItems.clear();
     }
 };
 
 class GeometryGroupList {
     const OptiXEnv &m_optixEnv;
-    bool m_allSelected;
-    std::set<uint32_t> m_selectedItems;
+    std::set<uint32_t> m_selectedGroups;
+    uint32_t m_activeGroupSerialID;
+    std::set<uint32_t> m_selectedIndicesForActiveGroup;
 
 public:
     GeometryGroupList(const OptiXEnv &optixEnv) :
-        m_optixEnv(optixEnv),
-        m_allSelected(false) {}
+        m_optixEnv(optixEnv) {}
 
-    void show() {
-        if (ImGui::BeginTable("##geomGroupList", 5,
+    void show(bool* selectionChanged) {
+        *selectionChanged = false;
+        if (ImGui::BeginTable("##GeomGroupList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
                               ImGuiTableFlags_ScrollY |
                               ImGuiTableFlags_ScrollFreezeTopRow,
-                              ImVec2(0, 300))) {
-            ImGui::TableSetupColumn("CheckAll",
-                                    ImGuiTableColumnFlags_WidthFixed |
-                                    ImGuiTableColumnFlags_NoResize);
-            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
+                              ImVec2(0, 500))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("#GeomInsts", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
+
+            // Header
             {
                 ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(ImGui::TableGetColumnName(0));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 2));
-                if (ImGui::Checkbox("##check", &m_allSelected)) {
-                    if (m_allSelected) {
-                        for (const auto &kv : m_optixEnv.geomGroups)
-                            m_selectedItems.insert(kv.first);
-                    }
-                    else {
-                        m_selectedItems.clear();
-                    }
-                }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TableHeader(ImGui::TableGetColumnName(1));
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TableHeader(ImGui::TableGetColumnName(2));
-                ImGui::TableSetColumnIndex(3);
-                ImGui::TableHeader(ImGui::TableGetColumnName(3));
-                ImGui::TableSetColumnIndex(4);
-                ImGui::TableHeader(ImGui::TableGetColumnName(4));
+                uint32_t columnIdx = 0;
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
             }
+
             for (const auto &kv : m_optixEnv.geomGroups) {
+                const GeometryGroupRef &geomGroup = kv.second;
+
                 ImGui::TableNextRow();
+                ImGuiTreeNodeFlags groupFlags = (ImGuiTreeNodeFlags_SpanFullWidth |
+                                                 ImGuiTreeNodeFlags_OpenOnArrow);
+                bool geomGroupSelected = m_selectedGroups.count(geomGroup->serialID) > 0;
+                if (geomGroupSelected)
+                    groupFlags |= ImGuiTreeNodeFlags_Selected;
+                bool open = ImGui::TreeNodeEx(geomGroup->name.c_str(), groupFlags);
+                bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
+                if (ImGui::IsItemClicked() && !onArrow) {
+                    m_selectedIndicesForActiveGroup.clear();
 
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(kv.first);
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 1));
-                bool selected = m_selectedItems.count(kv.first) > 0;
-                if (ImGui::Checkbox("##check", &selected)) {
-                    if (selected)
-                        m_selectedItems.insert(kv.first);
+                    if (!ImGui::GetIO().KeyCtrl) {
+                        // JP: Ctrlを押していない状態でクリックした場合は他のグループの選択を全て解除する。
+                        bool deselectedOthers = m_selectedGroups.size() > 1;
+                        m_selectedGroups.clear();
+                        if (geomGroupSelected)
+                            m_selectedGroups.insert(geomGroup->serialID);
+                        // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                        //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                        if (deselectedOthers)
+                            geomGroupSelected = false;
+                    }
+
+                    if (geomGroupSelected)
+                        m_selectedGroups.erase(geomGroup->serialID);
                     else
-                        m_selectedItems.erase(kv.first);
-                    m_allSelected = m_selectedItems.size() == m_optixEnv.geomInsts.size();
+                        m_selectedGroups.insert(geomGroup->serialID);
+
+                    *selectionChanged = true;
                 }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
-
-                ImGui::TableSetColumnIndex(1);
-                char sid[32];
-                sprintf_s(sid, "%u", kv.first);
-                ImGui::Selectable(sid, false, ImGuiSelectableFlags_None);
-
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", kv.second->name.c_str());
-
-                ImGui::TableSetColumnIndex(3);
+                ImGui::TableNextCell();
+                ImGui::Text("%u", geomGroup->serialID);
+                ImGui::TableNextCell();
                 ImGui::Text("%u", static_cast<uint32_t>(kv.second->geomInsts.size()));
-
-                ImGui::TableSetColumnIndex(4);
+                ImGui::TableNextCell();
                 ImGui::Text("%u", kv.second.use_count() - 1);
+                if (open) {
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 1.0f, 0.5f, 0.25f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 1.0f, 0.5f, 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 1.0f, 0.5f, 0.75f));
+                    for (int geomInstIdx = 0; geomInstIdx < geomGroup->geomInsts.size(); ++geomInstIdx) {
+                        const GeometryInstanceRef &geomInst = geomGroup->geomInsts[geomInstIdx];
+                        ImGuiTreeNodeFlags instFlags = (ImGuiTreeNodeFlags_Leaf |
+                                                        ImGuiTreeNodeFlags_Bullet |
+                                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                                        ImGuiTreeNodeFlags_SpanFullWidth);
+                        bool geomInstSelected = geomGroup->serialID == m_activeGroupSerialID &&
+                            m_selectedIndicesForActiveGroup.count(geomInstIdx) > 0;
+                        if (geomInstSelected)
+                            instFlags |= ImGuiTreeNodeFlags_Selected;
+                        ImGui::TableNextRow();
+                        ImGui::TreeNodeEx(geomInst->name.c_str(), instFlags);
+                        if (ImGui::IsItemClicked()) {
+                            m_selectedGroups.clear();
+
+                            // JP: 複数選択は同じグループ内でのみ機能する。
+                            if (geomGroup->serialID != m_activeGroupSerialID) {
+                                m_selectedIndicesForActiveGroup.clear();
+                                m_activeGroupSerialID = geomGroup->serialID;
+                            }
+
+                            if (!ImGui::GetIO().KeyCtrl) {
+                                // JP: Ctrlを押していない状態でクリックした場合は他のインスタンスの選択を全て解除する。
+                                bool deselectedOthers = m_selectedIndicesForActiveGroup.size() > 1;
+                                m_selectedIndicesForActiveGroup.clear();
+                                if (geomInstSelected)
+                                    m_selectedIndicesForActiveGroup.insert(geomInstIdx);
+                                // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                                //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                                if (deselectedOthers)
+                                    geomInstSelected = false;
+                            }
+
+                            if (geomInstSelected)
+                                m_selectedIndicesForActiveGroup.erase(geomInstIdx);
+                            else
+                                m_selectedIndicesForActiveGroup.insert(geomInstIdx);
+
+                            *selectionChanged = true;
+                        }
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", geomInst->serialID);
+                        ImGui::TableNextCell();
+                        ImGui::TextUnformatted("--");
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", geomInst.use_count() - 1);
+                    }
+                    ImGui::PopStyleColor(3);
+                    ImGui::TreePop();
+                }
             }
             ImGui::EndTable();
         }
     }
 
-    uint32_t getNumSelected() const {
-        return static_cast<uint32_t>(m_selectedItems.size());
+    void clearSelection() {
+        m_selectedIndicesForActiveGroup.clear();
+        m_selectedGroups.clear();
     }
-    void loopForSelected(const std::function<bool(const GeometryGroupRef &)> &func) {
-        for (const auto &sid : m_selectedItems) {
+    uint32_t getNumSelectedGeomGroups() const {
+        return static_cast<uint32_t>(m_selectedGroups.size());
+    }
+    uint32_t getNumSelectedGeomInsts() const {
+        return static_cast<uint32_t>(m_selectedIndicesForActiveGroup.size());
+    }
+    void loopForSelectedGeomGroups(const std::function<bool(const GeometryGroupRef &)> &func) {
+        for (const auto &sid : m_selectedGroups) {
             bool b = func(m_optixEnv.geomGroups.at(sid));
             if (!b)
                 break;
         }
     }
-
-    const GeometryGroupRef &getFirstSelectedItem() const {
-        return m_optixEnv.geomGroups.at(*m_selectedItems.cbegin());
+    GeometryGroupRef getActiveGeometryGroup() const {
+        if (m_selectedIndicesForActiveGroup.size() > 0)
+            return m_optixEnv.geomGroups.at(m_activeGroupSerialID);
+        return nullptr;
     }
-    void clearSelection() {
-        m_allSelected = false;
-        m_selectedItems.clear();
+    void callForActiveGeomGroup(const std::function<void(const GeometryGroupRef &, const std::set<uint32_t> &)> &func) {
+        const GeometryGroupRef &activeGeomGroup = m_optixEnv.geomGroups.at(m_activeGroupSerialID);
+        func(activeGeomGroup, m_selectedIndicesForActiveGroup);
+    }
+    uint32_t getFirstSelectedGeomInstIndex() const {
+        if (m_selectedIndicesForActiveGroup.size() > 0)
+            return *m_selectedIndicesForActiveGroup.cbegin();
+        return 0xFFFFFFFF;
     }
 };
 
 class InstanceList {
     const OptiXEnv &m_optixEnv;
-    bool m_allSelected;
     std::set<uint32_t> m_selectedItems;
 
 public:
     InstanceList(const OptiXEnv &optixEnv) :
-        m_optixEnv(optixEnv),
-        m_allSelected(false) {}
+        m_optixEnv(optixEnv) {}
 
-    void show() {
-        if (ImGui::BeginTable("##instList", 5,
+    void show(bool* selectionChanged) {
+        if (ImGui::BeginTable("##InstList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
                               ImGuiTableFlags_ScrollY |
                               ImGuiTableFlags_ScrollFreezeTopRow,
                               ImVec2(0, 300))) {
 
-            ImGui::TableSetupColumn("CheckAll",
-                                    ImGuiTableColumnFlags_WidthFixed |
-                                    ImGuiTableColumnFlags_NoResize);
-            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("GAS", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("AS", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
             {
                 ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(ImGui::TableGetColumnName(0));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 2));
-                if (ImGui::Checkbox("##check", &m_allSelected)) {
-                    if (m_allSelected) {
-                        for (const auto &kv : m_optixEnv.insts)
-                            m_selectedItems.insert(kv.first);
-                    }
-                    else {
-                        m_selectedItems.clear();
-                    }
-                }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TableHeader(ImGui::TableGetColumnName(1));
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TableHeader(ImGui::TableGetColumnName(2));
-                ImGui::TableSetColumnIndex(3);
-                ImGui::TableHeader(ImGui::TableGetColumnName(3));
-                ImGui::TableSetColumnIndex(4);
-                ImGui::TableHeader(ImGui::TableGetColumnName(4));
+                uint32_t columnIdx = 0;
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
             }
             for (const auto &kv : m_optixEnv.insts) {
+                const InstanceRef &inst = kv.second;
+
                 ImGui::TableNextRow();
 
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(kv.first);
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 1));
-                bool selected = m_selectedItems.count(kv.first) > 0;
-                if (ImGui::Checkbox("##check", &selected)) {
-                    if (selected)
-                        m_selectedItems.insert(kv.first);
+                bool instSelected = m_selectedItems.count(inst->serialID);
+                if (ImGui::Selectable(kv.second->name.c_str(), instSelected, ImGuiSelectableFlags_None)) {
+                    if (!ImGui::GetIO().KeyCtrl) {
+                        // JP: Ctrlを押していない状態でクリックした場合は他のグループの選択を全て解除する。
+                        bool deselectedOthers = m_selectedItems.size() > 1;
+                        m_selectedItems.clear();
+                        if (instSelected)
+                            m_selectedItems.insert(inst->serialID);
+                        // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                        //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                        if (deselectedOthers)
+                            instSelected = false;
+                    }
+
+                    if (instSelected)
+                        m_selectedItems.erase(inst->serialID);
                     else
-                        m_selectedItems.erase(kv.first);
-                    m_allSelected = m_selectedItems.size() == m_optixEnv.insts.size();
+                        m_selectedItems.insert(inst->serialID);
+
+                    *selectionChanged = true;
                 }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
 
-                ImGui::TableSetColumnIndex(1);
-                char sid[32];
-                sprintf_s(sid, "%u", kv.first);
-                ImGui::Selectable(sid, false, ImGuiSelectableFlags_None);
+                ImGui::TableNextCell();
+                ImGui::Text("%u", kv.first);
 
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", kv.second->name.c_str());
+                ImGui::TableNextCell();
+                if (inst->geomGroup)
+                    ImGui::Text("%s", inst->geomGroup->name.c_str());
+                else if (inst->group)
+                    ImGui::Text("%s", inst->group->name.c_str());
 
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%s", kv.second->geomGroup->name.c_str());
-
-                ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%u", kv.second.use_count() - 1);
+                ImGui::TableNextCell();
+                ImGui::Text("%u", inst.use_count() - 1);
             }
             ImGui::EndTable();
         }
@@ -590,114 +741,169 @@ public:
         return m_optixEnv.insts.at(*m_selectedItems.cbegin());
     }
     void clearSelection() {
-        m_allSelected = false;
         m_selectedItems.clear();
     }
 };
 
 class GroupList {
     const OptiXEnv &m_optixEnv;
-    bool m_allSelected;
-    std::set<uint32_t> m_selectedItems;
+    std::set<uint32_t> m_selectedGroups;
+    uint32_t m_activeGroupSerialID;
+    std::set<uint32_t> m_selectedIndicesForActiveGroup;
 
 public:
     GroupList(const OptiXEnv &optixEnv) :
-        m_optixEnv(optixEnv),
-        m_allSelected(false) {}
+        m_optixEnv(optixEnv) {}
 
-    void show() {
-        if (ImGui::BeginTable("##groupList", 5,
+    void show(bool* selectionChanged = nullptr) {
+        *selectionChanged = false;
+        if (ImGui::BeginTable("##GroupList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
                               ImGuiTableFlags_ScrollY |
                               ImGuiTableFlags_ScrollFreezeTopRow,
-                              ImVec2(0, 300))) {
-            ImGui::TableSetupColumn("CheckAll",
-                                    ImGuiTableColumnFlags_WidthFixed |
-                                    ImGuiTableColumnFlags_NoResize);
-            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
+                              ImVec2(0, 500))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("#insts", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("#Insts", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
+
+            // Header
             {
                 ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(ImGui::TableGetColumnName(0));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 2));
-                if (ImGui::Checkbox("##check", &m_allSelected)) {
-                    if (m_allSelected) {
-                        for (const auto &kv : m_optixEnv.groups)
-                            m_selectedItems.insert(kv.first);
-                    }
-                    else {
-                        m_selectedItems.clear();
-                    }
-                }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TableHeader(ImGui::TableGetColumnName(1));
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TableHeader(ImGui::TableGetColumnName(2));
-                ImGui::TableSetColumnIndex(3);
-                ImGui::TableHeader(ImGui::TableGetColumnName(3));
-                ImGui::TableSetColumnIndex(4);
-                ImGui::TableHeader(ImGui::TableGetColumnName(4));
+                uint32_t columnIdx = 0;
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
+                ImGui::TableNextCell();
+                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
             }
+
             for (const auto &kv : m_optixEnv.groups) {
+                const GroupRef &group = kv.second;
+
                 ImGui::TableNextRow();
+                ImGuiTreeNodeFlags groupFlags = (ImGuiTreeNodeFlags_SpanFullWidth |
+                                                 ImGuiTreeNodeFlags_OpenOnArrow);
+                bool groupSelected = m_selectedGroups.count(group->serialID) > 0;
+                if (groupSelected)
+                    groupFlags |= ImGuiTreeNodeFlags_Selected;
+                bool open = ImGui::TreeNodeEx(group->name.c_str(), groupFlags);
+                bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
+                if (ImGui::IsItemClicked() && !onArrow) {
+                    m_selectedIndicesForActiveGroup.clear();
 
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushID(kv.first);
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 1));
-                bool selected = m_selectedItems.count(kv.first) > 0;
-                if (ImGui::Checkbox("##check", &selected)) {
-                    if (selected)
-                        m_selectedItems.insert(kv.first);
+                    if (!ImGui::GetIO().KeyCtrl) {
+                        // JP: Ctrlを押していない状態でクリックした場合は他のグループの選択を全て解除する。
+                        bool deselectedOthers = m_selectedGroups.size() > 1;
+                        m_selectedGroups.clear();
+                        if (groupSelected)
+                            m_selectedGroups.insert(group->serialID);
+                        // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                        //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                        if (deselectedOthers)
+                            groupSelected = false;
+                    }
+
+                    if (groupSelected)
+                        m_selectedGroups.erase(group->serialID);
                     else
-                        m_selectedItems.erase(kv.first);
-                    m_allSelected = m_selectedItems.size() == m_optixEnv.groups.size();
+                        m_selectedGroups.insert(group->serialID);
+
+                    *selectionChanged = true;
                 }
-                ImGui::PopStyleVar();
-                ImGui::PopID();
-
-                ImGui::TableSetColumnIndex(1);
-                char sid[32];
-                sprintf_s(sid, "%u", kv.first);
-                ImGui::Selectable(sid, false, ImGuiSelectableFlags_None);
-
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", kv.second->name.c_str());
-
-                ImGui::TableSetColumnIndex(3);
+                ImGui::TableNextCell();
+                ImGui::Text("%u", group->serialID);
+                ImGui::TableNextCell();
                 ImGui::Text("%u", static_cast<uint32_t>(kv.second->insts.size()));
-
-                ImGui::TableSetColumnIndex(4);
+                ImGui::TableNextCell();
                 ImGui::Text("%u", kv.second.use_count() - 1);
+                if (open) {
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 1.0f, 0.5f, 0.25f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 1.0f, 0.5f, 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 1.0f, 0.5f, 0.75f));
+                    for (int instIdx = 0; instIdx < group->insts.size(); ++instIdx) {
+                        const InstanceRef &inst = group->insts[instIdx];
+                        ImGuiTreeNodeFlags instFlags = (ImGuiTreeNodeFlags_Leaf |
+                                                        ImGuiTreeNodeFlags_Bullet |
+                                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                                        ImGuiTreeNodeFlags_SpanFullWidth);
+                        bool geomInstSelected = group->serialID == m_activeGroupSerialID &&
+                            m_selectedIndicesForActiveGroup.count(instIdx) > 0;
+                        if (geomInstSelected)
+                            instFlags |= ImGuiTreeNodeFlags_Selected;
+                        ImGui::TableNextRow();
+                        ImGui::TreeNodeEx(inst->name.c_str(), instFlags);
+                        if (ImGui::IsItemClicked()) {
+                            m_selectedGroups.clear();
+
+                            // JP: 複数選択は同じグループ内でのみ機能する。
+                            if (group->serialID != m_activeGroupSerialID) {
+                                m_selectedIndicesForActiveGroup.clear();
+                                m_activeGroupSerialID = group->serialID;
+                            }
+
+                            if (!ImGui::GetIO().KeyCtrl) {
+                                // JP: Ctrlを押していない状態でクリックした場合は他のインスタンスの選択を全て解除する。
+                                bool deselectedOthers = m_selectedIndicesForActiveGroup.size() > 1;
+                                m_selectedIndicesForActiveGroup.clear();
+                                if (geomInstSelected)
+                                    m_selectedIndicesForActiveGroup.insert(instIdx);
+                                // JP: 他のファイルの選択状態の解除があった場合はかならず自身を選択状態に持っていく。
+                                //     (allSelectedを一旦falseにすることで続くコードで選択状態になる。)
+                                if (deselectedOthers)
+                                    geomInstSelected = false;
+                            }
+
+                            if (geomInstSelected)
+                                m_selectedIndicesForActiveGroup.erase(instIdx);
+                            else
+                                m_selectedIndicesForActiveGroup.insert(instIdx);
+
+                            *selectionChanged = true;
+                        }
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", inst->serialID);
+                        ImGui::TableNextCell();
+                        ImGui::TextUnformatted("--");
+                        ImGui::TableNextCell();
+                        ImGui::Text("%u", inst.use_count() - 1);
+                    }
+                    ImGui::PopStyleColor(3);
+                    ImGui::TreePop();
+                }
             }
             ImGui::EndTable();
         }
     }
 
-    uint32_t getNumSelected() const {
-        return static_cast<uint32_t>(m_selectedItems.size());
+    void clearSelection() {
+        m_selectedIndicesForActiveGroup.clear();
+        m_selectedGroups.clear();
     }
-    void loopForSelected(const std::function<bool(const GroupRef &)> &func) {
-        for (const auto &sid : m_selectedItems) {
+    uint32_t getNumSelectedGroups() const {
+        return static_cast<uint32_t>(m_selectedGroups.size());
+    }
+    uint32_t getNumSelectedInsts() const {
+        return static_cast<uint32_t>(m_selectedIndicesForActiveGroup.size());
+    }
+    void loopForSelectedGroups(const std::function<bool(const GroupRef &)> &func) {
+        for (const auto &sid : m_selectedGroups) {
             bool b = func(m_optixEnv.groups.at(sid));
             if (!b)
                 break;
         }
     }
-
-    const GroupRef &getFirstSelectedItem() const {
-        return m_optixEnv.groups.at(*m_selectedItems.cbegin());
+    GroupRef getActiveGroup() const {
+        if (m_selectedIndicesForActiveGroup.size() > 0)
+            return m_optixEnv.groups.at(m_activeGroupSerialID);
+        return nullptr;
     }
-    void clearSelection() {
-        m_allSelected = false;
-        m_selectedItems.clear();
+    void callForActiveGroup(const std::function<bool(const GroupRef &, const std::set<uint32_t> &)> &func) {
+        const GroupRef &activeGroup = m_optixEnv.groups.at(m_activeGroupSerialID);
+        func(activeGroup, m_selectedIndicesForActiveGroup);
     }
 };
 
@@ -709,6 +915,24 @@ static void glfw_error_callback(int32_t error, const char* description) {
 }
 
 
+
+namespace ImGui {
+    void PushDisabledStyle() {
+        PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.2f);
+    }
+    void PopDisabledStyle() {
+        PopStyleVar();
+    }
+
+    bool Button(const char* label, bool active, const ImVec2 &size = ImVec2(0, 0)) {
+        if (!active)
+            PushDisabledStyle();
+        bool ret = Button(label, size) && active;
+        if (!active)
+            PopDisabledStyle();
+        return ret;
+    }
+}
 
 int32_t mainFunc(int32_t argc, const char* argv[]) {
     const std::filesystem::path exeDir = getExecutableDirectory();
@@ -775,9 +999,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         return -1;
     }
 
-    glEnable(GL_FRAMEBUFFER_SRGB);
-    GLTK::errorCheck();
-
     // END: Initialize OpenGL and GLFW.
     // ----------------------------------------------------------------
 
@@ -797,19 +1018,19 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // Setup style
     // JP: ガンマ補正が有効なレンダーターゲットで、同じUIの見た目を得るためにデガンマされたスタイルも用意する。
     // EN: Prepare a degamma-ed style to have the identical UI appearance on gamma-corrected render target.
-    ImGuiStyle guiStyle, guiStyleWithGamma;
+    ImGuiStyle guiStyle/*, guiStyleWithGamma*/;
     ImGui::StyleColorsDark(&guiStyle);
-    guiStyleWithGamma = guiStyle;
-    const auto degamma = [](const ImVec4 &color) {
-        return ImVec4(sRGB_degamma_s(color.x),
-                      sRGB_degamma_s(color.y),
-                      sRGB_degamma_s(color.z),
-                      color.w);
-    };
-    for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-        guiStyleWithGamma.Colors[i] = degamma(guiStyleWithGamma.Colors[i]);
-    }
-    ImGui::GetStyle() = guiStyleWithGamma;
+    //guiStyleWithGamma = guiStyle;
+    //const auto degamma = [](const ImVec4 &color) {
+    //    return ImVec4(sRGB_degamma_s(color.x),
+    //                  sRGB_degamma_s(color.y),
+    //                  sRGB_degamma_s(color.z),
+    //                  color.w);
+    //};
+    //for (int i = 0; i < ImGuiCol_COUNT; ++i) {
+    //    guiStyleWithGamma.Colors[i] = degamma(guiStyleWithGamma.Colors[i]);
+    //}
+    ImGui::GetStyle() = guiStyle;
 
     io.Fonts->AddFontDefault();
 
@@ -931,8 +1152,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false,
-                                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS |
-                                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+                                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                                 DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
                                               OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                               OPTIX_EXCEPTION_FLAG_DEBUG),
@@ -953,19 +1173,38 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
     // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup0 = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("closesthit0"),
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("closesthit"),
                                                                            emptyModule, nullptr,
                                                                            emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(1);
-    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
-                  false);
+    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
+
+    OptixStackSizes stackSizes;
+
+    rayGenProgram.getStackSize(&stackSizes);
+    uint32_t cssRG = stackSizes.cssRG;
+
+    missProgram.getStackSize(&stackSizes);
+    uint32_t cssMS = stackSizes.cssMS;
+
+    hitProgramGroup.getStackSize(&stackSizes);
+    uint32_t cssCH = stackSizes.cssCH;
+
+    uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
+    uint32_t dcStackSizeFromState = 0;
+    // Possible Program Paths:
+    // RG - CH
+    // RG - MS
+    uint32_t ccStackSize = cssRG + std::max(cssCH, cssMS);
+    uint32_t maxTraversableGraphDepth = 5;
+    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, maxTraversableGraphDepth);
 
     OptiXEnv optixEnv;
     optixEnv.cuContext = cuContext;
@@ -981,7 +1220,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // EN: Setup materials.
 
     optixEnv.material = optixContext.createMaterial();
-    optixEnv.material.setHitGroup(Shared::RayType_Primary, hitProgramGroup0);
+    optixEnv.material.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -1001,6 +1240,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixEnv.gasDataBuffer.initialize(cuContext, g_bufferType, MaxNumGASs);
     optixEnv.gasSlotFinder.initialize(MaxNumGASs);
     optixEnv.geomInstSerialID = 0;
+    optixEnv.geomInstFileGroupSerialID = 0;
     optixEnv.gasSerialID = 0;
     optixEnv.instSerialID = 0;
     optixEnv.iasSerialID = 0;
@@ -1188,10 +1428,11 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+        CUstream &prevCuStream = cuStream[(bufferIndex + 1) % 2];
         CUstream &curCuStream = cuStream[bufferIndex];
         
-        // JP: 前フレームの処理が完了するのを待つ。
-        // EN: Wait the previous frame processing to finish.
+        // JP: 前回同じストリームを使った処理が完了するのを待つ。
+        // EN: Wait the previous processing which uses the same stream to finish.
         CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
 
 
@@ -1243,53 +1484,60 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             }
 
             if (ImGui::BeginTabBar("Scene", ImGuiTabBarFlags_None)) {
-                const auto ImGui_PushDisabledStyle = []() {
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.2f);
-                };
-                const auto ImGui_PopDisabledStyle = []() {
-                    ImGui::PopStyleVar();
-                };
-
                 if (ImGui::BeginTabItem("Geom Inst")) {
                     static GeometryInstanceList geomInstList(optixEnv);
                     geomInstList.show();
 
-                    bool geomInstsSelected = geomInstList.getNumSelected() > 0;
-                    bool allUnused = geomInstList.getNumSelected() > 0;
+                    uint32_t numSelectedGeomInsts = geomInstList.getNumSelected();
+                    bool geomInstsSelected = numSelectedGeomInsts > 0;
+                    bool allUnused = numSelectedGeomInsts > 0;
                     geomInstList.loopForSelected(
-                        [&allUnused](uint32_t idx, const GeometryInstanceRef &geomInst) {
-                            allUnused &= geomInst.use_count() == 1;
+                        [&optixEnv, &allUnused](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                            const GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
+                            for (uint32_t index : indices) {
+                                allUnused &= fileGroup.geomInsts[index].use_count() == 1;
+                                if (!allUnused)
+                                    break;
+                            }
                             return allUnused;
                         });
-                    bool selectedGeomInstsRemovable = allUnused && geomInstList.getNumSelected() > 0;
+                    bool selectedGeomInstsRemovable = allUnused && numSelectedGeomInsts > 0;
 
-                    if (!geomInstsSelected)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Create a GAS")) {
-                        if (geomInstsSelected) {
-                            uint32_t serialID = optixEnv.gasSerialID++;
-                            GeometryGroupRef geomGroup = make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
-                            uint32_t gasIndex = optixEnv.gasSlotFinder.getFirstAvailableSlot();
-                            optixEnv.gasSlotFinder.setInUse(gasIndex);
-                            char name[256];
-                            sprintf_s(name, "GAS-%u", serialID);
-                            geomGroup->optixEnv = &optixEnv;
-                            geomGroup->gasIndex = gasIndex;
-                            geomGroup->serialID = serialID;
-                            geomGroup->name = name;
-                            geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
-                            geomGroup->optixGAS.setConfiguration(false, false, false, false);
-                            geomGroup->optixGAS.setNumMaterialSets(1);
-                            geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
-                            geomGroup->optixGAS.setUserData(gasIndex);
-                            geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, geomInstList.getNumSelected());
-                            geomGroup->dataTransfered = false;
+                    if (ImGui::Button("Create a GAS", geomInstsSelected)) {
+                        uint32_t serialID = optixEnv.gasSerialID++;
+                        GeometryGroupRef geomGroup = make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
+                        uint32_t gasIndex = optixEnv.gasSlotFinder.getFirstAvailableSlot();
+                        optixEnv.gasSlotFinder.setInUse(gasIndex);
+                        char name[256];
+                        sprintf_s(name, "GAS-%u", serialID);
+                        geomGroup->optixEnv = &optixEnv;
+                        geomGroup->gasIndex = gasIndex;
+                        geomGroup->serialID = serialID;
+                        geomGroup->name = name;
+                        geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
+                        geomGroup->optixGAS.setConfiguration(false, false, false, false);
+                        geomGroup->optixGAS.setNumMaterialSets(1);
+                        geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
+                        geomGroup->optixGAS.setUserData(gasIndex);
+                        geomGroup->preTransforms.resize(numSelectedGeomInsts);
+                        geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, numSelectedGeomInsts);
+                        geomGroup->dataTransfered = false;
 
-                            geomInstList.loopForSelected(
-                                [&optixEnv, &geomGroup, &curCuStream](uint32_t idx, const GeometryInstanceRef &geomInst) {
+                        geomInstList.loopForSelected(
+                            [&optixEnv, &geomGroup, &curCuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                                const GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
+                                for (uint32_t index : indices) {
+                                    const GeometryInstanceRef &geomInst = fileGroup.geomInsts[index];
                                     geomGroup->geomInsts.push_back(geomInst);
-                                    geomGroup->preTransforms.emplace_back();
-                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst, geomGroup->preTransformBuffer.getCUdeviceptrAt(idx));
+                                    uint32_t indexInGAS = geomGroup->geomInsts.size() - 1;
+                                    GeometryInstancePreTransform &preTransform = geomGroup->preTransforms[indexInGAS];
+                                    preTransform.scale = float3(1.0f, 1.0f, 1.0f);
+                                    preTransform.rollPitchYaw[0] = 0.0f;
+                                    preTransform.rollPitchYaw[1] = 0.0f;
+                                    preTransform.rollPitchYaw[2] = 0.0f;
+                                    preTransform.position = float3(0.0f, 0.0f, 0.0f);
+                                    CUdeviceptr preTransformPtr = geomGroup->preTransformBuffer.getCUdeviceptrAt(indexInGAS);
+                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst, preTransformPtr);
                                     if (!geomInst->dataTransfered) {
                                         Shared::GeometryData geomData;
                                         geomData.vertexBuffer = geomInst->vertexBuffer->getDevicePointer();
@@ -1298,300 +1546,304 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                                                                         &geomData, sizeof(geomData), curCuStream));
                                         geomInst->dataTransfered = true;
                                     }
-                                    return true;
-                                });
-                            CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
-                                                            geomGroup->preTransforms.data(),
-                                                            geomGroup->preTransformBuffer.sizeInBytes(),
-                                                            curCuStream));
-
-                            sbtLayoutUpdated = true;
-                            traversablesUpdated = true;
-
-                            optixEnv.geomGroups[serialID] = geomGroup;
+                                }
+                                return true;
+                            });
+                        std::vector<Shared::GeometryInstancePreTransform> preTransforms(numSelectedGeomInsts);
+                        for (int i = 0; i < numSelectedGeomInsts; ++i) {
+                            const GeometryInstancePreTransform &srcPreTransform = geomGroup->preTransforms[i];
+                            Shared::GeometryInstancePreTransform &dstPreTransform = preTransforms[i];
+                            dstPreTransform.setSRT(srcPreTransform.scale,
+                                                   srcPreTransform.rollPitchYaw,
+                                                   srcPreTransform.position);
                         }
+                        CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
+                                                        preTransforms.data(),
+                                                        geomGroup->preTransformBuffer.sizeInBytes(),
+                                                        curCuStream));
+
+                        sbtLayoutUpdated = true;
+                        traversablesUpdated = true;
+
+                        optixEnv.geomGroups[serialID] = geomGroup;
                     }
-                    if (!geomInstsSelected)
-                        ImGui_PopDisabledStyle();
 
                     ImGui::SameLine();
-                    if (!selectedGeomInstsRemovable)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Remove")) {
-                        if (selectedGeomInstsRemovable) {
-                            geomInstList.loopForSelected(
-                                [&optixEnv](uint32_t idx, const GeometryInstanceRef &geomInst) {
-                                    optixEnv.geomInsts.erase(geomInst->serialID);
-                                    return true;
-                                });
-                            geomInstList.clearSelection();
-                        }
+                    if (ImGui::Button("Remove", selectedGeomInstsRemovable)) {
+                        geomInstList.loopForSelected(
+                            [&optixEnv](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                                GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
+                                // JP: serialIDに基づいているためまず安全。
+                                for (auto it = indices.crbegin(); it != indices.crend(); ++it)
+                                    fileGroup.geomInsts.erase(fileGroup.geomInsts.cbegin() + *it);
+                                if (fileGroup.geomInsts.size() == 0)
+                                    optixEnv.geomInstFileGroups.erase(geomInstFileGroupSerialID);
+                                return true;
+                            });
+                        geomInstList.clearSelection();
                     }
-                    if (!selectedGeomInstsRemovable)
-                        ImGui_PopDisabledStyle();
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Clear Selection"))
+                        geomInstList.clearSelection();
 
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Geom Group")) {
                     static GeometryGroupList geomGroupList(optixEnv);
-                    geomGroupList.show();
 
-                    bool singleGeomGroupSelected = geomGroupList.getNumSelected() == 1;
-                    bool allUnused = geomGroupList.getNumSelected() > 0;
-                    geomGroupList.loopForSelected(
-                        [&allUnused](const GeometryGroupRef &geomGroup) {
-                            allUnused &= geomGroup.use_count() == 1;
-                            return allUnused;
-                        });
-                    bool selectedGeomGroupsRemovable = allUnused && geomGroupList.getNumSelected() > 0;
+                    bool selectionChanged;
+                    geomGroupList.show(&selectionChanged);
 
-                    if (!singleGeomGroupSelected)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Create an Instance")) {
-                        if (singleGeomGroupSelected) {
-                            uint32_t serialID = optixEnv.instSerialID++;
-                            InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
-                            inst->optixEnv = &optixEnv;
-                            char name[256];
-                            sprintf_s(name, "Instance-%u", serialID);
-                            inst->serialID = serialID;
-                            inst->name = name;
-                            inst->scale = float3(1.0f, 1.0f, 1.0f);
-                            inst->rollPitchYaw[0] = 0.0f;
-                            inst->rollPitchYaw[1] = 0.0f;
-                            inst->rollPitchYaw[2] = 0.0f;
-                            inst->position = float3(0.0f, 0.0f, 0.0f);
+                    static bool allGroupUnused = true;
+                    static bool geomGroupSelected = false;
+                    static bool geomInstsSelected = false;
+                    static bool singleGeomInstSelected = false;
 
-                            Matrix3x3 srMat =
-                                qFromEulerAngles(inst->rollPitchYaw[0],
-                                                 inst->rollPitchYaw[1],
-                                                 inst->rollPitchYaw[2]).toMatrix3x3() *
-                                scale3x3(inst->scale);
+                    const auto onSelectionChange = [&]() {
+                        allGroupUnused = true;
+                        geomGroupList.loopForSelectedGeomGroups(
+                            [&optixEnv](const GeometryGroupRef &geomGroup) {
+                                allGroupUnused &= geomGroup.use_count() == 1;
+                                return allGroupUnused;
+                            });
+                        geomGroupSelected = geomGroupList.getNumSelectedGeomGroups() > 0;
+                        uint32_t numGeomInstsSelected = geomGroupList.getNumSelectedGeomInsts();
+                        geomInstsSelected = numGeomInstsSelected > 0;
+                        singleGeomInstSelected = numGeomInstsSelected == 1;
+                    };
 
-                            const GeometryGroupRef &geomGroup = geomGroupList.getFirstSelectedItem();
-                            inst->geomGroup = geomGroup;
-                            geomGroup->parentInsts.insert(inst);
-                            inst->optixInst = optixEnv.scene.createInstance();
-                            inst->optixInst.setChild(geomGroup->optixGAS);
-                            float tr[] = {
-                                srMat.m00, srMat.m01, srMat.m02, inst->position.x,
-                                srMat.m10, srMat.m11, srMat.m12, inst->position.y,
-                                srMat.m20, srMat.m21, srMat.m22, inst->position.z,
-                            };
-                            inst->optixInst.setTransform(tr);
+                    if (selectionChanged)
+                        onSelectionChange();
 
-                            if (!geomGroup->dataTransfered) {
-                                Shared::GASData gasData;
-                                gasData.preTransforms = geomGroup->preTransformBuffer.getDevicePointer();
-                                CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.gasDataBuffer.getCUdeviceptrAt(geomGroup->gasIndex),
-                                                                &gasData,
-                                                                sizeof(gasData),
-                                                                curCuStream));
-                                geomGroup->dataTransfered = true;
-                            }
+                    if (ImGui::Button("Create Instances", geomGroupSelected)) {
+                        geomGroupList.loopForSelectedGeomGroups(
+                            [&optixEnv, &curCuStream](const GeometryGroupRef &geomGroup) {
+                                uint32_t serialID = optixEnv.instSerialID++;
+                                InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
+                                inst->optixEnv = &optixEnv;
+                                char name[256];
+                                sprintf_s(name, "Instance-%u", serialID);
+                                inst->serialID = serialID;
+                                inst->name = name;
+                                inst->scale = float3(1.0f, 1.0f, 1.0f);
+                                inst->rollPitchYaw[0] = 0.0f;
+                                inst->rollPitchYaw[1] = 0.0f;
+                                inst->rollPitchYaw[2] = 0.0f;
+                                inst->position = float3(0.0f, 0.0f, 0.0f);
 
-                            optixEnv.insts[serialID] = inst;
-                        }
+                                Matrix3x3 srMat =
+                                    qFromEulerAngles(inst->rollPitchYaw[0],
+                                                     inst->rollPitchYaw[1],
+                                                     inst->rollPitchYaw[2]).toMatrix3x3() *
+                                    scale3x3(inst->scale);
+
+                                inst->geomGroup = geomGroup;
+                                geomGroup->parentInsts.insert(inst);
+                                inst->optixInst = optixEnv.scene.createInstance();
+                                inst->optixInst.setChild(geomGroup->optixGAS);
+                                float tr[] = {
+                                    srMat.m00, srMat.m01, srMat.m02, inst->position.x,
+                                    srMat.m10, srMat.m11, srMat.m12, inst->position.y,
+                                    srMat.m20, srMat.m21, srMat.m22, inst->position.z,
+                                };
+                                inst->optixInst.setTransform(tr);
+
+                                if (!geomGroup->dataTransfered) {
+                                    Shared::GASData gasData;
+                                    gasData.preTransforms = geomGroup->preTransformBuffer.getDevicePointer();
+                                    CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.gasDataBuffer.getCUdeviceptrAt(geomGroup->gasIndex),
+                                                                    &gasData,
+                                                                    sizeof(gasData),
+                                                                    curCuStream));
+                                    geomGroup->dataTransfered = true;
+                                }
+
+                                optixEnv.insts[serialID] = inst;
+
+                                return true;
+                            });
                     }
-                    if (!singleGeomGroupSelected)
-                        ImGui_PopDisabledStyle();
 
                     ImGui::SameLine();
-                    if (!selectedGeomGroupsRemovable)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Remove##GeomGroup")) {
-                        if (selectedGeomGroupsRemovable) {
-                            geomGroupList.loopForSelected(
+                    bool removeIsActive = (allGroupUnused && geomGroupSelected) || geomInstsSelected > 0;
+                    if (ImGui::Button("Remove", removeIsActive)) {
+                        if (geomGroupSelected) {
+                            geomGroupList.loopForSelectedGeomGroups(
                                 [&optixEnv](const GeometryGroupRef &geomGroup) {
                                     optixEnv.geomGroups.erase(geomGroup->serialID);
                                     return true;
                                 });
-                            geomGroupList.clearSelection();
-                            sbtLayoutUpdated = true;
-                            traversablesUpdated = true;
                         }
+                        else if (geomInstsSelected) {
+                            const GeometryGroupRef &geomGroup = geomGroupList.getActiveGeometryGroup();
+                            for (int i = geomGroup->geomInsts.size() - 1; i >= 0; --i)
+                                geomGroup->optixGAS.removeChild(geomGroup->geomInsts[i]->optixGeomInst,
+                                                                geomGroup->preTransformBuffer.getCUdeviceptrAt(i));
+                            geomGroupList.callForActiveGeomGroup(
+                                [&optixEnv](const GeometryGroupRef &geomGroup, const std::set<uint32_t> &selectedIndices) {
+                                    // JP: serialIDに基づいているためまず安全。
+                                    for (auto it = selectedIndices.crbegin(); it != selectedIndices.crend(); ++it) {
+                                        uint32_t geomInstIdx = *it;
+                                        const GeometryInstanceRef &geomInst = geomGroup->geomInsts[geomInstIdx];
+                                        geomGroup->geomInsts.erase(geomGroup->geomInsts.cbegin() + geomInstIdx);
+                                        geomGroup->preTransforms.erase(geomGroup->preTransforms.cbegin() + geomInstIdx);
+                                    }
+                                });
+                            for (int i = 0; i < geomGroup->geomInsts.size(); ++i)
+                                geomGroup->optixGAS.addChild(geomGroup->geomInsts[i]->optixGeomInst,
+                                                             geomGroup->preTransformBuffer.getCUdeviceptrAt(i));
+                            geomGroup->propagateMarkDirty();
+                            CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
+                                                            geomGroup->preTransforms.data(),
+                                                            geomGroup->preTransformBuffer.sizeInBytes(),
+                                                            curCuStream));
+                        }
+                        geomGroupList.clearSelection();
+                        onSelectionChange();
+
+                        sbtLayoutUpdated = true;
+                        traversablesUpdated = true;
                     }
-                    if (!selectedGeomGroupsRemovable)
-                        ImGui_PopDisabledStyle();
+
+                    if (ImGui::Button("Clear Selection"))
+                        geomGroupList.clearSelection();
 
 
 
+                    // TODO: Multiple Selection/Editing
                     ImGui::Separator();
+                    if (!singleGeomInstSelected)
+                        ImGui::PushDisabledStyle();
 
-                    if (!singleGeomGroupSelected)
-                        ImGui_PushDisabledStyle();
+                    GeometryGroupRef activeGroup = geomGroupList.getActiveGeometryGroup();
+                    uint32_t selectedGeomInstIndex = geomGroupList.getFirstSelectedGeomInstIndex();
+                    GeometryInstanceRef selectedGeomInst = selectedGeomInstIndex != 0xFFFFFFFF ?
+                        activeGroup->geomInsts[selectedGeomInstIndex] : nullptr;
+                    GeometryInstancePreTransform dummyPreTransform;
+                    GeometryInstancePreTransform &preTransform = selectedGeomInstIndex != 0xFFFFFFFF ?
+                        activeGroup->preTransforms[selectedGeomInstIndex] : dummyPreTransform;
 
-                    static GeometryGroupRef dummyGeomGroup = make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
-                    const GeometryGroupRef &selectedGeomGroup = singleGeomGroupSelected ?
-                        geomGroupList.getFirstSelectedItem() : dummyGeomGroup;
+                    ImGui::Text("%s", singleGeomInstSelected ? selectedGeomInst->name.c_str() : "Not selected");
+                    static float instScale[3];
+                    static float instOrientation[3];
+                    static float instPosition[3];
+                    bool srtUpdated = false;
+                    if (singleGeomInstSelected) {
+                        std::copy_n(reinterpret_cast<float*>(&preTransform.scale), 3, instScale);
+                        std::copy_n(preTransform.rollPitchYaw, 3, instOrientation);
+                        instOrientation[0] *= 180 / M_PI;
+                        instOrientation[1] *= 180 / M_PI;
+                        instOrientation[2] *= 180 / M_PI;
+                        std::copy_n(reinterpret_cast<float*>(&preTransform.position), 3, instPosition);
+                    }
+                    else {
+                        instScale[0] = instScale[1] = instScale[2] = 0.0f;
+                        instOrientation[0] = instOrientation[1] = instOrientation[2] = 0.0f;
+                        instPosition[0] = instPosition[1] = instPosition[2] = 0.0f;
+                    }
+                    srtUpdated |= ImGui::InputFloat3("Scale", instScale, 5);
+                    srtUpdated |= ImGui::InputFloat3("Roll/Pitch/Yaw", instOrientation, 5);
+                    srtUpdated |= ImGui::InputFloat3("Position", instPosition, 5);
+                    if (singleGeomInstSelected && srtUpdated) {
+                        preTransform.scale = float3(instScale[0], instScale[1], instScale[2]);
+                        preTransform.rollPitchYaw[0] = instOrientation[0] * M_PI / 180;
+                        preTransform.rollPitchYaw[1] = instOrientation[1] * M_PI / 180;
+                        preTransform.rollPitchYaw[2] = instOrientation[2] * M_PI / 180;
+                        preTransform.position = float3(instPosition[0], instPosition[1], instPosition[2]);
 
-                    ImGui::Text("%s", singleGeomGroupSelected ? selectedGeomGroup->name.c_str() : "Not selected");
+                        Shared::GeometryInstancePreTransform dstPreTransform;
+                        dstPreTransform.setSRT(preTransform.scale,
+                                               preTransform.rollPitchYaw,
+                                               preTransform.position);
+                        CUDADRV_CHECK(cuMemcpyHtoDAsync(activeGroup->preTransformBuffer.getCUdeviceptrAt(selectedGeomInstIndex),
+                                                        &dstPreTransform,
+                                                        sizeof(dstPreTransform),
+                                                        curCuStream));
 
-                    static bool allGeomInstSelected = false;
-                    static std::set<uint32_t> selectedGeomInsts;
-                    if (ImGui::BeginTable("##geomInstList", 4,
-                                          ImGuiTableFlags_Borders |
-                                          ImGuiTableFlags_Resizable |
-                                          ImGuiTableFlags_ScrollY |
-                                          ImGuiTableFlags_ScrollFreezeTopRow,
-                                          ImVec2(0, 200))) {
-                        ImGui::TableSetupColumn("CheckAll",
-                                                ImGuiTableColumnFlags_WidthFixed |
-                                                ImGuiTableColumnFlags_NoResize);
-                        ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
-                        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-                        ImGui::TableSetupColumn("#Prims", ImGuiTableColumnFlags_WidthFixed);
-                        {
-                            ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+                        activeGroup->optixGAS.markDirty();
+                        activeGroup->propagateMarkDirty();
 
-                            ImGui::TableSetColumnIndex(0);
-                            ImGui::PushID(ImGui::TableGetColumnName(0));
-                            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 2));
-                            if (ImGui::Checkbox("##check", &allGeomInstSelected)) {
-                                if (allGeomInstSelected) {
-                                    for (int i = 0; i < selectedGeomGroup->geomInsts.size(); ++i)
-                                        selectedGeomInsts.insert(i);
-                                }
-                                else {
-                                    selectedGeomInsts.clear();
-                                }
-                            }
-                            ImGui::PopStyleVar();
-                            ImGui::PopID();
-
-                            ImGui::TableSetColumnIndex(1);
-                            ImGui::TableHeader(ImGui::TableGetColumnName(1));
-                            ImGui::TableSetColumnIndex(2);
-                            ImGui::TableHeader(ImGui::TableGetColumnName(2));
-                            ImGui::TableSetColumnIndex(3);
-                            ImGui::TableHeader(ImGui::TableGetColumnName(3));
-                        }
-                        for (int i = 0; i < selectedGeomGroup->geomInsts.size(); ++i) {
-                            const GeometryInstanceRef &geomInst = selectedGeomGroup->geomInsts[i];
-
-                            ImGui::TableNextRow();
-
-                            ImGui::TableSetColumnIndex(0);
-                            ImGui::PushID(i);
-                            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, 1));
-                            bool selected = selectedGeomInsts.count(i) > 0;
-                            if (ImGui::Checkbox("##check", &selected)) {
-                                if (selected)
-                                    selectedGeomInsts.insert(i);
-                                else
-                                    selectedGeomInsts.erase(i);
-                                allGeomInstSelected = selectedGeomInsts.size() == optixEnv.geomInsts.size();
-                            }
-                            ImGui::PopStyleVar();
-                            ImGui::PopID();
-
-                            ImGui::TableSetColumnIndex(1);
-                            char sid[32];
-                            sprintf_s(sid, "%u", geomInst->serialID);
-                            ImGui::Selectable(sid, false, ImGuiSelectableFlags_None);
-
-                            ImGui::TableSetColumnIndex(2);
-                            ImGui::Text("%s", geomInst->name.c_str());
-
-                            ImGui::TableSetColumnIndex(3);
-                            ImGui::Text("%u", geomInst->triangleBuffer.numElements());
-                        }
-                        ImGui::EndTable();
+                        sbtLayoutUpdated = true;
+                        traversablesUpdated = true;
                     }
 
-                    bool geomInstsSelected = selectedGeomInsts.size() > 0;
-
-                    if (!singleGeomGroupSelected)
-                        ImGui_PopDisabledStyle();
-
-                    if (!geomInstsSelected)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Remove##GeomInst")) {
-                        if (geomInstsSelected) {
-                            for (auto it = selectedGeomInsts.crbegin(); it != selectedGeomInsts.crend(); ++it) {
-                                const GeometryInstanceRef &child = selectedGeomGroup->geomInsts[*it];
-                                selectedGeomGroup->geomInsts.erase(selectedGeomGroup->geomInsts.cbegin() + *it);
-                                selectedGeomGroup->optixGAS.removeChild(child->optixGeomInst);
-                            }
-
-                            sbtLayoutUpdated = true;
-                            traversablesUpdated = true;
-
-                            selectedGeomInsts.clear();
-                            allGeomInstSelected = false;
-                        }
-                    }
-                    if (!geomInstsSelected)
-                        ImGui_PopDisabledStyle();
+                    if (!singleGeomInstSelected)
+                        ImGui::PopDisabledStyle();
 
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Inst")) {
                     static InstanceList instList(optixEnv);
-                    instList.show();
 
-                    bool instsSelected = instList.getNumSelected() > 0;
-                    bool singleInstSelected = instList.getNumSelected() == 1;
-                    bool allUnused = instList.getNumSelected() > 0;
-                    instList.loopForSelected(
-                        [&allUnused](const InstanceRef &inst) {
-                            allUnused &= inst.use_count() == 1;
-                            return allUnused;
-                        });
-                    bool selectedInstsRemovable = allUnused && instList.getNumSelected() > 0;
+                    bool selectionChanged;
+                    instList.show(&selectionChanged);
 
-                    if (!instsSelected)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Create an IAS")) {
-                        if (instsSelected) {
-                            uint32_t serialID = optixEnv.iasSerialID++;
-                            GroupRef group = make_shared_with_deleter<Group>(Group::finalize);
-                            group->optixEnv = &optixEnv;
-                            char name[256];
-                            sprintf_s(name, "IAS-%u", serialID);
-                            group->serialID = serialID;
-                            group->name = name;
-                            group->optixIAS = optixEnv.scene.createInstanceAccelerationStructure();
-                            group->optixIAS.setConfiguration(false, false, false);
+                    static bool instsSelected = false;
+                    static bool singleInstSelected = false;
+                    static bool allUnused = true;
+                    static bool selectedInstsRemovable = false;
 
-                            instList.loopForSelected(
-                                [&group](const InstanceRef &inst) {
-                                    group->insts.push_back(inst);
-                                    group->optixIAS.addChild(inst->optixInst);
-                                    inst->parentGroups.insert(group);
-                                    return true;
-                                });
+                    const auto onSelectionChange = [&]() {
+                        instsSelected = instList.getNumSelected() > 0;
+                        singleInstSelected = instList.getNumSelected() == 1;
+                        allUnused = true;
+                        instList.loopForSelected(
+                            [](const InstanceRef &inst) {
+                                allUnused &= inst.use_count() == 1;
+                                return allUnused;
+                            });
+                        selectedInstsRemovable = allUnused && instList.getNumSelected() > 0;
+                    };
 
-                            optixEnv.groups[serialID] = group;
-                            traversablesUpdated = true;
-                        }
+                    if (selectionChanged)
+                        onSelectionChange();
+
+                    if (ImGui::Button("Create an IAS", instsSelected)) {
+                        uint32_t serialID = optixEnv.iasSerialID++;
+                        GroupRef group = make_shared_with_deleter<Group>(Group::finalize);
+                        group->optixEnv = &optixEnv;
+                        char name[256];
+                        sprintf_s(name, "IAS-%u", serialID);
+                        group->serialID = serialID;
+                        group->name = name;
+                        group->optixIAS = optixEnv.scene.createInstanceAccelerationStructure();
+                        group->optixIAS.setConfiguration(false, false, false);
+
+                        instList.loopForSelected(
+                            [&group](const InstanceRef &inst) {
+                                group->insts.push_back(inst);
+                                group->optixIAS.addChild(inst->optixInst);
+                                inst->parentGroups.insert(group);
+                                return true;
+                            });
+
+                        optixEnv.groups[serialID] = group;
+                        traversablesUpdated = true;
                     }
-                    if (!instsSelected)
-                        ImGui_PopDisabledStyle();
 
                     ImGui::SameLine();
-                    if (!selectedInstsRemovable)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Remove")) {
-                        if (selectedInstsRemovable) {
-                            instList.loopForSelected(
-                                [&optixEnv](const InstanceRef &inst) {
-                                    InstanceWRef instWRef = std::weak_ptr(inst);
+                    if (ImGui::Button("Remove", selectedInstsRemovable)) {
+                        instList.loopForSelected(
+                            [&optixEnv](const InstanceRef &inst) {
+                                InstanceWRef instWRef = std::weak_ptr(inst);
+                                if (inst->geomGroup)
                                     inst->geomGroup->parentInsts.erase(instWRef);
-                                    optixEnv.insts.erase(inst->serialID);
-                                    return true;
-                                });
-                            instList.clearSelection();
-                        }
+                                else if (inst->group)
+                                    inst->group->parentInsts.erase(instWRef);
+                                optixEnv.insts.erase(inst->serialID);
+                                return true;
+                            });
+                        instList.clearSelection();
+                        onSelectionChange();
                     }
-                    if (!selectedInstsRemovable)
-                        ImGui_PopDisabledStyle();
 
 
 
+                    // TODO: Multiple Selection/Editing
                     ImGui::Separator();
                     if (!singleInstSelected)
-                        ImGui_PushDisabledStyle();
+                        ImGui::PushDisabledStyle();
 
                     const InstanceRef &selectedInst = singleInstSelected ?
                         instList.getFirstSelectedItem() : InstanceRef();
@@ -1637,40 +1889,110 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                         };
                         selectedInst->optixInst.setTransform(tr);
 
-                        for (const auto &parent : selectedInst->parentGroups) {
-                            GroupRef group = parent.lock();
-                            group->optixIAS.markDirty();
-                        }
+                        selectedInst->propagateMarkDirty();
                     }
 
                     if (!singleInstSelected)
-                        ImGui_PopDisabledStyle();
+                        ImGui::PopDisabledStyle();
 
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Group")) {
                     static GroupList groupList(optixEnv);
-                    groupList.show();
 
-                    bool groupsSelected = groupList.getNumSelected() > 0;
-                    if (!groupsSelected)
-                        ImGui_PushDisabledStyle();
-                    if (ImGui::Button("Remove")) {
-                        if (groupsSelected) {
-                            groupList.loopForSelected(
+                    bool selectionChanged;
+                    groupList.show(&selectionChanged);
+
+                    static bool allGroupUnused = true;
+                    static uint32_t numGroupsSelected = 0;
+                    static uint32_t numInstsSelected = 0;
+                    static bool removeIsActive = false;
+
+                    const auto onSelectionChange = [&]() {
+                        bool allGroupUnused = true;
+                        groupList.loopForSelectedGroups(
+                            [&optixEnv, &allGroupUnused](const GroupRef &group) {
+                                allGroupUnused &= group.use_count() == 1;
+                                return allGroupUnused;
+                            });
+                        numGroupsSelected = groupList.getNumSelectedGroups();
+                        numInstsSelected = groupList.getNumSelectedInsts();
+                        removeIsActive = (allGroupUnused && numGroupsSelected > 0) || numInstsSelected > 0;
+                    };
+
+                    if (selectionChanged)
+                        onSelectionChange();
+
+                    if (ImGui::Button("Create Instances", numGroupsSelected > 0)) {
+                        groupList.loopForSelectedGroups(
+                            [&optixEnv, &curCuStream](const GroupRef &group) {
+                                uint32_t serialID = optixEnv.instSerialID++;
+                                InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
+                                inst->optixEnv = &optixEnv;
+                                char name[256];
+                                sprintf_s(name, "Instance-%u", serialID);
+                                inst->serialID = serialID;
+                                inst->name = name;
+                                inst->scale = float3(1.0f, 1.0f, 1.0f);
+                                inst->rollPitchYaw[0] = 0.0f;
+                                inst->rollPitchYaw[1] = 0.0f;
+                                inst->rollPitchYaw[2] = 0.0f;
+                                inst->position = float3(0.0f, 0.0f, 0.0f);
+
+                                Matrix3x3 srMat =
+                                    qFromEulerAngles(inst->rollPitchYaw[0],
+                                                     inst->rollPitchYaw[1],
+                                                     inst->rollPitchYaw[2]).toMatrix3x3() *
+                                    scale3x3(inst->scale);
+
+                                inst->group = group;
+                                group->parentInsts.insert(inst);
+                                inst->optixInst = optixEnv.scene.createInstance();
+                                inst->optixInst.setChild(group->optixIAS);
+                                float tr[] = {
+                                    srMat.m00, srMat.m01, srMat.m02, inst->position.x,
+                                    srMat.m10, srMat.m11, srMat.m12, inst->position.y,
+                                    srMat.m20, srMat.m21, srMat.m22, inst->position.z,
+                                };
+                                inst->optixInst.setTransform(tr);
+
+                                optixEnv.insts[serialID] = inst;
+
+                                return true;
+                            });
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Remove", removeIsActive)) {
+                        if (numGroupsSelected > 0) {
+                            groupList.loopForSelectedGroups(
                                 [&optixEnv](const GroupRef &group) {
-                                    GroupWRef groupWRef = std::weak_ptr(group);
-                                    for (const auto &child : group->insts)
-                                        child->parentGroups.erase(groupWRef);
                                     optixEnv.groups.erase(group->serialID);
                                     return true;
                                 });
-                            groupList.clearSelection();
-                            traversablesUpdated = true;
                         }
+                        else if (numInstsSelected > 0) {
+                            groupList.callForActiveGroup(
+                                [&optixEnv](const GroupRef &group, const std::set<uint32_t> &selectedIndices) {
+                                    // JP: serialIDに基づいているためまず安全。
+                                    for (auto it = selectedIndices.crbegin(); it != selectedIndices.crend(); ++it) {
+                                        uint32_t instIdx = *it;
+                                        const InstanceRef &inst = group->insts[instIdx];
+                                        group->optixIAS.removeChild(inst->optixInst);
+                                        group->insts.erase(group->insts.cbegin() + instIdx);
+                                        group->propagateMarkDirty();
+                                    }
+                                    return true;
+                                });
+                        }
+                        sbtLayoutUpdated = true;
+                        traversablesUpdated = true;
+                        groupList.clearSelection();
+                        onSelectionChange();
                     }
-                    if (!groupsSelected)
-                        ImGui_PopDisabledStyle();
+
+                    if (ImGui::Button("Clear Selection"))
+                        groupList.clearSelection();
 
                     ImGui::EndTabItem();
                 }
@@ -1687,15 +2009,27 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             if (geomGroup->optixGAS.isReady())
                 continue;
 
-            // TODO: GAS用バッファーのアップデートもレンダリングで使いながらのアップデートは危険？
             OptixAccelBufferSizes bufferSizes;
             geomGroup->optixGAS.prepareForBuild(&bufferSizes);
             if (bufferSizes.tempSizeInBytes >= optixEnv.asScratchBuffer.sizeInBytes())
                 optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, curCuStream);
-            if (geomGroup->optixGasMem.isInitialized())
-                geomGroup->optixGasMem.resize(bufferSizes.outputSizeInBytes, 1, curCuStream);
-            else
+            // JP: ASのメモリをGPUが使用中に確保しなおすのは危険なため使用の完了を待つ。
+            //     CPU/GPUの非同期実行を邪魔したくない場合、完全に別のバッファーを用意してそれと切り替える必要がある。
+            // EN: It is dangerous to reallocate AS memory during the GPU is using it,
+            //     so wait the completion of use.
+            //     You need to prepare a completely separated buffer and switch the current with it
+            //     if you don't want to interfere CPU/GPU asynchronous execution.
+            if (geomGroup->optixGasMem.isInitialized()) {
+                if (bufferSizes.outputSizeInBytes > geomGroup->optixGasMem.sizeInBytes()) {
+                    CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
+                    geomGroup->optixGasMem.resize(bufferSizes.outputSizeInBytes, 1, curCuStream);
+                    // TODO: prevCuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
+                }
+            }
+            else {
+                CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
                 geomGroup->optixGasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
+            }
             geomGroup->optixGAS.rebuild(curCuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
         }
 
@@ -1718,18 +2052,28 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             if (group->optixIAS.isReady())
                 continue;
 
-            // TODO: 非同期実行中のスクラッチバッファー更新大丈夫？
-            //       連続フレームで来ると危ない？同じフレーム内でもGAS, IASと連続してサイズ変更が危ない？
             OptixAccelBufferSizes bufferSizes;
             uint32_t numInstances;
             group->optixIAS.prepareForBuild(&bufferSizes, &numInstances);
             if (bufferSizes.tempSizeInBytes >= optixEnv.asScratchBuffer.sizeInBytes())
                 optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, curCuStream);
+            // JP: ASのメモリをGPUが使用中に確保しなおすのは危険なため使用の完了を待つ。
+            //     CPU/GPUの非同期実行を邪魔しないためには、完全に別のバッファーを用意してそれと切り替える必要がある。
+            // EN: It is dangerous to reallocate AS memory during the GPU is using it,
+            //     so wait the completion of use.
+            //     You need to prepare a completely separated buffer and switch the current with it
+            //     if you don't want to interfere CPU/GPU asynchronous execution.
             if (group->optixIasMem.isInitialized()) {
-                group->optixIasMem.resize(bufferSizes.outputSizeInBytes, 1, curCuStream);
-                group->optixInstanceBuffer.resize(numInstances);
+                if (bufferSizes.outputSizeInBytes > group->optixIasMem.sizeInBytes() ||
+                    numInstances > group->optixInstanceBuffer.numElements()) {
+                    CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
+                    group->optixIasMem.resize(bufferSizes.outputSizeInBytes, 1, curCuStream);
+                    group->optixInstanceBuffer.resize(numInstances);
+                    // TODO: prevCuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
+                }
             }
             else {
+                CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
                 group->optixIasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
                 group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, numInstances);
             }
@@ -1777,9 +2121,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         // ----------------------------------------------------------------
         // JP: 
 
-        glEnable(GL_FRAMEBUFFER_SRGB);
-        GLTK::errorCheck();
-
         glViewport(0, 0, curFBWidth, curFBHeight);
 
         drawOptiXResultShader.useProgram();
@@ -1814,7 +2155,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixEnv.groups.clear();
     optixEnv.insts.clear();
     optixEnv.geomGroups.clear();
-    optixEnv.geomInsts.clear();
+    optixEnv.geomInstFileGroups.clear();
 
     drawOptiXResultShader.finalize();
     vertexArrayForFullScreen.finalize();
@@ -1835,7 +2176,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     optixEnv.material.destroy();
 
-    hitProgramGroup0.destroy();
+    hitProgramGroup.destroy();
     missProgram.destroy();
     rayGenProgram.destroy();
 

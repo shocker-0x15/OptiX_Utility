@@ -14,6 +14,7 @@
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
+    <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="single_gas_main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -22,6 +23,7 @@
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
+    <ClInclude Include="..\common\common.h" />
     <ClInclude Include="single_gas_shared.h" />
   </ItemGroup>
   <ItemGroup>

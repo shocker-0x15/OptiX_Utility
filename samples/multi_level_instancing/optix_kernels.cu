@@ -39,7 +39,12 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
-    float time = plp.timeBegin + (plp.timeEnd - plp.timeBegin) * rng.getFloat0cTo1o();
+    // JP: モーションブラーの効果をわかりやすくするために画像中の位置ごとに時間幅を変える。
+    // EN: Use different duration depending on position in the image to make it easy to see
+    //     the motion blur effect.
+    float timeRange = plp.timeEnd - plp.timeBegin;
+    timeRange *= ((y < 0.5f ? 2 : 0) + (x > 0.5f ? 1 : 0)) / 3.0f;
+    float time = plp.timeBegin + timeRange * rng.getFloat0cTo1o();
 
     float3 color;
     optixu::trace<PayloadSignature>(

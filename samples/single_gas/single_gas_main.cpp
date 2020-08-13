@@ -1,124 +1,8 @@
-﻿// Platform defines
-#if defined(_WIN32) || defined(_WIN64)
-#    define HP_Platform_Windows
-#    if defined(_MSC_VER)
-#        define HP_Platform_Windows_MSVC
-#    endif
-#elif defined(__APPLE__)
-#    define HP_Platform_macOS
-#endif
-
-#if defined(HP_Platform_Windows_MSVC)
-#   define NOMINMAX
-#   define _USE_MATH_DEFINES
-#   include <Windows.h>
-#   undef near
-#   undef far
-#   undef RGB
-#endif
-
-
-
-#include <cstdio>
-#include <cstdlib>
-#include <cstdint>
-#include <cmath>
-
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <filesystem>
-#include <random>
-#include <thread>
-#include <chrono>
-
-#include <cuda_runtime.h> // only for vector types.
-
-#include "single_gas_shared.h"
+﻿#include "single_gas_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"
 #include "../../ext/tiny_obj_loader.h"
-
-
-
-#ifdef _DEBUG
-#   define ENABLE_ASSERT
-#   define DEBUG_SELECT(A, B) A
-#else
-#   define DEBUG_SELECT(A, B) B
-#endif
-
-#ifdef HP_Platform_Windows_MSVC
-static void devPrintf(const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    char str[4096];
-    vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
-    va_end(args);
-    OutputDebugString(str);
-}
-#else
-#   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
-#endif
-
-#if 1
-#   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
-#else
-#   define hpprintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#endif
-
-#ifdef ENABLE_ASSERT
-#   define Assert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
-#else
-#   define Assert(expr, fmt, ...)
-#endif
-
-#define Assert_ShouldNotBeCalled() Assert(false, "Should not be called!")
-#define Assert_NotImplemented() Assert(false, "Not implemented yet!")
-
-template <typename T, size_t size>
-constexpr size_t lengthof(const T(&array)[size]) {
-    return size;
-}
-
-
-
-static std::filesystem::path getExecutableDirectory() {
-    static std::filesystem::path ret;
-
-    static bool done = false;
-    if (!done) {
-#if defined(HP_Platform_Windows_MSVC)
-        TCHAR filepath[1024];
-        auto length = GetModuleFileName(NULL, filepath, 1024);
-        Assert(length > 0, "Failed to query the executable path.");
-
-        ret = filepath;
-#else
-        static_assert(false, "Not implemented");
-#endif
-        ret = ret.remove_filename();
-
-        done = true;
-    }
-
-    return ret;
-}
-
-static std::string readTxtFile(const std::filesystem::path& filepath) {
-    std::ifstream ifs;
-    ifs.open(filepath, std::ios::in);
-    if (ifs.fail())
-        return "";
-
-    std::stringstream sstream;
-    sstream << ifs.rdbuf();
-
-    return std::string(sstream.str());
-};
-
-
 
 int32_t mainFunc(int32_t argc, const char* argv[]) {
     // ----------------------------------------------------------------
@@ -168,8 +52,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
     pipeline.setMaxTraceDepth(1);
-    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
-                  false);
+    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.

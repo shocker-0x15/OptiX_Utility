@@ -41,7 +41,6 @@
 
 #   include <immintrin.h>
 
-#   include "GLToolkit.h"
 #   include "stopwatch.h"
 #endif
 
@@ -200,90 +199,13 @@ CUDA_DEVICE_FUNCTION uint32_t nthSetBit(uint32_t value, int32_t n) {
 
 
 
-#if !defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if !defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
 
 #if 1
 #   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
 #else
 #   define hpprintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
-
-
-
-struct alignas(8) int2 {
-    int32_t x, y;
-    constexpr int2(int32_t v = 0) : x(v), y(v) {}
-    constexpr int2(int32_t xx, int32_t yy) : x(xx), y(yy) {}
-};
-inline constexpr int2 make_int2(int32_t x, int32_t y) {
-    return int2(x, y);
-}
-struct int3 {
-    int32_t x, y, z;
-    constexpr int3(int32_t v = 0) : x(v), y(v), z(v) {}
-    constexpr int3(int32_t xx, int32_t yy, int32_t zz) : x(xx), y(yy), z(zz) {}
-};
-inline constexpr int3 make_int3(int32_t x, int32_t y, int32_t z) {
-    return int3(x, y, z);
-}
-struct alignas(16) int4 {
-    int32_t x, y, z, w;
-    constexpr int4(int32_t v = 0) : x(v), y(v), z(v), w(v) {}
-    constexpr int4(int32_t xx, int32_t yy, int32_t zz, int32_t ww) : x(xx), y(yy), z(zz), w(ww) {}
-};
-inline constexpr int4 make_int4(int32_t x, int32_t y, int32_t z, int32_t w) {
-    return int4(x, y, z, w);
-}
-struct alignas(8) uint2 {
-    uint32_t x, y;
-    constexpr uint2(uint32_t v = 0) : x(v), y(v) {}
-    constexpr uint2(uint32_t xx, uint32_t yy) : x(xx), y(yy) {}
-};
-inline constexpr uint2 make_uint2(uint32_t x, uint32_t y) {
-    return uint2(x, y);
-}
-struct uint3 {
-    uint32_t x, y, z;
-    constexpr uint3(uint32_t v = 0) : x(v), y(v), z(v) {}
-    constexpr uint3(uint32_t xx, uint32_t yy, uint32_t zz) : x(xx), y(yy), z(zz) {}
-};
-inline constexpr uint3 make_uint3(uint32_t x, uint32_t y, uint32_t z) {
-    return uint3(x, y, z);
-}
-struct uint4 {
-    uint32_t x, y, z, w;
-    constexpr uint4(uint32_t v = 0) : x(v), y(v), z(v), w(v) {}
-    constexpr uint4(uint32_t xx, uint32_t yy, uint32_t zz, uint32_t ww) : x(xx), y(yy), z(zz), w(ww) {}
-};
-inline constexpr uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) {
-    return uint4(x, y, z, w);
-}
-struct alignas(8) float2 {
-    float x, y;
-    constexpr float2(float v = 0) : x(v), y(v) {}
-    constexpr float2(float xx, float yy) : x(xx), y(yy) {}
-};
-inline float2 make_float2(float x, float y) {
-    return float2(x, y);
-}
-struct float3 {
-    float x, y, z;
-    constexpr float3(float v = 0) : x(v), y(v), z(v) {}
-    constexpr float3(float xx, float yy, float zz) : x(xx), y(yy), z(zz) {}
-};
-inline constexpr float3 make_float3(float x, float y, float z) {
-    return float3(x, y, z);
-}
-struct alignas(16) float4 {
-    float x, y, z, w;
-    constexpr float4(float v = 0) : x(v), y(v), z(v), w(v) {}
-    constexpr float4(float xx, float yy, float zz, float ww) : x(xx), y(yy), z(zz), w(ww) {}
-};
-inline constexpr float4 make_float4(float x, float y, float z, float w) {
-    return float4(x, y, z, w);
-}
-
-
 
 template <typename T, typename Deleter, typename ...ArgTypes>
 std::shared_ptr<T> make_shared_with_deleter(const Deleter &deleter, ArgTypes&&... args) {
@@ -410,6 +332,83 @@ public:
 #endif
 
 
+
+// JP: CUDAビルトインに対応する型・関数をホスト側で定義しておく。
+// EN: Define types and functions on the host corresponding to CUDA built-ins.
+#if !defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+struct alignas(8) int2 {
+    int32_t x, y;
+    constexpr int2(int32_t v = 0) : x(v), y(v) {}
+    constexpr int2(int32_t xx, int32_t yy) : x(xx), y(yy) {}
+};
+inline constexpr int2 make_int2(int32_t x, int32_t y) {
+    return int2(x, y);
+}
+struct int3 {
+    int32_t x, y, z;
+    constexpr int3(int32_t v = 0) : x(v), y(v), z(v) {}
+    constexpr int3(int32_t xx, int32_t yy, int32_t zz) : x(xx), y(yy), z(zz) {}
+};
+inline constexpr int3 make_int3(int32_t x, int32_t y, int32_t z) {
+    return int3(x, y, z);
+}
+struct alignas(16) int4 {
+    int32_t x, y, z, w;
+    constexpr int4(int32_t v = 0) : x(v), y(v), z(v), w(v) {}
+    constexpr int4(int32_t xx, int32_t yy, int32_t zz, int32_t ww) : x(xx), y(yy), z(zz), w(ww) {}
+};
+inline constexpr int4 make_int4(int32_t x, int32_t y, int32_t z, int32_t w) {
+    return int4(x, y, z, w);
+}
+struct alignas(8) uint2 {
+    uint32_t x, y;
+    constexpr uint2(uint32_t v = 0) : x(v), y(v) {}
+    constexpr uint2(uint32_t xx, uint32_t yy) : x(xx), y(yy) {}
+};
+inline constexpr uint2 make_uint2(uint32_t x, uint32_t y) {
+    return uint2(x, y);
+}
+struct uint3 {
+    uint32_t x, y, z;
+    constexpr uint3(uint32_t v = 0) : x(v), y(v), z(v) {}
+    constexpr uint3(uint32_t xx, uint32_t yy, uint32_t zz) : x(xx), y(yy), z(zz) {}
+};
+inline constexpr uint3 make_uint3(uint32_t x, uint32_t y, uint32_t z) {
+    return uint3(x, y, z);
+}
+struct uint4 {
+    uint32_t x, y, z, w;
+    constexpr uint4(uint32_t v = 0) : x(v), y(v), z(v), w(v) {}
+    constexpr uint4(uint32_t xx, uint32_t yy, uint32_t zz, uint32_t ww) : x(xx), y(yy), z(zz), w(ww) {}
+};
+inline constexpr uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) {
+    return uint4(x, y, z, w);
+}
+struct alignas(8) float2 {
+    float x, y;
+    constexpr float2(float v = 0) : x(v), y(v) {}
+    constexpr float2(float xx, float yy) : x(xx), y(yy) {}
+};
+inline float2 make_float2(float x, float y) {
+    return float2(x, y);
+}
+struct float3 {
+    float x, y, z;
+    constexpr float3(float v = 0) : x(v), y(v), z(v) {}
+    constexpr float3(float xx, float yy, float zz) : x(xx), y(yy), z(zz) {}
+};
+inline constexpr float3 make_float3(float x, float y, float z) {
+    return float3(x, y, z);
+}
+struct alignas(16) float4 {
+    float x, y, z, w;
+    constexpr float4(float v = 0) : x(v), y(v), z(v), w(v) {}
+    constexpr float4(float xx, float yy, float zz, float ww) : x(xx), y(yy), z(zz), w(ww) {}
+};
+inline constexpr float4 make_float4(float x, float y, float z, float w) {
+    return float4(x, y, z, w);
+}
+#endif
 
 CUDA_DEVICE_FUNCTION float3 getXYZ(const float4 &v) {
     return make_float3(v.x, v.y, v.z);
@@ -623,12 +622,32 @@ struct Matrix3x3 {
         }
     }
 
+    CUDA_DEVICE_FUNCTION Matrix3x3 &inverse() {
+        float det = 1.0f / (m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 -
+                            m02 * m11 * m20 - m01 * m10 * m22 - m00 * m12 * m21);
+        Matrix3x3 m;
+        m.m00 = det * (m11 * m22 - m12 * m21); m.m01 = -det * (m01 * m22 - m02 * m21); m.m02 = det * (m01 * m12 - m02 * m11);
+        m.m10 = -det * (m10 * m22 - m12 * m20); m.m11 = det * (m00 * m22 - m02 * m20); m.m12 = -det * (m00 * m12 - m02 * m10);
+        m.m20 = det * (m10 * m21 - m11 * m20); m.m21 = -det * (m00 * m21 - m01 * m20); m.m22 = det * (m00 * m11 - m01 * m10);
+        *this = m;
+
+        return *this;
+    }
     CUDA_DEVICE_FUNCTION Matrix3x3 &transpose() {
         std::swap(m10, m01); std::swap(m20, m02);
         std::swap(m21, m12);
         return *this;
     }
 };
+
+CUDA_DEVICE_FUNCTION Matrix3x3 transpose(const Matrix3x3 &mat) {
+    Matrix3x3 ret = mat;
+    return ret.transpose();
+}
+CUDA_DEVICE_FUNCTION Matrix3x3 inverse(const Matrix3x3 &mat) {
+    Matrix3x3 ret = mat;
+    return ret.inverse();
+}
 
 CUDA_DEVICE_FUNCTION Matrix3x3 scale3x3(const float3 &s) {
     return Matrix3x3(s.x * make_float3(1, 0, 0),

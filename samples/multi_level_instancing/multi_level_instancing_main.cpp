@@ -147,8 +147,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
     pipeline.setMaxTraceDepth(1);
-    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
-                  false);
+    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
@@ -484,9 +483,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     instAreaLight.setChild(areaLight.optixGas);
     instAreaLight.setTransform(instAreaLightTr);
 
-    constexpr uint32_t NumBunnies = 100;
-    const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
     struct Transform {
         struct SRT {
             float3 s;

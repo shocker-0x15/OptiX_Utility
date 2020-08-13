@@ -39,7 +39,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
 
     float3 color;
     // JP: ペイロードとともにトレースを呼び出す。
-    //     ペイロード数は最大で8DW。
+    //     ペイロード数は最大で合計8DW。
     // EN: Trace call with payloads.
     //     The maximum number of payloads is 8 dwords in total.
     optixu::trace<PayloadSignature>(
@@ -58,12 +58,12 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
     //     ポインターとしたものに一致しなければならない。
     //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
     //     型の不一致を検出できるようにすることを推奨する。
-    //     しかしここでは書き換えていないペイロードに関してはnullポインターを渡す。
+    //     書き換えていないペイロードに関してはnullポインターを渡しても良い。
     // EN: The signature used in setPayloads() must match the one replacing the part of payloads
     //     in optixu::trace() to pointer types.
     //     It is recommended to explicitly pass the same template arguments to 
     //     corresponding trace/getPayloads/setPayloads to notice type mismatch.
-    //     However pass the null pointers for the payloads which were read only.
+    //     Passing the null pointers is possible for the payloads which were read only.
     optixu::setPayloads<PayloadSignature>(&color);
 }
 
@@ -103,11 +103,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     //     ポインターとしたものに一致しなければならない。
     //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
     //     型の不一致を検出できるようにすることを推奨する。
-    //     しかしここでは書き換えていないペイロードに関してはnullポインターを渡す。
+    //     書き換えていないペイロードに関してはnullポインターを渡しても良い。
     // EN: The signature used in setPayloads() must match the one replacing the part of payloads
     //     in optixu::trace() to pointer types.
     //     It is recommended to explicitly pass the same template arguments to 
     //     corresponding trace/getPayloads/setPayloads to notice type mismatch.
-    //     However pass the null pointers for the payloads which were read only.
+    //     Passing the null pointers is possible for the payloads which were read only.
     optixu::setPayloads<PayloadSignature>(&color);
 }

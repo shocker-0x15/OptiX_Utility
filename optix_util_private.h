@@ -350,7 +350,7 @@ namespace optixu {
 
         void setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, Buffer* sbt);
 
-        bool isReady();
+        bool isReady(bool* hasMotionAS);
     };
 
 
@@ -641,6 +641,7 @@ namespace optixu {
         uint32_t matSetIndex;
         uint32_t id;
         uint32_t visibilityMask;
+        OptixInstanceFlags flags;
         float instTransform[12];
 
     public:
@@ -653,6 +654,7 @@ namespace optixu {
             matSetIndex = 0xFFFFFFFF;
             id = 0;
             visibilityMask = 0xFF;
+            flags = OPTIX_INSTANCE_FLAG_NONE;
             float identity[] = {
                 1, 0, 0, 0,
                 0, 1, 0, 0,

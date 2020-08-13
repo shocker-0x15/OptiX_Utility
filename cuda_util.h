@@ -20,24 +20,27 @@
 
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
-#   define CUDAHPlatform_Windows
+#   define CUDAUPlatform_Windows
 #   if defined(__MINGW32__) // Defined for both 32 bit/64 bit MinGW
-#       define CUDAHPlatform_Windows_MinGW
+#       define CUDAUPlatform_Windows_MinGW
 #   elif defined(_MSC_VER)
-#       define CUDAHPlatform_Windows_MSVC
+#       define CUDAUPlatform_Windows_MSVC
+#       if defined(__INTELLISENSE__)
+#           define CUDAU_CODE_COMPLETION
+#       endif
 #   endif
 #elif defined(__linux__)
-#   define CUDAHPlatform_Linux
+#   define CUDAUPlatform_Linux
 #elif defined(__APPLE__)
-#   define CUDAHPlatform_macOS
+#   define CUDAUPlatform_macOS
 #elif defined(__OpenBSD__)
-#   define CUDAHPlatform_OpenBSD
+#   define CUDAUPlatform_OpenBSD
 #endif
 
 
 
 #if defined(__CUDACC_RTC__)
-// Including cstdint and cfloat (cuda/std) is left to the user.
+// Including cstdint and cfloat (under cuda/std) is left to the user.
 typedef unsigned long long CUtexObject;
 typedef unsigned long long CUsurfObject;
 #else
@@ -54,13 +57,13 @@ typedef unsigned long long CUsurfObject;
 #   include <vector>
 #   include <sstream>
 
-// Enable this macro if CUDA/OpenGL interoperability is required.
+// JP: CUDA/OpenGL連携機能が必要な場合はOpenGLの関数宣言の取得(例: gl3w.hのinclude)と
+//     CUDA_UTIL_USE_GL_INTEROPの定義を行う。
+// EN: Obtain OpenGL function declarations (e.g. include gl3w.h) and define CUDA_UTIL_USE_GL_INTEROP
+//     if CUDA/OpenGL interoperability is required.
 #   define CUDA_UTIL_USE_GL_INTEROP
 #   if defined(CUDA_UTIL_USE_GL_INTEROP)
 #       include <GL/gl3w.h>
-#   endif
-
-#   if defined(CUDA_UTIL_USE_GL_INTEROP)
 #       include <cudaGL.h>
 #   endif
 

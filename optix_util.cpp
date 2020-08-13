@@ -114,8 +114,10 @@ namespace optixu {
         sbt->unmap(stream);
     }
 
-    bool Scene::Priv::isReady() {
+    bool Scene::Priv::isReady(bool* hasMotionAS) {
+        *hasMotionAS = false;
         for (_GeometryAccelerationStructure* _gas : geomASs) {
+            *hasMotionAS |= _gas->hasMotion();
             if (!_gas->isReady())
                 return false;
         }
@@ -126,6 +128,7 @@ namespace optixu {
         }
 
         for (_InstanceAccelerationStructure* _ias : instASs) {
+            *hasMotionAS |= _ias->hasMotion();
             if (!_ias->isReady())
                 return false;
         }
@@ -860,7 +863,7 @@ namespace optixu {
         instance->instanceId = id;
         instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
-        instance->flags = OPTIX_INSTANCE_FLAG_NONE;
+        instance->flags = flags;
 
         if (type == ChildType::GAS) {
             THROW_RUNTIME_ERROR(childGas->isReady(), "GAS %p is not ready.", childGas);
@@ -890,7 +893,7 @@ namespace optixu {
         instance->instanceId = id;
         instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
-        //instance->flags = OPTIX_INSTANCE_FLAG_NONE; これは変えられない？
+        //instance->flags = flags; これは変えられない？
         //instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
     }
 
@@ -945,6 +948,10 @@ namespace optixu {
         THROW_RUNTIME_ERROR((mask >> numVisibilityMaskBits) == 0,
                             "Number of visibility mask bits is %u.", numVisibilityMaskBits);
         m->visibilityMask = mask;
+    }
+
+    void Instance::setFlags(OptixInstanceFlags flags) const {
+        m->flags = flags;
     }
 
 
@@ -1374,11 +1381,10 @@ namespace optixu {
 
     ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
-                            "Either of Miss module or entry function name is not provided.");
-        if (_module)
-            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
-                                "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module && entryFunctionName,
+                            "Either of RayGen module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                            "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -1395,11 +1401,10 @@ namespace optixu {
 
     ProgramGroup Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR((_module != nullptr) == (entryFunctionName != nullptr),
-                            "Either of Miss module or entry function name is not provided.");
-        if (_module)
-            THROW_RUNTIME_ERROR(_module->getPipeline() == m,
-                                "Pipeline mismatch for the given module.");
+        THROW_RUNTIME_ERROR(_module && entryFunctionName,
+                            "Either of Exception module or entry function name is not provided.");
+        THROW_RUNTIME_ERROR(_module->getPipeline() == m,
+                            "Pipeline mismatch for the given module.");
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
@@ -1521,7 +1526,7 @@ namespace optixu {
 
 
 
-    void Pipeline::link(OptixCompileDebugLevel debugLevel, bool overrideUseMotionBlur) const {
+    void Pipeline::link(OptixCompileDebugLevel debugLevel) const {
         THROW_RUNTIME_ERROR(!m->pipelineLinked, "This pipeline has been already linked.");
 
         if (!m->pipelineLinked) {
@@ -1625,7 +1630,10 @@ namespace optixu {
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
-        THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
+        bool hasMotionAS;
+        THROW_RUNTIME_ERROR(m->scene->isReady(&hasMotionAS), "Scene is not ready.");
+        THROW_RUNTIME_ERROR(m->pipelineCompileOptions.usesMotionBlur || !hasMotionAS,
+                            "Scene has a motion AS but the pipeline has not been configured for motion.");
         THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
 
         m->setupShaderBindingTable(stream);

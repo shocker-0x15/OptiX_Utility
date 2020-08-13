@@ -76,7 +76,7 @@ namespace Shared {
         float b0, b1;
         int32_t primIndex;
 
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         CUDA_DEVICE_FUNCTION static HitPointParameter get() {
             HitPointParameter ret;
             if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
@@ -112,7 +112,7 @@ namespace Shared {
         };
         ProgDecodeHitPoint decodeHitPointFunc;
 
-#if defined(__CUDA_ARCH__) || defined(__INTELLISENSE__)
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         CUDA_DEVICE_FUNCTION void decodeHitPoint(const HitPointParameter &hitPointParam,
                                         float3* p, float3* sn, float2* texCoord) const {
             decodeHitPointFunc(hitPointParam, *this, p, sn, texCoord);

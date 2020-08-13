@@ -18,7 +18,7 @@
 
 #include "cuda_util.h"
 
-#ifdef CUDAHPlatform_Windows_MSVC
+#ifdef CUDAUPlatform_Windows_MSVC
 #   include <Windows.h>
 #   undef near
 #   undef far
@@ -29,7 +29,7 @@
 
 
 namespace cudau {
-#ifdef CUDAHPlatform_Windows_MSVC
+#ifdef CUDAUPlatform_Windows_MSVC
     void devPrintf(const char* fmt, ...) {
         va_list args;
         va_start(args, fmt);
