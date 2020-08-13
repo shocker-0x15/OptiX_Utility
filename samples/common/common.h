@@ -219,6 +219,8 @@ std::string readTxtFile(const std::filesystem::path& filepath);
 
 float sRGB_degamma_s(float value);
 
+float sRGB_gamma_s(float value);
+
 
 
 class SlotFinder {

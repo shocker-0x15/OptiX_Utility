@@ -205,7 +205,6 @@ namespace optixu {
 
             customPrimArray.numSbtRecords = buildInputFlags.size();
             if (customPrimArray.numSbtRecords > 1) {
-                optixAssert_NotImplemented();
                 customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
                 customPrimArray.sbtIndexOffsetSizeInBytes = 4;
                 customPrimArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
@@ -237,7 +236,6 @@ namespace optixu {
 
             triArray.numSbtRecords = buildInputFlags.size();
             if (triArray.numSbtRecords > 1) {
-                optixAssert_NotImplemented();
                 triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
                 triArray.sbtIndexOffsetSizeInBytes = 4;
                 triArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
@@ -262,10 +260,8 @@ namespace optixu {
             primitiveAabbBufferArray[0] = primitiveAABBBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
             customPrimArray.aabbBuffers = primitiveAabbBufferArray;
 
-            if (customPrimArray.numSbtRecords > 1) {
-                optixAssert_NotImplemented();
+            if (customPrimArray.numSbtRecords > 1)
                 customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
-            }
         }
         else {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
@@ -275,10 +271,8 @@ namespace optixu {
 
             triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
 
-            if (triArray.numSbtRecords > 1) {
-                optixAssert_NotImplemented();
+            if (triArray.numSbtRecords > 1)
                 triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
-            }
 
             triArray.preTransform = preTransform;
             triArray.transformFormat = preTransform ? OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 : OPTIX_TRANSFORM_FORMAT_NONE;

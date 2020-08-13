@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - uint32_t以外のサイズのuserDataの使用。
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
@@ -745,14 +746,16 @@ namespace optixu {
               |
               |
               +-- Scene    --+-- IAS
-                             |
-                             +-- Instance
-                             |
-                             +-- Transform
-                             |
-                             +-- GAS
-                             |
-                             +-- GeomInst
+              |              |
+              |              +-- Instance
+              |              |
+              |              +-- Transform
+              |              |
+              |              +-- GAS
+              |              |
+              |              +-- GeomInst
+              |
+              +-- Denoiser
 
     JP: 
     EN: 
@@ -799,9 +802,11 @@ private: \
         OPTIX_COMMON_FUNCTIONS(Context);
 
         Material createMaterial() const;
+
         Scene createScene() const;
 
         Pipeline createPipeline() const;
+
         Denoiser createDenoiser(OptixDenoiserInputKind inputKind) const;
 
         CUcontext getCUcontext() const;

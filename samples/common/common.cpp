@@ -56,6 +56,13 @@ float sRGB_degamma_s(float value) {
     return std::pow((value + 0.055f) / 1.055f, 2.4f);
 }
 
+float sRGB_gamma_s(float value) {
+    Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
+    if (value <= 0.0031308f)
+        return 12.92f * value;
+    return 1.055f * std::pow(value, 1 / 2.4f) - 0.055f;
+}
+
 
 
 void SlotFinder::initialize(uint32_t numSlots) {
