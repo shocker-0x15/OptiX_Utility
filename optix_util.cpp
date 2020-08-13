@@ -110,8 +110,10 @@ namespace optixu {
         sbt->unmap(stream);
     }
 
-    bool Scene::Priv::isReady() {
+    bool Scene::Priv::isReady(bool* hasMotionAS) {
+        *hasMotionAS = false;
         for (_GeometryAccelerationStructure* _gas : geomASs) {
+            *hasMotionAS |= _gas->hasMotion();
             if (!_gas->isReady())
                 return false;
         }
@@ -122,6 +124,7 @@ namespace optixu {
         }
 
         for (_InstanceAccelerationStructure* _ias : instASs) {
+            *hasMotionAS |= _ias->hasMotion();
             if (!_ias->isReady())
                 return false;
         }
@@ -1623,7 +1626,10 @@ namespace optixu {
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
-        THROW_RUNTIME_ERROR(m->scene->isReady(), "Scene is not ready.");
+        bool hasMotionAS;
+        THROW_RUNTIME_ERROR(m->scene->isReady(&hasMotionAS), "Scene is not ready.");
+        THROW_RUNTIME_ERROR(m->pipelineCompileOptions.usesMotionBlur || !hasMotionAS,
+                            "Scene has a motion AS but the pipeline has not been configured for motion.");
         THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
 
         m->setupShaderBindingTable(stream);

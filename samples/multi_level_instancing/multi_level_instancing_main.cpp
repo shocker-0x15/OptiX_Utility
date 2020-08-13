@@ -483,9 +483,6 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     instAreaLight.setChild(areaLight.optixGas);
     instAreaLight.setTransform(instAreaLightTr);
 
-    constexpr uint32_t NumBunnies = 100;
-    const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
     struct Transform {
         struct SRT {
             float3 s;
