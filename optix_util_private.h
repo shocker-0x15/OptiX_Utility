@@ -902,26 +902,95 @@ namespace optixu {
 
 
 
+    static inline size_t getPixelSize(OptixPixelFormat format) {
+        switch (format) {
+        case OPTIX_PIXEL_FORMAT_HALF3:
+            return 3 * sizeof(uint16_t);
+        case OPTIX_PIXEL_FORMAT_HALF4:
+            return 4 * sizeof(uint16_t);
+        case OPTIX_PIXEL_FORMAT_FLOAT3:
+            return 3 * sizeof(float);
+        case OPTIX_PIXEL_FORMAT_FLOAT4:
+            return 4 * sizeof(float);
+        case OPTIX_PIXEL_FORMAT_UCHAR3:
+        case OPTIX_PIXEL_FORMAT_UCHAR4:
+            optixAssert_NotImplemented();
+            break;
+        default:
+            optixAssert_ShouldNotBeCalled();
+            break;
+        }
+        return 0;
+    }
+
+    struct _DenoisingTask {
+        size_t inputAddressOffset;
+        size_t outputAddressOffset;
+        int32_t outputWidth;
+        int32_t outputHeight;
+        int32_t offsetX;
+        int32_t offsetY;
+
+        _DenoisingTask() {}
+        _DenoisingTask(const DenoisingTask &v) {
+            std::memcpy(this, &v, sizeof(v));
+        }
+        operator DenoisingTask() const {
+            DenoisingTask ret;
+            std::memcpy(&ret, this, sizeof(ret));
+            return ret;
+        }
+    };
+    static_assert(sizeof(DenoisingTask) == sizeof(_DenoisingTask) &&
+                  alignof(DenoisingTask) == alignof(_DenoisingTask),
+                  "Size/Alignment mismatch: DenoisingTask vs _DenoisingTask");
+    
     class Denoiser::Priv {
         const _Context* context;
         OptixDenoiser rawDenoiser;
+        OptixDenoiserInputKind inputKind;
 
+        uint32_t imageWidth;
+        uint32_t imageHeight;
+        uint32_t tileWidth;
+        uint32_t tileHeight;
+        int32_t overlapWidth;
+        size_t stateBufferSize;
+        size_t scratchBufferSize;
         uint32_t maxInputWidth;
         uint32_t maxInputHeight;
         OptixDenoiserSizes memoryRequirement;
 
         const Buffer* stateBuffer;
         const Buffer* scratchBuffer;
+        const Buffer* colorBuffer;
+        const Buffer* albedoBuffer;
+        const Buffer* normalBuffer;
+        const Buffer* outputBuffer;
+        OptixPixelFormat colorFormat;
+        OptixPixelFormat albedoFormat;
+        OptixPixelFormat normalFormat;
         struct {
-            unsigned int readyToDenoise : 1;
+            unsigned int modelSet : 1;
+            unsigned int useTiling : 1;
+            unsigned int imageSizeSet : 1;
+            unsigned int imageLayersSet : 1;
+            unsigned int stateIsReady : 1;
         };
 
     public:
         OPTIX_OPAQUE_BRIDGE(Denoiser);
 
-        Priv(const _Context* ctxt, OptixDenoiserInputKind inputKind) :
+        Priv(const _Context* ctxt, OptixDenoiserInputKind _inputKind) :
             context(ctxt),
-            readyToDenoise(false) {
+            inputKind(_inputKind),
+            stateBuffer(nullptr), scratchBuffer(nullptr),
+            colorBuffer(nullptr), albedoBuffer(nullptr), normalBuffer(nullptr), outputBuffer(nullptr),
+            modelSet(false),
+            useTiling(false),
+            imageSizeSet(false),
+            imageLayersSet(false),
+            stateIsReady(false) {
             OptixDenoiserOptions options = {};
             options.inputKind = inputKind;
             OPTIX_CHECK(optixDenoiserCreate(context->getRawContext(), &options, &rawDenoiser));

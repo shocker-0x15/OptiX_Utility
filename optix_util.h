@@ -1098,6 +1098,10 @@ private: \
 
 
 
+    struct DenoisingTask {
+        uint64_t placeHolder[4];
+    };
+    
     class Denoiser {
         OPTIX_PIMPL();
 
@@ -1106,14 +1110,16 @@ private: \
         OPTIX_COMMON_FUNCTIONS(Denoiser);
 
         void setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const;
-        void computeMemoryResources(uint32_t width, uint32_t height, OptixDenoiserSizes* sizes) const;
-        void setup(CUstream stream, uint32_t width, uint32_t height,
-                   const Buffer &stateBuffer, const Buffer &scratchBuffer) const;
-        void computeIntensity(CUstream stream, const OptixImage2D &inputImage, CUdeviceptr outputIntensity);
+        void prepareForInvoke(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
+                              size_t* stateBufferSize, size_t* scratchBufferSize, uint32_t* numTasks) const;
+        void getTasks(DenoisingTask* tasks) const;
+        void setLayers(const Buffer* color, const Buffer* albedo, const Buffer* normal, const Buffer* denoisedColor,
+                       OptixPixelFormat colorFormat, OptixPixelFormat albedoFormat, OptixPixelFormat normalFormat) const;
+
+        void setup(CUstream stream, const Buffer &stateBuffer, const Buffer &scratchBuffer) const;
+        void computeIntensity(CUstream stream, const Buffer &scratchBuffer, CUdeviceptr outputIntensity);
         void invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
-                    const OptixImage2D* inputLayers, uint32_t numInputLayers,
-                    uint32_t inputOffsetX, uint32_t inputOffsetY,
-                    const OptixImage2D* outputLayer);
+                    const DenoisingTask &task);
     };
 
 

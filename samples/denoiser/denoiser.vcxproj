@@ -27,6 +27,7 @@
     <ClInclude Include="denoiser_shared.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="copy_buffers.cu" />
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -34,7 +35,7 @@
     <ProjectGuid>{2D96E67E-8C6A-4B87-8B88-93E3921D874A}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>05.denoiser (WIP)</ProjectName>
+    <ProjectName>05.denoiser</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

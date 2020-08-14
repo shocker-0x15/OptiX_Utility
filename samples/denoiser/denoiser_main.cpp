@@ -510,12 +510,30 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
-    optixu::HostBlockBuffer2D<float4, 1> colorAccumBuffer;
-    optixu::HostBlockBuffer2D<float4, 1> albedoAccumBuffer;
-    optixu::HostBlockBuffer2D<float4, 1> normalAccumBuffer;
-    colorAccumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
-    albedoAccumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
-    normalAccumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+    cudau::Array colorAccumBuffer;
+    cudau::Array albedoAccumBuffer;
+    cudau::Array normalAccumBuffer;
+    colorAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
+                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                                  renderTargetSizeX, renderTargetSizeY, 1);
+    albedoAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
+                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                                   renderTargetSizeX, renderTargetSizeY, 1);
+    normalAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
+                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                                   renderTargetSizeX, renderTargetSizeY, 1);
+    cudau::TypedBuffer<float4> linearColorBuffer;
+    cudau::TypedBuffer<float4> linearAlbedoBuffer;
+    cudau::TypedBuffer<float4> linearNormalBuffer;
+    cudau::TypedBuffer<float4> linearOutputBuffer;
+    linearColorBuffer.initialize(cuContext, cudau::BufferType::Device,
+                                 renderTargetSizeX * renderTargetSizeY);
+    linearAlbedoBuffer.initialize(cuContext, cudau::BufferType::Device,
+                                  renderTargetSizeX * renderTargetSizeY);
+    linearNormalBuffer.initialize(cuContext, cudau::BufferType::Device,
+                                  renderTargetSizeX * renderTargetSizeY);
+    linearOutputBuffer.initialize(cuContext, cudau::BufferType::Device,
+                                  renderTargetSizeX * renderTargetSizeY);
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
     rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
@@ -531,15 +549,48 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    // JP: デノイザーのセットアップ。
+    // EN: Setup a denoiser.
+    constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
+    constexpr uint32_t tileWidth = useTiledDenoising ? 32 : 0;
+    constexpr uint32_t tileHeight = useTiledDenoising ? 32 : 0;
+    optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL);
+    denoiser.setModel(OPTIX_DENOISER_MODEL_KIND_HDR, nullptr, 0);
+    size_t stateBufferSize;
+    size_t scratchBufferSize;
+    uint32_t numTasks;
+    denoiser.prepareForInvoke(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
+                               &stateBufferSize, &scratchBufferSize, &numTasks);
+    cudau::Buffer denoiserStateBuffer;
+    cudau::Buffer denoiserScratchBuffer;
+    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateBufferSize, 1);
+    denoiserScratchBuffer.initialize(cuContext, cudau::BufferType::Device, scratchBufferSize, 1);
+    hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserStateBuffer.sizeInBytes());
+    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserScratchBuffer.sizeInBytes());
+
+    std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
+    denoiser.getTasks(denoisingTasks.data());
+
+    // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
+    // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
+    CUmodule moduleCopyBuffers;
+    CUDADRV_CHECK(cuModuleLoad(&moduleCopyBuffers, (getExecutableDirectory() / "denoiser/ptxes/copy_buffers.ptx").string().c_str()));
+    cudau::Kernel kernelCopyBuffers(moduleCopyBuffers, "copyBuffers", cudau::dim3(8, 8), 0);
+
+    CUdeviceptr hdrIntensity;
+    CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
+
+
+
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
     plp.materialData = materialDataBuffer.getDevicePointer();
     plp.geomInstData = geomDataBuffer.getDevicePointer();
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
     plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-    plp.colorAccumBuffer = colorAccumBuffer.getBlockBuffer2D();
-    plp.albedoAccumBuffer = albedoAccumBuffer.getBlockBuffer2D();
-    plp.normalAccumBuffer = normalAccumBuffer.getBlockBuffer2D();
+    plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
+    plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
+    plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5);
@@ -554,47 +605,92 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    // JP: レンダリング
+    // EN: Render
     constexpr uint32_t numSamples = 1;
     for (int frameIndex = 0; frameIndex < numSamples; ++frameIndex) {
         plp.numAccumFrames = frameIndex;
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
         pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
     }
+
+    // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
+    // EN: Copy the results to the linear buffers (and normalize normals).
+    cudau::dim3 dimCopyBuffers = kernelCopyBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
+    kernelCopyBuffers(cuStream, dimCopyBuffers,
+                      colorAccumBuffer.getSurfaceObject(0),
+                      albedoAccumBuffer.getSurfaceObject(0),
+                      normalAccumBuffer.getSurfaceObject(0),
+                      linearColorBuffer.getDevicePointer(),
+                      linearAlbedoBuffer.getDevicePointer(),
+                      linearNormalBuffer.getDevicePointer(),
+                      uint2(renderTargetSizeX, renderTargetSizeY));
+
+    // JP: デノイズ
+    //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
+    // EN: Denoise
+    //     It is possible to reuse the scratch buffer for denoising for computeIntensity() if its size is enough.
+    denoiser.setup(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+    denoiser.setLayers(&linearColorBuffer, &linearAlbedoBuffer, &linearNormalBuffer, &linearOutputBuffer,
+                       OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4);
+    denoiser.computeIntensity(cuStream, denoiserScratchBuffer, hdrIntensity);
+    for (int i = 0; i < denoisingTasks.size(); ++i)
+        denoiser.invoke(cuStream, false, hdrIntensity, 0.0f, denoisingTasks[i]);
+
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
-    colorAccumBuffer.map();
-    albedoAccumBuffer.map();
-    normalAccumBuffer.map();
+
+
+    // JP: 結果とデノイズ用付随バッファーの画像出力。
+    // EN: Output the result and buffers associated to the denoiser as images.
+    auto colorPixels = colorAccumBuffer.map<float4>();
+    auto albedoPixels = albedoAccumBuffer.map<float4>();
+    auto normalPixels = normalAccumBuffer.map<float4>();
+    auto outputPixels = linearOutputBuffer.map();
     std::vector<uint32_t> colorImageData(renderTargetSizeX * renderTargetSizeY);
     std::vector<uint32_t> albedoImageData(renderTargetSizeX * renderTargetSizeY);
     std::vector<uint32_t> normalImageData(renderTargetSizeX * renderTargetSizeY);
+    std::vector<uint32_t> outputImageData(renderTargetSizeX * renderTargetSizeY);
     for (int y = 0; y < renderTargetSizeY; ++y) {
         for (int x = 0; x < renderTargetSizeX; ++x) {
-            float4 color = colorAccumBuffer(x, y);
+            uint32_t linearIndex = renderTargetSizeX * y + x;
+
+            float4 color = colorPixels[linearIndex];
             color.x = sRGB_gamma_s(1 - std::exp(-color.x));
             color.y = sRGB_gamma_s(1 - std::exp(-color.y));
             color.z = sRGB_gamma_s(1 - std::exp(-color.z));
-            uint32_t &dstColor = colorImageData[y * renderTargetSizeX + x];
+            uint32_t &dstColor = colorImageData[linearIndex];
             dstColor = (std::min<uint32_t>(255, 255 * color.x) << 0) |
                        (std::min<uint32_t>(255, 255 * color.y) << 8) |
                        (std::min<uint32_t>(255, 255 * color.z) << 16) |
                        (std::min<uint32_t>(255, 255 * color.w) << 24);
 
-            float4 albedo = albedoAccumBuffer(x, y);
-            uint32_t &dstAlbedo = albedoImageData[y * renderTargetSizeX + x];
+            float4 albedo = albedoPixels[linearIndex];
+            uint32_t &dstAlbedo = albedoImageData[linearIndex];
             dstAlbedo = (std::min<uint32_t>(255, 255 * albedo.x) << 0) |
                         (std::min<uint32_t>(255, 255 * albedo.y) << 8) |
                         (std::min<uint32_t>(255, 255 * albedo.z) << 16) |
                         (std::min<uint32_t>(255, 255 * albedo.w) << 24);
 
-            float4 normal = normalAccumBuffer(x, y);
-            uint32_t &dstNormal = normalImageData[y * renderTargetSizeX + x];
+            float4 normal = normalPixels[linearIndex];
+            uint32_t &dstNormal = normalImageData[linearIndex];
             dstNormal = (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.x)) << 0) |
                         (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.y)) << 8) |
                         (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.z)) << 16) |
                         (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.w)) << 24);
+
+            float4 output = outputPixels[linearIndex];
+            output.x = sRGB_gamma_s(1 - std::exp(-output.x));
+            output.y = sRGB_gamma_s(1 - std::exp(-output.y));
+            output.z = sRGB_gamma_s(1 - std::exp(-output.z));
+            uint32_t &dstOutput = outputImageData[linearIndex];
+            dstOutput = (std::min<uint32_t>(255, 255 * output.x) << 0) |
+                        (std::min<uint32_t>(255, 255 * output.y) << 8) |
+                        (std::min<uint32_t>(255, 255 * output.z) << 16) |
+                        (std::min<uint32_t>(255, 255 * output.w) << 24);
         }
     }
+    linearOutputBuffer.unmap();
     normalAccumBuffer.unmap();
     albedoAccumBuffer.unmap();
     colorAccumBuffer.unmap();
@@ -602,14 +698,30 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     stbi_write_bmp("color.bmp", renderTargetSizeX, renderTargetSizeY, 4, colorImageData.data());
     stbi_write_bmp("albedo.bmp", renderTargetSizeX, renderTargetSizeY, 4, albedoImageData.data());
     stbi_write_bmp("normal.bmp", renderTargetSizeX, renderTargetSizeY, 4, normalImageData.data());
+    stbi_write_bmp("color_denoised.bmp", renderTargetSizeX, renderTargetSizeY, 4, outputImageData.data());
 
 
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
 
 
+    
+    CUDADRV_CHECK(cuMemFree(hdrIntensity));
 
+    CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
+    
+    denoiserScratchBuffer.finalize();
+    denoiserStateBuffer.finalize();
+    
+    denoiser.destroy();
+    
     rngBuffer.finalize();
+
+    linearOutputBuffer.finalize();
+    linearNormalBuffer.finalize();
+    linearAlbedoBuffer.finalize();
+    linearColorBuffer.finalize();
+
     normalAccumBuffer.finalize();
     albedoAccumBuffer.finalize();
     colorAccumBuffer.finalize();

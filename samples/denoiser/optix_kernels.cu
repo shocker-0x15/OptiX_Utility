@@ -50,8 +50,8 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 
     PCG32RNG rng = plp.rngBuffer[launchIndex];
 
-    float x = static_cast<float>(launchIndex.x + 0.5f) / plp.imageSize.x;
-    float y = static_cast<float>(launchIndex.y + 0.5f) / plp.imageSize.y;
+    float x = static_cast<float>(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
+    float y = static_cast<float>(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
@@ -64,8 +64,8 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     payload.pathLength = 1;
     payload.terminate = false;
     SearchRayPayload* payloadPtr = &payload;
-    float3 firstHitAlbedo;
-    float3 firstHitNormal;
+    float3 firstHitAlbedo = make_float3(0.0f, 0.0f, 0.0f);
+    float3 firstHitNormal = make_float3(0.0f, 0.0f, 0.0f);
     float3* firstHitAlbedoPtr = &firstHitAlbedo;
     float3* firstHitNormalPtr = &firstHitNormal;
     while (true) {
@@ -84,16 +84,24 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 
     plp.rngBuffer[launchIndex] = rng;
 
-    float3 prevColorResult = getXYZ(plp.colorAccumBuffer[launchIndex]);
-    float3 prevAlbedoResult = getXYZ(plp.albedoAccumBuffer[launchIndex]);
-    float3 prevNormalResult = getXYZ(plp.normalAccumBuffer[launchIndex]);
+    // Normal input to the denoiser should be in camera space (right handed, looking down the negative Z-axis).
+    firstHitNormal = transpose(plp.camera.orientation) * firstHitNormal;
+
+    float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
+    float3 prevAlbedoResult = make_float3(0.0f, 0.0f, 0.0f);
+    float3 prevNormalResult = make_float3(0.0f, 0.0f, 0.0f);
+    if (plp.numAccumFrames > 0) {
+        prevColorResult = getXYZ(plp.colorAccumBuffer.read(launchIndex));
+        prevAlbedoResult = getXYZ(plp.albedoAccumBuffer.read(launchIndex));
+        prevNormalResult = getXYZ(plp.normalAccumBuffer.read(launchIndex));
+    }
     float curWeight = 1.0f / (1 + plp.numAccumFrames);
     float3 colorResult = (1 - curWeight) * prevColorResult + curWeight * payload.contribution;
     float3 albedoResult = (1 - curWeight) * prevAlbedoResult + curWeight * firstHitAlbedo;
     float3 normalResult = (1 - curWeight) * prevNormalResult + curWeight * firstHitNormal;
-    plp.colorAccumBuffer[launchIndex] = make_float4(colorResult, 1.0f);
-    plp.albedoAccumBuffer[launchIndex] = make_float4(albedoResult, 1.0f);
-    plp.normalAccumBuffer[launchIndex] = make_float4(normalResult, 1.0f);
+    plp.colorAccumBuffer.write(launchIndex, make_float4(colorResult, 1.0f));
+    plp.albedoAccumBuffer.write(launchIndex, make_float4(albedoResult, 1.0f));
+    plp.normalAccumBuffer.write(launchIndex, make_float4(normalResult, 1.0f));
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
@@ -103,10 +111,6 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     optixu::getPayloads<SearchRayPayloadSignature>(nullptr, &payload, &albedo, &normal);
     payload->contribution += payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
-    if (payload->pathLength == 1) {
-        *albedo = make_float3(0.0f, 0.0f, 0.0f);
-        *normal = make_float3(0.0f, 0.0f, 0.0f);
-    }
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {

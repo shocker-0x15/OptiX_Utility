@@ -536,7 +536,7 @@ namespace cudau {
         m_width = width;
         m_height = height;
         m_depth = depth;
-        m_numMipmapLevels = std::max(numMipmapLevels, 0u);
+        m_numMipmapLevels = std::max(numMipmapLevels, 1u);
         m_elemType = elemType;
         m_numChannels = numChannels;
         m_surfaceLoadStore = surfaceLoadStore;

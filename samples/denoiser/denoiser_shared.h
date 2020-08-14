@@ -83,9 +83,9 @@ namespace Shared {
         int2 imageSize;
         uint32_t numAccumFrames;
         optixu::BlockBuffer2D<PCG32RNG, 1> rngBuffer;
-        optixu::BlockBuffer2D<float4, 1> colorAccumBuffer;
-        optixu::BlockBuffer2D<float4, 1> albedoAccumBuffer;
-        optixu::BlockBuffer2D<float4, 1> normalAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         PerspectiveCamera camera;
         uint32_t lightGeomInstIndex;
     };

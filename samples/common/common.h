@@ -636,8 +636,10 @@ struct Matrix3x3 {
         return *this;
     }
     CUDA_DEVICE_FUNCTION Matrix3x3 &transpose() {
-        std::swap(m10, m01); std::swap(m20, m02);
-        std::swap(m21, m12);
+        float temp;
+        temp = m10; m10 = m01; m01 = temp;
+        temp = m20; m20 = m02; m02 = temp;
+        temp = m21; m21 = m12; m12 = temp;
         return *this;
     }
 };
