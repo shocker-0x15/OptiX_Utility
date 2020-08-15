@@ -239,7 +239,7 @@ namespace optixu {
         CUDA_DEVICE_FUNCTION T read(uint2 idx) const {
             return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
         }
-        CUDA_DEVICE_FUNCTION void write(uint2 idx, const T &value) {
+        CUDA_DEVICE_FUNCTION void write(uint2 idx, const T &value) const {
             surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
         }
         template <uint32_t comp, typename U>
@@ -249,7 +249,7 @@ namespace optixu {
         CUDA_DEVICE_FUNCTION T read(int2 idx) const {
             return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
         }
-        CUDA_DEVICE_FUNCTION void write(int2 idx, const T &value) {
+        CUDA_DEVICE_FUNCTION void write(int2 idx, const T &value) const {
             surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
         }
         template <uint32_t comp, typename U>
