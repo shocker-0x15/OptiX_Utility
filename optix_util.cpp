@@ -351,13 +351,15 @@ namespace optixu {
         m->primitiveIndexOffset = offset;
     }
 
-    void GeometryInstance::setNumMaterials(uint32_t numMaterials, const Buffer* matIndexOffsetBuffe, uint32_t indexOffsetSize) const {
+    void GeometryInstance::setNumMaterials(uint32_t numMaterials, const Buffer* matIndexOffsetBuffer, uint32_t indexOffsetSize) const {
         THROW_RUNTIME_ERROR(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
-        THROW_RUNTIME_ERROR((numMaterials == 1) != (matIndexOffsetBuffe != nullptr),
+        THROW_RUNTIME_ERROR((numMaterials == 1) != (matIndexOffsetBuffer != nullptr),
                             "Material index offset buffer must be provided when multiple materials are used.");
         THROW_RUNTIME_ERROR(indexOffsetSize >= 1 && indexOffsetSize <= 4, "Invalid index offset size.");
+        if (matIndexOffsetBuffer)
+            THROW_RUNTIME_ERROR(matIndexOffsetBuffer->stride() >= indexOffsetSize, "Buffer's stride is smaller than the given index offset size.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
-        m->materialIndexOffsetBuffer = matIndexOffsetBuffe;
+        m->materialIndexOffsetBuffer = matIndexOffsetBuffer;
         m->materialIndexOffsetSize = indexOffsetSize;
     }
 
