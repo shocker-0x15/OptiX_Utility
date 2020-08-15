@@ -25,6 +25,9 @@
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\dds_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -44,6 +47,9 @@
     </ClInclude>
     <ClInclude Include="denoiser_shared.h" />
     <ClInclude Include="..\common\common.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\dds_loader.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
   </ItemGroup>

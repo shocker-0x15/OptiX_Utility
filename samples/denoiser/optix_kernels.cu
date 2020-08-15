@@ -150,7 +150,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         sn = -sn;
     p = p + sn * 0.001f;
 
-    float3 albedo = mat.albedo;
+    float3 albedo;
+    if (mat.texture)
+        albedo = getXYZ(tex2DLod<float4>(mat.texture, texCoord.x, texCoord.y, 0.0f));
+    else
+        albedo = mat.albedo;
 
     if (payload->pathLength == 1) {
         *firstHitAlbedo = albedo;

@@ -68,9 +68,11 @@ namespace Shared {
     };
 
     struct MaterialData {
+        CUtexObject texture;
         float3 albedo;
 
         MaterialData() :
+            texture(0),
             albedo(make_float3(0.0f, 0.0f, 0.5f)) {}
     };
 

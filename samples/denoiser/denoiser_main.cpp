@@ -1,5 +1,8 @@
 ﻿#include "denoiser_shared.h"
 
+#include "../common/dds_loader.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "../../ext/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"
 #include "../../ext/tiny_obj_loader.h"
@@ -77,14 +80,59 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     Shared::MaterialData* matData = materialDataBuffer.map();
 
-    uint32_t matGrayWallIndex = materialID++;
-    optixu::Material matGray = optixContext.createMaterial();
-    matGray.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matGray.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matGray.setUserData(matGrayWallIndex);
-    Shared::MaterialData matGrayWallData;
-    matGrayWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-    matData[matGrayWallIndex] = matGrayWallData;
+//#define USE_BLOCK_COMPRESSED_TEXTURE
+
+    uint32_t matCeilingIndex = materialID++;
+    optixu::Material matCeiling = optixContext.createMaterial();
+    matCeiling.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    matCeiling.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    matCeiling.setUserData(matCeilingIndex);
+    Shared::MaterialData matCeilingData;
+    matCeilingData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    matData[matCeilingIndex] = matCeilingData;
+
+    uint32_t matFarSideWallIndex = materialID++;
+    optixu::Material matFarSideWall = optixContext.createMaterial();
+    matFarSideWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    matFarSideWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    matFarSideWall.setUserData(matFarSideWallIndex);
+    Shared::MaterialData matFarSideWallData;
+    //matFarSideWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    cudau::Array arrayFarSideWall;
+    {
+        cudau::TextureSampler texSampler;
+        texSampler.setFilterMode(cudau::TextureFilterMode::Linear,
+                                 cudau::TextureFilterMode::Linear);
+        texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+        texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
+
+        {
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS", &width, &height, &mipCount, &sizes, &format);
+
+            arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                           width, height, 1/*mipCount*/);
+            for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
+                arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
+
+            dds::free(ddsData, mipCount, sizes);
+#else
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg", &width, &height, &n, 4);
+            arrayFarSideWall.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1);
+            arrayFarSideWall.transfer<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+#endif
+        }
+        matFarSideWallData.texture = texSampler.createTextureObject(arrayFarSideWall);
+    }
+    matData[matFarSideWallIndex] = matFarSideWallData;
 
     uint32_t matLeftWallIndex = materialID++;
     optixu::Material matLeftWall = optixContext.createMaterial();
@@ -101,8 +149,50 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matRightWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
     matRightWall.setUserData(matRightWallIndex);
     Shared::MaterialData matRightWallData;
-    matRightWallData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.75), sRGB_degamma_s(0.25));
+    matRightWallData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
     matData[matRightWallIndex] = matRightWallData;
+
+    uint32_t matFloorIndex = materialID++;
+    optixu::Material matFloor = optixContext.createMaterial();
+    matFloor.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    matFloor.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    matFloor.setUserData(matFloorIndex);
+    Shared::MaterialData matFloorData;
+    cudau::Array arrayFloor;
+    {
+        cudau::TextureSampler texSampler;
+        texSampler.setFilterMode(cudau::TextureFilterMode::Linear,
+                                 cudau::TextureFilterMode::Linear);
+        texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+        texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
+
+        {
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS", &width, &height, &mipCount, &sizes, &format);
+
+            arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                           width, height, 1/*mipCount*/);
+            for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
+                arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
+
+            dds::free(ddsData, mipCount, sizes);
+#else
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg", &width, &height, &n, 4);
+            arrayFloor.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                           width, height, 1);
+            arrayFloor.transfer<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+#endif
+        }
+        matFloorData.texture = texSampler.createTextureObject(arrayFloor);
+    }
+    matData[matFloorIndex] = matFloorData;
 
     uint32_t matAreaLightIndex = materialID++;
     optixu::Material matAreaLight = optixContext.createMaterial();
@@ -119,7 +209,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     matBunny.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
     matBunny.setUserData(matBunnyIndex);
     Shared::MaterialData matBunnyData;
-    matBunnyData.albedo = make_float3(sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f));
+    matBunnyData.albedo = make_float3(sRGB_degamma_s(0.25f), sRGB_degamma_s(0.75f), sRGB_degamma_s(0.25f));
     matData[matBunnyIndex] = matBunnyData;
 
     materialDataBuffer.unmap();
@@ -149,14 +239,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         Shared::Vertex vertices[] = {
             // floor
             { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
-            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
-            // back wall
+            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 1) },
+            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(1, 1) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(1, 0) },
+            // far side wall
             { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 0) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 2) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 2) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 0) },
             // ceiling
             { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
             { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },
@@ -177,7 +267,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         Shared::Triangle triangles[] = {
             // floor
             { 0, 1, 2 }, { 0, 2, 3 },
-            // back wall
+            // far side wall
             { 4, 5, 6 }, { 4, 6, 7 },
             // ceiling
             { 8, 11, 10 }, { 8, 10, 9 },
@@ -189,10 +279,10 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         uint32_t matIndices[] = {
             0, 0,
-            0, 0,
-            0, 0,
             1, 1,
             2, 2,
+            3, 3,
+            4, 4,
         };
 
         vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
@@ -201,10 +291,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         geomInstRoom.setVertexBuffer(&vertexBufferRoom);
         geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(3, &matIndexBufferRoom);
-        geomInstRoom.setMaterial(0, 0, matGray);
-        geomInstRoom.setMaterial(0, 1, matLeftWall);
-        geomInstRoom.setMaterial(0, 2, matRightWall);
+        geomInstRoom.setNumMaterials(5, &matIndexBufferRoom);
+        geomInstRoom.setMaterial(0, 0, matFloor);
+        geomInstRoom.setMaterial(0, 1, matFarSideWall);
+        geomInstRoom.setMaterial(0, 2, matCeiling);
+        geomInstRoom.setMaterial(0, 3, matLeftWall);
+        geomInstRoom.setMaterial(0, 4, matRightWall);
         geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstRoom.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstRoom.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
@@ -556,20 +648,28 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     constexpr uint32_t tileHeight = useTiledDenoising ? 32 : 0;
     optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL);
     denoiser.setModel(OPTIX_DENOISER_MODEL_KIND_HDR, nullptr, 0);
-    size_t stateBufferSize;
-    size_t scratchBufferSize;
+    size_t stateSize;
+    size_t scratchSize;
+    size_t scratchSizeForComputeIntensity;
     uint32_t numTasks;
-    denoiser.prepareForInvoke(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-                               &stateBufferSize, &scratchBufferSize, &numTasks);
+    denoiser.prepare(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
+                     &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
+                     &numTasks);;
+    hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
+    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
+    hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
     cudau::Buffer denoiserStateBuffer;
     cudau::Buffer denoiserScratchBuffer;
-    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateBufferSize, 1);
-    denoiserScratchBuffer.initialize(cuContext, cudau::BufferType::Device, scratchBufferSize, 1);
-    hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserStateBuffer.sizeInBytes());
-    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserScratchBuffer.sizeInBytes());
+    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateSize, 1);
+    denoiserScratchBuffer.initialize(cuContext, cudau::BufferType::Device,
+                                     std::max(scratchSize, scratchSizeForComputeIntensity), 1);
 
     std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
     denoiser.getTasks(denoisingTasks.data());
+
+    denoiser.setLayers(&linearColorBuffer, &linearAlbedoBuffer, &linearNormalBuffer, &linearOutputBuffer,
+                       OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4);
+    denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
 
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
@@ -605,9 +705,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
 
 
+    cudau::Timer timerRender;
+    cudau::Timer timerDenoise;
+    timerRender.initialize(cuContext);
+    timerDenoise.initialize(cuContext);
+    
     // JP: レンダリング
     // EN: Render
-    constexpr uint32_t numSamples = 1;
+    constexpr uint32_t numSamples = 8;
+    timerRender.start(cuStream);
     for (int frameIndex = 0; frameIndex < numSamples; ++frameIndex) {
         plp.numAccumFrames = frameIndex;
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
@@ -625,19 +731,29 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                       linearAlbedoBuffer.getDevicePointer(),
                       linearNormalBuffer.getDevicePointer(),
                       uint2(renderTargetSizeX, renderTargetSizeY));
+    timerRender.stop(cuStream);
 
-    // JP: デノイズ
+    // JP: パストレーシング結果のデノイズ。
+    //     毎フレーム呼ぶ必要があるのはcomputeIntensity()とinvoke()。
+    //     computeIntensity()は自作することもできる。
     //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
-    // EN: Denoise
-    //     It is possible to reuse the scratch buffer for denoising for computeIntensity() if its size is enough.
-    denoiser.setup(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
-    denoiser.setLayers(&linearColorBuffer, &linearAlbedoBuffer, &linearNormalBuffer, &linearOutputBuffer,
-                       OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4);
+    // EN: Denoise the path tracing the result.
+    //     computeIntensity() and invoke() should be calld every frame.
+    //     You can also create a custom computeIntensity().
+    //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
+    timerDenoise.start(cuStream);
     denoiser.computeIntensity(cuStream, denoiserScratchBuffer, hdrIntensity);
     for (int i = 0; i < denoisingTasks.size(); ++i)
         denoiser.invoke(cuStream, false, hdrIntensity, 0.0f, denoisingTasks[i]);
+    timerDenoise.stop(cuStream);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+
+    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, timerRender.report());
+    hpprintf("Denoise: %.3f[ms]\n", timerDenoise.report());
+
+    timerDenoise.finalize();
+    timerRender.finalize();
 
 
 
@@ -768,9 +884,15 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     matBunny.destroy();
     matAreaLight.destroy();
+    CUDADRV_CHECK(cuTexObjectDestroy(matFloorData.texture));
+    arrayFloor.finalize();
+    matFloor.destroy();
     matRightWall.destroy();
     matLeftWall.destroy();
-    matGray.destroy();
+    CUDADRV_CHECK(cuTexObjectDestroy(matFarSideWallData.texture));
+    arrayFarSideWall.finalize();
+    matFarSideWall.destroy();
+    matCeiling.destroy();
 
     materialDataBuffer.finalize();
 

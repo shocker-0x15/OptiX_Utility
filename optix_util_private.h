@@ -955,8 +955,9 @@ namespace optixu {
         uint32_t tileWidth;
         uint32_t tileHeight;
         int32_t overlapWidth;
-        size_t stateBufferSize;
-        size_t scratchBufferSize;
+        size_t stateSize;
+        size_t scratchSize;
+        size_t scratchSizeForComputeIntensity;
         uint32_t maxInputWidth;
         uint32_t maxInputHeight;
         OptixDenoiserSizes memoryRequirement;

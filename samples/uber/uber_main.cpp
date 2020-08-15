@@ -1,4 +1,7 @@
-﻿#include "uber_shared.h"
+﻿// This sample is a spaghetti test place for the author.
+// No specific theme, No clean code. Someday, may disappears.
+
+#include "uber_shared.h"
 
 // Include glfw3.h after our OpenGL definitions
 #include "../common/GLToolkit.h"

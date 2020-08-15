@@ -1100,6 +1100,8 @@ private: \
 
     struct DenoisingTask {
         uint64_t placeHolder[4];
+
+        // TODO: ? implement a function to query required window (tile + overlap).
     };
     
     class Denoiser {
@@ -1110,13 +1112,14 @@ private: \
         OPTIX_COMMON_FUNCTIONS(Denoiser);
 
         void setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const;
-        void prepareForInvoke(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
-                              size_t* stateBufferSize, size_t* scratchBufferSize, uint32_t* numTasks) const;
+        void prepare(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
+                     size_t* stateBufferSize, size_t* scratchBufferSize, size_t* scratchBufferSizeForComputeIntensity,
+                     uint32_t* numTasks) const;
         void getTasks(DenoisingTask* tasks) const;
         void setLayers(const Buffer* color, const Buffer* albedo, const Buffer* normal, const Buffer* denoisedColor,
                        OptixPixelFormat colorFormat, OptixPixelFormat albedoFormat, OptixPixelFormat normalFormat) const;
+        void setupState(CUstream stream, const Buffer &stateBuffer, const Buffer &scratchBuffer) const;
 
-        void setup(CUstream stream, const Buffer &stateBuffer, const Buffer &scratchBuffer) const;
         void computeIntensity(CUstream stream, const Buffer &scratchBuffer, CUdeviceptr outputIntensity);
         void invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
                     const DenoisingTask &task);
