@@ -160,11 +160,25 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
     cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
     {
+#define USE_TRIANGLE_SROUP_FOR_AREA_LIGHT
+
+#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
+            { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
+        };
+
+        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+#else
+        Shared::Vertex vertices[] = {
+            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
         };
 
         Shared::Triangle triangles[] = {
@@ -173,18 +187,27 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+#endif
 
+        // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
+        // EN: It will be interpreted as triangle soup if not setting an index buffer.
         geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
+#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
         geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
+#endif
         geomInstAreaLight.setNumMaterials(1, nullptr);
         geomInstAreaLight.setMaterial(0, 0, mat0);
         geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstAreaLight.setUserData(geomInstIndex);
 
         geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+        geomData[geomInstIndex].triangleBuffer = nullptr;
+#else
         geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+#endif
 
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.999f, 0.0f));
+        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.75f, 0.0f));
 
         ++geomInstIndex;
     }

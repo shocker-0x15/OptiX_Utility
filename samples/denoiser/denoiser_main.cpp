@@ -234,7 +234,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
     cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
-    cudau::TypedBuffer<uint32_t> matIndexBufferRoom;
+    cudau::TypedBuffer<uint8_t> matIndexBufferRoom;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -277,7 +277,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        uint32_t matIndices[] = {
+        uint8_t matIndices[] = {
             0, 0,
             1, 1,
             2, 2,
@@ -291,7 +291,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
         geomInstRoom.setVertexBuffer(&vertexBufferRoom);
         geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(5, &matIndexBufferRoom);
+        geomInstRoom.setNumMaterials(5, &matIndexBufferRoom, sizeof(uint8_t));
         geomInstRoom.setMaterial(0, 0, matFloor);
         geomInstRoom.setMaterial(0, 1, matFarSideWall);
         geomInstRoom.setMaterial(0, 2, matCeiling);

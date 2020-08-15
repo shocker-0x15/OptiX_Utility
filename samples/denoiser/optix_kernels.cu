@@ -161,7 +161,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         *firstHitNormal = sn;
     }
 
-    const float3 LightRadiance = make_float3(20, 20, 20);
+    const float3 LightRadiance = make_float3(30, 30, 30);
     // Hard-coded directly visible light
     if (sbtr.geomInstData == plp.lightGeomInstIndex &&
         isFrontFace &&

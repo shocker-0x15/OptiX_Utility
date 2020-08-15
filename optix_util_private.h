@@ -365,6 +365,8 @@ namespace optixu {
                 CUdeviceptr* vertexBufferArray;
                 const Buffer* vertexBuffer;
                 const Buffer* triangleBuffer;
+                OptixVertexFormat vertexFormat;
+                OptixIndicesFormat indexFormat;
                 uint32_t offsetInBytesForVertices;
                 uint32_t numVertices;
             };
@@ -376,7 +378,8 @@ namespace optixu {
         uint32_t offsetInBytesForPrimitives;
         uint32_t numPrimitives;
         uint32_t primitiveIndexOffset;
-        const TypedBuffer<uint32_t>* materialIndexOffsetBuffer;
+        uint32_t materialIndexOffsetSize;
+        const Buffer* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 
         std::vector<std::vector<const _Material*>> materialSets;
@@ -394,7 +397,7 @@ namespace optixu {
             offsetInBytesForPrimitives(0),
             numPrimitives(0),
             primitiveIndexOffset(0),
-            materialIndexOffsetBuffer(nullptr),
+            materialIndexOffsetSize(0), materialIndexOffsetBuffer(nullptr),
             forCustomPrimitives(_forCustomPrimitives) {
             if (forCustomPrimitives) {
                 primitiveAabbBufferArray = new CUdeviceptr[1];
@@ -406,6 +409,8 @@ namespace optixu {
                 vertexBufferArray[0] = 0;
                 vertexBuffer = nullptr;
                 triangleBuffer = nullptr;
+                vertexFormat = OPTIX_VERTEX_FORMAT_NONE;
+                indexFormat = OPTIX_INDICES_FORMAT_NONE;
                 offsetInBytesForVertices = 0;
                 numVertices = 0;
             }
@@ -955,12 +960,11 @@ namespace optixu {
         uint32_t tileWidth;
         uint32_t tileHeight;
         int32_t overlapWidth;
+        uint32_t maxInputWidth;
+        uint32_t maxInputHeight;
         size_t stateSize;
         size_t scratchSize;
         size_t scratchSizeForComputeIntensity;
-        uint32_t maxInputWidth;
-        uint32_t maxInputHeight;
-        OptixDenoiserSizes memoryRequirement;
 
         const Buffer* stateBuffer;
         const Buffer* scratchBuffer;
@@ -985,13 +989,12 @@ namespace optixu {
         Priv(const _Context* ctxt, OptixDenoiserInputKind _inputKind) :
             context(ctxt),
             inputKind(_inputKind),
+            imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
+            overlapWidth(0), maxInputWidth(0), maxInputHeight(0),
+            stateSize(0), scratchSize(0), scratchSizeForComputeIntensity(0),
             stateBuffer(nullptr), scratchBuffer(nullptr),
             colorBuffer(nullptr), albedoBuffer(nullptr), normalBuffer(nullptr), outputBuffer(nullptr),
-            modelSet(false),
-            useTiling(false),
-            imageSizeSet(false),
-            imageLayersSet(false),
-            stateIsReady(false) {
+            modelSet(false), useTiling(false), imageSizeSet(false), imageLayersSet(false), stateIsReady(false) {
             OptixDenoiserOptions options = {};
             options.inputKind = inputKind;
             OPTIX_CHECK(optixDenoiserCreate(context->getRawContext(), &options, &rawDenoiser));

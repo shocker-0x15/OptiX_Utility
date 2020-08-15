@@ -193,6 +193,8 @@ namespace optixu {
         *input = OptixBuildInput{};
 
         if (forCustomPrimitives) {
+            THROW_RUNTIME_ERROR(primitiveAABBBuffer, "Custom Primitive AABB buffer is not set.");
+
             input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
             OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
 
@@ -206,7 +208,7 @@ namespace optixu {
             customPrimArray.numSbtRecords = buildInputFlags.size();
             if (customPrimArray.numSbtRecords > 1) {
                 customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
-                customPrimArray.sbtIndexOffsetSizeInBytes = 4;
+                customPrimArray.sbtIndexOffsetSizeInBytes = materialIndexOffsetSize;
                 customPrimArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
             }
             else {
@@ -218,6 +220,10 @@ namespace optixu {
             customPrimArray.flags = buildInputFlags.data();
         }
         else {
+            THROW_RUNTIME_ERROR(vertexBuffer, "Vertex buffer is not set.");
+            THROW_RUNTIME_ERROR((indexFormat != OPTIX_INDICES_FORMAT_NONE) != (triangleBuffer == nullptr),
+                                "Triangle buffer must be provided if using a index format other than None, otherwise must not be provided.");
+
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
@@ -225,19 +231,26 @@ namespace optixu {
 
             triArray.vertexBuffers = vertexBufferArray;
             triArray.numVertices = numVertices;
-            triArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+            triArray.vertexFormat = vertexFormat;
             triArray.vertexStrideInBytes = vertexBuffer->stride();
 
-            triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
-            triArray.numIndexTriplets = numPrimitives;
-            triArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
-            triArray.indexStrideInBytes = triangleBuffer->stride();
+            if (indexFormat != OPTIX_INDICES_FORMAT_NONE) {
+                triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
+                triArray.indexStrideInBytes = triangleBuffer->stride();
+                triArray.numIndexTriplets = numPrimitives;
+            }
+            else {
+                triArray.indexBuffer = 0;
+                triArray.indexStrideInBytes = 0;
+                triArray.numIndexTriplets = 0;
+            }
+            triArray.indexFormat = indexFormat;
             triArray.primitiveIndexOffset = primitiveIndexOffset;
 
             triArray.numSbtRecords = buildInputFlags.size();
             if (triArray.numSbtRecords > 1) {
                 triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
-                triArray.sbtIndexOffsetSizeInBytes = 4;
+                triArray.sbtIndexOffsetSizeInBytes = materialIndexOffsetSize;
                 triArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer->stride();
             }
             else {
@@ -269,7 +282,8 @@ namespace optixu {
             vertexBufferArray[0] = vertexBuffer->getCUdeviceptr() + offsetInBytesForVertices;
             triArray.vertexBuffers = vertexBufferArray;
 
-            triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
+            if (indexFormat != OPTIX_INDICES_FORMAT_NONE)
+                triArray.indexBuffer = triangleBuffer->getCUdeviceptr() + offsetInBytesForPrimitives;
 
             if (triArray.numSbtRecords > 1)
                 triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer->getCUdeviceptr();
@@ -310,16 +324,18 @@ namespace optixu {
         m = nullptr;
     }
 
-    void GeometryInstance::setVertexBuffer(const Buffer* vertexBuffer, uint32_t offsetInBytes, uint32_t numVertices) const {
+    void GeometryInstance::setVertexBuffer(const Buffer* vertexBuffer, OptixVertexFormat format, uint32_t offsetInBytes, uint32_t numVertices) const {
         THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->vertexBuffer = vertexBuffer;
+        m->vertexFormat = format;
         m->offsetInBytesForVertices = offsetInBytes;
         m->numVertices = std::min<uint32_t>(vertexBuffer->numElements(), numVertices);
     }
 
-    void GeometryInstance::setTriangleBuffer(const Buffer* triangleBuffer, uint32_t offsetInBytes, uint32_t numPrimitives) const {
+    void GeometryInstance::setTriangleBuffer(const Buffer* triangleBuffer, OptixIndicesFormat format, uint32_t offsetInBytes, uint32_t numPrimitives) const {
         THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->triangleBuffer = triangleBuffer;
+        m->indexFormat = format;
         m->offsetInBytesForPrimitives = offsetInBytes;
         m->numPrimitives = std::min<uint32_t>(triangleBuffer->numElements(), numPrimitives);
     }
@@ -335,12 +351,14 @@ namespace optixu {
         m->primitiveIndexOffset = offset;
     }
 
-    void GeometryInstance::setNumMaterials(uint32_t numMaterials, const TypedBuffer<uint32_t>* matIdxOffsetBuffer) const {
+    void GeometryInstance::setNumMaterials(uint32_t numMaterials, const Buffer* matIndexOffsetBuffe, uint32_t indexOffsetSize) const {
         THROW_RUNTIME_ERROR(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
-        THROW_RUNTIME_ERROR((numMaterials == 1) != (matIdxOffsetBuffer != nullptr),
+        THROW_RUNTIME_ERROR((numMaterials == 1) != (matIndexOffsetBuffe != nullptr),
                             "Material index offset buffer must be provided when multiple materials are used.");
+        THROW_RUNTIME_ERROR(indexOffsetSize >= 1 && indexOffsetSize <= 4, "Invalid index offset size.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
-        m->materialIndexOffsetBuffer = matIdxOffsetBuffer;
+        m->materialIndexOffsetBuffer = matIndexOffsetBuffe;
+        m->materialIndexOffsetSize = indexOffsetSize;
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
@@ -636,7 +654,7 @@ namespace optixu {
             return nullptr;
         else if (childType == ChildType::Transform)
             return childXfm->getDescendantGAS();
-        optixAssert_NotImplemented();
+        optixAssert_ShouldNotBeCalled();
         return nullptr;
     }
 
@@ -878,9 +896,7 @@ namespace optixu {
             else
                 instance->sbtOffset = 0;
         }
-        else {
-            optixAssert_NotImplemented();
-        }
+        optixAssert_ShouldNotBeCalled();
     }
 
     void Instance::Priv::updateInstance(OptixInstance* instance) const {
@@ -1713,15 +1729,11 @@ namespace optixu {
             int32_t outputHeight = tileHeight;
             if (outputOffsetY == 0)
                 outputHeight += m->overlapWidth;
-            if (outputOffsetY + outputHeight > imageHeight)
-                outputHeight = imageHeight - outputOffsetY;
 
             for (int32_t outputOffsetX = 0; outputOffsetX < imageWidth;) {
                 uint32_t outputWidth = tileWidth;
                 if (outputOffsetX == 0)
                     outputWidth += m->overlapWidth;
-                if (outputOffsetX + outputWidth > imageWidth)
-                    outputWidth = imageWidth - outputOffsetX;
 
                 ++*numTasks;
 

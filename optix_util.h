@@ -29,7 +29,6 @@ TODO:
 - uint32_t以外のサイズのuserDataの使用。
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
-- Triangle Soupサポート。
 - Deformation Blurサポート。
 - HitGroup以外のプログラムの非同期更新。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
@@ -861,14 +860,14 @@ private: \
         // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
         //     required when calling the following APIs.
         //     (It is okay to use update instead of calling markDirty() when changing only vertex/AABB buffer.)
-        void setVertexBuffer(const Buffer* vertexBuffer,
+        void setVertexBuffer(const Buffer* vertexBuffer, OptixVertexFormat format = OPTIX_VERTEX_FORMAT_FLOAT3,
                              uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
-        void setTriangleBuffer(const Buffer* triangleBuffer,
+        void setTriangleBuffer(const Buffer* triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
                                uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer,
                                           uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
-        void setNumMaterials(uint32_t numMaterials, const TypedBuffer<uint32_t>* matIdxOffsetBuffer) const;
+        void setNumMaterials(uint32_t numMaterials, const Buffer* matIndexOffsetBuffer, uint32_t indexOffsetSize = sizeof(uint32_t)) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。

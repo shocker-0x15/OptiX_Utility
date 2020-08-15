@@ -76,7 +76,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
     HitPointParameter hp = HitPointParameter::get();
 
-    const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
+    Triangle triangle;
+    if (geom.triangleBuffer)
+        triangle = geom.triangleBuffer[hp.primIndex];
+    else // triangle soup
+        triangle = Triangle{ 3 * hp.primIndex + 0, 3 * hp.primIndex + 1, 3 * hp.primIndex + 2 };
     const Vertex &v0 = geom.vertexBuffer[triangle.index0];
     const Vertex &v1 = geom.vertexBuffer[triangle.index1];
     const Vertex &v2 = geom.vertexBuffer[triangle.index2];
