@@ -920,9 +920,9 @@ namespace optixu {
         case OPTIX_PIXEL_FORMAT_FLOAT4:
             return 4 * sizeof(float);
         case OPTIX_PIXEL_FORMAT_UCHAR3:
+            return 3 * sizeof(uint8_t);
         case OPTIX_PIXEL_FORMAT_UCHAR4:
-            optixAssert_NotImplemented();
-            break;
+            return 4 * sizeof(uint8_t);
         default:
             optixAssert_ShouldNotBeCalled();
             break;
@@ -931,12 +931,12 @@ namespace optixu {
     }
 
     struct _DenoisingTask {
-        size_t inputAddressOffset;
-        size_t outputAddressOffset;
+        int32_t inputOffsetX;
+        int32_t inputOffsetY;
+        int32_t outputOffsetX;
+        int32_t outputOffsetY;
         int32_t outputWidth;
         int32_t outputHeight;
-        int32_t offsetX;
-        int32_t offsetY;
 
         _DenoisingTask() {}
         _DenoisingTask(const DenoisingTask &v) {

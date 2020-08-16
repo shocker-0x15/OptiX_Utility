@@ -644,8 +644,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: デノイザーのセットアップ。
     // EN: Setup a denoiser.
     constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
-    constexpr uint32_t tileWidth = useTiledDenoising ? 32 : 0;
-    constexpr uint32_t tileHeight = useTiledDenoising ? 32 : 0;
+    constexpr uint32_t tileWidth = useTiledDenoising ? 128 : 0;
+    constexpr uint32_t tileHeight = useTiledDenoising ? 128 : 0;
     optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL);
     denoiser.setModel(OPTIX_DENOISER_MODEL_KIND_HDR, nullptr, 0);
     size_t stateSize;

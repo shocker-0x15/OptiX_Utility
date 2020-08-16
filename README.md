@@ -82,7 +82,7 @@ cudau::Buffer asBuildScratchMem;
 
 // Create geometry acceleration structures.
 optixu::GeometryAccelerationStructure gas0 = scene.createGeometryAccelerationStructure();
-gas0.setConfiguration(false, true, true, false); // Builder preference.
+gas0.setConfiguration(optixu::ASTradeoff::PreferFastTrace, true, true, false); // Builder preference.
 gas0.addChild(geomInst0);
 gas0.addChild(geomInst1);
 gas0.addChild(...);
@@ -103,7 +103,7 @@ optixu::Instance inst1 = scene.createInstance();
 
 // Create instance acceleration structures.
 optixu::InstanceAccelerationStructure ias0 = scene.createInstanceAccelerationStructure();
-ias0.setConfiguration(false, true, true); // Builder preference.
+ias0.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, true); // Builder preference.
 ias0.addChild(inst0);
 ias0.addChild(inst1);
 ias0.addChild(...);
@@ -199,7 +199,7 @@ I've confirmed that the program runs correctly on the following environment.
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 11.0
+* CUDA 11.0 Update 1
 * OptiX 7.1.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License

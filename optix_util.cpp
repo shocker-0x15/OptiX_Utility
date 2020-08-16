@@ -1724,7 +1724,7 @@ namespace optixu {
         m->scratchSize = m->useTiling ?
             sizes.withOverlapScratchSizeInBytes : sizes.withoutOverlapScratchSizeInBytes;
         m->scratchSizeForComputeIntensity = sizeof(int32_t) * (2 + m->imageWidth * m->imageHeight);
-        m->overlapWidth = sizes.overlapWindowSizeInPixels / 2;
+        m->overlapWidth = sizes.overlapWindowSizeInPixels;
         m->maxInputWidth = std::min(tileWidth + 2 * m->overlapWidth, imageWidth);
         m->maxInputHeight = std::min(tileHeight + 2 * m->overlapWidth, imageHeight);
 
@@ -1783,12 +1783,12 @@ namespace optixu {
                     inputOffsetX = m->imageWidth - m->maxInputWidth;
 
                 _DenoisingTask task;
-                task.inputAddressOffset = static_cast<size_t>(m->imageWidth) * inputOffsetY + inputOffsetX;
-                task.outputAddressOffset = static_cast<size_t>(m->imageWidth) * outputOffsetY + outputOffsetX;
+                task.inputOffsetX = inputOffsetX;
+                task.inputOffsetY = inputOffsetY;
+                task.outputOffsetX = outputOffsetX;
+                task.outputOffsetY = outputOffsetY;
                 task.outputWidth = outputWidth;
                 task.outputHeight = outputHeight;
-                task.offsetX = outputOffsetX - inputOffsetX;
-                task.offsetY = outputOffsetY - inputOffsetY;
                 tasks[taskIdx++] = task;
 
                 outputOffsetX += outputWidth;
@@ -1872,7 +1872,10 @@ namespace optixu {
 
         _DenoisingTask _task(task);
 
-        denoiserInputs[0].data = m->colorBuffer->getCUdeviceptr() + colorStride * _task.inputAddressOffset;
+        // TODO: 入出力画像のrowStrideを指定できるようにする。
+
+        size_t colorAddressOffset = colorStride * (_task.inputOffsetY * m->imageWidth + _task.inputOffsetX);
+        denoiserInputs[0].data = m->colorBuffer->getCUdeviceptr() + colorAddressOffset;
         denoiserInputs[0].width = m->maxInputWidth;
         denoiserInputs[0].height = m->maxInputHeight;
         denoiserInputs[0].format = m->colorFormat;
@@ -1883,7 +1886,8 @@ namespace optixu {
         if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO ||
             m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL) {
             size_t albedoStride = getPixelSize(m->albedoFormat);
-            denoiserInputs[1].data = m->albedoBuffer->getCUdeviceptr() + albedoStride * _task.inputAddressOffset;
+            size_t albedoAddressOffset = albedoStride * (_task.inputOffsetY * m->imageWidth + _task.inputOffsetX);
+            denoiserInputs[1].data = m->albedoBuffer->getCUdeviceptr() + albedoAddressOffset;
             denoiserInputs[1].width = m->maxInputWidth;
             denoiserInputs[1].height = m->maxInputHeight;
             denoiserInputs[1].format = m->albedoFormat;
@@ -1895,7 +1899,8 @@ namespace optixu {
 
         if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL) {
             size_t normalStride = getPixelSize(m->normalFormat);
-            denoiserInputs[2].data = m->normalBuffer->getCUdeviceptr() + normalStride * _task.inputAddressOffset;
+            size_t normalAddressOffset = normalStride * (_task.inputOffsetY * m->imageWidth + _task.inputOffsetX);
+            denoiserInputs[2].data = m->normalBuffer->getCUdeviceptr() + normalAddressOffset;
             denoiserInputs[2].width = m->maxInputWidth;
             denoiserInputs[2].height = m->maxInputHeight;
             denoiserInputs[2].format = m->normalFormat;
@@ -1905,18 +1910,21 @@ namespace optixu {
             ++numInputLayers;
         }
 
-        denoiserOutput.data = m->outputBuffer->getCUdeviceptr() + colorStride * _task.outputAddressOffset;
+        size_t outputAddressOffset = colorStride * (_task.outputOffsetY * m->imageWidth + _task.outputOffsetX);
+        denoiserOutput.data = m->outputBuffer->getCUdeviceptr() + outputAddressOffset;
         denoiserOutput.width = _task.outputWidth;
         denoiserOutput.height = _task.outputHeight;
         denoiserOutput.format = m->colorFormat;
         denoiserOutput.pixelStrideInBytes = colorStride;
         denoiserOutput.rowStrideInBytes = m->imageWidth * colorStride;
 
+        int32_t offsetX = _task.outputOffsetX - _task.inputOffsetX;
+        int32_t offsetY = _task.outputOffsetY - _task.inputOffsetY;
         OPTIX_CHECK(optixDenoiserInvoke(m->rawDenoiser, stream,
                                         &params,
                                         m->stateBuffer->getCUdeviceptr(), m->stateBuffer->sizeInBytes(),
                                         denoiserInputs, numInputLayers,
-                                        _task.offsetX, _task.offsetY,
+                                        offsetX, offsetY,
                                         &denoiserOutput,
                                         m->scratchBuffer->getCUdeviceptr(), m->scratchBuffer->sizeInBytes()));
     }

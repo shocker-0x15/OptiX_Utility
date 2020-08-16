@@ -1105,7 +1105,7 @@ private: \
 
 
     struct DenoisingTask {
-        uint64_t placeHolder[4];
+        uint32_t placeHolder[6];
 
         // TODO: ? implement a function to query required window (tile + overlap).
     };
