@@ -11,10 +11,10 @@ It provides fine-level controllability but requires the user to write troublesom
 The purpose of this OptiX Utility is to provide classes and functions which encapsulates parts which tend to be boilerplate code while keeping fine controllability.
 
 - cuda_util.h, cuda_util.cpp \
-  このCUDAユーティリティはCUDAのbufferやarray、そしてカーネルの実行のためのクラス・関数を提供しています。\
+  このCUDAユーティリティはCUDAのbufferやarrayの生成、そしてカーネルの実行のためのクラス・関数を提供しています。\
   現在のOptiXはCUDAに基づいたAPIになっているため、ユーザーはOptiXのコードと併せて頻繁に純粋なCUDAのコードも扱う必要があります。\
   これにはOptiX関連のコードは含まれません。\
-  This CUDA Utility provides classes and functions for CUDA buffer, CUDA array creation and CUDA kernel execution.
+  This CUDA Utility provides classes and functions for CUDA buffer, array creation and kernel execution.
   OptiX is now CUDA-centric API, so the user often needs to manage pure CUDA code along with OptiX code.\
   This doesn't contain any OptiX-related code.
 - optix_util.h, optix_util_private.h, optix_util.cpp\

@@ -299,7 +299,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++geomInstIndex;
 
         room.optixGas = scene.createGeometryAccelerationStructure();
-        room.optixGas.setConfiguration(true, false, true, false);
+        room.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         room.optixGas.setNumMaterialSets(1);
         room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         room.optixGas.addChild(room.optixGeomInst);
@@ -345,7 +345,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++geomInstIndex;
 
         areaLight.optixGas = scene.createGeometryAccelerationStructure();
-        areaLight.optixGas.setConfiguration(true, false, true, false);
+        areaLight.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         areaLight.optixGas.setNumMaterialSets(1);
         areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         areaLight.optixGas.addChild(areaLight.optixGeomInst);
@@ -379,7 +379,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++geomInstIndex;
 
         bunny.optixGas = scene.createGeometryAccelerationStructure();
-        bunny.optixGas.setConfiguration(true, false, true, false);
+        bunny.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         bunny.optixGas.setNumMaterialSets(1);
         bunny.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         bunny.optixGas.addChild(bunny.optixGeomInst);
@@ -413,7 +413,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         ++geomInstIndex;
 
         cube.optixGas = scene.createGeometryAccelerationStructure();
-        cube.optixGas.setConfiguration(true, false, true, false);
+        cube.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         cube.optixGas.setNumMaterialSets(1);
         cube.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         cube.optixGas.addChild(cube.optixGeomInst);
@@ -508,12 +508,12 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
         Transform::SRT srt1;
         srt1.s = make_float3(0.005f);
         srt1.o = Quaternion(0, 0, 0, 1);
-        srt1.t = make_float3(-0.5f, -1.0f + 0.1f, 0);
+        srt1.t = make_float3(-0.5f, -1.0f + 0.2f, 0);
         tr.srts.push_back(srt1);
         Transform::SRT srt2;
         srt2.s = make_float3(0.005f);
         srt2.o = Quaternion(0, 0, 0, 1);
-        srt2.t = make_float3(-0.5f, -1.0f + 0.2f, 0);
+        srt2.t = make_float3(-0.5f + 0.2f, -1.0f + 0.4f, 0);
         tr.srts.push_back(srt2);
 
         size_t trMemSize;
@@ -597,7 +597,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     cudau::TypedBuffer<OptixAabb> aabbBuffer;
     constexpr uint32_t numMotionKeys = 3;
-    lowerIas.setConfiguration(true, false, false);
+    lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
     lowerIas.addChild(instRoom);
     lowerIas.addChild(instAreaLight);
@@ -713,7 +713,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer topIasMem;
     uint32_t numTopInstances;
     cudau::TypedBuffer<OptixInstance> topInstanceBuffer;
-    topIas.setConfiguration(true, false, false);
+    topIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     topIas.addChild(topInstA);
     topIas.addChild(topInstB);
     topIas.addChild(topInstC);

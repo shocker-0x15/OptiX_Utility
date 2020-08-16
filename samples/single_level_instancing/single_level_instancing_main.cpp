@@ -304,7 +304,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasRoom = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasRoomMem;
     cudau::Buffer gasRoomCompactedMem;
-    gasRoom.setConfiguration(true, false, true, false);
+    gasRoom.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasRoom.setNumMaterialSets(1);
     gasRoom.setNumRayTypes(0, Shared::NumRayTypes);
     gasRoom.addChild(geomInstRoom);
@@ -315,7 +315,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasAreaLightMem;
     cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(true, false, true, false);
+    gasAreaLight.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     gasAreaLight.addChild(geomInstAreaLight);
@@ -326,7 +326,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasBunny = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasBunnyMem;
     cudau::Buffer gasBunnyCompactedMem;
-    gasBunny.setConfiguration(true, false, true, false);
+    gasBunny.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasBunny.setNumMaterialSets(1);
     gasBunny.setNumRayTypes(0, Shared::NumRayTypes);
     gasBunny.addChild(geomInstBunny);
@@ -418,7 +418,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer iasMem;
     uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(true, false, false);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     ias.addChild(instRoom);
     ias.addChild(instAreaLight);
     for (int i = 0; i < instsBunny.size(); ++i)

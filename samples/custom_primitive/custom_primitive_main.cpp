@@ -250,7 +250,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasRoom = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasRoomMem;
     cudau::Buffer gasRoomCompactedMem;
-    gasRoom.setConfiguration(true, false, true, false);
+    gasRoom.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasRoom.setNumMaterialSets(1);
     gasRoom.setNumRayTypes(0, Shared::NumRayTypes);
     gasRoom.addChild(geomInstRoom);
@@ -266,7 +266,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasCustomPrimitives = scene.createGeometryAccelerationStructure(true);
     cudau::Buffer gasCustomPrimitivesMem;
     cudau::Buffer gasCustomPrimitivesCompactedMem;
-    gasCustomPrimitives.setConfiguration(true, false, true, false);
+    gasCustomPrimitives.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasCustomPrimitives.setNumMaterialSets(1);
     gasCustomPrimitives.setNumRayTypes(0, Shared::NumRayTypes);
     gasCustomPrimitives.addChild(geomInstSpheres);
@@ -318,7 +318,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer iasMem;
     uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(true, false, false);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     ias.addChild(instRoom);
     ias.addChild(instCustomPrimitives);
     ias.prepareForBuild(&asMemReqs, &numInstances);

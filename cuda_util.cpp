@@ -770,7 +770,7 @@ namespace cudau {
         if (m_mappedPointers[mipmapLevel])
             throw std::runtime_error("This mip-map level is already mapped.");
         if (mipmapLevel >= m_numMipmapLevels)
-            throw std::runtime_error("Specified mip-map level is out of bound.");
+            throw std::runtime_error("Specified mip-map level is out of bounds.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
@@ -828,7 +828,7 @@ namespace cudau {
         if (!m_mappedPointers[mipmapLevel])
             throw std::runtime_error("This mip-map level is not mapped.");
         if (mipmapLevel >= m_numMipmapLevels)
-            throw std::runtime_error("Specified mip-map level is out of bound.");
+            throw std::runtime_error("Specified mip-map level is out of bounds.");
 
         CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 

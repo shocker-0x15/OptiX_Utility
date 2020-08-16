@@ -339,7 +339,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasMem;
     cudau::Buffer gasCompactedMem;
-    gas.setConfiguration(true, false, true, false);
+    gas.setConfiguration(optixu::ASTradeoff::Default, false, true, false);
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
     gas.addChild(geomInstRoom/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.

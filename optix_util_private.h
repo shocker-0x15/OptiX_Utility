@@ -474,9 +474,9 @@ namespace optixu {
         OptixTraversableHandle compactedHandle;
         const Buffer* accelBuffer;
         const Buffer* compactedAccelBuffer;
+        ASTradeoff tradeoff;
         struct {
             unsigned int forCustomPrimitives : 1;
-            unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
             unsigned int allowRandomVertexAccess : 1;
@@ -494,8 +494,9 @@ namespace optixu {
             userData(0),
             handle(0), compactedHandle(0),
             accelBuffer(nullptr), compactedAccelBuffer(nullptr),
+            tradeoff(ASTradeoff::Default),
             forCustomPrimitives(_forCustomPrimitives),
-            preferFastTrace(true), allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
+            allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
             readyToBuild(false), available(false), 
             readyToCompact(false), compactedAvailable(false) {
             scene->addGAS(this);
@@ -705,8 +706,8 @@ namespace optixu {
         const TypedBuffer<OptixAabb>* aabbBuffer;
         const Buffer* accelBuffer;
         const Buffer* compactedAccelBuffer;
+        ASTradeoff tradeoff;
         struct {
-            unsigned int preferFastTrace : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
             unsigned int aabbsRequired : 1;
@@ -723,7 +724,8 @@ namespace optixu {
             scene(_scene),
             handle(0), compactedHandle(0),
             instanceBuffer(nullptr), aabbBuffer(nullptr), accelBuffer(nullptr), compactedAccelBuffer(nullptr),
-            preferFastTrace(true), allowUpdate(false), allowCompaction(false),
+            tradeoff(ASTradeoff::Default),
+            allowUpdate(false), allowCompaction(false),
             readyToBuild(false), available(false),
             readyToCompact(false), compactedAvailable(false) {
             scene->addIAS(this);

@@ -1515,7 +1515,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                         geomGroup->serialID = serialID;
                         geomGroup->name = name;
                         geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
-                        geomGroup->optixGAS.setConfiguration(false, false, false, false);
+                        geomGroup->optixGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
                         geomGroup->optixGAS.setNumMaterialSets(1);
                         geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
                         geomGroup->optixGAS.setUserData(gasIndex);
@@ -1808,7 +1808,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
                         group->serialID = serialID;
                         group->name = name;
                         group->optixIAS = optixEnv.scene.createInstanceAccelerationStructure();
-                        group->optixIAS.setConfiguration(false, false, false);
+                        group->optixIAS.setConfiguration(optixu::ASTradeoff::PreferFastBuild, false, false);
 
                         instList.loopForSelected(
                             [&group](const InstanceRef &inst) {
@@ -2013,6 +2013,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             geomGroup->optixGAS.prepareForBuild(&bufferSizes);
             if (bufferSizes.tempSizeInBytes >= optixEnv.asScratchBuffer.sizeInBytes())
                 optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, curCuStream);
+            hpprintf("GAS: %s\n", kv.second->name.c_str());
+            hpprintf("AS Size: %llu bytes\n", bufferSizes.outputSizeInBytes);
+            hpprintf("Scratch Size: %llu bytes\n", bufferSizes.tempSizeInBytes);
             // JP: ASのメモリをGPUが使用中に確保しなおすのは危険なため使用の完了を待つ。
             //     CPU/GPUの非同期実行を邪魔したくない場合、完全に別のバッファーを用意してそれと切り替える必要がある。
             // EN: It is dangerous to reallocate AS memory during the GPU is using it,
@@ -2055,6 +2058,9 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
             OptixAccelBufferSizes bufferSizes;
             uint32_t numInstances;
             group->optixIAS.prepareForBuild(&bufferSizes, &numInstances);
+            hpprintf("IAS: %s\n", kv.second->name.c_str());
+            hpprintf("AS Size: %llu bytes\n", bufferSizes.outputSizeInBytes);
+            hpprintf("Scratch Size: %llu bytes\n", bufferSizes.tempSizeInBytes);
             if (bufferSizes.tempSizeInBytes >= optixEnv.asScratchBuffer.sizeInBytes())
                 optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, curCuStream);
             // JP: ASのメモリをGPUが使用中に確保しなおすのは危険なため使用の完了を待つ。

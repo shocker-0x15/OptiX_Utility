@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- Linux環境でのテスト。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - uint32_t以外のサイズのuserDataの使用。
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
@@ -298,22 +299,22 @@ namespace optixu {
 
         CUDA_DEVICE_FUNCTION const T &operator[](uint2 idx) const {
             optixAssert(idx.x < m_width && idx.y < m_height,
-                        "Out of bound: %u, %u", idx.x, idx.y);
+                        "Out of bounds: %u, %u", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         CUDA_DEVICE_FUNCTION T &operator[](uint2 idx) {
             optixAssert(idx.x < m_width && idx.y < m_height,
-                        "Out of bound: %u, %u", idx.x, idx.y);
+                        "Out of bounds: %u, %u", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         CUDA_DEVICE_FUNCTION const T &operator[](int2 idx) const {
             optixAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
-                        "Out of bound: %d, %d", idx.x, idx.y);
+                        "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         CUDA_DEVICE_FUNCTION T &operator[](int2 idx) {
             optixAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
-                        "Out of bound: %d, %d", idx.x, idx.y);
+                        "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
 #endif
@@ -800,15 +801,12 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(Context);
 
-        Material createMaterial() const;
-
-        Scene createScene() const;
+        CUcontext getCUcontext() const;
 
         Pipeline createPipeline() const;
-
+        Material createMaterial() const;
+        Scene createScene() const;
         Denoiser createDenoiser(OptixDenoiserInputKind inputKind) const;
-
-        CUcontext getCUcontext() const;
     };
 
 
@@ -880,6 +878,14 @@ private: \
 
 
 
+    enum class ASTradeoff {
+        Default = 0,
+        PreferFastTrace,
+        PreferFastBuild,
+    };
+
+
+
     class GeometryAccelerationStructure {
         OPTIX_PIMPL();
 
@@ -889,7 +895,7 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はGASがdirty状態になる。
         // EN: Calling the following APIs marks the GAS dirty.
-        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
+        void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void markDirty() const;
@@ -949,8 +955,9 @@ private: \
         void setChild(Transform child) const;
         void markDirty() const;
 
-        // JP: 所属するTraversableのmarkDirty()を呼ぶ必要がある。
-        // EN: Calling markDirty() of a traversable to which the transform belongs is required.
+        // JP: (間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable (e.g. IAS) to which the transform
+        //     (indirectly) belongs is required.
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &trDeviceMem);
 
         bool isReady() const;
@@ -991,7 +998,7 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はIASがdirty状態になる。
         // EN: Calling the following APIs marks the IAS dirty.
-        void setConfiguration(bool preferFastTrace, bool allowUpdate, bool allowCompaction) const;
+        void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChild(Instance instance) const;

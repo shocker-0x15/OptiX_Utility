@@ -952,7 +952,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasCornellBoxMem;
     cudau::Buffer gasCornellBoxCompactedMem;
-    gasCornellBox.setConfiguration(true, false, true, false);
+    gasCornellBox.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
@@ -964,7 +964,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasAreaLightMem;
     cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(true, false, true, false);
+    gasAreaLight.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
@@ -975,14 +975,14 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasObjectMem;
-    gasObject.setConfiguration(false, true, false, false);
+    gasObject.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
     gasObject.setNumMaterialSets(2);
     gasObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasObject.setNumRayTypes(1, Shared::NumRayTypes);
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
     gasObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, 
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer,
                                       std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
     // JP: カスタムプリミティブ用のGASを作成する。
@@ -990,7 +990,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t gasCustomPrimObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(true);
     cudau::Buffer gasCustomPrimObjectMem;
-    gasCustomPrimObject.setConfiguration(false, true, false, false);
+    gasCustomPrimObject.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
     gasCustomPrimObject.setNumMaterialSets(1);
     gasCustomPrimObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasCustomPrimObject.addChild(customPrimInstance);
@@ -1076,7 +1076,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     cudau::Buffer iasSceneMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     uint32_t numInstances;
-    iasScene.setConfiguration(false, true, false);
+    iasScene.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instObject0);
