@@ -1865,58 +1865,48 @@ namespace optixu {
         params.hdrIntensity = hdrIntensity;
         params.blendFactor = blendFactor;
 
-        size_t colorStride = getPixelSize(m->colorFormat);
-
-        OptixImage2D denoiserInputs[3];
-        OptixImage2D denoiserOutput = {};
-
         _DenoisingTask _task(task);
+
+        uint32_t numInputLayers = 0;
+
+        const auto setupInputLayer = [&]
+        (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
+            uint32_t pixelStride = getPixelSize(format);
+            *layer = {};
+            layer->rowStrideInBytes = m->imageWidth * pixelStride;
+            layer->pixelStrideInBytes = pixelStride;
+            uint32_t addressOffset = _task.inputOffsetY * layer->rowStrideInBytes + _task.inputOffsetX * pixelStride;
+            layer->data = baseAddress + addressOffset;
+            layer->width = m->maxInputWidth;
+            layer->height = m->maxInputHeight;
+            layer->format = format;
+
+            ++numInputLayers;
+        };
 
         // TODO: 入出力画像のrowStrideを指定できるようにする。
 
-        size_t colorAddressOffset = colorStride * (_task.inputOffsetY * m->imageWidth + _task.inputOffsetX);
-        denoiserInputs[0].data = m->colorBuffer->getCUdeviceptr() + colorAddressOffset;
-        denoiserInputs[0].width = m->maxInputWidth;
-        denoiserInputs[0].height = m->maxInputHeight;
-        denoiserInputs[0].format = m->colorFormat;
-        denoiserInputs[0].pixelStrideInBytes = colorStride;
-        denoiserInputs[0].rowStrideInBytes = m->imageWidth * colorStride;
-
-        uint32_t numInputLayers = 1;
+        OptixImage2D denoiserInputs[3];
+        setupInputLayer(m->colorFormat, m->colorBuffer->getCUdeviceptr(), &denoiserInputs[0]);
         if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO ||
-            m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL) {
-            size_t albedoStride = getPixelSize(m->albedoFormat);
-            size_t albedoAddressOffset = albedoStride * (_task.inputOffsetY * m->imageWidth + _task.inputOffsetX);
-            denoiserInputs[1].data = m->albedoBuffer->getCUdeviceptr() + albedoAddressOffset;
-            denoiserInputs[1].width = m->maxInputWidth;
-            denoiserInputs[1].height = m->maxInputHeight;
-            denoiserInputs[1].format = m->albedoFormat;
-            denoiserInputs[1].pixelStrideInBytes = albedoStride;
-            denoiserInputs[1].rowStrideInBytes = m->imageWidth * albedoStride;
+            m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
+            setupInputLayer(m->albedoFormat, m->albedoBuffer->getCUdeviceptr(), &denoiserInputs[1]);
+        if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
+            setupInputLayer(m->normalFormat, m->normalBuffer->getCUdeviceptr(), &denoiserInputs[2]);
 
-            ++numInputLayers;
+        OptixImage2D denoiserOutput = {};
+        {
+            OptixImage2D &layer = denoiserOutput;
+            OptixPixelFormat format = m->colorFormat;
+            uint32_t pixelStride = getPixelSize(format);
+            layer.rowStrideInBytes = m->imageWidth * pixelStride;
+            layer.pixelStrideInBytes = pixelStride;
+            uint32_t addressOffset = _task.outputOffsetY * layer.rowStrideInBytes + _task.outputOffsetX * pixelStride;
+            layer.data = m->outputBuffer->getCUdeviceptr() + addressOffset;
+            layer.width = _task.outputWidth;
+            layer.height = _task.outputHeight;
+            layer.format = format;
         }
-
-        if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL) {
-            size_t normalStride = getPixelSize(m->normalFormat);
-            size_t normalAddressOffset = normalStride * (_task.inputOffsetY * m->imageWidth + _task.inputOffsetX);
-            denoiserInputs[2].data = m->normalBuffer->getCUdeviceptr() + normalAddressOffset;
-            denoiserInputs[2].width = m->maxInputWidth;
-            denoiserInputs[2].height = m->maxInputHeight;
-            denoiserInputs[2].format = m->normalFormat;
-            denoiserInputs[2].pixelStrideInBytes = normalStride;
-            denoiserInputs[2].rowStrideInBytes = m->imageWidth * normalStride;
-
-            ++numInputLayers;
-        }
-
-        size_t outputAddressOffset = colorStride * (_task.outputOffsetY * m->imageWidth + _task.outputOffsetX);
-        denoiserOutput.data = m->outputBuffer->getCUdeviceptr() + outputAddressOffset;
-        denoiserOutput.width = _task.outputWidth;
-        denoiserOutput.height = _task.outputHeight;
-        denoiserOutput.format = m->colorFormat;
-        denoiserOutput.pixelStrideInBytes = colorStride;
-        denoiserOutput.rowStrideInBytes = m->imageWidth * colorStride;
 
         int32_t offsetX = _task.outputOffsetX - _task.inputOffsetX;
         int32_t offsetY = _task.outputOffsetY - _task.inputOffsetY;
