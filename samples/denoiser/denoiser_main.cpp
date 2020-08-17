@@ -644,8 +644,8 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     // JP: デノイザーのセットアップ。
     // EN: Setup a denoiser.
     constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
-    constexpr uint32_t tileWidth = useTiledDenoising ? 128 : 0;
-    constexpr uint32_t tileHeight = useTiledDenoising ? 128 : 0;
+    constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
+    constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
     optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL);
     denoiser.setModel(OPTIX_DENOISER_MODEL_KIND_HDR, nullptr, 0);
     size_t stateSize;
@@ -693,7 +693,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 0, 3.5);
+    plp.camera.position = make_float3(0, 0, 3.16f);
     plp.camera.orientation = rotateY3x3(M_PI);
     plp.lightGeomInstIndex = lightGeomInstIndex;
 
