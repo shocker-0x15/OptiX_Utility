@@ -901,7 +901,9 @@ namespace optixu {
             else
                 instance->sbtOffset = 0;
         }
-        optixAssert_ShouldNotBeCalled();
+        else {
+            optixAssert_ShouldNotBeCalled();
+        }
     }
 
     void Instance::Priv::updateInstance(OptixInstance* instance) const {
