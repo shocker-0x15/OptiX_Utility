@@ -99,7 +99,7 @@ static void loadObj(const std::string &filepath,
     }
 }
 
-int32_t mainFunc(int32_t argc, const char* argv[]) {
+int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
@@ -863,14 +863,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     return 0;
 }
-
-int32_t main(int32_t argc, const char* argv[]) {
-    try {
-        mainFunc(argc, argv);
-    }
-    catch (const std::exception &ex) {
-        hpprintf("Error: %s\n", ex.what());
-    }
-
-    return 0;
+catch (const std::exception &ex) {
+    hpprintf("Error: %s\n", ex.what());
+    return -1;
 }

@@ -179,7 +179,7 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 
-int32_t mainFunc(int32_t argc, const char* argv[]) {
+int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OpenGL, GLFWの初期化。
     // EN: Initialize OpenGL and GLFW.
@@ -1926,14 +1926,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     return 0;
 }
-
-int32_t main(int32_t argc, const char* argv[]) {
-    try {
-        mainFunc(argc, argv);
-    }
-    catch (const std::exception &ex) {
-        hpprintf("Error: %s\n", ex.what());
-    }
-
-    return 0;
+catch (const std::exception &ex) {
+    hpprintf("Error: %s\n", ex.what());
+    return -1;
 }

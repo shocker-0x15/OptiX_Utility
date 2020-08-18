@@ -7,7 +7,7 @@
 #include "../../ext/stb_image_write.h"
 #include "../../ext/tiny_obj_loader.h"
 
-int32_t mainFunc(int32_t argc, const char* argv[]) {
+int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
@@ -654,7 +654,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
     uint32_t numTasks;
     denoiser.prepare(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
                      &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-                     &numTasks);;
+                     &numTasks);
     hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
     hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
     hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
@@ -914,14 +914,7 @@ int32_t mainFunc(int32_t argc, const char* argv[]) {
 
     return 0;
 }
-
-int32_t main(int32_t argc, const char* argv[]) {
-    try {
-        mainFunc(argc, argv);
-    }
-    catch (const std::exception &ex) {
-        hpprintf("Error: %s\n", ex.what());
-    }
-
-    return 0;
+catch (const std::exception &ex) {
+    hpprintf("Error: %s\n", ex.what());
+    return -1;
 }

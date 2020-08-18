@@ -775,6 +775,21 @@ namespace optixu {
     class ProgramGroup;
     class Denoiser;
 
+    enum class ASTradeoff {
+        Default = 0,
+        PreferFastTrace,
+        PreferFastBuild,
+    };
+
+    enum class TransformType {
+        MatrixMotion = 0,
+        SRTMotion,
+        Static,
+        Invalid
+    };
+
+
+
 #define OPTIX_PIMPL() \
 public: \
     class Priv; \
@@ -878,14 +893,6 @@ private: \
 
 
 
-    enum class ASTradeoff {
-        Default = 0,
-        PreferFastTrace,
-        PreferFastBuild,
-    };
-
-
-
     class GeometryAccelerationStructure {
         OPTIX_PIMPL();
 
@@ -927,13 +934,6 @@ private: \
     };
 
 
-
-    enum class TransformType {
-        MatrixMotion = 0,
-        SRTMotion,
-        Static,
-        Invalid
-    };
 
     class Transform {
         OPTIX_PIMPL();
@@ -1104,7 +1104,7 @@ private: \
 
 
 
-    struct DenoisingTask {
+    class DenoisingTask {
         uint32_t placeHolder[6];
 
         // TODO: ? implement a function to query required window (tile + overlap).
