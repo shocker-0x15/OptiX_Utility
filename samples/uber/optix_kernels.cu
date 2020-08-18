@@ -10,6 +10,17 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 
+struct HitGroupSBTRecordData {
+    uint32_t materialIndex;
+    uint32_t geomInstIndex;
+
+    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    }
+};
+
+
+
 struct SearchRayPayload {
     float3 alpha;
     float3 contribution;
@@ -130,9 +141,9 @@ RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParame
 
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const MaterialData &mat = plp.materialData[sbtr.materialData];
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const MaterialData &mat = plp.materialData[sbtr.materialIndex];
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
 
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
@@ -172,7 +183,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
 
     const float3 LightRadiance = make_float3(20, 20, 20);
     // Hard-coded directly visible light
-    if (sbtr.materialData == plp.matLightIndex &&
+    if (sbtr.materialIndex == plp.matLightIndex &&
         isFrontFace &&
         (payload->pathLength == 1 || payload->specularBounce)) {
         payload->contribution = payload->contribution + payload->alpha * LightRadiance;
@@ -249,9 +260,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
 //     it appears better to basically use a common program and callable programs for different behaviors,
 //     but here define another program on purpose for demonstration.
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_specular)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const MaterialData &mat = plp.materialData[sbtr.materialData];
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const MaterialData &mat = plp.materialData[sbtr.materialIndex];
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
 
     // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
     //     ポインターとしたものに一致しなければならない。
@@ -305,8 +316,8 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 
 
 CUDA_DEVICE_KERNEL void RT_IS_NAME(custom_primitive)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
     uint32_t primIndex = optixGetPrimitiveIndex();
     const SphereParameter &param = geom.paramBuffer[primIndex];
     const float3 rayOrg = optixGetObjectRayOrigin();

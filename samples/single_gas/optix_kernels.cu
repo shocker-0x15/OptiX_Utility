@@ -22,6 +22,27 @@ struct HitPointParameter {
     }
 };
 
+// JP: optixGetSbtDataPointer()で取得できるポインターの位置に
+//     Material, GeometryInstance, GeometryInstanceAccelerationStructureのsetUserData()
+//     で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
+//     各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGeometryInstanceに属していても
+//     マテリアルが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
+//     このサンプルではMaterialとGASにはユーザーデータは設定していない。
+// EN: Data set by each of Material, GeometryInstance, GeometryInstanceAccelerationStructure's setUserData()
+//     line up in the order (Each relative offset follows the specified alignment)
+//     at the position pointed by optixGetSbtDataPointer().
+//     Note that the start position of each data changes depending on the sizes of forward data.
+//     Therefore for example, the start positions of GeometryInstance's data are possibly different
+//     if materials are different even if those belong to the same GeometryInstance.
+//     This sample did not set user data to Material and GAS.
+struct HitGroupSBTRecordData {
+    uint32_t geomInstIndex;
+
+    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+    }
+};
+
 
 
 #define PayloadSignature float3
@@ -72,8 +93,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     //     で設定した値を取得できる。
     // EN: The values set at setUserData() of Material, GeometryInstance and GAS can be obtained from
     //     optixu::getHitGroupSBTRecordData()
-    auto sbtr = optixu::getHitGroupSBTRecordData();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstData];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
     HitPointParameter hp = HitPointParameter::get();
 
     Triangle triangle;
