@@ -36,7 +36,7 @@ struct HitPointParameter {
 //     if materials are different even if those belong to the same GeometryInstance.
 //     This sample did not set user data to Material and GAS.
 struct HitGroupSBTRecordData {
-    uint32_t geomInstIndex;
+    GeometryData geomData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
@@ -89,12 +89,8 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
-    // JP: optixu::getHitGroupSBTRecordData()よりMaterialやGeometryInstanceやGASのsetUserData()
-    //     で設定した値を取得できる。
-    // EN: The values set at setUserData() of Material, GeometryInstance and GAS can be obtained from
-    //     optixu::getHitGroupSBTRecordData()
     auto sbtr = HitGroupSBTRecordData::get();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
+    const GeometryData &geom = sbtr.geomData;
     HitPointParameter hp = HitPointParameter::get();
 
     Triangle triangle;
@@ -115,8 +111,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     // EN: Transform from GeometryInstance to GAS space should be manually implemented by the user.
     //     However, it is possible to get post-transformed values using optixGetTriangleVertexData()
     //     only for positions if random vertex access is enabled for GAS build configuration.
-    const GeometryPreTransform &preTransform = plp.geomPreTransforms[optixGetSbtGASIndex()];
-    sn = normalize(preTransform.transformNormal(sn));
+    sn = normalize(geom.transformNormal(sn));
 
     // JP: 法線を可視化。
     //     このサンプルでは単一のGASしか使っていないためオブジェクト空間からワールド空間への変換は無い。

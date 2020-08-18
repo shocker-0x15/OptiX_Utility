@@ -5,7 +5,406 @@
 #include "../../ext/tiny_obj_loader.h"
 
 static void loadObjFile(const std::filesystem::path &filepath,
-                        std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles) {
+                        std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles);
+
+int32_t main(int32_t argc, const char* argv[]) try {
+    // ----------------------------------------------------------------
+    // JP: OptiXのコンテキストとパイプラインの設定。
+    // EN: Settings for OptiX context and pipeline.
+
+    CUcontext cuContext;
+    int32_t cuDeviceCount;
+    CUstream cuStream;
+    CUDADRV_CHECK(cuInit(0));
+    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
+    CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
+    CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
+    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
+
+    optixu::Context optixContext = optixu::Context::create(cuContext);
+
+    optixu::Pipeline pipeline = optixContext.createPipeline();
+
+    // JP: このサンプルでは単一のGASのみを使用する。
+    // EN: This sample uses only a single GAS.
+    pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
+                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+                                OPTIX_EXCEPTION_FLAG_DEBUG,
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "single_gas/ptxes/optix_kernels.ptx");
+    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
+        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+    optixu::Module emptyModule;
+
+    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen0"));
+    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
+
+    // JP: このヒットグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
+    // EN: This hit group is for ray-triangle intersection, so we don't need custom intersection program.
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
+        moduleOptiX, RT_CH_NAME_STR("closesthit0"),
+        emptyModule, nullptr,
+        emptyModule, nullptr);
+
+    // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
+    // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
+    pipeline.setMaxTraceDepth(1);
+    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+    pipeline.setRayGenerationProgram(rayGenProgram);
+    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    //pipeline.setExceptionProgram(exceptionProgram);
+    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
+
+    // END: Settings for OptiX context and pipeline.
+    // ----------------------------------------------------------------
+
+
+
+    // ----------------------------------------------------------------
+    // JP: マテリアルのセットアップ。
+    // EN: Setup materials.
+
+    optixu::Material mat0 = optixContext.createMaterial();
+    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+
+    // END: Setup materials.
+    // ----------------------------------------------------------------
+
+
+
+    // ----------------------------------------------------------------
+    // JP: シーンのセットアップ。
+    // EN: Setup a scene.
+
+    optixu::Scene scene = optixContext.createScene();
+
+    cudau::TypedBuffer<Shared::GeometryPreTransform> preTransformBuffer;
+    preTransformBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
+    Shared::GeometryPreTransform* preTransforms = preTransformBuffer.map();
+
+    uint32_t geomInstIndex = 0;
+
+    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
+    {
+        Shared::Vertex vertices[] = {
+            // floor
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
+            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
+            // back wall
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 1) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 0) },
+            // ceiling
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3(1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(1, 0) },
+            // left wall
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 1) },
+            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 1) },
+            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 0) },
+            // right wall
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 0) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 1) },
+            { make_float3(1.0f, 1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 1) },
+            { make_float3(1.0f, -1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 0) },
+        };
+
+        Shared::Triangle triangles[] = {
+            // floor
+            { 0, 1, 2 }, { 0, 2, 3 },
+            // back wall
+            { 4, 5, 6 }, { 4, 6, 7 },
+            // ceiling
+            { 8, 11, 10 }, { 8, 10, 9 },
+            // left wall
+            { 15, 12, 13 }, { 15, 13, 14 },
+            // right wall
+            { 16, 19, 18 }, { 16, 18, 17 }
+        };
+
+        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+
+        Matrix3x3 matSR = Matrix3x3();
+
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+        geomData.matSR_N = transpose(inverse(matSR));
+
+        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
+        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
+        geomInstRoom.setNumMaterials(1, nullptr);
+        geomInstRoom.setMaterial(0, 0, mat0);
+        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstRoom.setUserData(geomData);
+
+        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, 0.0f, 0.0f));
+
+        ++geomInstIndex;
+    }
+
+    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
+    {
+#define USE_TRIANGLE_SROUP_FOR_AREA_LIGHT
+
+#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+        Shared::Vertex vertices[] = {
+            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
+        };
+
+        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+#else
+        Shared::Vertex vertices[] = {
+            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
+        };
+
+        Shared::Triangle triangles[] = {
+            { 0, 1, 2 }, { 0, 2, 3 },
+        };
+
+        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+#endif
+
+        Matrix3x3 matSR = Matrix3x3();
+
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+#endif
+        geomData.matSR_N = transpose(inverse(matSR));
+
+        // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
+        // EN: It will be interpreted as triangle soup if not setting an index buffer.
+        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
+#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
+#endif
+        geomInstAreaLight.setNumMaterials(1, nullptr);
+        geomInstAreaLight.setMaterial(0, 0, mat0);
+        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstAreaLight.setUserData(geomData);
+
+        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, 0.75f, 0.0f));
+
+        ++geomInstIndex;
+    }
+
+    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
+    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
+    {
+        std::vector<Shared::Vertex> vertices;
+        std::vector<Shared::Triangle> triangles;
+        loadObjFile("../../data/stanford_bunny_309_faces.obj", &vertices, &triangles);
+
+        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
+        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
+
+        Matrix3x3 matSR = rotateY3x3(M_PI / 4) * scale3x3(0.012f);
+
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferBunny.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferBunny.getDevicePointer();
+        geomData.matSR_N = transpose(inverse(matSR));
+
+        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
+        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
+        geomInstBunny.setNumMaterials(1, nullptr);
+        geomInstBunny.setMaterial(0, 0, mat0);
+        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        geomInstBunny.setUserData(geomData);
+
+        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, -1.0f, 0.0f));
+
+        ++geomInstIndex;
+    }
+
+    preTransformBuffer.unmap();
+
+
+
+    size_t maxSizeOfScratchBuffer = 0;
+    OptixAccelBufferSizes asMemReqs;
+
+    cudau::Buffer asBuildScratchMem;
+
+    // JP: Geometry Acceleration Structureを生成する。
+    // EN: Create an geometry acceleration structure.
+    optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer gasMem;
+    cudau::Buffer gasCompactedMem;
+    gas.setConfiguration(optixu::ASTradeoff::Default, false, true, false);
+    gas.setNumMaterialSets(1);
+    gas.setNumRayTypes(0, Shared::NumRayTypes);
+    gas.addChild(geomInstRoom/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
+    // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
+    //     指定されたTransformを用いてAcceleration Structureが作られる。
+    //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
+    // EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
+    //     Acceleration structure is built using the specified transform.
+    //     Note that geometry that given by the user in a kernel is not transformed.
+    gas.addChild(geomInstAreaLight, preTransformBuffer.getCUdeviceptrAt(1));
+    gas.addChild(geomInstBunny, preTransformBuffer.getCUdeviceptrAt(2));
+    gas.prepareForBuild(&asMemReqs);
+    gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    // JP: Geometry Acceleration Structureをビルドする。
+    // EN: Build geometry acceleration structures.
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+    OptixTraversableHandle travHandle = gas.rebuild(cuStream, gasMem, asBuildScratchMem);
+
+    // JP: 静的なメッシュはコンパクションもしておく。
+    // EN: Perform compaction for static meshes.
+    size_t compactedASSize;
+    gas.prepareForCompact(&compactedASSize);
+    gasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
+    travHandle = gas.compact(cuStream, gasCompactedMem);
+    gas.removeUncompacted();
+
+
+
+    cudau::Buffer shaderBindingTable;
+    size_t sbtSize;
+    scene.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+
+    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+
+    // END: Setup a scene.
+    // ----------------------------------------------------------------
+
+
+
+    constexpr uint32_t renderTargetSizeX = 1024;
+    constexpr uint32_t renderTargetSizeY = 1024;
+    optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
+    accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+
+
+
+    Shared::PipelineLaunchParameters plp;
+    plp.travHandle = travHandle;
+    plp.imageSize.x = renderTargetSizeX;
+    plp.imageSize.y = renderTargetSizeY;
+    plp.resultBuffer = accumBuffer.getBlockBuffer2D();
+    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
+    plp.camera.position = make_float3(0, 0, 3.5);
+    plp.camera.orientation = rotateY3x3(M_PI);
+
+    pipeline.setScene(scene);
+    pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
+
+    CUdeviceptr plpOnDevice;
+    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
+
+
+
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+    pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+
+    accumBuffer.map();
+    std::vector<uint32_t> imageData(renderTargetSizeX * renderTargetSizeY);
+    for (int y = 0; y < renderTargetSizeY; ++y) {
+        for (int x = 0; x < renderTargetSizeX; ++x) {
+            const float4 &srcPix = accumBuffer(x, y);
+            uint32_t &dstPix = imageData[y * renderTargetSizeX + x];
+            dstPix = (std::min<uint32_t>(255, 255 * srcPix.x) <<  0) |
+                     (std::min<uint32_t>(255, 255 * srcPix.y) <<  8) |
+                     (std::min<uint32_t>(255, 255 * srcPix.z) << 16) |
+                     (std::min<uint32_t>(255, 255 * srcPix.w) << 24);
+        }
+    }
+    accumBuffer.unmap();
+
+    stbi_write_bmp("output.bmp", renderTargetSizeX, renderTargetSizeY, 4, imageData.data());
+
+
+
+    CUDADRV_CHECK(cuMemFree(plpOnDevice));
+
+
+
+    accumBuffer.finalize();
+
+    shaderBindingTable.finalize();
+
+    gasCompactedMem.finalize();
+    asBuildScratchMem.finalize();
+    gasMem.finalize();
+    gas.destroy();
+
+    triangleBufferBunny.finalize();
+    vertexBufferBunny.finalize();
+    geomInstBunny.destroy();
+    
+    triangleBufferAreaLight.finalize();
+    vertexBufferAreaLight.finalize();
+    geomInstAreaLight.destroy();
+
+    triangleBufferRoom.finalize();
+    vertexBufferRoom.finalize();
+    geomInstRoom.destroy();
+
+    preTransformBuffer.finalize();
+
+    scene.destroy();
+
+    mat0.destroy();
+
+    hitProgramGroup.destroy();
+
+    missProgram.destroy();
+    rayGenProgram.destroy();
+
+    moduleOptiX.destroy();
+
+    pipeline.destroy();
+
+    optixContext.destroy();
+
+    CUDADRV_CHECK(cuStreamDestroy(cuStream));
+    CUDADRV_CHECK(cuCtxDestroy(cuContext));
+
+    return 0;
+}
+catch (const std::exception &ex) {
+    hpprintf("Error: %s\n", ex.what());
+    return -1;
+}
+
+void loadObjFile(const std::filesystem::path &filepath,
+                 std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -95,399 +494,4 @@ static void loadObjFile(const std::filesystem::path &filepath,
         Shared::Vertex &v = vertices->at(vIdx);
         v.normal = normalize(v.normal);
     }
-}
-
-int32_t main(int32_t argc, const char* argv[]) try {
-    // ----------------------------------------------------------------
-    // JP: OptiXのコンテキストとパイプラインの設定。
-    // EN: Settings for OptiX context and pipeline.
-
-    CUcontext cuContext;
-    int32_t cuDeviceCount;
-    CUstream cuStream;
-    CUDADRV_CHECK(cuInit(0));
-    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
-    CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
-    CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
-
-    optixu::Context optixContext = optixu::Context::create(cuContext);
-
-    optixu::Pipeline pipeline = optixContext.createPipeline();
-
-    // JP: このサンプルでは単一のGASのみを使用する。
-    // EN: This sample uses only a single GAS.
-    pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                OPTIX_EXCEPTION_FLAG_DEBUG,
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "single_gas/ptxes/optix_kernels.ptx");
-    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
-        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-    optixu::Module emptyModule;
-
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen0"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
-
-    // JP: このヒットグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
-    // EN: This hit group is for ray-triangle intersection, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
-        moduleOptiX, RT_CH_NAME_STR("closesthit0"),
-        emptyModule, nullptr,
-        emptyModule, nullptr);
-
-    // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
-    // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
-    pipeline.setMaxTraceDepth(1);
-    pipeline.link(DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-    pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
-    //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
-    pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
-
-    // END: Settings for OptiX context and pipeline.
-    // ----------------------------------------------------------------
-
-
-
-    // ----------------------------------------------------------------
-    // JP: マテリアルのセットアップ。
-    // EN: Setup materials.
-
-    optixu::Material mat0 = optixContext.createMaterial();
-    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
-
-    // END: Setup materials.
-    // ----------------------------------------------------------------
-
-
-
-    // ----------------------------------------------------------------
-    // JP: シーンのセットアップ。
-    // EN: Setup a scene.
-
-    optixu::Scene scene = optixContext.createScene();
-
-    cudau::TypedBuffer<Shared::GeometryData> geomDataBuffer;
-    geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
-    Shared::GeometryData* geomData = geomDataBuffer.map();
-
-    cudau::TypedBuffer<Shared::GeometryPreTransform> preTransformBuffer;
-    preTransformBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
-    Shared::GeometryPreTransform* preTransforms = preTransformBuffer.map();
-
-    uint32_t geomInstIndex = 0;
-
-    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
-    {
-        Shared::Vertex vertices[] = {
-            // floor
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
-            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
-            // back wall
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 0) },
-            // ceiling
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(1, 0) },
-            // left wall
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 1) },
-            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 1) },
-            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 0) },
-            // right wall
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 0) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 0) },
-        };
-
-        Shared::Triangle triangles[] = {
-            // floor
-            { 0, 1, 2 }, { 0, 2, 3 },
-            // back wall
-            { 4, 5, 6 }, { 4, 6, 7 },
-            // ceiling
-            { 8, 11, 10 }, { 8, 10, 9 },
-            // left wall
-            { 15, 12, 13 }, { 15, 13, 14 },
-            // right wall
-            { 16, 19, 18 }, { 16, 18, 17 }
-        };
-
-        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-
-        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
-        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(1, nullptr);
-        geomInstRoom.setMaterial(0, 0, mat0);
-        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferRoom.getDevicePointer();
-
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.0f, 0.0f));
-
-        ++geomInstIndex;
-    }
-
-    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
-    {
-#define USE_TRIANGLE_SROUP_FOR_AREA_LIGHT
-
-#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
-        Shared::Vertex vertices[] = {
-            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
-        };
-
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-#else
-        Shared::Vertex vertices[] = {
-            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3( 0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
-        };
-
-        Shared::Triangle triangles[] = {
-            { 0, 1, 2 }, { 0, 2, 3 },
-        };
-
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-#endif
-
-        // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
-        // EN: It will be interpreted as triangle soup if not setting an index buffer.
-        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
-#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
-        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
-#endif
-        geomInstAreaLight.setNumMaterials(1, nullptr);
-        geomInstAreaLight.setMaterial(0, 0, mat0);
-        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
-        geomData[geomInstIndex].triangleBuffer = nullptr;
-#else
-        geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
-#endif
-
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(Matrix3x3(), make_float3(0.0f, 0.75f, 0.0f));
-
-        ++geomInstIndex;
-    }
-
-    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
-    {
-        std::vector<Shared::Vertex> vertices;
-        std::vector<Shared::Triangle> triangles;
-        loadObjFile("../../data/stanford_bunny_309_faces.obj", &vertices, &triangles);
-
-        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
-
-        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
-        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
-        geomInstBunny.setNumMaterials(1, nullptr);
-        geomInstBunny.setMaterial(0, 0, mat0);
-        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunny.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferBunny.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferBunny.getDevicePointer();
-
-        preTransforms[geomInstIndex] = Shared::GeometryPreTransform(rotateY3x3(M_PI / 4) * scale3x3(0.012f),
-                                                                    make_float3(0.0f, -1.0f, 0.0f));
-
-        ++geomInstIndex;
-    }
-
-    preTransformBuffer.unmap();
-    geomDataBuffer.unmap();
-
-
-
-    size_t maxSizeOfScratchBuffer = 0;
-    OptixAccelBufferSizes asMemReqs;
-
-    cudau::Buffer asBuildScratchMem;
-
-    // JP: Geometry Acceleration Structureを生成する。
-    // EN: Create an geometry acceleration structure.
-    optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasMem;
-    cudau::Buffer gasCompactedMem;
-    gas.setConfiguration(optixu::ASTradeoff::Default, false, true, false);
-    gas.setNumMaterialSets(1);
-    gas.setNumRayTypes(0, Shared::NumRayTypes);
-    gas.addChild(geomInstRoom/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
-    // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
-    //     指定されたTransformを用いてAcceleration Structureが作られる。
-    //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
-    // EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
-    //     Acceleration structure is built using the specified transform.
-    //     Note that geometry that given by the user in a kernel is not transformed.
-    gas.addChild(geomInstAreaLight, preTransformBuffer.getCUdeviceptrAt(1));
-    gas.addChild(geomInstBunny, preTransformBuffer.getCUdeviceptrAt(2));
-    gas.prepareForBuild(&asMemReqs);
-    gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    // JP: Geometry Acceleration Structureをビルドする。
-    // EN: Build geometry acceleration structures.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    OptixTraversableHandle travHandle = gas.rebuild(cuStream, gasMem, asBuildScratchMem);
-
-    // JP: 静的なメッシュはコンパクションもしておく。
-    // EN: Perform compaction for static meshes.
-    size_t compactedASSize;
-    gas.prepareForCompact(&compactedASSize);
-    gasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    travHandle = gas.compact(cuStream, gasCompactedMem);
-    gas.removeUncompacted();
-
-
-
-    cudau::Buffer shaderBindingTable;
-    size_t sbtSize;
-    scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
-
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
-
-    // END: Setup a scene.
-    // ----------------------------------------------------------------
-
-
-
-    constexpr uint32_t renderTargetSizeX = 1024;
-    constexpr uint32_t renderTargetSizeY = 1024;
-    optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
-    accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
-
-
-
-    Shared::PipelineLaunchParameters plp;
-    plp.travHandle = travHandle;
-    plp.geomInstData = geomDataBuffer.getDevicePointer();
-    plp.geomPreTransforms = preTransformBuffer.getDevicePointer();
-    plp.imageSize.x = renderTargetSizeX;
-    plp.imageSize.y = renderTargetSizeY;
-    plp.resultBuffer = accumBuffer.getBlockBuffer2D();
-    plp.camera.fovY = 50 * M_PI / 180;
-    plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 0, 3.5);
-    plp.camera.orientation = rotateY3x3(M_PI);
-
-    pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
-
-    CUdeviceptr plpOnDevice;
-    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
-
-
-
-    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-    pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
-
-    accumBuffer.map();
-    std::vector<uint32_t> imageData(renderTargetSizeX * renderTargetSizeY);
-    for (int y = 0; y < renderTargetSizeY; ++y) {
-        for (int x = 0; x < renderTargetSizeX; ++x) {
-            const float4 &srcPix = accumBuffer(x, y);
-            uint32_t &dstPix = imageData[y * renderTargetSizeX + x];
-            dstPix = (std::min<uint32_t>(255, 255 * srcPix.x) <<  0) |
-                     (std::min<uint32_t>(255, 255 * srcPix.y) <<  8) |
-                     (std::min<uint32_t>(255, 255 * srcPix.z) << 16) |
-                     (std::min<uint32_t>(255, 255 * srcPix.w) << 24);
-        }
-    }
-    accumBuffer.unmap();
-
-    stbi_write_bmp("output.bmp", renderTargetSizeX, renderTargetSizeY, 4, imageData.data());
-
-
-
-    CUDADRV_CHECK(cuMemFree(plpOnDevice));
-
-
-
-    accumBuffer.finalize();
-
-    shaderBindingTable.finalize();
-
-    gasCompactedMem.finalize();
-    asBuildScratchMem.finalize();
-    gasMem.finalize();
-    gas.destroy();
-
-    triangleBufferBunny.finalize();
-    vertexBufferBunny.finalize();
-    geomInstBunny.destroy();
-    
-    triangleBufferAreaLight.finalize();
-    vertexBufferAreaLight.finalize();
-    geomInstAreaLight.destroy();
-
-    triangleBufferRoom.finalize();
-    vertexBufferRoom.finalize();
-    geomInstRoom.destroy();
-
-    preTransformBuffer.finalize();
-    geomDataBuffer.finalize();
-
-    scene.destroy();
-
-    mat0.destroy();
-
-    hitProgramGroup.destroy();
-
-    missProgram.destroy();
-    rayGenProgram.destroy();
-
-    moduleOptiX.destroy();
-
-    pipeline.destroy();
-
-    optixContext.destroy();
-
-    CUDADRV_CHECK(cuStreamDestroy(cuStream));
-    CUDADRV_CHECK(cuCtxDestroy(cuContext));
-
-    return 0;
-}
-catch (const std::exception &ex) {
-    hpprintf("Error: %s\n", ex.what());
-    return -1;
 }

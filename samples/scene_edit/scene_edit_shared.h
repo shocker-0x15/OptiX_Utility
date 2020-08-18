@@ -81,8 +81,6 @@ namespace Shared {
 
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
-        const GeometryData* geomInstData;
-        const GASData* gasData;
         int2 imageSize;
         optixu::NativeBlockBuffer2D<float4> resultBuffer;
         PerspectiveCamera camera;

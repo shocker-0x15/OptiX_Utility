@@ -23,9 +23,8 @@ struct HitPointParameter {
 };
 
 struct HitGroupSBTRecordData {
-    uint32_t matIndex;
-    uint32_t geomInstIndex;
-    uint32_t gasIndex;
+    MaterialData matData;
+    GeometryData geomData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
@@ -125,8 +124,8 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     auto sbtr = HitGroupSBTRecordData::get();
-    const MaterialData &mat = plp.materialData[sbtr.matIndex];
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
+    const MaterialData &mat = sbtr.matData;
+    const GeometryData &geom = sbtr.geomData;
 
     PCG32RNG rng;
     SearchRayPayload* payload;
@@ -173,11 +172,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
     const float3 LightRadiance = make_float3(30, 30, 30);
     // Hard-coded directly visible light
-    if (sbtr.geomInstIndex == plp.lightGeomInstIndex &&
-        isFrontFace &&
-        payload->pathLength == 1) {
+    if (mat.isEmitter && isFrontFace && payload->pathLength == 1)
         payload->contribution += payload->alpha * LightRadiance;
-    }
 
     // Next Event Estimation
     {

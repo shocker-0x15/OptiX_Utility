@@ -94,15 +94,13 @@ using GroupWRef = std::weak_ptr<Group>;
 
 struct GeometryInstance {
     OptiXEnv* optixEnv;
-    uint32_t geomInstIndex;
     uint32_t serialID;
     std::string name;
     optixu::GeometryInstance optixGeomInst;
     VertexBufferRef vertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
-    bool dataTransfered = false;
 
-    GeometryInstance() : geomInstIndex(SlotFinder::InvalidSlotIndex) {}
+    GeometryInstance() {}
     static void finalize(GeometryInstance* p);
 };
 
@@ -120,7 +118,6 @@ struct GeometryInstancePreTransform {
 
 struct GeometryGroup {
     OptiXEnv* optixEnv;
-    uint32_t gasIndex;
     uint32_t serialID;
     std::string name;
     optixu::GeometryAccelerationStructure optixGAS;
@@ -129,9 +126,8 @@ struct GeometryGroup {
     cudau::TypedBuffer<Shared::GeometryInstancePreTransform> preTransformBuffer;
     std::set<InstanceWRef, std::owner_less<InstanceWRef>> parentInsts;
     cudau::Buffer optixGasMem;
-    bool dataTransfered = false;
 
-    GeometryGroup() : gasIndex(SlotFinder::InvalidSlotIndex) {}
+    GeometryGroup() {}
     static void finalize(GeometryGroup* p);
 
     void propagateMarkDirty() const;
@@ -174,10 +170,6 @@ struct OptiXEnv {
     optixu::Context context;
     optixu::Material material;
     optixu::Scene scene;
-    cudau::TypedBuffer<Shared::GeometryData> geometryDataBuffer;
-    SlotFinder geometryInstSlotFinder;
-    cudau::TypedBuffer<Shared::GASData> gasDataBuffer;
-    SlotFinder gasSlotFinder;
 
     uint32_t geomInstSerialID;
     uint32_t geomInstFileGroupSerialID;
@@ -195,20 +187,14 @@ struct OptiXEnv {
 };
 
 void GeometryInstance::finalize(GeometryInstance* p) {
-    if (p->geomInstIndex != SlotFinder::InvalidSlotIndex) {
-        p->optixGeomInst.destroy();
-        p->triangleBuffer.finalize();
-        p->optixEnv->geometryInstSlotFinder.setNotInUse(p->geomInstIndex);
-    }
+    p->optixGeomInst.destroy();
+    p->triangleBuffer.finalize();
     delete p;
 }
 void GeometryGroup::finalize(GeometryGroup* p) {
-    if (p->gasIndex != SlotFinder::InvalidSlotIndex) {
-        p->optixGasMem.finalize();
-        p->preTransformBuffer.finalize();
-        p->optixGAS.destroy();
-        p->optixEnv->gasSlotFinder.setNotInUse(p->gasIndex);
-    }
+    p->optixGasMem.finalize();
+    p->preTransformBuffer.finalize();
+    p->optixGAS.destroy();
     delete p;
 }
 void GeometryGroup::propagateMarkDirty() const {
@@ -296,10 +282,7 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         char name[256];
         sprintf_s(name, "%s-%d", basename.c_str(), meshIdx);
         GeometryInstanceRef geomInst = make_shared_with_deleter<GeometryInstance>(GeometryInstance::finalize);
-        uint32_t geomInstIndex = optixEnv->geometryInstSlotFinder.getFirstAvailableSlot();
-        optixEnv->geometryInstSlotFinder.setInUse(geomInstIndex);
         geomInst->optixEnv = optixEnv;
-        geomInst->geomInstIndex = geomInstIndex;
         geomInst->serialID = optixEnv->geomInstSerialID++;
         geomInst->name = name;
         geomInst->vertexBuffer = vertexBuffer;
@@ -309,8 +292,10 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         geomInst->optixGeomInst.setTriangleBuffer(&geomInst->triangleBuffer);
         geomInst->optixGeomInst.setNumMaterials(1, nullptr);
         geomInst->optixGeomInst.setMaterial(0, 0, optixEnv->material);
-        geomInst->optixGeomInst.setUserData(geomInstIndex);
-        geomInst->dataTransfered = false;
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBuffer->getDevicePointer();
+        geomData.triangleBuffer = geomInst->triangleBuffer.getDevicePointer();
+        geomInst->optixGeomInst.setUserData(geomData);
 
         fileGroup.geomInsts.push_back(geomInst);
     }
@@ -1235,10 +1220,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr uint32_t MaxNumGASs = 512;
     
     optixEnv.scene = optixContext.createScene();
-    optixEnv.geometryDataBuffer.initialize(cuContext, g_bufferType, MaxNumGeometryInstances);
-    optixEnv.geometryInstSlotFinder.initialize(MaxNumGeometryInstances);
-    optixEnv.gasDataBuffer.initialize(cuContext, g_bufferType, MaxNumGASs);
-    optixEnv.gasSlotFinder.initialize(MaxNumGASs);
     optixEnv.geomInstSerialID = 0;
     optixEnv.geomInstFileGroupSerialID = 0;
     optixEnv.gasSerialID = 0;
@@ -1283,8 +1264,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = 0;
-    plp.geomInstData = optixEnv.geometryDataBuffer.getDevicePointer();
-    plp.gasData = optixEnv.gasDataBuffer.getDevicePointer();
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
@@ -1506,22 +1485,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     if (ImGui::Button("Create a GAS", geomInstsSelected)) {
                         uint32_t serialID = optixEnv.gasSerialID++;
                         GeometryGroupRef geomGroup = make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
-                        uint32_t gasIndex = optixEnv.gasSlotFinder.getFirstAvailableSlot();
-                        optixEnv.gasSlotFinder.setInUse(gasIndex);
                         char name[256];
                         sprintf_s(name, "GAS-%u", serialID);
                         geomGroup->optixEnv = &optixEnv;
-                        geomGroup->gasIndex = gasIndex;
                         geomGroup->serialID = serialID;
                         geomGroup->name = name;
                         geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
                         geomGroup->optixGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
                         geomGroup->optixGAS.setNumMaterialSets(1);
                         geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
-                        geomGroup->optixGAS.setUserData(gasIndex);
                         geomGroup->preTransforms.resize(numSelectedGeomInsts);
                         geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, numSelectedGeomInsts);
-                        geomGroup->dataTransfered = false;
+                        Shared::GASData gasData = {};
+                        gasData.preTransforms = geomGroup->preTransformBuffer.getDevicePointer();
+                        geomGroup->optixGAS.setUserData(gasData);
 
                         geomInstList.loopForSelected(
                             [&optixEnv, &geomGroup, &curCuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
@@ -1538,14 +1515,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     preTransform.position = float3(0.0f, 0.0f, 0.0f);
                                     CUdeviceptr preTransformPtr = geomGroup->preTransformBuffer.getCUdeviceptrAt(indexInGAS);
                                     geomGroup->optixGAS.addChild(geomInst->optixGeomInst, preTransformPtr);
-                                    if (!geomInst->dataTransfered) {
-                                        Shared::GeometryData geomData;
-                                        geomData.vertexBuffer = geomInst->vertexBuffer->getDevicePointer();
-                                        geomData.triangleBuffer = geomInst->triangleBuffer.getDevicePointer();
-                                        CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.geometryDataBuffer.getCUdeviceptrAt(geomInst->geomInstIndex),
-                                                                        &geomData, sizeof(geomData), curCuStream));
-                                        geomInst->dataTransfered = true;
-                                    }
                                 }
                                 return true;
                             });
@@ -1648,16 +1617,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     srMat.m20, srMat.m21, srMat.m22, inst->position.z,
                                 };
                                 inst->optixInst.setTransform(tr);
-
-                                if (!geomGroup->dataTransfered) {
-                                    Shared::GASData gasData;
-                                    gasData.preTransforms = geomGroup->preTransformBuffer.getDevicePointer();
-                                    CUDADRV_CHECK(cuMemcpyHtoDAsync(optixEnv.gasDataBuffer.getCUdeviceptrAt(geomGroup->gasIndex),
-                                                                    &gasData,
-                                                                    sizeof(gasData),
-                                                                    curCuStream));
-                                    geomGroup->dataTransfered = true;
-                                }
 
                                 optixEnv.insts[serialID] = inst;
 
@@ -2174,10 +2133,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixEnv.asScratchBuffer.finalize();
     optixEnv.shaderBindingTable[1].finalize();
     optixEnv.shaderBindingTable[0].finalize();
-    optixEnv.gasSlotFinder.finalize();
-    optixEnv.gasDataBuffer.finalize();
-    optixEnv.geometryInstSlotFinder.finalize();
-    optixEnv.geometryDataBuffer.finalize();
     optixEnv.scene.destroy();
 
     optixEnv.material.destroy();

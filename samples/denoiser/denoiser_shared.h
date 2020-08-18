@@ -70,18 +70,18 @@ namespace Shared {
     struct MaterialData {
         CUtexObject texture;
         float3 albedo;
+        bool isEmitter;
 
         MaterialData() :
             texture(0),
-            albedo(make_float3(0.0f, 0.0f, 0.5f)) {}
+            albedo(make_float3(0.0f, 0.0f, 0.5f)),
+            isEmitter(false) {}
     };
 
 
 
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
-        const MaterialData* materialData;
-        const GeometryData* geomInstData;
         int2 imageSize;
         uint32_t numAccumFrames;
         optixu::BlockBuffer2D<PCG32RNG, 1> rngBuffer;
@@ -89,6 +89,5 @@ namespace Shared {
         optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         PerspectiveCamera camera;
-        uint32_t lightGeomInstIndex;
     };
 }

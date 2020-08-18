@@ -7,97 +7,7 @@
 static void loadObj(const std::string &filepath,
                     std::vector<Shared::Vertex>* vertices,
                     std::vector<Shared::Triangle>* triangles,
-                    AABB* bbox) {
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn;
-    std::string err;
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str());
-
-    // Record unified unique vertices.
-    std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
-    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-        const tinyobj::shape_t &shape = shapes[sIdx];
-        size_t idxOffset = 0;
-        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-            if (numFaceVertices != 3) {
-                idxOffset += numFaceVertices;
-                continue;
-            }
-
-            for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
-                tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
-                auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
-                unifiedVertexMap[key] = Shared::Vertex{
-                    make_float3(attrib.vertices[3 * idx.vertex_index + 0],
-                                attrib.vertices[3 * idx.vertex_index + 1],
-                                attrib.vertices[3 * idx.vertex_index + 2]),
-                    make_float3(0, 0, 0),
-                    make_float2(0, 0)
-                };
-            }
-
-            idxOffset += numFaceVertices;
-        }
-    }
-
-    // Assign a vertex index to each of unified unique unifiedVertexMap.
-    std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
-    vertices->resize(unifiedVertexMap.size());
-    uint32_t vertexIndex = 0;
-    *bbox = AABB();
-    for (const auto &kv : unifiedVertexMap) {
-        (*vertices)[vertexIndex] = kv.second;
-        vertexIndices[kv.first] = vertexIndex++;
-        bbox->unify(kv.second.position);
-    }
-    unifiedVertexMap.clear();
-
-    // Calculate triangle index buffer.
-    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-        const tinyobj::shape_t &shape = shapes[sIdx];
-        size_t idxOffset = 0;
-        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-            if (numFaceVertices != 3) {
-                idxOffset += numFaceVertices;
-                continue;
-            }
-
-            tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
-            tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
-            tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-            auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
-            auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
-            auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
-
-            triangles->push_back(Shared::Triangle{
-                vertexIndices.at(key0),
-                vertexIndices.at(key1),
-                vertexIndices.at(key2) });
-
-            idxOffset += numFaceVertices;
-        }
-    }
-    vertexIndices.clear();
-
-    for (int tIdx = 0; tIdx < triangles->size(); ++tIdx) {
-        const Shared::Triangle &tri = (*triangles)[tIdx];
-        Shared::Vertex &v0 = (*vertices)[tri.index0];
-        Shared::Vertex &v1 = (*vertices)[tri.index1];
-        Shared::Vertex &v2 = (*vertices)[tri.index2];
-        float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-        v0.normal += gn;
-        v1.normal += gn;
-        v2.normal += gn;
-    }
-    for (int vIdx = 0; vIdx < vertices->size(); ++vIdx) {
-        Shared::Vertex &v = (*vertices)[vIdx];
-        v.normal = normalize(v.normal);
-    }
-}
+                    AABB* bbox);
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -199,12 +109,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Scene scene = optixContext.createScene();
 
-    cudau::TypedBuffer<Shared::GeometryData> geomDataBuffer;
-    geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 16);
-    Shared::GeometryData* geomData = geomDataBuffer.map();
-
-    uint32_t geomInstIndex = 0;
-
     size_t maxSizeOfScratchBuffer = 0;
     OptixAccelBufferSizes asMemReqs;
 
@@ -285,18 +189,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         room.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = room.vertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = room.triangleBuffer.getDevicePointer();
+
         room.optixGeomInst = scene.createGeometryInstance();
         room.optixGeomInst.setVertexBuffer(&room.vertexBuffer);
         room.optixGeomInst.setTriangleBuffer(&room.triangleBuffer);
         room.optixGeomInst.setNumMaterials(1, nullptr);
         room.optixGeomInst.setMaterial(0, 0, mat0);
         room.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = room.vertexBuffer.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = room.triangleBuffer.getDevicePointer();
-
-        ++geomInstIndex;
+        room.optixGeomInst.setUserData(geomData);
 
         room.optixGas = scene.createGeometryAccelerationStructure();
         room.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
@@ -331,18 +234,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         areaLight.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = areaLight.vertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = areaLight.triangleBuffer.getDevicePointer();
+
         areaLight.optixGeomInst = scene.createGeometryInstance();
         areaLight.optixGeomInst.setVertexBuffer(&areaLight.vertexBuffer);
         areaLight.optixGeomInst.setTriangleBuffer(&areaLight.triangleBuffer);
         areaLight.optixGeomInst.setNumMaterials(1, nullptr);
         areaLight.optixGeomInst.setMaterial(0, 0, mat0);
         areaLight.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        areaLight.optixGeomInst.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = areaLight.vertexBuffer.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = areaLight.triangleBuffer.getDevicePointer();
-
-        ++geomInstIndex;
+        areaLight.optixGeomInst.setUserData(geomData);
 
         areaLight.optixGas = scene.createGeometryAccelerationStructure();
         areaLight.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
@@ -365,18 +267,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         bunny.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = bunny.vertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = bunny.triangleBuffer.getDevicePointer();
+
         bunny.optixGeomInst = scene.createGeometryInstance();
         bunny.optixGeomInst.setVertexBuffer(&bunny.vertexBuffer);
         bunny.optixGeomInst.setTriangleBuffer(&bunny.triangleBuffer);
         bunny.optixGeomInst.setNumMaterials(1, nullptr);
         bunny.optixGeomInst.setMaterial(0, 0, mat0);
         bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        bunny.optixGeomInst.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = bunny.vertexBuffer.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = bunny.triangleBuffer.getDevicePointer();
-
-        ++geomInstIndex;
+        bunny.optixGeomInst.setUserData(geomData);
 
         bunny.optixGas = scene.createGeometryAccelerationStructure();
         bunny.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
@@ -399,18 +300,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cube.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         cube.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = cube.vertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = cube.triangleBuffer.getDevicePointer();
+
         cube.optixGeomInst = scene.createGeometryInstance();
         cube.optixGeomInst.setVertexBuffer(&cube.vertexBuffer);
         cube.optixGeomInst.setTriangleBuffer(&cube.triangleBuffer);
         cube.optixGeomInst.setNumMaterials(1, nullptr);
         cube.optixGeomInst.setMaterial(0, 0, mat0);
         cube.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        cube.optixGeomInst.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = cube.vertexBuffer.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = cube.triangleBuffer.getDevicePointer();
-
-        ++geomInstIndex;
+        cube.optixGeomInst.setUserData(geomData);
 
         cube.optixGas = scene.createGeometryAccelerationStructure();
         cube.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
@@ -421,8 +321,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cube.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
-
-    geomDataBuffer.unmap();
 
 
 
@@ -758,7 +656,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.geomInstData = geomDataBuffer.getDevicePointer();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.rngBuffer = rngBuffer.getBlockBuffer2D();
@@ -841,8 +738,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLight.finalize();
     room.finalize();
 
-    geomDataBuffer.finalize();
-
     scene.destroy();
 
     mat0.destroy();
@@ -866,4 +761,99 @@ int32_t main(int32_t argc, const char* argv[]) try {
 catch (const std::exception &ex) {
     hpprintf("Error: %s\n", ex.what());
     return -1;
+}
+
+void loadObj(const std::string &filepath,
+             std::vector<Shared::Vertex>* vertices,
+             std::vector<Shared::Triangle>* triangles,
+             AABB* bbox) {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn;
+    std::string err;
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str());
+
+    // Record unified unique vertices.
+    std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
+                tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
+                auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
+                unifiedVertexMap[key] = Shared::Vertex{
+                    make_float3(attrib.vertices[3 * idx.vertex_index + 0],
+                                attrib.vertices[3 * idx.vertex_index + 1],
+                                attrib.vertices[3 * idx.vertex_index + 2]),
+                    make_float3(0, 0, 0),
+                    make_float2(0, 0)
+                };
+            }
+
+            idxOffset += numFaceVertices;
+        }
+    }
+
+    // Assign a vertex index to each of unified unique unifiedVertexMap.
+    std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
+    vertices->resize(unifiedVertexMap.size());
+    uint32_t vertexIndex = 0;
+    *bbox = AABB();
+    for (const auto &kv : unifiedVertexMap) {
+        (*vertices)[vertexIndex] = kv.second;
+        vertexIndices[kv.first] = vertexIndex++;
+        bbox->unify(kv.second.position);
+    }
+    unifiedVertexMap.clear();
+
+    // Calculate triangle index buffer.
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
+            tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
+            tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
+            auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
+            auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
+            auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
+
+            triangles->push_back(Shared::Triangle{
+                vertexIndices.at(key0),
+                vertexIndices.at(key1),
+                vertexIndices.at(key2) });
+
+            idxOffset += numFaceVertices;
+        }
+    }
+    vertexIndices.clear();
+
+    for (int tIdx = 0; tIdx < triangles->size(); ++tIdx) {
+        const Shared::Triangle &tri = (*triangles)[tIdx];
+        Shared::Vertex &v0 = (*vertices)[tri.index0];
+        Shared::Vertex &v1 = (*vertices)[tri.index1];
+        Shared::Vertex &v2 = (*vertices)[tri.index2];
+        float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
+        v0.normal += gn;
+        v1.normal += gn;
+        v2.normal += gn;
+    }
+    for (int vIdx = 0; vIdx < vertices->size(); ++vIdx) {
+        Shared::Vertex &v = (*vertices)[vIdx];
+        v.normal = normalize(v.normal);
+    }
 }

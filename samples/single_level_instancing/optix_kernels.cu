@@ -23,7 +23,7 @@ struct HitPointParameter {
 };
 
 struct HitGroupSBTRecordData {
-    uint32_t geomInstIndex;
+    GeometryData geomData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
@@ -62,7 +62,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
+    const GeometryData &geom = sbtr.geomData;
     HitPointParameter hp = HitPointParameter::get();
 
     const Triangle &triangle = geom.triangleBuffer[hp.primIndex];

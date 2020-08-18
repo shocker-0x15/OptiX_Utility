@@ -91,12 +91,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Scene scene = optixContext.createScene();
 
-    cudau::TypedBuffer<Shared::GeometryData> geomDataBuffer;
-    geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
-    Shared::GeometryData* geomData = geomDataBuffer.map();
-
-    uint32_t geomInstIndex = 0;
-
     optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
     cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
@@ -145,17 +139,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+
         geomInstRoom.setVertexBuffer(&vertexBufferRoom);
         geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
         geomInstRoom.setNumMaterials(1, nullptr);
         geomInstRoom.setMaterial(0, 0, matForTriangles);
         geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferRoom.getDevicePointer();
-
-        ++geomInstIndex;
+        geomInstRoom.setUserData(geomData);
     }
 
     optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
@@ -176,17 +169,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+
         geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
         geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
         geomInstAreaLight.setNumMaterials(1, nullptr);
         geomInstAreaLight.setMaterial(0, 0, matForTriangles);
         geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
-
-        ++geomInstIndex;
+        geomInstAreaLight.setUserData(geomData);
     }
 
     // JP: カスタムプリミティブ用GeometryInstanceは生成時に指定する必要がある。
@@ -224,19 +216,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         paramBufferSpheres.unmap();
         aabbBufferSpheres.unmap();
 
+        Shared::GeometryData geomData = {};
+        geomData.aabbBuffer = aabbBufferSpheres.getDevicePointer();
+        geomData.paramBuffer = paramBufferSpheres.getDevicePointer();
+
         geomInstSpheres.setCustomPrimitiveAABBBuffer(&aabbBufferSpheres);
         geomInstSpheres.setNumMaterials(1, nullptr);
         geomInstSpheres.setMaterial(0, 0, matForSpheres);
         geomInstSpheres.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstSpheres.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].aabbBuffer = aabbBufferSpheres.getDevicePointer();
-        geomData[geomInstIndex].paramBuffer = paramBufferSpheres.getDevicePointer();
-
-        ++geomInstIndex;
+        geomInstSpheres.setUserData(geomData);
     }
-
-    geomDataBuffer.unmap();
 
 
 
@@ -347,7 +336,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.geomInstData = geomDataBuffer.getDevicePointer();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.resultBuffer = accumBuffer.getBlockBuffer2D();
@@ -420,8 +408,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     triangleBufferRoom.finalize();
     vertexBufferRoom.finalize();
     geomInstRoom.destroy();
-
-    geomDataBuffer.finalize();
 
     scene.destroy();
 

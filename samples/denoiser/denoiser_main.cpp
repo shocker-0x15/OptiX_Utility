@@ -7,6 +7,99 @@
 #include "../../ext/stb_image_write.h"
 #include "../../ext/tiny_obj_loader.h"
 
+static void loadObjFile(const std::filesystem::path &filepath,
+                        std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles) {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn;
+    std::string err;
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                                filepath.string().c_str());
+
+    // Record unified unique vertices.
+    std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
+                tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
+                auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
+                unifiedVertexMap[key] = Shared::Vertex{
+                    make_float3(attrib.vertices[3 * idx.vertex_index + 0],
+                                attrib.vertices[3 * idx.vertex_index + 1],
+                                attrib.vertices[3 * idx.vertex_index + 2]),
+                    make_float3(0, 0, 0),
+                    make_float2(0, 0)
+                };
+            }
+
+            idxOffset += numFaceVertices;
+        }
+    }
+
+    // Assign a vertex index to each of unified unique unifiedVertexMap.
+    std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
+    vertices->resize(unifiedVertexMap.size());
+    uint32_t vertexIndex = 0;
+    for (const auto &kv : unifiedVertexMap) {
+        vertices->at(vertexIndex) = kv.second;
+        vertexIndices[kv.first] = vertexIndex++;
+    }
+    unifiedVertexMap.clear();
+
+    // Calculate triangle index buffer.
+    triangles->clear();
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
+            tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
+            tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
+            auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
+            auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
+            auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
+
+            triangles->push_back(Shared::Triangle{
+                vertexIndices.at(key0),
+                vertexIndices.at(key1),
+                vertexIndices.at(key2) });
+
+            idxOffset += numFaceVertices;
+        }
+    }
+    vertexIndices.clear();
+
+    for (int tIdx = 0; tIdx < triangles->size(); ++tIdx) {
+        const Shared::Triangle &tri = triangles->at(tIdx);
+        Shared::Vertex &v0 = vertices->at(tri.index0);
+        Shared::Vertex &v1 = vertices->at(tri.index1);
+        Shared::Vertex &v2 = vertices->at(tri.index2);
+        float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
+        v0.normal += gn;
+        v1.normal += gn;
+        v2.normal += gn;
+    }
+    for (int vIdx = 0; vIdx < vertices->size(); ++vIdx) {
+        Shared::Vertex &v = vertices->at(vIdx);
+        v.normal = normalize(v.normal);
+    }
+}
+
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
@@ -74,29 +167,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-    cudau::TypedBuffer<Shared::MaterialData> materialDataBuffer;
-    materialDataBuffer.initialize(cuContext, cudau::BufferType::Device, 128);
-    uint32_t materialID = 0;
-
-    Shared::MaterialData* matData = materialDataBuffer.map();
-
 //#define USE_BLOCK_COMPRESSED_TEXTURE
 
-    uint32_t matCeilingIndex = materialID++;
     optixu::Material matCeiling = optixContext.createMaterial();
     matCeiling.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matCeiling.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matCeiling.setUserData(matCeilingIndex);
-    Shared::MaterialData matCeilingData;
+    Shared::MaterialData matCeilingData = {};
     matCeilingData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-    matData[matCeilingIndex] = matCeilingData;
+    matCeiling.setUserData(matCeilingData);
 
-    uint32_t matFarSideWallIndex = materialID++;
     optixu::Material matFarSideWall = optixContext.createMaterial();
     matFarSideWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matFarSideWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matFarSideWall.setUserData(matFarSideWallIndex);
-    Shared::MaterialData matFarSideWallData;
+    Shared::MaterialData matFarSideWallData = {};
     //matFarSideWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
     cudau::Array arrayFarSideWall;
     {
@@ -132,32 +215,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         matFarSideWallData.texture = texSampler.createTextureObject(arrayFarSideWall);
     }
-    matData[matFarSideWallIndex] = matFarSideWallData;
+    matFarSideWall.setUserData(matFarSideWallData);
 
-    uint32_t matLeftWallIndex = materialID++;
     optixu::Material matLeftWall = optixContext.createMaterial();
     matLeftWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matLeftWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matLeftWall.setUserData(matLeftWallIndex);
-    Shared::MaterialData matLeftWallData;
+    Shared::MaterialData matLeftWallData = {};
     matLeftWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
-    matData[matLeftWallIndex] = matLeftWallData;
+    matLeftWall.setUserData(matLeftWallData);
 
-    uint32_t matRightWallIndex = materialID++;
     optixu::Material matRightWall = optixContext.createMaterial();
     matRightWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matRightWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matRightWall.setUserData(matRightWallIndex);
-    Shared::MaterialData matRightWallData;
+    Shared::MaterialData matRightWallData = {};
     matRightWallData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
-    matData[matRightWallIndex] = matRightWallData;
+    matRightWall.setUserData(matRightWallData);
 
-    uint32_t matFloorIndex = materialID++;
     optixu::Material matFloor = optixContext.createMaterial();
     matFloor.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matFloor.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matFloor.setUserData(matFloorIndex);
-    Shared::MaterialData matFloorData;
+    Shared::MaterialData matFloorData = {};
     cudau::Array arrayFloor;
     {
         cudau::TextureSampler texSampler;
@@ -192,27 +269,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         matFloorData.texture = texSampler.createTextureObject(arrayFloor);
     }
-    matData[matFloorIndex] = matFloorData;
+    matFloor.setUserData(matFloorData);
 
-    uint32_t matAreaLightIndex = materialID++;
     optixu::Material matAreaLight = optixContext.createMaterial();
     matAreaLight.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matAreaLight.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matAreaLight.setUserData(matAreaLightIndex);
-    Shared::MaterialData matAreaLightData;
+    Shared::MaterialData matAreaLightData = {};
     matAreaLightData.albedo = make_float3(sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f));
-    matData[matAreaLightIndex] = matAreaLightData;
+    matAreaLightData.isEmitter = true;
+    matAreaLight.setUserData(matAreaLightData);
 
-    uint32_t matBunnyIndex = materialID++;
     optixu::Material matBunny = optixContext.createMaterial();
     matBunny.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
     matBunny.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    matBunny.setUserData(matBunnyIndex);
-    Shared::MaterialData matBunnyData;
+    Shared::MaterialData matBunnyData = {};
     matBunnyData.albedo = make_float3(sRGB_degamma_s(0.25f), sRGB_degamma_s(0.75f), sRGB_degamma_s(0.25f));
-    matData[matBunnyIndex] = matBunnyData;
-
-    materialDataBuffer.unmap();
+    matBunny.setUserData(matBunnyData);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -224,12 +296,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Setup a scene.
 
     optixu::Scene scene = optixContext.createScene();
-
-    cudau::TypedBuffer<Shared::GeometryData> geomDataBuffer;
-    geomDataBuffer.initialize(cuContext, cudau::BufferType::Device, 3);
-    Shared::GeometryData* geomData = geomDataBuffer.map();
-
-    uint32_t geomInstIndex = 0;
 
     optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
@@ -289,6 +355,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
         matIndexBufferRoom.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+
         geomInstRoom.setVertexBuffer(&vertexBufferRoom);
         geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
         geomInstRoom.setNumMaterials(5, &matIndexBufferRoom, sizeof(uint8_t));
@@ -300,12 +370,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstRoom.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
         geomInstRoom.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferRoom.getDevicePointer();
-
-        ++geomInstIndex;
+        geomInstRoom.setUserData(geomData);
     }
 
     optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
@@ -327,130 +392,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
         vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+
         geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
         geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
         geomInstAreaLight.setNumMaterials(1, nullptr);
         geomInstAreaLight.setMaterial(0, 0, matAreaLight);
         geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomInstIndex);
-        lightGeomInstIndex = geomInstIndex;
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferAreaLight.getDevicePointer();
-
-        ++geomInstIndex;
+        geomInstAreaLight.setUserData(geomData);
     }
 
     optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
     cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
     {
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn;
-        std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../../data/stanford_bunny_309_faces.obj");
-
-        // Record unified unique vertices.
-        std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
-                    tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
-                    auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
-                    unifiedVertexMap[key] = Shared::Vertex{
-                        make_float3(attrib.vertices[3 * idx.vertex_index + 0],
-                                    attrib.vertices[3 * idx.vertex_index + 1],
-                                    attrib.vertices[3 * idx.vertex_index + 2]),
-                        make_float3(0, 0, 0),
-                        make_float2(0, 0)
-                    };
-                }
-
-                idxOffset += numFaceVertices;
-            }
-        }
-
-        // Assign a vertex index to each of unified unique unifiedVertexMap.
-        std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
-        std::vector<Shared::Vertex> vertices(unifiedVertexMap.size());
-        uint32_t vertexIndex = 0;
-        for (const auto &kv : unifiedVertexMap) {
-            vertices[vertexIndex] = kv.second;
-            vertexIndices[kv.first] = vertexIndex++;
-        }
-        unifiedVertexMap.clear();
-
-        // Calculate triangle index buffer.
+        std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
-                tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
-                tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-                auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
-                auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
-                auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
-
-                triangles.push_back(Shared::Triangle{
-                    vertexIndices.at(key0),
-                    vertexIndices.at(key1),
-                    vertexIndices.at(key2) });
-
-                idxOffset += numFaceVertices;
-            }
-        }
-        vertexIndices.clear();
-
-        for (int tIdx = 0; tIdx < triangles.size(); ++tIdx) {
-            const Shared::Triangle &tri = triangles[tIdx];
-            Shared::Vertex &v0 = vertices[tri.index0];
-            Shared::Vertex &v1 = vertices[tri.index1];
-            Shared::Vertex &v2 = vertices[tri.index2];
-            float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-            v0.normal += gn;
-            v1.normal += gn;
-            v2.normal += gn;
-        }
-        for (int vIdx = 0; vIdx < vertices.size(); ++vIdx) {
-            Shared::Vertex &v = vertices[vIdx];
-            v.normal = normalize(v.normal);
-        }
+        loadObjFile("../../data/stanford_bunny_309_faces.obj", &vertices, &triangles);
 
         vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
         triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
+
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = vertexBufferBunny.getDevicePointer();
+        geomData.triangleBuffer = triangleBufferBunny.getDevicePointer();
 
         geomInstBunny.setVertexBuffer(&vertexBufferBunny);
         geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
         geomInstBunny.setNumMaterials(1, nullptr);
         geomInstBunny.setMaterial(0, 0, matBunny);
         geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunny.setUserData(geomInstIndex);
-
-        geomData[geomInstIndex].vertexBuffer = vertexBufferBunny.getDevicePointer();
-        geomData[geomInstIndex].triangleBuffer = triangleBufferBunny.getDevicePointer();
-
-        ++geomInstIndex;
+        geomInstBunny.setUserData(geomData);
     }
-
-    geomDataBuffer.unmap();
 
 
 
@@ -684,8 +659,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.materialData = materialDataBuffer.getDevicePointer();
-    plp.geomInstData = geomDataBuffer.getDevicePointer();
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
     plp.rngBuffer = rngBuffer.getBlockBuffer2D();
     plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
@@ -695,7 +668,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.16f);
     plp.camera.orientation = rotateY3x3(M_PI);
-    plp.lightGeomInstIndex = lightGeomInstIndex;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
@@ -878,8 +850,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     vertexBufferRoom.finalize();
     geomInstRoom.destroy();
 
-    geomDataBuffer.finalize();
-
     scene.destroy();
 
     matBunny.destroy();
@@ -893,8 +863,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     arrayFarSideWall.finalize();
     matFarSideWall.destroy();
     matCeiling.destroy();
-
-    materialDataBuffer.finalize();
 
     visibilityHitProgramGroup.destroy();
     shadingHitProgramGroup.destroy();
