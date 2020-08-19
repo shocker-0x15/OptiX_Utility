@@ -53,7 +53,7 @@ optixu::ProgramGroup visibilityRayHitProgramGroup =
                                    emptyModule, nullptr);
 // ...
 pipeline.setMaxTraceDepth(2);
-pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL, false);
+pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL);
 
 // Create materials.
 optix::Material defaultMat = optixContext.createMaterial();
@@ -160,7 +160,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
 }
 // ...
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
-    auto sbtr = optixu::getHitGroupSBTRecordData();
+    auto sbtr = reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     // ...
     PCG32RNG rng;
     SearchRayPayload* payload;
@@ -192,9 +192,9 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly on the following environment.
 
-* Windows 10 (1909) & Visual Studio 2019 (16.7.1)
+* Windows 10 (1909) & Visual Studio 2019 (16.7.2)
 * Core i9-9900K, 32GB, RTX 2070 8GB
-* NVIDIA Driver 451.48
+* NVIDIA Driver 451.67
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
