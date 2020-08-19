@@ -91,7 +91,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryData &geom = sbtr.geomData;
-    HitPointParameter hp = HitPointParameter::get();
+    auto hp = HitPointParameter::get();
 
     Triangle triangle;
     if (geom.triangleBuffer)

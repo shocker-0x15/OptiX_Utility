@@ -78,7 +78,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryData &geom = sbtr.geomData;
-    HitPointParameter hp = HitPointParameter::get();
+    auto hp = HitPointParameter::get();
 
     const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
     const Vertex &v0 = geom.vertexBuffer[triangle.index0];

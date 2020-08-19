@@ -133,7 +133,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     float3* firstHitNormal;
     optixu::getPayloads<SearchRayPayloadSignature>(&rng, &payload, &firstHitAlbedo, &firstHitNormal);
 
-    HitPointParameter hp = HitPointParameter::get();
+    auto hp = HitPointParameter::get();
     float3 p;
     float3 sn;
     float2 texCoord;

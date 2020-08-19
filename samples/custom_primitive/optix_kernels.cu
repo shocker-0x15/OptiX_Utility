@@ -113,7 +113,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryData &geom = sbtr.geomData;
-    HitPointParameter hp = HitPointParameter::get();
+    auto hp = HitPointParameter::get();
 
     float3 sn;
     OptixPrimitiveType primType = optixGetPrimitiveType();
