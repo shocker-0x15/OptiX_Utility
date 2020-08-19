@@ -92,9 +92,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     uint32_t geomInstIndex = 0;
 
-    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
+    optixu::GeometryInstance roomGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> roomVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> roomTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -137,31 +137,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        roomVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Matrix3x3 matSR = Matrix3x3();
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
         geomData.matSR_N = transpose(inverse(matSR));
 
-        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
-        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(1, nullptr);
-        geomInstRoom.setMaterial(0, 0, mat0);
-        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomData);
+        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
+        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setNumMaterials(1, nullptr);
+        roomGeomInst.setMaterial(0, 0, mat0);
+        roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setUserData(geomData);
 
         preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, 0.0f, 0.0f));
 
         ++geomInstIndex;
     }
 
-    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
+    optixu::GeometryInstance areaLightGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
     {
 #define USE_TRIANGLE_SROUP_FOR_AREA_LIGHT
 
@@ -175,7 +175,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { make_float3( 0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
         };
 
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        areaLightVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
 #else
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -188,59 +188,59 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        areaLightVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 #endif
 
         Matrix3x3 matSR = Matrix3x3();
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
 #if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
-        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 #endif
         geomData.matSR_N = transpose(inverse(matSR));
 
         // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
         // EN: It will be interpreted as triangle soup if not setting an index buffer.
-        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
+        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
 #if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
-        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
+        areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
 #endif
-        geomInstAreaLight.setNumMaterials(1, nullptr);
-        geomInstAreaLight.setMaterial(0, 0, mat0);
-        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomData);
+        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setMaterial(0, 0, mat0);
+        areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        areaLightGeomInst.setUserData(geomData);
 
         preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, 0.75f, 0.0f));
 
         ++geomInstIndex;
     }
 
-    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
+    optixu::GeometryInstance bunnyGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> bunnyVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> bunnyTriangleBuffer;
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
         loadObjFile("../../data/stanford_bunny_309_faces.obj", &vertices, &triangles);
 
-        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
+        bunnyVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        bunnyTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Matrix3x3 matSR = rotateY3x3(M_PI / 4) * scale3x3(0.012f);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferBunny.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferBunny.getDevicePointer();
+        geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
         geomData.matSR_N = transpose(inverse(matSR));
 
-        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
-        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
-        geomInstBunny.setNumMaterials(1, nullptr);
-        geomInstBunny.setMaterial(0, 0, mat0);
-        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunny.setUserData(geomData);
+        bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
+        bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
+        bunnyGeomInst.setNumMaterials(1, nullptr);
+        bunnyGeomInst.setMaterial(0, 0, mat0);
+        bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        bunnyGeomInst.setUserData(geomData);
 
         preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, -1.0f, 0.0f));
 
@@ -264,15 +264,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gas.setConfiguration(optixu::ASTradeoff::Default, false, true, false);
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
-    gas.addChild(geomInstRoom/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
+    gas.addChild(roomGeomInst/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
     // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
     //     指定されたTransformを用いてAcceleration Structureが作られる。
     //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
     // EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
     //     Acceleration structure is built using the specified transform.
     //     Note that geometry that given by the user in a kernel is not transformed.
-    gas.addChild(geomInstAreaLight, preTransformBuffer.getCUdeviceptrAt(1));
-    gas.addChild(geomInstBunny, preTransformBuffer.getCUdeviceptrAt(2));
+    gas.addChild(areaLightGeomInst, preTransformBuffer.getCUdeviceptrAt(1));
+    gas.addChild(bunnyGeomInst, preTransformBuffer.getCUdeviceptrAt(2));
     gas.prepareForBuild(&asMemReqs);
     gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
@@ -364,17 +364,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasMem.finalize();
     gas.destroy();
 
-    triangleBufferBunny.finalize();
-    vertexBufferBunny.finalize();
-    geomInstBunny.destroy();
+    bunnyTriangleBuffer.finalize();
+    bunnyVertexBuffer.finalize();
+    bunnyGeomInst.destroy();
     
-    triangleBufferAreaLight.finalize();
-    vertexBufferAreaLight.finalize();
-    geomInstAreaLight.destroy();
+    areaLightTriangleBuffer.finalize();
+    areaLightVertexBuffer.finalize();
+    areaLightGeomInst.destroy();
 
-    triangleBufferRoom.finalize();
-    vertexBufferRoom.finalize();
-    geomInstRoom.destroy();
+    roomTriangleBuffer.finalize();
+    roomVertexBuffer.finalize();
+    roomGeomInst.destroy();
 
     preTransformBuffer.finalize();
 

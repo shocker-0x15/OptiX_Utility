@@ -169,19 +169,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 //#define USE_BLOCK_COMPRESSED_TEXTURE
 
-    optixu::Material matCeiling = optixContext.createMaterial();
-    matCeiling.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matCeiling.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matCeilingData = {};
-    matCeilingData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-    matCeiling.setUserData(matCeilingData);
+    optixu::Material ceilingMat = optixContext.createMaterial();
+    ceilingMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    ceilingMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData ceilingMatData = {};
+    ceilingMatData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    ceilingMat.setUserData(ceilingMatData);
 
-    optixu::Material matFarSideWall = optixContext.createMaterial();
-    matFarSideWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matFarSideWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matFarSideWallData = {};
-    //matFarSideWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
-    cudau::Array arrayFarSideWall;
+    optixu::Material farSideWallMat = optixContext.createMaterial();
+    farSideWallMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    farSideWallMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData farSideWallMatData = {};
+    //farSideWallMatData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    cudau::Array farSideWallArray;
     {
         cudau::TextureSampler texSampler;
         texSampler.setFilterMode(cudau::TextureFilterMode::Linear,
@@ -206,36 +206,36 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #else
             int32_t width, height, n;
             uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg", &width, &height, &n, 4);
-            arrayFarSideWall.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+            farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                     cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                     width, height, 1);
-            arrayFarSideWall.transfer<uint8_t>(linearImageData, width * height * 4);
+            farSideWallArray.transfer<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
 #endif
         }
-        matFarSideWallData.texture = texSampler.createTextureObject(arrayFarSideWall);
+        farSideWallMatData.texture = texSampler.createTextureObject(farSideWallArray);
     }
-    matFarSideWall.setUserData(matFarSideWallData);
+    farSideWallMat.setUserData(farSideWallMatData);
 
-    optixu::Material matLeftWall = optixContext.createMaterial();
-    matLeftWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matLeftWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matLeftWallData = {};
-    matLeftWallData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
-    matLeftWall.setUserData(matLeftWallData);
+    optixu::Material leftWallMat = optixContext.createMaterial();
+    leftWallMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    leftWallMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData leftWallMatData = {};
+    leftWallMatData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
+    leftWallMat.setUserData(leftWallMatData);
 
-    optixu::Material matRightWall = optixContext.createMaterial();
-    matRightWall.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matRightWall.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matRightWallData = {};
-    matRightWallData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
-    matRightWall.setUserData(matRightWallData);
+    optixu::Material rightWallMat = optixContext.createMaterial();
+    rightWallMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    rightWallMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData rightWallMatData = {};
+    rightWallMatData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
+    rightWallMat.setUserData(rightWallMatData);
 
-    optixu::Material matFloor = optixContext.createMaterial();
-    matFloor.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matFloor.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matFloorData = {};
-    cudau::Array arrayFloor;
+    optixu::Material floorMat = optixContext.createMaterial();
+    floorMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    floorMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData floorMatData = {};
+    cudau::Array floorArray;
     {
         cudau::TextureSampler texSampler;
         texSampler.setFilterMode(cudau::TextureFilterMode::Linear,
@@ -260,31 +260,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #else
             int32_t width, height, n;
             uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg", &width, &height, &n, 4);
-            arrayFloor.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+            floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                            width, height, 1);
-            arrayFloor.transfer<uint8_t>(linearImageData, width * height * 4);
+            floorArray.transfer<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
 #endif
         }
-        matFloorData.texture = texSampler.createTextureObject(arrayFloor);
+        floorMatData.texture = texSampler.createTextureObject(floorArray);
     }
-    matFloor.setUserData(matFloorData);
+    floorMat.setUserData(floorMatData);
 
-    optixu::Material matAreaLight = optixContext.createMaterial();
-    matAreaLight.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matAreaLight.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matAreaLightData = {};
-    matAreaLightData.albedo = make_float3(sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f));
-    matAreaLightData.isEmitter = true;
-    matAreaLight.setUserData(matAreaLightData);
+    optixu::Material areaLightMat = optixContext.createMaterial();
+    areaLightMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    areaLightMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData areaLightMatData = {};
+    areaLightMatData.albedo = make_float3(sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f));
+    areaLightMatData.isEmitter = true;
+    areaLightMat.setUserData(areaLightMatData);
 
-    optixu::Material matBunny = optixContext.createMaterial();
-    matBunny.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    matBunny.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData matBunnyData = {};
-    matBunnyData.albedo = make_float3(sRGB_degamma_s(0.25f), sRGB_degamma_s(0.75f), sRGB_degamma_s(0.25f));
-    matBunny.setUserData(matBunnyData);
+    optixu::Material bunnyMat = optixContext.createMaterial();
+    bunnyMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+    bunnyMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    Shared::MaterialData bunnyMatData = {};
+    bunnyMatData.albedo = make_float3(sRGB_degamma_s(0.25f), sRGB_degamma_s(0.75f), sRGB_degamma_s(0.25f));
+    bunnyMat.setUserData(bunnyMatData);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -297,10 +297,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Scene scene = optixContext.createScene();
 
-    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
-    cudau::TypedBuffer<uint8_t> matIndexBufferRoom;
+    optixu::GeometryInstance roomGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> roomVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> roomTriangleBuffer;
+    cudau::TypedBuffer<uint8_t> roomMatIndexBuffer;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -351,32 +351,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
             4, 4,
         };
 
-        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-        matIndexBufferRoom.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
+        roomVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        roomMatIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
-        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(5, &matIndexBufferRoom, sizeof(uint8_t));
-        geomInstRoom.setMaterial(0, 0, matFloor);
-        geomInstRoom.setMaterial(0, 1, matFarSideWall);
-        geomInstRoom.setMaterial(0, 2, matCeiling);
-        geomInstRoom.setMaterial(0, 3, matLeftWall);
-        geomInstRoom.setMaterial(0, 4, matRightWall);
-        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomData);
+        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
+        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setNumMaterials(5, &roomMatIndexBuffer, sizeof(uint8_t));
+        roomGeomInst.setMaterial(0, 0, floorMat);
+        roomGeomInst.setMaterial(0, 1, farSideWallMat);
+        roomGeomInst.setMaterial(0, 2, ceilingMat);
+        roomGeomInst.setMaterial(0, 3, leftWallMat);
+        roomGeomInst.setMaterial(0, 4, rightWallMat);
+        roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setUserData(geomData);
     }
 
-    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
-    uint32_t lightGeomInstIndex;
+    optixu::GeometryInstance areaLightGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -389,42 +388,42 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        areaLightVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 
-        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
-        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
-        geomInstAreaLight.setNumMaterials(1, nullptr);
-        geomInstAreaLight.setMaterial(0, 0, matAreaLight);
-        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomData);
+        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
+        areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
+        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setMaterial(0, 0, areaLightMat);
+        areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        areaLightGeomInst.setUserData(geomData);
     }
 
-    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
+    optixu::GeometryInstance bunnyGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> bunnyVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> bunnyTriangleBuffer;
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
         loadObjFile("../../data/stanford_bunny_309_faces.obj", &vertices, &triangles);
 
-        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
+        bunnyVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        bunnyTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferBunny.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferBunny.getDevicePointer();
+        geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
 
-        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
-        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
-        geomInstBunny.setNumMaterials(1, nullptr);
-        geomInstBunny.setMaterial(0, 0, matBunny);
-        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunny.setUserData(geomData);
+        bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
+        bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
+        bunnyGeomInst.setNumMaterials(1, nullptr);
+        bunnyGeomInst.setMaterial(0, 0, bunnyMat);
+        bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        bunnyGeomInst.setUserData(geomData);
     }
 
 
@@ -436,82 +435,82 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Geometry Acceleration Structureを生成する。
     // EN: Create geometry acceleration structures.
-    optixu::GeometryAccelerationStructure gasRoom = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasRoomMem;
-    cudau::Buffer gasRoomCompactedMem;
-    gasRoom.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasRoom.setNumMaterialSets(1);
-    gasRoom.setNumRayTypes(0, Shared::NumRayTypes);
-    gasRoom.addChild(geomInstRoom);
-    gasRoom.prepareForBuild(&asMemReqs);
-    gasRoomMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer roomGasMem;
+    cudau::Buffer roomGasCompactedMem;
+    roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    roomGas.setNumMaterialSets(1);
+    roomGas.setNumRayTypes(0, Shared::NumRayTypes);
+    roomGas.addChild(roomGeomInst);
+    roomGas.prepareForBuild(&asMemReqs);
+    roomGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasAreaLightMem;
-    cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasAreaLight.setNumMaterialSets(1);
-    gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
-    gasAreaLight.addChild(geomInstAreaLight);
-    gasAreaLight.prepareForBuild(&asMemReqs);
-    gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure areaLightGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer areaLightGasMem;
+    cudau::Buffer areaLightGasCompactedMem;
+    areaLightGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    areaLightGas.setNumMaterialSets(1);
+    areaLightGas.setNumRayTypes(0, Shared::NumRayTypes);
+    areaLightGas.addChild(areaLightGeomInst);
+    areaLightGas.prepareForBuild(&asMemReqs);
+    areaLightGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    optixu::GeometryAccelerationStructure gasBunny = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasBunnyMem;
-    cudau::Buffer gasBunnyCompactedMem;
-    gasBunny.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasBunny.setNumMaterialSets(1);
-    gasBunny.setNumRayTypes(0, Shared::NumRayTypes);
-    gasBunny.addChild(geomInstBunny);
-    gasBunny.prepareForBuild(&asMemReqs);
-    gasBunnyMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure bunnyGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer bunnyGasMem;
+    cudau::Buffer bunnyGasCompactedMem;
+    bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    bunnyGas.setNumMaterialSets(1);
+    bunnyGas.setNumRayTypes(0, Shared::NumRayTypes);
+    bunnyGas.addChild(bunnyGeomInst);
+    bunnyGas.prepareForBuild(&asMemReqs);
+    bunnyGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    gasRoom.rebuild(cuStream, gasRoomMem, asBuildScratchMem);
-    gasAreaLight.rebuild(cuStream, gasAreaLightMem, asBuildScratchMem);
-    gasBunny.rebuild(cuStream, gasBunnyMem, asBuildScratchMem);
+    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
+    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
+    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
-    size_t gasBoxCompactedSize;
-    gasRoom.prepareForCompact(&gasBoxCompactedSize);
-    gasRoomCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasBoxCompactedSize, 1);
-    size_t gasAreaLightCompactedSize;
-    gasAreaLight.prepareForCompact(&gasAreaLightCompactedSize);
-    gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasAreaLightCompactedSize, 1);
-    size_t gasBunnyCompactedSize;
-    gasBunny.prepareForCompact(&gasBunnyCompactedSize);
-    gasBunnyCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasBunnyCompactedSize, 1);
+    size_t roomGasCompactedSizze;
+    roomGas.prepareForCompact(&roomGasCompactedSizze);
+    roomGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, roomGasCompactedSizze, 1);
+    size_t areaLightGasCompactedSize;
+    areaLightGas.prepareForCompact(&areaLightGasCompactedSize);
+    areaLightGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, areaLightGasCompactedSize, 1);
+    size_t bunnyGasCompactedSize;
+    bunnyGas.prepareForCompact(&bunnyGasCompactedSize);
+    bunnyGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, bunnyGasCompactedSize, 1);
 
-    gasRoom.compact(cuStream, gasRoomCompactedMem);
-    gasRoom.removeUncompacted();
-    gasAreaLight.compact(cuStream, gasAreaLightCompactedMem);
-    gasAreaLight.removeUncompacted();
-    gasBunny.compact(cuStream, gasBunnyCompactedMem);
-    gasBunny.removeUncompacted();
+    roomGas.compact(cuStream, roomGasCompactedMem);
+    roomGas.removeUncompacted();
+    areaLightGas.compact(cuStream, areaLightGasCompactedMem);
+    areaLightGas.removeUncompacted();
+    bunnyGas.compact(cuStream, bunnyGasCompactedMem);
+    bunnyGas.removeUncompacted();
 
 
 
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
-    optixu::Instance instRoom = scene.createInstance();
-    instRoom.setChild(gasRoom);
+    optixu::Instance roomInst = scene.createInstance();
+    roomInst.setChild(roomGas);
 
-    float instAreaLightTr[] = {
+    float areaLightInstXfm[] = {
         1, 0, 0, 0,
         0, 1, 0, 0.9f,
         0, 0, 1, 0
     };
-    optixu::Instance instAreaLight = scene.createInstance();
-    instAreaLight.setChild(gasAreaLight);
-    instAreaLight.setTransform(instAreaLightTr);
+    optixu::Instance areaLightInst = scene.createInstance();
+    areaLightInst.setChild(areaLightGas);
+    areaLightInst.setTransform(areaLightInstXfm);
 
-    std::vector<optixu::Instance> instsBunny;
+    std::vector<optixu::Instance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
     constexpr uint32_t NumBunnies = 100;
@@ -523,15 +522,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.003f + tt * 0.0006f;
-        float instBunnyTr[] = {
+        float bunnyInstXfm[] = {
             scale, 0, 0, x,
             0, scale, 0, -1 + (1 - tt),
             0, 0, scale, z
         };
-        optixu::Instance instBunny = scene.createInstance();
-        instBunny.setChild(gasBunny);
-        instBunny.setTransform(instBunnyTr);
-        instsBunny.push_back(instBunny);
+        optixu::Instance bunnyInst = scene.createInstance();
+        bunnyInst.setChild(bunnyGas);
+        bunnyInst.setTransform(bunnyInstXfm);
+        bunnyInsts.push_back(bunnyInst);
     }
 
 
@@ -554,10 +553,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(instRoom);
-    ias.addChild(instAreaLight);
-    for (int i = 0; i < instsBunny.size(); ++i)
-        ias.addChild(instsBunny[i]);
+    ias.addChild(roomInst);
+    ias.addChild(areaLightInst);
+    for (int i = 0; i < bunnyInsts.size(); ++i)
+        ias.addChild(bunnyInsts[i]);
     ias.prepareForBuild(&asMemReqs, &numInstances);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
@@ -822,47 +821,47 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
-    for (int i = instsBunny.size() - 1; i >= 0; --i)
-        instsBunny[i].destroy();
-    instAreaLight.destroy();
-    instRoom.destroy();
+    for (int i = bunnyInsts.size() - 1; i >= 0; --i)
+        bunnyInsts[i].destroy();
+    areaLightInst.destroy();
+    roomInst.destroy();
 
-    gasBunnyCompactedMem.finalize();
-    gasAreaLightCompactedMem.finalize();
-    gasRoomCompactedMem.finalize();
-    gasBunnyMem.finalize();
-    gasBunny.destroy();
-    gasAreaLightMem.finalize();
-    gasAreaLight.destroy();
-    gasRoomMem.finalize();
-    gasRoom.destroy();
+    bunnyGasCompactedMem.finalize();
+    areaLightGasCompactedMem.finalize();
+    roomGasCompactedMem.finalize();
+    bunnyGasMem.finalize();
+    bunnyGas.destroy();
+    areaLightGasMem.finalize();
+    areaLightGas.destroy();
+    roomGasMem.finalize();
+    roomGas.destroy();
 
-    triangleBufferBunny.finalize();
-    vertexBufferBunny.finalize();
-    geomInstBunny.destroy();
+    bunnyTriangleBuffer.finalize();
+    bunnyVertexBuffer.finalize();
+    bunnyGeomInst.destroy();
     
-    triangleBufferAreaLight.finalize();
-    vertexBufferAreaLight.finalize();
-    geomInstAreaLight.destroy();
+    areaLightTriangleBuffer.finalize();
+    areaLightVertexBuffer.finalize();
+    areaLightGeomInst.destroy();
 
-    matIndexBufferRoom.finalize();
-    triangleBufferRoom.finalize();
-    vertexBufferRoom.finalize();
-    geomInstRoom.destroy();
+    roomMatIndexBuffer.finalize();
+    roomTriangleBuffer.finalize();
+    roomVertexBuffer.finalize();
+    roomGeomInst.destroy();
 
     scene.destroy();
 
-    matBunny.destroy();
-    matAreaLight.destroy();
-    CUDADRV_CHECK(cuTexObjectDestroy(matFloorData.texture));
-    arrayFloor.finalize();
-    matFloor.destroy();
-    matRightWall.destroy();
-    matLeftWall.destroy();
-    CUDADRV_CHECK(cuTexObjectDestroy(matFarSideWallData.texture));
-    arrayFarSideWall.finalize();
-    matFarSideWall.destroy();
-    matCeiling.destroy();
+    bunnyMat.destroy();
+    areaLightMat.destroy();
+    CUDADRV_CHECK(cuTexObjectDestroy(floorMatData.texture));
+    floorArray.finalize();
+    floorMat.destroy();
+    rightWallMat.destroy();
+    leftWallMat.destroy();
+    CUDADRV_CHECK(cuTexObjectDestroy(farSideWallMatData.texture));
+    farSideWallArray.finalize();
+    farSideWallMat.destroy();
+    ceilingMat.destroy();
 
     visibilityHitProgramGroup.destroy();
     shadingHitProgramGroup.destroy();

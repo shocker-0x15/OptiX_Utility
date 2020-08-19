@@ -536,6 +536,33 @@ CUDA_DEVICE_FUNCTION float3 normalize(const float3 &v) {
 
 
 
+CUDA_DEVICE_FUNCTION float3 HSVtoRGB(float h, float s, float v) {
+    if (s == 0)
+        return make_float3(v, v, v);
+
+    h = h - std::floor(h);
+    int32_t hi = static_cast<int32_t>(h * 6);
+    float f = h * 6 - hi;
+    float m = v * (1 - s);
+    float n = v * (1 - s * f);
+    float k = v * (1 - s * (1 - f));
+    if (hi == 0)
+        return make_float3(v, k, m);
+    else if (hi == 1)
+        return make_float3(n, v, m);
+    else if (hi == 2)
+        return make_float3(m, v, k);
+    else if (hi == 3)
+        return make_float3(m, n, v);
+    else if (hi == 4)
+        return make_float3(k, m, v);
+    else if (hi == 5)
+        return make_float3(v, m, n);
+    return make_float3(0, 0, 0);
+}
+
+
+
 struct AABB {
     float3 minP;
     float3 maxP;

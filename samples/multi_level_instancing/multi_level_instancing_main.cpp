@@ -369,17 +369,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: インスタンスを作成する。
     // EN: Create instances.
-    optixu::Instance instRoom = scene.createInstance();
-    instRoom.setChild(room.optixGas);
+    optixu::Instance roomInst = scene.createInstance();
+    roomInst.setChild(room.optixGas);
 
-    float instAreaLightTr[] = {
+    float areaLightInstXfm[] = {
         1, 0, 0, 0,
         0, 1, 0, 0.9f,
         0, 0, 1, 0
     };
-    optixu::Instance instAreaLight = scene.createInstance();
-    instAreaLight.setChild(areaLight.optixGas);
-    instAreaLight.setTransform(instAreaLightTr);
+    optixu::Instance areaLightInst = scene.createInstance();
+    areaLightInst.setChild(areaLight.optixGas);
+    areaLightInst.setTransform(areaLightInstXfm);
 
     struct Transform {
         struct SRT {
@@ -391,9 +391,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::Transform optixTransform;
         cudau::Buffer* deviceMem; // TODO?: define move constructor.
     };
-    std::vector<Transform> transformsObject;
-    std::vector<optixu::Instance> instsObject;
-    std::vector<AABB> baseAABBsObject;
+    std::vector<Transform> objectTransforms;
+    std::vector<optixu::Instance> objectInsts;
+    std::vector<AABB> objectBaseAABBs;
 
     // Bunny
     {
@@ -427,13 +427,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tr.deviceMem = new cudau::Buffer;
         tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
         tr.optixTransform.rebuild(cuStream, *tr.deviceMem);
-        transformsObject.push_back(tr);
+        objectTransforms.push_back(tr);
 
         optixu::Instance inst = scene.createInstance();
         inst.setChild(tr.optixTransform);
-        instsObject.push_back(inst);
+        objectInsts.push_back(inst);
 
-        baseAABBsObject.push_back(bunny.bbox);
+        objectBaseAABBs.push_back(bunny.bbox);
     }
 
     // Cube
@@ -468,7 +468,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tr.deviceMem = new cudau::Buffer;
         tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
         tr.optixTransform.rebuild(cuStream, *tr.deviceMem);
-        transformsObject.push_back(tr);
+        objectTransforms.push_back(tr);
 
         optixu::Instance inst = scene.createInstance();
         inst.setChild(tr.optixTransform);
@@ -479,9 +479,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             rotMat.m20, rotMat.m21, rotMat.m22, 0.0f,
         };
         inst.setTransform(instXfm);
-        instsObject.push_back(inst);
+        objectInsts.push_back(inst);
 
-        baseAABBsObject.push_back(cube.bbox);
+        objectBaseAABBs.push_back(cube.bbox);
     }
 
 
@@ -497,10 +497,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr uint32_t numMotionKeys = 3;
     lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-    lowerIas.addChild(instRoom);
-    lowerIas.addChild(instAreaLight);
-    for (int i = 0; i < instsObject.size(); ++i)
-        lowerIas.addChild(instsObject[i]);
+    lowerIas.addChild(roomInst);
+    lowerIas.addChild(areaLightInst);
+    for (int i = 0; i < objectInsts.size(); ++i)
+        lowerIas.addChild(objectInsts[i]);
     lowerIas.prepareForBuild(&asMemReqs, &numInstances, &numAABBs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
@@ -515,9 +515,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         OptixAabb* aabbs = aabbBuffer.map();
         // First two instances don't require AABBs and its values will be ignored.
-        for (int instIdx = 2; instIdx < (2 + instsObject.size()); ++instIdx) {
-            const Transform &tr = transformsObject[instIdx - 2];
-            const AABB &baseAABB = baseAABBsObject[instIdx - 2];
+        for (int instIdx = 2; instIdx < (2 + objectInsts.size()); ++instIdx) {
+            const Transform &tr = objectTransforms[instIdx - 2];
+            const AABB &baseAABB = objectBaseAABBs[instIdx - 2];
             for (int keyIdx = 0; keyIdx < numMotionKeys; ++keyIdx) {
                 OptixAabb &aabb = aabbs[instIdx * numMotionKeys + keyIdx];
 
@@ -724,14 +724,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
-    for (int i = instsObject.size() - 1; i >= 0; --i) {
-        instsObject[i].destroy();
-        transformsObject[i].deviceMem->finalize();
-        delete transformsObject[i].deviceMem;
-        transformsObject[i].optixTransform.destroy();
+    for (int i = objectInsts.size() - 1; i >= 0; --i) {
+        objectInsts[i].destroy();
+        objectTransforms[i].deviceMem->finalize();
+        delete objectTransforms[i].deviceMem;
+        objectTransforms[i].optixTransform.destroy();
     }
-    instAreaLight.destroy();
-    instRoom.destroy();
+    areaLightInst.destroy();
+    roomInst.destroy();
 
     cube.finalize();
     bunny.finalize();

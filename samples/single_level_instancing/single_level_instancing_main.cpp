@@ -72,8 +72,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-    optixu::Material mat0 = optixContext.createMaterial();
-    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    optixu::Material roomMat = optixContext.createMaterial();
+    Shared::MaterialData roomMatData;
+    roomMatData.color = float3(1.0f, 1.0f, 1.0f);
+    roomMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    roomMat.setUserData(roomMatData);
+
+    optixu::Material areaLightMat = optixContext.createMaterial();
+    Shared::MaterialData areaLightMatData;
+    areaLightMatData.color = float3(1.0f, 1.0f, 1.0f);
+    areaLightMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    areaLightMat.setUserData(areaLightMatData);
+
+    constexpr uint32_t NumBunnies = 100;
+    std::vector<optixu::Material> bunnyMaterials(NumBunnies);
+    for (int i = 0; i < NumBunnies; ++i) {
+        bunnyMaterials[i] = optixContext.createMaterial();
+        bunnyMaterials[i].setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    }
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -86,9 +102,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Scene scene = optixContext.createScene();
 
-    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
+    optixu::GeometryInstance roomGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> roomVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> roomTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -131,24 +147,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        roomVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
-        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(1, nullptr);
-        geomInstRoom.setMaterial(0, 0, mat0);
-        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomData);
+        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
+        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setNumMaterials(1, nullptr);
+        roomGeomInst.setMaterial(0, 0, roomMat);
+        roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setUserData(geomData);
     }
 
-    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
+    optixu::GeometryInstance areaLightGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -161,42 +177,47 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        areaLightVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 
-        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
-        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
-        geomInstAreaLight.setNumMaterials(1, nullptr);
-        geomInstAreaLight.setMaterial(0, 0, mat0);
-        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomData);
+        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
+        areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
+        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setMaterial(0, 0, areaLightMat);
+        areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        areaLightGeomInst.setUserData(geomData);
     }
 
-    optixu::GeometryInstance geomInstBunny = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferBunny;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferBunny;
+    optixu::GeometryInstance bunnyGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> bunnyVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> bunnyTriangleBuffer;
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
         loadObjFile("../../data/stanford_bunny_309_faces.obj", &vertices, &triangles);
 
-        vertexBufferBunny.initialize(cuContext, cudau::BufferType::Device, vertices);
-        triangleBufferBunny.initialize(cuContext, cudau::BufferType::Device, triangles);
+        bunnyVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        bunnyTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferBunny.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferBunny.getDevicePointer();
+        geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
 
-        geomInstBunny.setVertexBuffer(&vertexBufferBunny);
-        geomInstBunny.setTriangleBuffer(&triangleBufferBunny);
-        geomInstBunny.setNumMaterials(1, nullptr);
-        geomInstBunny.setMaterial(0, 0, mat0);
-        geomInstBunny.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstBunny.setUserData(geomData);
+        // JP: GASのインスタンスごとに異なるマテリアルを使用できるように
+        //     各マテリアルセットのスロットにマテリアルをセットする。
+        // EN: Set a material to each slot of a material set
+        //     so that each GAS uses different material than others.
+        bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
+        bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
+        bunnyGeomInst.setNumMaterials(1, nullptr);
+        for (int i = 0; i < NumBunnies; ++i)
+            bunnyGeomInst.setMaterial(i, 0, bunnyMaterials[i]);
+        bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        bunnyGeomInst.setUserData(geomData);
     }
 
 
@@ -208,90 +229,98 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Geometry Acceleration Structureを生成する。
     // EN: Create geometry acceleration structures.
-    optixu::GeometryAccelerationStructure gasRoom = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasRoomMem;
-    cudau::Buffer gasRoomCompactedMem;
-    gasRoom.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasRoom.setNumMaterialSets(1);
-    gasRoom.setNumRayTypes(0, Shared::NumRayTypes);
-    gasRoom.addChild(geomInstRoom);
-    gasRoom.prepareForBuild(&asMemReqs);
-    gasRoomMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer roomGasMem;
+    cudau::Buffer roomGasCompactedMem;
+    roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    roomGas.setNumMaterialSets(1);
+    roomGas.setNumRayTypes(0, Shared::NumRayTypes);
+    roomGas.addChild(roomGeomInst);
+    roomGas.prepareForBuild(&asMemReqs);
+    roomGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasAreaLightMem;
-    cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasAreaLight.setNumMaterialSets(1);
-    gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
-    gasAreaLight.addChild(geomInstAreaLight);
-    gasAreaLight.prepareForBuild(&asMemReqs);
-    gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure areaLightGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer areaLightGasMem;
+    cudau::Buffer areaLightGasCompactedMem;
+    areaLightGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    areaLightGas.setNumMaterialSets(1);
+    areaLightGas.setNumRayTypes(0, Shared::NumRayTypes);
+    areaLightGas.addChild(areaLightGeomInst);
+    areaLightGas.prepareForBuild(&asMemReqs);
+    areaLightGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    optixu::GeometryAccelerationStructure gasBunny = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasBunnyMem;
-    cudau::Buffer gasBunnyCompactedMem;
-    gasBunny.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasBunny.setNumMaterialSets(1);
-    gasBunny.setNumRayTypes(0, Shared::NumRayTypes);
-    gasBunny.addChild(geomInstBunny);
-    gasBunny.prepareForBuild(&asMemReqs);
-    gasBunnyMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    // JP: GASのインスタンスごとに異なるマテリアルを使用できるようにマテリアルセットの数を設定する。
+    // EN: Set a material set value so that each GAS uses different material than others.
+    optixu::GeometryAccelerationStructure bunnyGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer bunnyGasMem;
+    cudau::Buffer bunnyGasCompactedMem;
+    bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    bunnyGas.setNumMaterialSets(NumBunnies);
+    for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
+        bunnyGas.setNumRayTypes(matSetIdx, Shared::NumRayTypes);
+    bunnyGas.addChild(bunnyGeomInst);
+    bunnyGas.prepareForBuild(&asMemReqs);
+    bunnyGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    gasRoom.rebuild(cuStream, gasRoomMem, asBuildScratchMem);
-    gasAreaLight.rebuild(cuStream, gasAreaLightMem, asBuildScratchMem);
-    gasBunny.rebuild(cuStream, gasBunnyMem, asBuildScratchMem);
+    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
+    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
+    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
-    size_t gasBoxCompactedSize;
-    gasRoom.prepareForCompact(&gasBoxCompactedSize);
-    gasRoomCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasBoxCompactedSize, 1);
-    size_t gasAreaLightCompactedSize;
-    gasAreaLight.prepareForCompact(&gasAreaLightCompactedSize);
-    gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasAreaLightCompactedSize, 1);
-    size_t gasBunnyCompactedSize;
-    gasBunny.prepareForCompact(&gasBunnyCompactedSize);
-    gasBunnyCompactedMem.initialize(cuContext, cudau::BufferType::Device, gasBunnyCompactedSize, 1);
+    size_t roomGasCompactedSize;
+    roomGas.prepareForCompact(&roomGasCompactedSize);
+    roomGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, roomGasCompactedSize, 1);
+    size_t areaLightGasCompactedSize;
+    areaLightGas.prepareForCompact(&areaLightGasCompactedSize);
+    areaLightGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, areaLightGasCompactedSize, 1);
+    size_t bunnyGasCompactedSize;
+    bunnyGas.prepareForCompact(&bunnyGasCompactedSize);
+    bunnyGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, bunnyGasCompactedSize, 1);
 
-    gasRoom.compact(cuStream, gasRoomCompactedMem);
-    gasRoom.removeUncompacted();
-    gasAreaLight.compact(cuStream, gasAreaLightCompactedMem);
-    gasAreaLight.removeUncompacted();
-    gasBunny.compact(cuStream, gasBunnyCompactedMem);
-    gasBunny.removeUncompacted();
+    roomGas.compact(cuStream, roomGasCompactedMem);
+    roomGas.removeUncompacted();
+    areaLightGas.compact(cuStream, areaLightGasCompactedMem);
+    areaLightGas.removeUncompacted();
+    bunnyGas.compact(cuStream, bunnyGasCompactedMem);
+    bunnyGas.removeUncompacted();
 
 
 
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
-    optixu::Instance instRoom = scene.createInstance();
-    instRoom.setChild(gasRoom);
+    optixu::Instance roomInst = scene.createInstance();
+    roomInst.setChild(roomGas);
 
-    float instAreaLightTr[] = {
+    float areaLightInstXfm[] = {
         1, 0, 0, 0,
         0, 1, 0, 0.75f,
         0, 0, 1, 0
     };
-    optixu::Instance instAreaLight = scene.createInstance();
-    instAreaLight.setChild(gasAreaLight);
-    instAreaLight.setTransform(instAreaLightTr);
+    optixu::Instance areaLightInst = scene.createInstance();
+    areaLightInst.setChild(areaLightGas);
+    areaLightInst.setTransform(areaLightInstXfm);
 
-    std::vector<optixu::Instance> instsBunny;
+    std::vector<optixu::Instance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
-    constexpr uint32_t NumBunnies = 100;
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
         float x = r * std::cos(GoldenAngle * i);
         float z = r * std::sin(GoldenAngle * i);
+
+        Shared::MaterialData matData;
+        matData.color = HSVtoRGB(std::fmod((GoldenAngle * i) / 2 * M_PI, 1.0f),
+                                 r / 0.9f,
+                                 1.0f);
+        bunnyMaterials[i].setUserData(matData);
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.003f + tt * 0.0006f;
@@ -301,9 +330,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             0, 0, scale, z
         };
         optixu::Instance instBunny = scene.createInstance();
-        instBunny.setChild(gasBunny);
+        // JP: インスタンスごとに異なるマテリアルセットを使用する。
+        // EN: Use different material set per instance.
+        instBunny.setChild(bunnyGas, i);
         instBunny.setTransform(instBunnyTr);
-        instsBunny.push_back(instBunny);
+        bunnyInsts.push_back(instBunny);
     }
 
 
@@ -326,10 +357,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(instRoom);
-    ias.addChild(instAreaLight);
-    for (int i = 0; i < instsBunny.size(); ++i)
-        ias.addChild(instsBunny[i]);
+    ias.addChild(roomInst);
+    ias.addChild(areaLightInst);
+    for (int i = 0; i < bunnyInsts.size(); ++i)
+        ias.addChild(bunnyInsts[i]);
     ias.prepareForBuild(&asMemReqs, &numInstances);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
@@ -408,36 +439,39 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
-    for (int i = instsBunny.size() - 1; i >= 0; --i)
-        instsBunny[i].destroy();
-    instAreaLight.destroy();
-    instRoom.destroy();
+    for (int i = bunnyInsts.size() - 1; i >= 0; --i)
+        bunnyInsts[i].destroy();
+    areaLightInst.destroy();
+    roomInst.destroy();
 
-    gasBunnyCompactedMem.finalize();
-    gasAreaLightCompactedMem.finalize();
-    gasRoomCompactedMem.finalize();
-    gasBunnyMem.finalize();
-    gasBunny.destroy();
-    gasAreaLightMem.finalize();
-    gasAreaLight.destroy();
-    gasRoomMem.finalize();
-    gasRoom.destroy();
+    bunnyGasCompactedMem.finalize();
+    areaLightGasCompactedMem.finalize();
+    roomGasCompactedMem.finalize();
+    bunnyGasMem.finalize();
+    bunnyGas.destroy();
+    areaLightGasMem.finalize();
+    areaLightGas.destroy();
+    roomGasMem.finalize();
+    roomGas.destroy();
 
-    triangleBufferBunny.finalize();
-    vertexBufferBunny.finalize();
-    geomInstBunny.destroy();
+    bunnyTriangleBuffer.finalize();
+    bunnyVertexBuffer.finalize();
+    bunnyGeomInst.destroy();
     
-    triangleBufferAreaLight.finalize();
-    vertexBufferAreaLight.finalize();
-    geomInstAreaLight.destroy();
+    areaLightTriangleBuffer.finalize();
+    areaLightVertexBuffer.finalize();
+    areaLightGeomInst.destroy();
 
-    triangleBufferRoom.finalize();
-    vertexBufferRoom.finalize();
-    geomInstRoom.destroy();
+    roomTriangleBuffer.finalize();
+    roomVertexBuffer.finalize();
+    roomGeomInst.destroy();
 
     scene.destroy();
 
-    mat0.destroy();
+    for (int i = NumBunnies - 1; i >= 0; --i)
+        bunnyMaterials[i].destroy();
+    areaLightMat.destroy();
+    roomMat.destroy();
 
     hitProgramGroup.destroy();
 

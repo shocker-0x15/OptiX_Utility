@@ -22,7 +22,19 @@ struct HitPointParameter {
     }
 };
 
+// JP: optixGetSbtDataPointer()で取得できるポインターの位置に
+//     Material, GeometryInstance, GeometryInstanceAccelerationStructureのsetUserData()
+//     で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
+//     各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGeometryInstanceに属していても
+//     マテリアルが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
+// EN: Data set by each of Material, GeometryInstance, GeometryInstanceAccelerationStructure's setUserData()
+//     line up in the order (Each relative offset follows the specified alignment)
+//     at the position pointed by optixGetSbtDataPointer().
+//     Note that the start position of each data changes depending on the sizes of forward data.
+//     Therefore for example, the start positions of GeometryInstance's data are possibly different
+//     if materials are different even if those belong to the same GeometryInstance.
 struct HitGroupSBTRecordData {
+    MaterialData matData;
     GeometryData geomData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
@@ -73,10 +85,15 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     float b0 = 1 - (hp.b1 + hp.b2);
     float3 sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
 
+    // JP: GeometryInstanceからGAS空間への変換とは違って、GAS空間からインスタンス空間
+    //     (1段階インスタンシングの場合はワールド空間に相当)への変換は組み込み関数が用意されている。
+    // EN: There is an intrinsic function to transform from GAS space to instance space
+    //     (corresponds to world space in single-level instancing case)
+    //     unlike the transform from GeometryInstance to GAS space.
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
-    // JP: 法線を可視化。
-    // EN: Visualize the normal.
-    float3 color = 0.5f * sn + make_float3(0.5f);
+    // JP: 法線の可視化とインスタンスの色を混ぜて表示。
+    // EN: Display by mixing normal visualization and the instance's color.
+    float3 color = (0.5f * sn + make_float3(0.5f)) * sbtr.matData.color;
     optixu::setPayloads<PayloadSignature>(&color);
 }

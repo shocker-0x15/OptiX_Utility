@@ -91,9 +91,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Scene scene = optixContext.createScene();
 
-    optixu::GeometryInstance geomInstRoom = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferRoom;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferRoom;
+    optixu::GeometryInstance roomGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> roomVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> roomTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -136,24 +136,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        vertexBufferRoom.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferRoom.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        roomVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferRoom.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferRoom.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        geomInstRoom.setVertexBuffer(&vertexBufferRoom);
-        geomInstRoom.setTriangleBuffer(&triangleBufferRoom);
-        geomInstRoom.setNumMaterials(1, nullptr);
-        geomInstRoom.setMaterial(0, 0, matForTriangles);
-        geomInstRoom.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstRoom.setUserData(geomData);
+        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
+        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setNumMaterials(1, nullptr);
+        roomGeomInst.setMaterial(0, 0, matForTriangles);
+        roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setUserData(geomData);
     }
 
-    optixu::GeometryInstance geomInstAreaLight = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> vertexBufferAreaLight;
-    cudau::TypedBuffer<Shared::Triangle> triangleBufferAreaLight;
+    optixu::GeometryInstance areaLightGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.75f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
@@ -166,37 +166,37 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
 
-        vertexBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        triangleBufferAreaLight.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        areaLightVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBufferAreaLight.getDevicePointer();
-        geomData.triangleBuffer = triangleBufferAreaLight.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 
-        geomInstAreaLight.setVertexBuffer(&vertexBufferAreaLight);
-        geomInstAreaLight.setTriangleBuffer(&triangleBufferAreaLight);
-        geomInstAreaLight.setNumMaterials(1, nullptr);
-        geomInstAreaLight.setMaterial(0, 0, matForTriangles);
-        geomInstAreaLight.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstAreaLight.setUserData(geomData);
+        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
+        areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
+        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setMaterial(0, 0, matForTriangles);
+        areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        areaLightGeomInst.setUserData(geomData);
     }
 
     // JP: カスタムプリミティブ用GeometryInstanceは生成時に指定する必要がある。
     // EN: GeometryInstance for custom primitives requires to be specified at the creation.
-    optixu::GeometryInstance geomInstSpheres = scene.createGeometryInstance(true);
-    cudau::TypedBuffer<AABB> aabbBufferSpheres;
-    cudau::TypedBuffer<Shared::SphereParameter> paramBufferSpheres;
+    optixu::GeometryInstance spheresGeomInst = scene.createGeometryInstance(true);
+    cudau::TypedBuffer<AABB> spheresAabbBuffer;
+    cudau::TypedBuffer<Shared::SphereParameter> spheresParamBuffer;
     {
         constexpr uint32_t numPrimitives = 25;
-        aabbBufferSpheres.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
-        paramBufferSpheres.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
+        spheresAabbBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
+        spheresParamBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
 
         // JP: 各球のパラメターとAABBを設定する。
         //     これらはもちろんCUDAカーネルで設定することも可能。
         // EN: Set the parameters and AABB for each sphere.
         //     Of course, these can be set using a CUDA kernel.
-        AABB* aabbs = aabbBufferSpheres.map();
-        Shared::SphereParameter* params = paramBufferSpheres.map();
+        AABB* aabbs = spheresAabbBuffer.map();
+        Shared::SphereParameter* params = spheresParamBuffer.map();
         std::mt19937 rng(1290527201);
         std::uniform_real_distribution u01;
         for (int i = 0; i < numPrimitives; ++i) {
@@ -213,18 +213,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
             aabb.unify(param.center - make_float3(param.radius));
             aabb.unify(param.center + make_float3(param.radius));
         }
-        paramBufferSpheres.unmap();
-        aabbBufferSpheres.unmap();
+        spheresParamBuffer.unmap();
+        spheresAabbBuffer.unmap();
 
         Shared::GeometryData geomData = {};
-        geomData.aabbBuffer = aabbBufferSpheres.getDevicePointer();
-        geomData.paramBuffer = paramBufferSpheres.getDevicePointer();
+        geomData.aabbBuffer = spheresAabbBuffer.getDevicePointer();
+        geomData.paramBuffer = spheresParamBuffer.getDevicePointer();
 
-        geomInstSpheres.setCustomPrimitiveAABBBuffer(&aabbBufferSpheres);
-        geomInstSpheres.setNumMaterials(1, nullptr);
-        geomInstSpheres.setMaterial(0, 0, matForSpheres);
-        geomInstSpheres.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        geomInstSpheres.setUserData(geomData);
+        spheresGeomInst.setCustomPrimitiveAABBBuffer(&spheresAabbBuffer);
+        spheresGeomInst.setNumMaterials(1, nullptr);
+        spheresGeomInst.setMaterial(0, 0, matForSpheres);
+        spheresGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        spheresGeomInst.setUserData(geomData);
     }
 
 
@@ -236,51 +236,51 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Geometry Acceleration Structureを生成する。
     // EN: Create geometry acceleration structures.
-    optixu::GeometryAccelerationStructure gasRoom = scene.createGeometryAccelerationStructure();
-    cudau::Buffer gasRoomMem;
-    cudau::Buffer gasRoomCompactedMem;
-    gasRoom.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasRoom.setNumMaterialSets(1);
-    gasRoom.setNumRayTypes(0, Shared::NumRayTypes);
-    gasRoom.addChild(geomInstRoom);
-    gasRoom.addChild(geomInstAreaLight);
-    gasRoom.prepareForBuild(&asMemReqs);
-    gasRoomMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer roomGasMem;
+    cudau::Buffer roomGasCompactedMem;
+    roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    roomGas.setNumMaterialSets(1);
+    roomGas.setNumRayTypes(0, Shared::NumRayTypes);
+    roomGas.addChild(roomGeomInst);
+    roomGas.addChild(areaLightGeomInst);
+    roomGas.prepareForBuild(&asMemReqs);
+    roomGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: カスタムプリミティブ用のGASは三角形用のGASとは別にする必要がある。
     //     GAS生成時にカスタムプリミティブ用であることを指定する。
     // EN: GAS for custom primitives must be created separately with GAS for triangles.
     //     Specify that the GAS is for custom primitives at the creation.
-    optixu::GeometryAccelerationStructure gasCustomPrimitives = scene.createGeometryAccelerationStructure(true);
-    cudau::Buffer gasCustomPrimitivesMem;
-    cudau::Buffer gasCustomPrimitivesCompactedMem;
-    gasCustomPrimitives.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    gasCustomPrimitives.setNumMaterialSets(1);
-    gasCustomPrimitives.setNumRayTypes(0, Shared::NumRayTypes);
-    gasCustomPrimitives.addChild(geomInstSpheres);
-    gasCustomPrimitives.prepareForBuild(&asMemReqs);
-    gasCustomPrimitivesMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    optixu::GeometryAccelerationStructure customPrimitivesGas = scene.createGeometryAccelerationStructure(true);
+    cudau::Buffer customPrimitivesGasMem;
+    cudau::Buffer customPrimitivesGasCompactedMem;
+    customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    customPrimitivesGas.setNumMaterialSets(1);
+    customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    customPrimitivesGas.addChild(spheresGeomInst);
+    customPrimitivesGas.prepareForBuild(&asMemReqs);
+    customPrimitivesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    gasRoom.rebuild(cuStream, gasRoomMem, asBuildScratchMem);
-    gasCustomPrimitives.rebuild(cuStream, gasCustomPrimitivesMem, asBuildScratchMem);
+    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
+    customPrimitivesGas.rebuild(cuStream, customPrimitivesGasMem, asBuildScratchMem);
 
     // JP: 静的なGASはコンパクションもしておく。
     // EN: Perform compaction for static GAS.
     size_t compactedASSize;
-    gasRoom.prepareForCompact(&compactedASSize);
-    gasRoomCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    gasRoom.compact(cuStream, gasRoomCompactedMem);
-    gasRoom.removeUncompacted();
+    roomGas.prepareForCompact(&compactedASSize);
+    roomGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
+    roomGas.compact(cuStream, roomGasCompactedMem);
+    roomGas.removeUncompacted();
 
-    gasCustomPrimitives.prepareForCompact(&compactedASSize);
-    gasCustomPrimitivesCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    gasCustomPrimitives.compact(cuStream, gasCustomPrimitivesCompactedMem);
-    gasCustomPrimitives.removeUncompacted();
+    customPrimitivesGas.prepareForCompact(&compactedASSize);
+    customPrimitivesGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
+    customPrimitivesGas.compact(cuStream, customPrimitivesGasCompactedMem);
+    customPrimitivesGas.removeUncompacted();
 
 
 
@@ -294,10 +294,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
     optixu::Instance instRoom = scene.createInstance();
-    instRoom.setChild(gasRoom);
+    instRoom.setChild(roomGas);
 
     optixu::Instance instCustomPrimitives = scene.createInstance();
-    instCustomPrimitives.setChild(gasCustomPrimitives);
+    instCustomPrimitives.setChild(customPrimitivesGas);
 
 
 
@@ -390,24 +390,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.finalize();
 
     asBuildScratchMem.finalize();
-    gasCustomPrimitivesCompactedMem.finalize();
-    gasCustomPrimitivesMem.finalize();
-    gasCustomPrimitives.destroy();
-    gasRoomCompactedMem.finalize();
-    gasRoomMem.finalize();
-    gasRoom.destroy();
+    customPrimitivesGasCompactedMem.finalize();
+    customPrimitivesGasMem.finalize();
+    customPrimitivesGas.destroy();
+    roomGasCompactedMem.finalize();
+    roomGasMem.finalize();
+    roomGas.destroy();
 
-    paramBufferSpheres.finalize();
-    aabbBufferSpheres.finalize();
-    geomInstSpheres.destroy();
+    spheresParamBuffer.finalize();
+    spheresAabbBuffer.finalize();
+    spheresGeomInst.destroy();
 
-    triangleBufferAreaLight.finalize();
-    vertexBufferAreaLight.finalize();
-    geomInstAreaLight.destroy();
+    areaLightTriangleBuffer.finalize();
+    areaLightVertexBuffer.finalize();
+    areaLightGeomInst.destroy();
 
-    triangleBufferRoom.finalize();
-    vertexBufferRoom.finalize();
-    geomInstRoom.destroy();
+    roomTriangleBuffer.finalize();
+    roomVertexBuffer.finalize();
+    roomGeomInst.destroy();
 
     scene.destroy();
 
