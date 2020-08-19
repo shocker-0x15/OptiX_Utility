@@ -293,11 +293,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
-    optixu::Instance instRoom = scene.createInstance();
-    instRoom.setChild(roomGas);
+    optixu::Instance roomInst = scene.createInstance();
+    roomInst.setChild(roomGas);
 
-    optixu::Instance instCustomPrimitives = scene.createInstance();
-    instCustomPrimitives.setChild(customPrimitivesGas);
+    optixu::Instance customPrimitivesInst = scene.createInstance();
+    customPrimitivesInst.setChild(customPrimitivesGas);
 
 
 
@@ -308,8 +308,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(instRoom);
-    ias.addChild(instCustomPrimitives);
+    ias.addChild(roomInst);
+    ias.addChild(customPrimitivesInst);
     ias.prepareForBuild(&asMemReqs, &numInstances);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
@@ -384,8 +384,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
-    instCustomPrimitives.destroy();
-    instRoom.destroy();
+    customPrimitivesInst.destroy();
+    roomInst.destroy();
 
     shaderBindingTable.finalize();
 

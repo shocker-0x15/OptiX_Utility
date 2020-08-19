@@ -329,12 +329,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             0, scale, 0, -1 + (1 - tt),
             0, 0, scale, z
         };
-        optixu::Instance instBunny = scene.createInstance();
+        optixu::Instance bunnyInst = scene.createInstance();
         // JP: インスタンスごとに異なるマテリアルセットを使用する。
         // EN: Use different material set per instance.
-        instBunny.setChild(bunnyGas, i);
-        instBunny.setTransform(instBunnyTr);
-        bunnyInsts.push_back(instBunny);
+        bunnyInst.setChild(bunnyGas, i);
+        bunnyInst.setTransform(instBunnyTr);
+        bunnyInsts.push_back(bunnyInst);
     }
 
 
