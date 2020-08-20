@@ -167,7 +167,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-//#define USE_BLOCK_COMPRESSED_TEXTURE
+#define USE_BLOCK_COMPRESSED_TEXTURE
 
     optixu::Material ceilingMat = optixContext.createMaterial();
     ceilingMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
@@ -194,21 +194,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS", &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS",
+                                          &width, &height, &mipCount, &sizes, &format);
 
-            arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                           width, height, 1/*mipCount*/);
-            for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
-                arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
+            farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                          cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                          width, height, 1/*mipCount*/);
+            for (int i = 0; i < farSideWallArray.getNumMipmapLevels(); ++i)
+                farSideWallArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
 #else
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg", &width, &height, &n, 4);
+            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
+                                                 &width, &height, &n, 4);
             farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1);
+                                          cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                          width, height, 1);
             farSideWallArray.transfer<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
 #endif
@@ -248,21 +250,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS", &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS",
+                                          &width, &height, &mipCount, &sizes, &format);
 
-            arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                           width, height, 1/*mipCount*/);
-            for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
-                arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
+            floorArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1/*mipCount*/);
+            for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
+                floorArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
 #else
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg", &width, &height, &n, 4);
+            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
+                                                 &width, &height, &n, 4);
             floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                           width, height, 1);
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1);
             floorArray.transfer<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
 #endif
@@ -309,10 +313,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(1, 1) },
             { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(1, 0) },
             // far side wall
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 2) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 2) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 0) },
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 2) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 0) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 2) },
             // ceiling
             { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
             { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },

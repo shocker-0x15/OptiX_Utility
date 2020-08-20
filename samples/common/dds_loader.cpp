@@ -230,7 +230,7 @@ namespace dds {
 
 
     uint8_t** load(const char* filepath, int32_t* width, int32_t* height, int32_t* mipCount, size_t** sizes, Format* format) {
-        std::ifstream ifs(filepath);
+        std::ifstream ifs(filepath, std::ios::in | std::ios::binary);
         if (!ifs.is_open()) {
             hpprintf("Not found: %s\n", filepath);
             return nullptr;
@@ -273,7 +273,8 @@ namespace dds {
         if ((header.m_flags & Header::Flags::MipMapCount) != 0)
             *mipCount = header.m_mipmapCount;
 
-        uint8_t** data = new uint8_t * [*mipCount];
+        uint8_t* singleData = new uint8_t[dataSize];
+        uint8_t** data = new uint8_t*[*mipCount];
         *sizes = new size_t[*mipCount];
         int32_t mipWidth = *width;
         int32_t mipHeight = *height;
@@ -287,7 +288,7 @@ namespace dds {
             int32_t bh = (mipHeight + 3) / 4;
             size_t mipDataSize = bw * bh * blockSize;
 
-            data[i] = new uint8_t[mipDataSize];
+            data[i] = singleData + cumDataSize;
             (*sizes)[i] = mipDataSize;
             ifs.read((char*)data[i], mipDataSize);
             cumDataSize += mipDataSize;
@@ -301,9 +302,9 @@ namespace dds {
     }
 
     void free(uint8_t** data, int32_t mipCount, size_t* sizes) {
-        for (int i = mipCount - 1; i >= 0; --i)
-            delete[] data[i];
+        void* singleData = data[0];
         delete[] sizes;
         delete[] data;
+        delete singleData;
     }
 }
