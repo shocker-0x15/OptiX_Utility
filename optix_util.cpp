@@ -1679,21 +1679,6 @@ namespace optixu {
         m->sbtIsUpToDate = false;
     }
 
-    void Pipeline::setScene(const Scene &scene) const {
-        m->scene = extract(scene);
-        m->hitGroupSbt = nullptr;
-        m->hitGroupSbtIsUpToDate = false;
-    }
-
-    void Pipeline::setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const {
-        m->hitGroupSbt = shaderBindingTable;
-        m->hitGroupSbtIsUpToDate = false;
-    }
-
-    void Pipeline::markHitGroupShaderBindingTableDirty() const {
-        m->hitGroupSbtIsUpToDate = false;
-    }
-
     void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,
                                 uint32_t directCallableStackSizeFromState,
                                 uint32_t continuationStackSize,
@@ -1707,6 +1692,21 @@ namespace optixu {
                                               directCallableStackSizeFromState,
                                               continuationStackSize,
                                               maxTraversableGraphDepth));
+    }
+
+    void Pipeline::setScene(const Scene &scene) const {
+        m->scene = extract(scene);
+        m->hitGroupSbt = nullptr;
+        m->hitGroupSbtIsUpToDate = false;
+    }
+
+    void Pipeline::setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const {
+        m->hitGroupSbt = shaderBindingTable;
+        m->hitGroupSbtIsUpToDate = false;
+    }
+
+    void Pipeline::markHitGroupShaderBindingTableDirty() const {
+        m->hitGroupSbtIsUpToDate = false;
     }
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {

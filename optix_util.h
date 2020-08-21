@@ -1068,15 +1068,20 @@ private: \
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
         void setCallableProgram(uint32_t index, ProgramGroup program) const;
 
-        void setScene(const Scene &scene) const;
-        void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
-        void markHitGroupShaderBindingTableDirty() const;
-
         void setStackSize(uint32_t directCallableStackSizeFromTraversal,
                           uint32_t directCallableStackSizeFromState,
                           uint32_t continuationStackSize,
                           uint32_t maxTraversableGraphDepth) const;
 
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルがdirty状態になる。
+        // EN: Calling the following APIs marks the hit group's shader binding table dirty.
+        void setScene(const Scene &scene) const;
+        void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
+        void markHitGroupShaderBindingTableDirty() const;
+
+        // JP: セットされたシーンを基にシェーダーバインディングテーブルのセットアップを行い、
+        //     Ray Generationシェーダーを起動する。
+        // EN: Setup the shader binding table based on the scene set, then launch the ray generation shader.
         void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
     };
 
