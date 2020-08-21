@@ -1358,50 +1358,48 @@ namespace optixu {
             for (int i = 0; i < numMissRayTypes; ++i)
                 THROW_RUNTIME_ERROR(missPrograms[i], "Miss program is not set for ray type %d.", i);
 
-            sbt = {};
-            {
-                auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>(stream);
-                rayGenProgram->packHeader(rayGenRecordOnHost);
-                rayGenRecord.unmap(stream);
+            auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>(stream);
+            rayGenProgram->packHeader(rayGenRecordOnHost);
+            rayGenRecord.unmap(stream);
 
-                if (exceptionProgram) {
-                    auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>(stream);
-                    exceptionProgram->packHeader(exceptionRecordOnHost);
-                    exceptionRecord.unmap(stream);
-                }
-
-                auto missRecordsOnHost = missRecords.map<uint8_t>(stream);
-                for (int i = 0; i < numMissRayTypes; ++i)
-                    missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-                missRecords.unmap(stream);
-
-                scene->setupHitGroupSBT(stream, this, hitGroupSbt);
-
-                auto callableRecordsOnHost = callableRecords.map<uint8_t>(stream);
-                for (int i = 0; i < callablePrograms.size(); ++i)
-                    callablePrograms[i]->packHeader(callableRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-                callableRecords.unmap(stream);
-
-
-
-                sbt.raygenRecord = rayGenRecord.getCUdeviceptr();
-
-                sbt.exceptionRecord = exceptionProgram ? exceptionRecord.getCUdeviceptr() : 0;
-
-                sbt.missRecordBase = missRecords.getCUdeviceptr();
-                sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
-                sbt.missRecordCount = numMissRayTypes;
-
-                sbt.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
-                sbt.hitgroupRecordStrideInBytes = scene->getSingleRecordSize();
-                sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / scene->getSingleRecordSize();
-
-                sbt.callablesRecordBase = callablePrograms.size() ? callableRecords.getCUdeviceptr() : 0;
-                sbt.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
-                sbt.callablesRecordCount = callablePrograms.size();
+            if (exceptionProgram) {
+                auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>(stream);
+                exceptionProgram->packHeader(exceptionRecordOnHost);
+                exceptionRecord.unmap(stream);
             }
 
+            auto missRecordsOnHost = missRecords.map<uint8_t>(stream);
+            for (int i = 0; i < numMissRayTypes; ++i)
+                missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
+            missRecords.unmap(stream);
+
+            auto callableRecordsOnHost = callableRecords.map<uint8_t>(stream);
+            for (int i = 0; i < callablePrograms.size(); ++i)
+                callablePrograms[i]->packHeader(callableRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
+            callableRecords.unmap(stream);
+
+            sbt.raygenRecord = rayGenRecord.getCUdeviceptr();
+
+            sbt.exceptionRecord = exceptionProgram ? exceptionRecord.getCUdeviceptr() : 0;
+
+            sbt.missRecordBase = missRecords.getCUdeviceptr();
+            sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
+            sbt.missRecordCount = numMissRayTypes;
+
+            sbt.callablesRecordBase = callablePrograms.size() ? callableRecords.getCUdeviceptr() : 0;
+            sbt.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
+            sbt.callablesRecordCount = callablePrograms.size();
+
             sbtIsUpToDate = true;
+        }
+
+        if (!hitGroupSbtIsUpToDate) {
+            scene->setupHitGroupSBT(stream, this, hitGroupSbt);
+            hitGroupSbtIsUpToDate = true;
+
+            sbt.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
+            sbt.hitgroupRecordStrideInBytes = scene->getSingleRecordSize();
+            sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / scene->getSingleRecordSize();
         }
     }
 
@@ -1670,8 +1668,10 @@ namespace optixu {
         THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
-        if (index >= m->callablePrograms.size())
+        if (index >= m->callablePrograms.size()) {
             m->callablePrograms.resize(index + 1);
+            m->sbtAllocDone = false;
+        }
         m->callablePrograms[index] = _program;
         m->sbtIsUpToDate = false;
     }
@@ -1679,16 +1679,16 @@ namespace optixu {
     void Pipeline::setScene(const Scene &scene) const {
         m->scene = extract(scene);
         m->hitGroupSbt = nullptr;
-        m->sbtIsUpToDate = false;
+        m->hitGroupSbtIsUpToDate = false;
     }
 
     void Pipeline::setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const {
         m->hitGroupSbt = shaderBindingTable;
-        m->sbtIsUpToDate = false;
+        m->hitGroupSbtIsUpToDate = false;
     }
 
     void Pipeline::markHitGroupShaderBindingTableDirty() const {
-        m->sbtIsUpToDate = false;
+        m->hitGroupSbtIsUpToDate = false;
     }
 
     void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,

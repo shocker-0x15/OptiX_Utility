@@ -823,6 +823,7 @@ namespace optixu {
             unsigned int pipelineLinked : 1;
             unsigned int sbtAllocDone : 1;
             unsigned int sbtIsUpToDate : 1;
+            unsigned int hitGroupSbtIsUpToDate : 1;
         };
 
         void setupShaderBindingTable(CUstream stream);
@@ -835,7 +836,7 @@ namespace optixu {
             maxTraceDepth(0), sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
-            pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false) {
+            pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
             rayGenRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
             rayGenRecord.setMappedMemoryPersistent(true);
             exceptionRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
@@ -844,6 +845,7 @@ namespace optixu {
             missRecords.setMappedMemoryPersistent(true);
             callableRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
             callableRecords.setMappedMemoryPersistent(true);
+            sbt = {};
         }
         ~Priv() {
             if (pipelineLinked)
