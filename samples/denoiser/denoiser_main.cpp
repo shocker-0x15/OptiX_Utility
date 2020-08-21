@@ -283,12 +283,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLightMatData.isEmitter = true;
     areaLightMat.setUserData(areaLightMatData);
 
-    optixu::Material bunnyMat = optixContext.createMaterial();
-    bunnyMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
-    bunnyMat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
-    Shared::MaterialData bunnyMatData = {};
-    bunnyMatData.albedo = make_float3(sRGB_degamma_s(0.25f), sRGB_degamma_s(0.75f), sRGB_degamma_s(0.25f));
-    bunnyMat.setUserData(bunnyMatData);
+    constexpr uint32_t NumBunnies = 100;
+    std::vector<optixu::Material> bunnyMats(NumBunnies);
+    for (int i = 0; i < NumBunnies; ++i) {
+        bunnyMats[i] = optixContext.createMaterial();
+        bunnyMats[i].setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
+        bunnyMats[i].setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
+    }
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -425,7 +426,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
         bunnyGeomInst.setNumMaterials(1, nullptr);
-        bunnyGeomInst.setMaterial(0, 0, bunnyMat);
+        for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
+            bunnyGeomInst.setMaterial(matSetIdx, 0, bunnyMats[matSetIdx]);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunnyGeomInst.setUserData(geomData);
     }
@@ -465,8 +467,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer bunnyGasMem;
     cudau::Buffer bunnyGasCompactedMem;
     bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    bunnyGas.setNumMaterialSets(1);
-    bunnyGas.setNumRayTypes(0, Shared::NumRayTypes);
+    bunnyGas.setNumMaterialSets(NumBunnies);
+    for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
+        bunnyGas.setNumRayTypes(matSetIdx, Shared::NumRayTypes);
     bunnyGas.addChild(bunnyGeomInst);
     bunnyGas.prepareForBuild(&asMemReqs);
     bunnyGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -517,12 +520,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     std::vector<optixu::Instance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
-    constexpr uint32_t NumBunnies = 100;
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
         float x = r * std::cos(GoldenAngle * i);
         float z = r * std::sin(GoldenAngle * i);
+
+        Shared::MaterialData matData;
+        matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * M_PI), 1.0f),
+                                               r / 0.9f,
+                                               1.0f));
+        bunnyMats[i].setUserData(matData);
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.003f + tt * 0.0006f;
@@ -532,7 +540,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             0, 0, scale, z
         };
         optixu::Instance bunnyInst = scene.createInstance();
-        bunnyInst.setChild(bunnyGas);
+        bunnyInst.setChild(bunnyGas, i);
         bunnyInst.setTransform(bunnyInstXfm);
         bunnyInsts.push_back(bunnyInst);
     }
@@ -855,7 +863,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     scene.destroy();
 
-    bunnyMat.destroy();
+    for (int i = NumBunnies - 1; i >= 0; --i)
+        bunnyMats[i].destroy();
     areaLightMat.destroy();
     CUDADRV_CHECK(cuTexObjectDestroy(floorMatData.texture));
     floorArray.finalize();

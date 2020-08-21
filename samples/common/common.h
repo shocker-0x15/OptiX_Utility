@@ -217,10 +217,6 @@ std::filesystem::path getExecutableDirectory();
 
 std::string readTxtFile(const std::filesystem::path& filepath);
 
-float sRGB_degamma_s(float value);
-
-float sRGB_gamma_s(float value);
-
 
 
 class SlotFinder {
@@ -559,6 +555,26 @@ CUDA_DEVICE_FUNCTION float3 HSVtoRGB(float h, float s, float v) {
     else if (hi == 5)
         return make_float3(v, m, n);
     return make_float3(0, 0, 0);
+}
+
+CUDA_DEVICE_FUNCTION float sRGB_degamma_s(float value) {
+    Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
+    if (value <= 0.04045f)
+        return value / 12.92f;
+    return std::pow((value + 0.055f) / 1.055f, 2.4f);
+}
+
+CUDA_DEVICE_FUNCTION float sRGB_gamma_s(float value) {
+    Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
+    if (value <= 0.0031308f)
+        return 12.92f * value;
+    return 1.055f * std::pow(value, 1 / 2.4f) - 0.055f;
+}
+
+CUDA_DEVICE_FUNCTION float3 sRGB_degamma(const float3 &value) {
+    return make_float3(sRGB_degamma_s(value.x),
+                       sRGB_degamma_s(value.y),
+                       sRGB_degamma_s(value.z));
 }
 
 
