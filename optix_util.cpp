@@ -1344,9 +1344,9 @@ namespace optixu {
     
     void Pipeline::Priv::setupShaderBindingTable(CUstream stream) {
         if (!sbtAllocDone) {
-            missRecords.resize(numMissRayTypes, missRecords.stride());
+            missRecords.resize(numMissRayTypes, missRecords.stride(), stream);
             if (callablePrograms.size())
-                callableRecords.resize(callablePrograms.size(), callableRecords.stride());
+                callableRecords.resize(callablePrograms.size(), callableRecords.stride(), stream);
 
             sbtAllocDone = true;
             sbtIsUpToDate = false;
@@ -1360,27 +1360,27 @@ namespace optixu {
 
             sbt = {};
             {
-                auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>();
+                auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>(stream);
                 rayGenProgram->packHeader(rayGenRecordOnHost);
-                rayGenRecord.unmap();
+                rayGenRecord.unmap(stream);
 
                 if (exceptionProgram) {
-                    auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>();
+                    auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>(stream);
                     exceptionProgram->packHeader(exceptionRecordOnHost);
-                    exceptionRecord.unmap();
+                    exceptionRecord.unmap(stream);
                 }
 
-                auto missRecordsOnHost = missRecords.map<uint8_t>();
+                auto missRecordsOnHost = missRecords.map<uint8_t>(stream);
                 for (int i = 0; i < numMissRayTypes; ++i)
                     missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-                missRecords.unmap();
+                missRecords.unmap(stream);
 
                 scene->setupHitGroupSBT(stream, this, hitGroupSbt);
 
-                auto callableRecordsOnHost = callableRecords.map<uint8_t>();
+                auto callableRecordsOnHost = callableRecords.map<uint8_t>(stream);
                 for (int i = 0; i < callablePrograms.size(); ++i)
                     callablePrograms[i]->packHeader(callableRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-                callableRecords.unmap();
+                callableRecords.unmap(stream);
 
 
 

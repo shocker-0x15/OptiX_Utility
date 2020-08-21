@@ -528,7 +528,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         Shared::MaterialData matData;
         matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * M_PI), 1.0f),
-                                               r / 0.9f,
+                                               std::sqrt(r / 0.9f),
                                                1.0f));
         bunnyMats[i].setUserData(matData);
 
@@ -720,7 +720,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     毎フレーム呼ぶ必要があるのはcomputeIntensity()とinvoke()。
     //     computeIntensity()は自作することもできる。
     //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
-    // EN: Denoise the path tracing the result.
+    // EN: Denoise the path tracing result.
     //     computeIntensity() and invoke() should be calld every frame.
     //     You can also create a custom computeIntensity().
     //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
