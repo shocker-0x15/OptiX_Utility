@@ -874,12 +874,12 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
-        //     ただしローンチ時のセットアップはSBTバッファーのmap/unmap()を伴うので、
+        //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
         //     安全のためにはSBTバッファーをダブルバッファリングする必要がある。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
-        //     However note that the setup in the launch involves map/unmap() of the SBT buffer,
-        //     so double buffered SBT is required for safety.
+        //     However note that the setup in the launch involves the change of the SBT buffer's contents
+        //     and transfer, so double buffered SBT is required for safety.
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>

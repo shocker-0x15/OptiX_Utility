@@ -1352,6 +1352,9 @@ namespace optixu {
             sbtIsUpToDate = false;
         }
 
+        // JP: 現在の実装はヒットグループ以外のSBTを非同期に更新することを想定していない。
+        // EN: The current implementation doesn't consider asynchronous update of
+        //     SBT except for hitgroup's one.
         if (!sbtIsUpToDate) {
             THROW_RUNTIME_ERROR(rayGenProgram, "Ray generation program is not set.");
 
