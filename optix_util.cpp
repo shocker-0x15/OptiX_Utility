@@ -1344,9 +1344,9 @@ namespace optixu {
     
     void Pipeline::Priv::setupShaderBindingTable(CUstream stream) {
         if (!sbtAllocDone) {
-            missRecords.resize(numMissRayTypes, missRecords.stride(), stream);
+            missRecords.resize(numMissRayTypes, missRecords.stride());
             if (callablePrograms.size())
-                callableRecords.resize(callablePrograms.size(), callableRecords.stride(), stream);
+                callableRecords.resize(callablePrograms.size(), callableRecords.stride());
 
             sbtAllocDone = true;
             sbtIsUpToDate = false;
@@ -1361,25 +1361,25 @@ namespace optixu {
             for (int i = 0; i < numMissRayTypes; ++i)
                 THROW_RUNTIME_ERROR(missPrograms[i], "Miss program is not set for ray type %d.", i);
 
-            auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>(stream);
+            auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>();
             rayGenProgram->packHeader(rayGenRecordOnHost);
-            rayGenRecord.unmap(stream);
+            rayGenRecord.unmap();
 
             if (exceptionProgram) {
-                auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>(stream);
+                auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>();
                 exceptionProgram->packHeader(exceptionRecordOnHost);
-                exceptionRecord.unmap(stream);
+                exceptionRecord.unmap();
             }
 
-            auto missRecordsOnHost = missRecords.map<uint8_t>(stream);
+            auto missRecordsOnHost = missRecords.map<uint8_t>();
             for (int i = 0; i < numMissRayTypes; ++i)
                 missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-            missRecords.unmap(stream);
+            missRecords.unmap();
 
-            auto callableRecordsOnHost = callableRecords.map<uint8_t>(stream);
+            auto callableRecordsOnHost = callableRecords.map<uint8_t>();
             for (int i = 0; i < callablePrograms.size(); ++i)
                 callablePrograms[i]->packHeader(callableRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-            callableRecords.unmap(stream);
+            callableRecords.unmap();
 
             sbt.raygenRecord = rayGenRecord.getCUdeviceptr();
 
