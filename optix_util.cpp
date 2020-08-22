@@ -312,11 +312,11 @@ namespace optixu {
         }
     }
 
-    SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t matSetIdx) const {
+    SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t gasMatSetIdx) const {
         SizeAlign maxRecordSizeAlign;
         for (int matIdx = 0; matIdx < materials.size(); ++matIdx) {
             THROW_RUNTIME_ERROR(materials[matIdx][0], "Default material (== material set 0) is not set for material %u.", matIdx);
-            matSetIdx = matSetIdx < materials[matIdx].size() ? matSetIdx : 0;
+            uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
             const _Material* mat = materials[matIdx][matSetIdx];
             if (!mat)
                 mat = materials[matIdx][0];
@@ -332,13 +332,13 @@ namespace optixu {
         return static_cast<uint32_t>(buildInputFlags.size());
     }
 
-    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx,
+    uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
                                                     const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                                     uint32_t numRayTypes, uint8_t* records) const {
         uint32_t numMaterials = materials.size();
         for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
             THROW_RUNTIME_ERROR(materials[matIdx][0], "Default material (== material set 0) is not set for material %u.", matIdx);
-            matSetIdx = matSetIdx < materials[matIdx].size() ? matSetIdx : 0;
+            uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
             const _Material* mat = materials[matIdx][matSetIdx];
             if (!mat)
                 mat = materials[matIdx][0];

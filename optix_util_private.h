@@ -446,9 +446,9 @@ namespace optixu {
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
-        SizeAlign calcMaxRecordSizeAlign(uint32_t matSetIdx) const;
+        SizeAlign calcMaxRecordSizeAlign(uint32_t gasMatSetIdx) const;
         uint32_t getNumSBTRecords() const;
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx,
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
                                 const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                 uint32_t numRayTypes, uint8_t* records) const;
     };

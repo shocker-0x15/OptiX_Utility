@@ -258,7 +258,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // EN: Each of instances 75-99 uses unique materials for half of them,
             //     the others falls back to the one of material set 0.
             else {
-                for (int i = 0; i < Ngon / 2; ++i)
+                for (int i = 0; i < Ngon; i += 2)
                     multiMatPolygonGeomInst.setMaterial(matSetIdx, i, polygonMaterials[matSetIdx][i]);
             }
         }
