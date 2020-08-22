@@ -201,6 +201,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomGeomInst.setMaterial(0, 3, leftWallMat);
         roomGeomInst.setMaterial(0, 4, rightWallMat);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(3, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(4, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
     }
 
@@ -237,8 +241,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         multiMatPolygonGeomInst.setNumMaterials(Ngon, &multiMatPolygonMaterialIndexBuffer, sizeof(uint8_t));
         // JP: GASのインスタンスごとに異なるマテリアルを使用できるように
         //     各マテリアルセットのスロットにマテリアルをセットする。
-        // EN: Set a material to each slot of a material set
-        //     so that each GAS uses different material than others.
+        // EN: Set a material to each slot of material sets
+        //     so that each GAS instance uses different material than others.
         for (int matSetIdx = 0; matSetIdx < NumPolygonInstances; ++matSetIdx) {
             // JP: 0-49のインスタンスは完全に独自のマテリアルを使用する。
             // EN: Each of instances 0-49 uses completely unique materials.
@@ -256,13 +260,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             }
             // JP: 75-99のインスタンスは半分のマテリアルが独自、もう半分がマテリアルセット0のものにフォールバックされる。
             // EN: Each of instances 75-99 uses unique materials for half of them,
-            //     the others falls back to the one of material set 0.
+            //     the others fall back to the one of material set 0.
             else {
                 for (int i = 0; i < Ngon; i += 2)
                     multiMatPolygonGeomInst.setMaterial(matSetIdx, i, polygonMaterials[matSetIdx][i]);
             }
         }
-        multiMatPolygonGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        for (int i = 0; i < Ngon; ++i)
+            multiMatPolygonGeomInst.setGeometryFlags(i, OPTIX_GEOMETRY_FLAG_NONE);
         multiMatPolygonGeomInst.setUserData(geomData);
     }
 
