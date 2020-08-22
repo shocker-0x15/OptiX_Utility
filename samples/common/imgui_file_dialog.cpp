@@ -203,8 +203,8 @@ void FileDialog::calcEntries(std::vector<std::filesystem::directory_entry>* entr
 
     for (const std::string &filter : fileFilters) {
         for (const EntryInfo &entryInfo : m_entryInfos) {
-            if (((m_flags & Flag_DirectorySelection == 0) && entryInfo.is_directory()) ||
-                ((m_flags & Flag_FileSelection == 0) && !entryInfo.is_directory()))
+            if ((((m_flags & Flag_DirectorySelection) == 0) && entryInfo.is_directory()) ||
+                (((m_flags & Flag_FileSelection) == 0) && !entryInfo.is_directory()))
                 continue;
 
             if (entryInfo.path().filename().u8string() == filter) {

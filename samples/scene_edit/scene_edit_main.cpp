@@ -236,7 +236,7 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
                                              aiProcess_GenNormals | aiProcess_GenSmoothNormals |
                                              aiProcess_PreTransformVertices);
     if (!scene) {
-        hpprintf("Failed to load %s.\n", filepath.c_str());
+        hpprintf("Failed to load %s.\n", filepath.string().c_str());
         return;
     }
 
@@ -1631,7 +1631,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     }
 
                     ImGui::SameLine();
-                    bool removeIsActive = (allGroupUnused && geomGroupSelected) || geomInstsSelected > 0;
+                    bool removeIsActive = (allGroupUnused && geomGroupSelected) || geomInstsSelected;
                     if (ImGui::Button("Remove", removeIsActive)) {
                         if (geomGroupSelected) {
                             geomGroupList.loopForSelectedGeomGroups(

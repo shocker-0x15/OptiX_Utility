@@ -417,7 +417,7 @@ namespace optixu {
 
         uint32_t prevNumMatSets = m->materials[matIdx].size();
         if (matSetIdx >= prevNumMatSets)
-            m->materials[matIdx].resize(matSetIdx + 1);
+            m->materials[matIdx].resize(matSetIdx + 1, nullptr);
         m->materials[matIdx][matSetIdx] = extract(mat);
     }
 

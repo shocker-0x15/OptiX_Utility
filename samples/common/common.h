@@ -47,6 +47,7 @@
 
 #include "../../optix_util.h"
 #if !defined(__CUDA_ARCH__)
+#   undef CUDA_DEVICE_FUNCTION
 #   define CUDA_DEVICE_FUNCTION inline
 #endif
 
@@ -799,6 +800,6 @@ CUDA_DEVICE_FUNCTION static Quaternion qRotateX(float angle) { return qRotate(an
 CUDA_DEVICE_FUNCTION static Quaternion qRotateY(float angle) { return qRotate(angle, make_float3(0, 1, 0)); }
 CUDA_DEVICE_FUNCTION static Quaternion qRotateZ(float angle) { return qRotate(angle, make_float3(0, 0, 1)); }
 
-CUDA_DEVICE_FUNCTION inline Quaternion qFromEulerAngles(float roll, float pitch, float yaw) {
+CUDA_DEVICE_FUNCTION Quaternion qFromEulerAngles(float roll, float pitch, float yaw) {
     return qRotateZ(roll) * qRotateY(yaw) * qRotateX(pitch);
 }

@@ -291,6 +291,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(3, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(4, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
     }
 
