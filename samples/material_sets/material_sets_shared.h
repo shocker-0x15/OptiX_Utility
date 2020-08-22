@@ -30,6 +30,12 @@ namespace Shared {
     };
 
 
+
+    struct MaterialData {
+        float3 color;
+    };
+
+
     
     struct GeometryData {
         const Vertex* vertexBuffer;

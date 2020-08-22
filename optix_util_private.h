@@ -348,7 +348,9 @@ namespace optixu {
         }
         void markSBTLayoutDirty();
         uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
-            return sbtOffsets.at(SBTOffsetKey{ gas, matSetIdx });
+            SBTOffsetKey key = SBTOffsetKey{ gas, matSetIdx };
+            THROW_RUNTIME_ERROR(sbtOffsets.count(key), "GAS %p: material set index %u is out of bounds.", gas, matSetIdx);
+            return sbtOffsets.at(key);
         }
 
         uint32_t getSingleRecordSize() const {

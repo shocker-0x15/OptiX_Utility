@@ -29,6 +29,7 @@
 
 #   include <fstream>
 #   include <sstream>
+#   include <array>
 #   include <vector>
 #   include <set>
 #   include <unordered_set>
