@@ -389,7 +389,7 @@ namespace optixu {
         const Buffer* materialIndexOffsetBuffer;
         std::vector<uint32_t> buildInputFlags; // per SBT record
 
-        std::vector<std::vector<const _Material*>> materialSets;
+        std::vector<std::vector<const _Material*>> materials;
 
         struct {
             const unsigned int forCustomPrimitives : 1;

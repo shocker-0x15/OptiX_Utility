@@ -314,11 +314,12 @@ namespace optixu {
 
     SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t matSetIdx) const {
         SizeAlign maxRecordSizeAlign;
-        matSetIdx = matSetIdx < materialSets.size() ? matSetIdx : 0;
-        const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
-        uint32_t numMaterials = buildInputFlags.size();
-        for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
-            const _Material* mat = materialSet[matIdx];
+        for (int matIdx = 0; matIdx < materials.size(); ++matIdx) {
+            THROW_RUNTIME_ERROR(materials[matIdx][0], "Default material (== material set 0) is not set for material %u.", matIdx);
+            matSetIdx = matSetIdx < materials[matIdx].size() ? matSetIdx : 0;
+            const _Material* mat = materials[matIdx][matSetIdx];
+            if (!mat)
+                mat = materials[matIdx][0];
             SizeAlign recordSizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
             recordSizeAlign += mat->getUserDataSizeAlign();
             maxRecordSizeAlign = max(maxRecordSizeAlign, recordSizeAlign);
@@ -334,12 +335,13 @@ namespace optixu {
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx,
                                                     const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                                     uint32_t numRayTypes, uint8_t* records) const {
-        matSetIdx = matSetIdx < materialSets.size() ? matSetIdx : 0;
-        const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
-        uint32_t numMaterials = buildInputFlags.size();
+        uint32_t numMaterials = materials.size();
         for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
-            const _Material* mat = materialSet[matIdx];
-            THROW_RUNTIME_ERROR(mat, "No material is set for %u-%u.", matSetIdx, matIdx);
+            THROW_RUNTIME_ERROR(materials[matIdx][0], "Default material (== material set 0) is not set for material %u.", matIdx);
+            matSetIdx = matSetIdx < materials[matIdx].size() ? matSetIdx : 0;
+            const _Material* mat = materials[matIdx][matSetIdx];
+            if (!mat)
+                mat = materials[matIdx][0];
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 SizeAlign curSizeAlign;
                 mat->setRecordData(pipeline, rIdx, records, &curSizeAlign);
@@ -397,28 +399,26 @@ namespace optixu {
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         m->materialIndexOffsetBuffer = matIndexOffsetBuffer;
         m->materialIndexOffsetSize = indexOffsetSize;
+        m->materials.resize(numMaterials);
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
-        size_t numMaterials = m->buildInputFlags.size();
+        size_t numMaterials = m->materials.size();
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
-                            "Out of material bounds [0, %u).", (uint32_t)numMaterials);
+                            "Out of material bounds [0, %u).", static_cast<uint32_t>(numMaterials));
 
         m->buildInputFlags[matIdx] = flags;
     }
 
     void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const {
-        size_t numMaterials = m->buildInputFlags.size();
+        size_t numMaterials = m->materials.size();
         THROW_RUNTIME_ERROR(matIdx < numMaterials,
-                            "Out of material bounds [0, %u).", (uint32_t)numMaterials);
+                            "Out of material bounds [0, %u).", static_cast<uint32_t>(numMaterials));
 
-        uint32_t prevNumMatSets = m->materialSets.size();
-        if (matSetIdx >= prevNumMatSets) {
-            m->materialSets.resize(matSetIdx + 1);
-            for (int i = prevNumMatSets; i < m->materialSets.size(); ++i)
-                m->materialSets[i].resize(numMaterials, nullptr);
-        }
-        m->materialSets[matSetIdx][matIdx] = extract(mat);
+        uint32_t prevNumMatSets = m->materials[matIdx].size();
+        if (matSetIdx >= prevNumMatSets)
+            m->materials[matIdx].resize(matSetIdx + 1);
+        m->materials[matIdx][matSetIdx] = extract(mat);
     }
 
     void GeometryInstance::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
