@@ -30,7 +30,6 @@ TODO:
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
 - Deformation Blurサポート。
-- HitGroup以外のプログラムの非同期更新。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
@@ -874,12 +873,8 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
-        //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
-        //     安全のためにはSBTバッファーをダブルバッファリングする必要がある。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
-        //     However note that the setup in the launch involves the change of the SBT buffer's contents
-        //     and transfer, so double buffered SBT is required for safety.
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -1061,23 +1056,45 @@ private: \
 
         void link(OptixCompileDebugLevel debugLevel) const;
 
+        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが無効化される。
+        // EN: Calling the following APIs invalidate the (non-hit group) shader binding table layout.
         void setNumMissRayTypes(uint32_t numMissRayTypes) const;
+        void setNumCallablePrograms(uint32_t numCallablePrograms) const;
 
+        void generateShaderBindingTableLayout(size_t* memorySize) const;
+
+        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルがdirty状態になり
+        //     ローンチ時に再セットアップされる。
+        //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
+        //     非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
+        // EN: Calling the following API marks the (non-hit group) shader binding table dirty
+        //     then triggers re-setup of the table at launch.
+        //     However note that the setup in the launch involves the change of the SBT buffer's contents
+        //     and transfer, so double buffered SBT is required for safety
+        //     in the case performing asynchronous update.
         void setRayGenerationProgram(ProgramGroup program) const;
         void setExceptionProgram(ProgramGroup program) const;
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
         void setCallableProgram(uint32_t index, ProgramGroup program) const;
+        void setShaderBindingTable(Buffer* shaderBindingTable) const;
+
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルがdirty状態になり
+        //     ローンチ時に再セットアップされる。
+        //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
+        //     非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
+        // EN: Calling the following APIs marks the hit group's shader binding table dirty,
+        //     then triggers re-setup of the table at launch.
+        //     However note that the setup in the launch involves the change of the SBT buffer's contents
+        //     and transfer, so double buffered SBT is required for safety
+        //     in the case performing asynchronous update.
+        void setScene(const Scene &scene) const;
+        void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
+        void markHitGroupShaderBindingTableDirty() const;
 
         void setStackSize(uint32_t directCallableStackSizeFromTraversal,
                           uint32_t directCallableStackSizeFromState,
                           uint32_t continuationStackSize,
                           uint32_t maxTraversableGraphDepth) const;
-
-        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルがdirty状態になる。
-        // EN: Calling the following APIs marks the hit group's shader binding table dirty.
-        void setScene(const Scene &scene) const;
-        void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
-        void markHitGroupShaderBindingTableDirty() const;
 
         // JP: セットされたシーンを基にシェーダーバインディングテーブルのセットアップを行い、
         //     Ray Generationシェーダーを起動する。

@@ -274,6 +274,8 @@ namespace dds {
             *mipCount = header.m_mipmapCount;
 
         uint8_t* singleData = new uint8_t[dataSize];
+        ifs.read((char*)singleData, dataSize);
+
         uint8_t** data = new uint8_t*[*mipCount];
         *sizes = new size_t[*mipCount];
         int32_t mipWidth = *width;
@@ -290,7 +292,6 @@ namespace dds {
 
             data[i] = singleData + cumDataSize;
             (*sizes)[i] = mipDataSize;
-            ifs.read((char*)data[i], mipDataSize);
             cumDataSize += mipDataSize;
 
             mipWidth = std::max<int32_t>(1, mipWidth / 2);

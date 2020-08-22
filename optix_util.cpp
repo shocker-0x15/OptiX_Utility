@@ -108,7 +108,7 @@ namespace optixu {
 
     void Scene::Priv::setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, Buffer* sbt) {
         THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= singleRecordSize * numSBTRecords,
-                            "Shader binding table size is not enough.");
+                            "Hit group shader binding table size is not enough.");
 
         auto records = sbt->map<uint8_t>(stream);
 
@@ -1343,66 +1343,60 @@ namespace optixu {
     }
     
     void Pipeline::Priv::setupShaderBindingTable(CUstream stream) {
-        if (!sbtAllocDone) {
-            missRecords.resize(numMissRayTypes, missRecords.stride());
-            if (callablePrograms.size())
-                callableRecords.resize(callablePrograms.size(), callableRecords.stride());
-
-            sbtAllocDone = true;
-            sbtIsUpToDate = false;
-        }
-
-        // JP: 現在の実装はヒットグループ以外のSBTを非同期に更新することを想定していない。
-        // EN: The current implementation doesn't consider asynchronous update of
-        //     SBT except for hitgroup's one.
         if (!sbtIsUpToDate) {
             THROW_RUNTIME_ERROR(rayGenProgram, "Ray generation program is not set.");
-
             for (int i = 0; i < numMissRayTypes; ++i)
                 THROW_RUNTIME_ERROR(missPrograms[i], "Miss program is not set for ray type %d.", i);
+            for (int i = 0; i < numCallablePrograms; ++i)
+                THROW_RUNTIME_ERROR(callablePrograms[i], "Callable program is not set for index %d.", i);
 
-            auto rayGenRecordOnHost = rayGenRecord.map<uint8_t>();
-            rayGenProgram->packHeader(rayGenRecordOnHost);
-            rayGenRecord.unmap();
+            auto records = sbt->map<uint8_t>(stream);
+            size_t offset = 0;
 
-            if (exceptionProgram) {
-                auto exceptionRecordOnHost = exceptionRecord.map<uint8_t>();
-                exceptionProgram->packHeader(exceptionRecordOnHost);
-                exceptionRecord.unmap();
+            size_t rayGenRecordOffset = offset;
+            rayGenProgram->packHeader(records + offset);
+            offset += OPTIX_SBT_RECORD_HEADER_SIZE;
+
+            size_t exceptionRecordOffset = offset;
+            if (exceptionProgram)
+                exceptionProgram->packHeader(records + offset);
+            offset += OPTIX_SBT_RECORD_HEADER_SIZE;
+
+            CUdeviceptr missRecordOffset = offset;
+            for (int i = 0; i < numMissRayTypes; ++i) {
+                missPrograms[i]->packHeader(records + offset);
+                offset += OPTIX_SBT_RECORD_HEADER_SIZE;
             }
 
-            auto missRecordsOnHost = missRecords.map<uint8_t>();
-            for (int i = 0; i < numMissRayTypes; ++i)
-                missPrograms[i]->packHeader(missRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-            missRecords.unmap();
+            CUdeviceptr callableRecordOffset = offset;
+            for (int i = 0; i < numCallablePrograms; ++i) {
+                callablePrograms[i]->packHeader(records + offset);
+                offset += OPTIX_SBT_RECORD_HEADER_SIZE;
+            }
 
-            auto callableRecordsOnHost = callableRecords.map<uint8_t>();
-            for (int i = 0; i < callablePrograms.size(); ++i)
-                callablePrograms[i]->packHeader(callableRecordsOnHost + OPTIX_SBT_RECORD_HEADER_SIZE * i);
-            callableRecords.unmap();
+            sbt->unmap(stream);
 
-            sbt.raygenRecord = rayGenRecord.getCUdeviceptr();
-
-            sbt.exceptionRecord = exceptionProgram ? exceptionRecord.getCUdeviceptr() : 0;
-
-            sbt.missRecordBase = missRecords.getCUdeviceptr();
-            sbt.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
-            sbt.missRecordCount = numMissRayTypes;
-
-            sbt.callablesRecordBase = callablePrograms.size() ? callableRecords.getCUdeviceptr() : 0;
-            sbt.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
-            sbt.callablesRecordCount = callablePrograms.size();
+            CUdeviceptr baseAddress = sbt->getCUdeviceptr();
+            sbtParams.raygenRecord = baseAddress + rayGenRecordOffset;
+            sbtParams.exceptionRecord = exceptionProgram ? baseAddress + exceptionRecordOffset : 0;
+            sbtParams.missRecordBase = baseAddress + missRecordOffset;
+            sbtParams.missRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
+            sbtParams.missRecordCount = numMissRayTypes;
+            sbtParams.callablesRecordBase = numCallablePrograms ? baseAddress + callableRecordOffset : 0;
+            sbtParams.callablesRecordStrideInBytes = OPTIX_SBT_RECORD_HEADER_SIZE;
+            sbtParams.callablesRecordCount = numCallablePrograms;
 
             sbtIsUpToDate = true;
         }
 
         if (!hitGroupSbtIsUpToDate) {
             scene->setupHitGroupSBT(stream, this, hitGroupSbt);
-            hitGroupSbtIsUpToDate = true;
 
-            sbt.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
-            sbt.hitgroupRecordStrideInBytes = scene->getSingleRecordSize();
-            sbt.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / scene->getSingleRecordSize();
+            sbtParams.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
+            sbtParams.hitgroupRecordStrideInBytes = scene->getSingleRecordSize();
+            sbtParams.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / scene->getSingleRecordSize();
+
+            hitGroupSbtIsUpToDate = true;
         }
     }
 
@@ -1635,7 +1629,29 @@ namespace optixu {
     void Pipeline::setNumMissRayTypes(uint32_t numMissRayTypes) const {
         m->numMissRayTypes = numMissRayTypes;
         m->missPrograms.resize(m->numMissRayTypes);
-        m->sbtAllocDone = false;
+        m->sbtLayoutIsUpToDate = false;
+    }
+
+    void Pipeline::setNumCallablePrograms(uint32_t numCallablePrograms) const {
+        m->numCallablePrograms = numCallablePrograms;
+        m->callablePrograms.resize(m->numCallablePrograms);
+        m->sbtLayoutIsUpToDate = false;
+    }
+
+    void Pipeline::generateShaderBindingTableLayout(size_t* memorySize) const {
+        if (m->sbtLayoutIsUpToDate) {
+            *memorySize = m->sbtSize;
+            return;
+        }
+
+        m->sbtSize = 0;
+        m->sbtSize += OPTIX_SBT_RECORD_HEADER_SIZE; // RayGen
+        m->sbtSize += OPTIX_SBT_RECORD_HEADER_SIZE; // Exception
+        m->sbtSize += OPTIX_SBT_RECORD_HEADER_SIZE * m->numMissRayTypes; // Miss
+        m->sbtSize += OPTIX_SBT_RECORD_HEADER_SIZE * m->numCallablePrograms; // Callable
+        m->sbtLayoutIsUpToDate = true;
+
+        *memorySize = m->sbtSize;
     }
     
     void Pipeline::setRayGenerationProgram(ProgramGroup program) const {
@@ -1668,30 +1684,17 @@ namespace optixu {
 
     void Pipeline::setCallableProgram(uint32_t index, ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
+        THROW_RUNTIME_ERROR(index < m->numCallablePrograms, "Invalid callable program index.");
         THROW_RUNTIME_ERROR(_program, "Invalid program %p.", _program);
         THROW_RUNTIME_ERROR(_program->getPipeline() == m, "Pipeline mismatch for the given program (group).");
 
-        if (index >= m->callablePrograms.size()) {
-            m->callablePrograms.resize(index + 1);
-            m->sbtAllocDone = false;
-        }
         m->callablePrograms[index] = _program;
         m->sbtIsUpToDate = false;
     }
 
-    void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,
-                                uint32_t directCallableStackSizeFromState,
-                                uint32_t continuationStackSize,
-                                uint32_t maxTraversableGraphDepth) const {
-        if (m->pipelineCompileOptions.traversableGraphFlags & OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING)
-            maxTraversableGraphDepth = 2;
-        else if (m->pipelineCompileOptions.traversableGraphFlags == OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS)
-            maxTraversableGraphDepth = 1;
-        OPTIX_CHECK(optixPipelineSetStackSize(m->rawPipeline,
-                                              directCallableStackSizeFromTraversal,
-                                              directCallableStackSizeFromState,
-                                              continuationStackSize,
-                                              maxTraversableGraphDepth));
+    void Pipeline::setShaderBindingTable(Buffer* shaderBindingTable) const {
+        m->sbt = shaderBindingTable;
+        m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setScene(const Scene &scene) const {
@@ -1709,7 +1712,26 @@ namespace optixu {
         m->hitGroupSbtIsUpToDate = false;
     }
 
+    void Pipeline::setStackSize(uint32_t directCallableStackSizeFromTraversal,
+                                uint32_t directCallableStackSizeFromState,
+                                uint32_t continuationStackSize,
+                                uint32_t maxTraversableGraphDepth) const {
+        if (m->pipelineCompileOptions.traversableGraphFlags & OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING)
+            maxTraversableGraphDepth = 2;
+        else if (m->pipelineCompileOptions.traversableGraphFlags == OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS)
+            maxTraversableGraphDepth = 1;
+        OPTIX_CHECK(optixPipelineSetStackSize(m->rawPipeline,
+                                              directCallableStackSizeFromTraversal,
+                                              directCallableStackSizeFromState,
+                                              continuationStackSize,
+                                              maxTraversableGraphDepth));
+    }
+
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
+        THROW_RUNTIME_ERROR(m->sbtLayoutIsUpToDate, "Shader binding table layout is outdated.");
+        THROW_RUNTIME_ERROR(m->sbt, "Shader binding table is not set.");
+        THROW_RUNTIME_ERROR(m->sbt->sizeInBytes() >= m->sbtSize,
+                            "Shader binding table size is not enough.");
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
         bool hasMotionAS;
         THROW_RUNTIME_ERROR(m->scene->isReady(&hasMotionAS), "Scene is not ready.");
@@ -1720,7 +1742,7 @@ namespace optixu {
         m->setupShaderBindingTable(stream);
 
         OPTIX_CHECK(optixLaunch(m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
-                                &m->sbt, dimX, dimY, dimZ));
+                                &m->sbtParams, dimX, dimY, dimZ));
     }
 
 

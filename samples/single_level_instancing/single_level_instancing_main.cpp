@@ -63,6 +63,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
+    cudau::Buffer shaderBindingTable;
+    size_t sbtSize;
+    pipeline.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    pipeline.setShaderBindingTable(&shaderBindingTable);
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -343,10 +349,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     確定している必要がある。
     // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
     //     when creating an IAS.
-    cudau::Buffer shaderBindingTable;
-    size_t sbtSize;
-    scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    cudau::Buffer hitGroupSBT;
+    size_t hitGroupSbtSize;
+    scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
+    hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
 
 
 
@@ -396,7 +402,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
+    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -437,7 +443,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
-    shaderBindingTable.finalize();
+    hitGroupSBT.finalize();
 
     for (int i = bunnyInsts.size() - 1; i >= 0; --i)
         bunnyInsts[i].destroy();
@@ -472,6 +478,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyMaterials[i].destroy();
     areaLightMat.destroy();
     roomMat.destroy();
+
+    shaderBindingTable.finalize();
 
     hitProgramGroup.destroy();
 

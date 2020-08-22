@@ -451,11 +451,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                                                                              moduleOptiX, RT_AH_NAME_STR("visibility"),
                                                                                              moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
 
-    uint32_t callableProgramSampleTextureIndex = 0;
+    uint32_t nextCallableProgramIndex = 0;
+    uint32_t callableProgramSampleTextureIndex = nextCallableProgramIndex++;
     optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
-    uint32_t callableProgramDecodeHitPointTriangleIndex = 1;
+    uint32_t callableProgramDecodeHitPointTriangleIndex = nextCallableProgramIndex++;
     optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
-    uint32_t callableProgramDecodeHitPointSphereIndex = 2;
+    uint32_t callableProgramDecodeHitPointSphereIndex = nextCallableProgramIndex++;
     optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
     pipeline.setMaxTraceDepth(2);
@@ -468,9 +469,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
+    pipeline.setNumCallablePrograms(nextCallableProgramIndex);
     pipeline.setCallableProgram(callableProgramSampleTextureIndex, callableProgramSampleTexture);
     pipeline.setCallableProgram(callableProgramDecodeHitPointTriangleIndex, callableProgramDecodeHitPointTriangle);
     pipeline.setCallableProgram(callableProgramDecodeHitPointSphereIndex, callableProgramDecodeHitPointSphere);
+
+    cudau::Buffer shaderBindingTable;
+    size_t sbtSize;
+    pipeline.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    pipeline.setShaderBindingTable(&shaderBindingTable);
 
     OptixStackSizes stackSizes;
 
@@ -1029,10 +1037,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    cudau::Buffer shaderBindingTable;
-    size_t sbtSize;
-    scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, g_bufferType, sbtSize, 1);
+    cudau::Buffer hitGroupSBT;
+    size_t hitGroupSbtSize;
+    scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
+    hitGroupSBT.initialize(cuContext, g_bufferType, hitGroupSbtSize, 1);
     
     // JP: GASからインスタンスを作成する。
     // EN: Make instances from GASs.
@@ -1196,7 +1204,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.textures = textureObjectBuffer.getDevicePointer();
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
+    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -1835,7 +1843,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     instAreaLight.destroy();
     instCornellBox.destroy();
 
-    shaderBindingTable.finalize();
+    hitGroupSBT.finalize();
 
     asBuildScratchMem.finalize();
 
@@ -1888,6 +1896,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuModuleUnload(moduleBoundingBoxProgram));
     CUDADRV_CHECK(cuModuleUnload(moduleDeform));
     CUDADRV_CHECK(cuModuleUnload(modulePostProcess));
+
+    shaderBindingTable.finalize();
 
     callableProgramDecodeHitPointSphere.destroy();
     callableProgramDecodeHitPointTriangle.destroy();

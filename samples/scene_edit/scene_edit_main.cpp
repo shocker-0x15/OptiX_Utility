@@ -183,7 +183,7 @@ struct OptiXEnv {
 
     cudau::Buffer asScratchBuffer;
 
-    cudau::Buffer shaderBindingTable[2]; // double buffering
+    cudau::Buffer hitGroupSBT[2]; // double buffering
 };
 
 void GeometryInstance::finalize(GeometryInstance* p) {
@@ -1171,6 +1171,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
+    cudau::Buffer shaderBindingTable;
+    size_t sbtSize;
+    pipeline.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    pipeline.setShaderBindingTable(&shaderBindingTable);
+
     OptixStackSizes stackSizes;
 
     rayGenProgram.getStackSize(&stackSizes);
@@ -1285,9 +1291,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint64_t frameIndex = 0;
     glfwSetWindowUserPointer(window, &frameIndex);
     int32_t requestedSize[2];
-    bool sbtLayoutUpdated = true;
+    bool hitGroupSbtLayoutUpdated = true;
     uint32_t sbtIndex = -1;
-    cudau::Buffer* curShaderBindingTable;
+    cudau::Buffer* curHitGroupSBT;
     OptixTraversableHandle curTravHandle = 0;
     while (true) {
         uint32_t bufferIndex = frameIndex % 2;
@@ -1531,7 +1537,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                                         geomGroup->preTransformBuffer.sizeInBytes(),
                                                         curCuStream));
 
-                        sbtLayoutUpdated = true;
+                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
 
                         optixEnv.geomGroups[serialID] = geomGroup;
@@ -1661,7 +1667,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         geomGroupList.clearSelection();
                         onSelectionChange();
 
-                        sbtLayoutUpdated = true;
+                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                     }
 
@@ -1723,7 +1729,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         activeGroup->optixGAS.markDirty();
                         activeGroup->propagateMarkDirty();
 
-                        sbtLayoutUpdated = true;
+                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                     }
 
@@ -1944,7 +1950,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     return true;
                                 });
                         }
-                        sbtLayoutUpdated = true;
+                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                         groupList.clearSelection();
                         onSelectionChange();
@@ -1995,18 +2001,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
             geomGroup->optixGAS.rebuild(curCuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
         }
 
-        if (sbtLayoutUpdated) {
+        if (hitGroupSbtLayoutUpdated) {
             sbtIndex = (sbtIndex + 1) % 2;
-            curShaderBindingTable = &optixEnv.shaderBindingTable[sbtIndex];
+            curHitGroupSBT = &optixEnv.hitGroupSBT[sbtIndex];
 
-            size_t sbtSize;
-            optixEnv.scene.generateShaderBindingTableLayout(&sbtSize);
-            if (curShaderBindingTable->isInitialized())
-                curShaderBindingTable->resize(sbtSize, 1, curCuStream);
+            size_t hitGroupSbtSize;
+            optixEnv.scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
+            if (curHitGroupSBT->isInitialized())
+                curHitGroupSBT->resize(hitGroupSbtSize, 1, curCuStream);
             else
-                curShaderBindingTable->initialize(cuContext, g_bufferType, sbtSize, 1);
-            pipeline.setHitGroupShaderBindingTable(curShaderBindingTable);
-            sbtLayoutUpdated = false;
+                curHitGroupSBT->initialize(cuContext, g_bufferType, hitGroupSbtSize, 1);
+            pipeline.setHitGroupShaderBindingTable(curHitGroupSBT);
+            hitGroupSbtLayoutUpdated = false;
         }
 
         for (const auto &kv : optixEnv.groups) {
@@ -2131,11 +2137,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     outputTexture.finalize();
 
     optixEnv.asScratchBuffer.finalize();
-    optixEnv.shaderBindingTable[1].finalize();
-    optixEnv.shaderBindingTable[0].finalize();
+    optixEnv.hitGroupSBT[1].finalize();
+    optixEnv.hitGroupSBT[0].finalize();
     optixEnv.scene.destroy();
 
     optixEnv.material.destroy();
+
+    shaderBindingTable.finalize();
 
     hitProgramGroup.destroy();
     missProgram.destroy();

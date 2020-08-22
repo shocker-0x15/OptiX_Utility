@@ -66,6 +66,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
+    cudau::Buffer shaderBindingTable;
+    size_t sbtSize;
+    pipeline.generateShaderBindingTableLayout(&sbtSize);
+    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    pipeline.setShaderBindingTable(&shaderBindingTable);
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -284,10 +290,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    cudau::Buffer shaderBindingTable;
-    size_t sbtSize;
-    scene.generateShaderBindingTableLayout(&sbtSize);
-    shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
+    cudau::Buffer hitGroupSBT;
+    size_t hitGroupSbtSize;
+    scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
+    hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
 
 
 
@@ -345,7 +351,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&shaderBindingTable);
+    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -387,7 +393,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     customPrimitivesInst.destroy();
     roomInst.destroy();
 
-    shaderBindingTable.finalize();
+    hitGroupSBT.finalize();
 
     asBuildScratchMem.finalize();
     customPrimitivesGasCompactedMem.finalize();
@@ -413,6 +419,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     matForSpheres.destroy();
     matForTriangles.destroy();
+
+    shaderBindingTable.finalize();
 
     hitProgramGroupForSpheres.destroy();
     hitProgramGroupForTriangles.destroy();

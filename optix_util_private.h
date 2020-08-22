@@ -805,23 +805,20 @@ namespace optixu {
 
         _Scene* scene;
         uint32_t numMissRayTypes;
+        uint32_t numCallablePrograms;
+        size_t sbtSize;
 
         _ProgramGroup* rayGenProgram;
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
         std::vector<_ProgramGroup*> callablePrograms;
-        // TODO: CPU/GPU asynchronous update
-        Buffer rayGenRecord;
-        Buffer exceptionRecord;
-        Buffer missRecords;
-        Buffer callableRecords;
-
+        Buffer* sbt;
         Buffer* hitGroupSbt;
-        OptixShaderBindingTable sbt;
+        OptixShaderBindingTable sbtParams;
 
         struct {
             unsigned int pipelineLinked : 1;
-            unsigned int sbtAllocDone : 1;
+            unsigned int sbtLayoutIsUpToDate : 1;
             unsigned int sbtIsUpToDate : 1;
             unsigned int hitGroupSbtIsUpToDate : 1;
         };
@@ -834,27 +831,14 @@ namespace optixu {
         Priv(const _Context* ctxt) :
             context(ctxt), rawPipeline(nullptr),
             maxTraceDepth(0), sizeOfPipelineLaunchParams(0),
-            scene(nullptr), numMissRayTypes(0),
+            scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
-            pipelineLinked(false), sbtAllocDone(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
-            rayGenRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
-            rayGenRecord.setMappedMemoryPersistent(true);
-            exceptionRecord.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
-            exceptionRecord.setMappedMemoryPersistent(true);
-            missRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
-            missRecords.setMappedMemoryPersistent(true);
-            callableRecords.initialize(context->getCUDAContext(), s_BufferType, 1, OPTIX_SBT_RECORD_HEADER_SIZE);
-            callableRecords.setMappedMemoryPersistent(true);
-            sbt = {};
+            pipelineLinked(false), sbtLayoutIsUpToDate(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
+            sbtParams = {};
         }
         ~Priv() {
             if (pipelineLinked)
                 optixPipelineDestroy(rawPipeline);
-
-            callableRecords.finalize();
-            missRecords.finalize();
-            exceptionRecord.finalize();
-            rayGenRecord.finalize();
         }
 
         CUcontext getCUDAContext() const {
