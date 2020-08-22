@@ -45,8 +45,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
-    // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
+    // JP: このグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
+    // EN: This group is for ray-triangle intersection, so we don't need custom intersection program.
     optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
@@ -96,6 +96,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyMaterials[i] = optixContext.createMaterial();
         bunnyMaterials[i].setHitGroup(Shared::RayType_Primary, hitProgramGroup);
     }
+
+    optixu::Material bunnyBaseMat = optixContext.createMaterial();
+    Shared::MaterialData bunnyBaseMatData;
+    bunnyBaseMatData.color = float3(0.2f, 0.2f, 0.2f);
+    bunnyBaseMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    bunnyBaseMat.setUserData(bunnyBaseMatData);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -226,6 +232,39 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyGeomInst.setUserData(geomData);
     }
 
+    optixu::GeometryInstance bunnyBaseGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> bunnyBaseVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> bunnyBaseTriangleBuffer;
+    {
+        constexpr uint32_t N = 6;
+        std::vector<Shared::Vertex> vertices(N + 1);
+        std::vector<Shared::Triangle> triangles(N);
+        vertices[0] = Shared::Vertex{ float3(0, 0, 0), float3(0, 1, 0), float2(0, 0) };
+        for (int i = 0; i < N; ++i) {
+            float angle = 2 * M_PI * static_cast<float>(i) / N;
+            vertices[1 + i] = Shared::Vertex{
+                float3(70 * std::sin(angle), 0, 70 * std::cos(angle)),
+                float3(0, 1, 0),
+                float2(0.5f + 0.5f * std::sin(angle), 0.5f + 0.5f * std::cos(angle))
+            };
+            triangles[i] = Shared::Triangle{ 0, static_cast<uint32_t>(1 + i), static_cast<uint32_t>(1 + (i + 1) % N) };
+        }
+
+        bunnyBaseVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        bunnyBaseTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
+
+        Shared::GeometryData geomData = {};
+        geomData.vertexBuffer = bunnyBaseVertexBuffer.getDevicePointer();
+        geomData.triangleBuffer = bunnyBaseTriangleBuffer.getDevicePointer();
+
+        bunnyBaseGeomInst.setVertexBuffer(&bunnyBaseVertexBuffer);
+        bunnyBaseGeomInst.setTriangleBuffer(&bunnyBaseTriangleBuffer);
+        bunnyBaseGeomInst.setNumMaterials(1, nullptr);
+        bunnyBaseGeomInst.setMaterial(0, 0, bunnyBaseMat);
+        bunnyBaseGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        bunnyBaseGeomInst.setUserData(geomData);
+    }
+
 
 
     size_t maxSizeOfScratchBuffer = 0;
@@ -258,12 +297,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: GASのインスタンスごとに異なるマテリアルを使用できるようにマテリアルセットの数を設定する。
+    //     bunnyBaseは1つのマテリアルセットしか持っていないため、どのインスタンスでも同じマテリアルが使用される。
     // EN: Set a material set value so that each GAS uses different material than others.
+    //     bunnyBase has only one material set theresore each instance uses the same material.
     optixu::GeometryAccelerationStructure bunnyGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer bunnyGasMem;
     cudau::Buffer bunnyGasCompactedMem;
     bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     bunnyGas.setNumMaterialSets(NumBunnies);
+    bunnyGas.addChild(bunnyBaseGeomInst);
     for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
         bunnyGas.setNumRayTypes(matSetIdx, Shared::NumRayTypes);
     bunnyGas.addChild(bunnyGeomInst);
@@ -330,16 +372,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.003f + tt * 0.0006f;
-        float instBunnyTr[] = {
+        float bunnyInstXfm[] = {
             scale, 0, 0, x,
-            0, scale, 0, -1 + (1 - tt),
+            0, scale, 0, -0.999f + (1 - tt),
             0, 0, scale, z
         };
         optixu::Instance bunnyInst = scene.createInstance();
         // JP: インスタンスごとに異なるマテリアルセットを使用する。
         // EN: Use different material set per instance.
         bunnyInst.setChild(bunnyGas, i);
-        bunnyInst.setTransform(instBunnyTr);
+        bunnyInst.setTransform(bunnyInstXfm);
         bunnyInsts.push_back(bunnyInst);
     }
 
@@ -460,6 +502,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomGasMem.finalize();
     roomGas.destroy();
 
+    bunnyBaseTriangleBuffer.finalize();
+    bunnyBaseVertexBuffer.finalize();
+    bunnyBaseGeomInst.destroy();
+
     bunnyTriangleBuffer.finalize();
     bunnyVertexBuffer.finalize();
     bunnyGeomInst.destroy();
@@ -474,6 +520,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     scene.destroy();
 
+    bunnyBaseMat.destroy();
     for (int i = NumBunnies - 1; i >= 0; --i)
         bunnyMaterials[i].destroy();
     areaLightMat.destroy();

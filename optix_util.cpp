@@ -65,6 +65,7 @@ namespace optixu {
 
     void Material::Priv::setRecordData(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const {
         Key key{ pipeline, rayType };
+        THROW_RUNTIME_ERROR(programs.count(key), "Pipeline: %p: No hit group is set to ray type: %u", pipeline, rayType);
         const _ProgramGroup* hitGroup = programs.at(key);
         *curSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
         hitGroup->packHeader(record);
@@ -114,8 +115,8 @@ namespace optixu {
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
-            for (int j = 0; j < numMatSets; ++j) {
-                uint32_t numRecords = gas->fillSBTRecords(pipeline, j, records);
+            for (int matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
+                uint32_t numRecords = gas->fillSBTRecords(pipeline, matSetIdx, records);
                 records += numRecords * singleRecordSize;
             }
         }
@@ -313,6 +314,7 @@ namespace optixu {
 
     SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t matSetIdx) const {
         SizeAlign maxRecordSizeAlign;
+        matSetIdx = matSetIdx < materialSets.size() ? matSetIdx : 0;
         const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
         uint32_t numMaterials = buildInputFlags.size();
         for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
@@ -332,14 +334,12 @@ namespace optixu {
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx,
                                                     const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                                     uint32_t numRayTypes, uint8_t* records) const {
-        THROW_RUNTIME_ERROR(matSetIdx < materialSets.size(),
-                            "Out of material set bound: [0, %u)", static_cast<uint32_t>(materialSets.size()));
-
+        matSetIdx = matSetIdx < materialSets.size() ? matSetIdx : 0;
         const std::vector<const _Material*> &materialSet = materialSets[matSetIdx];
         uint32_t numMaterials = buildInputFlags.size();
         for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
             const _Material* mat = materialSet[matIdx];
-            THROW_RUNTIME_ERROR(mat, "No material set for %u-%u.", matSetIdx, matIdx);
+            THROW_RUNTIME_ERROR(mat, "No material is set for %u-%u.", matSetIdx, matIdx);
             for (int rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 SizeAlign curSizeAlign;
                 mat->setRecordData(pipeline, rIdx, records, &curSizeAlign);

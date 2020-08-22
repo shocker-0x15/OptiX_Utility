@@ -55,6 +55,13 @@ optixu::ProgramGroup visibilityRayHitProgramGroup =
 pipeline.setMaxTraceDepth(2);
 pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL);
 
+// Allocate a shader binding table.
+cudau::Buffer sbt;
+size_t sbtSize;
+scene.generateShaderBindingTableLayout(&sbtSize);
+//...
+pipeline.setShaderBindingTable(&sbt);
+
 // Create materials.
 optix::Material defaultMat = optixContext.createMaterial();
 defaultMat.setHitGroup(RayType::Search, searchRayHitProgramGroup);
@@ -114,15 +121,15 @@ ias0.prepareForBuild(&asMemReqs);
 // ...
 OptixTraversableHandle ias0Handle = ias0.rebuild(cuStream, instBuffer, ias0Mem, asBuildScratchMem);
 
-// Allocate a shader binding table.
-cudau::Buffer shaderBindingTable;
-size_t sbtSize;
-scene.generateShaderBindingTableLayout(&sbtSize);
+// Allocate a shader binding table for hit groups.
+cudau::Buffer hitGroupSbt;
+size_t hitGroupSbtSize;
+scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
 // ...
 
 // Associate the pipeline and the scene/shader binding table.
 pipeline.setScene(scene);
-pipeline.setHitGroupShaderBindingTable(shaderBindingTable);
+pipeline.setHitGroupShaderBindingTable(hitGroupSbt);
 
 // Setup pipeline launch parameters and allocate memory for it on the device.
 PipelineLaunchParameter plp;

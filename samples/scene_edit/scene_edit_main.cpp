@@ -1156,8 +1156,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
-    // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
+    // JP: このグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
+    // EN: This group is for ray-triangle intersection, so we don't need custom intersection program.
     optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("closesthit"),
                                                                            emptyModule, nullptr,
                                                                            emptyModule, nullptr);

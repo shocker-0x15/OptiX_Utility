@@ -8,97 +8,7 @@
 #include "../../ext/tiny_obj_loader.h"
 
 static void loadObjFile(const std::filesystem::path &filepath,
-                        std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles) {
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn;
-    std::string err;
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                                filepath.string().c_str());
-
-    // Record unified unique vertices.
-    std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
-    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-        const tinyobj::shape_t &shape = shapes[sIdx];
-        size_t idxOffset = 0;
-        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-            if (numFaceVertices != 3) {
-                idxOffset += numFaceVertices;
-                continue;
-            }
-
-            for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
-                tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
-                auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
-                unifiedVertexMap[key] = Shared::Vertex{
-                    make_float3(attrib.vertices[3 * idx.vertex_index + 0],
-                                attrib.vertices[3 * idx.vertex_index + 1],
-                                attrib.vertices[3 * idx.vertex_index + 2]),
-                    make_float3(0, 0, 0),
-                    make_float2(0, 0)
-                };
-            }
-
-            idxOffset += numFaceVertices;
-        }
-    }
-
-    // Assign a vertex index to each of unified unique unifiedVertexMap.
-    std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
-    vertices->resize(unifiedVertexMap.size());
-    uint32_t vertexIndex = 0;
-    for (const auto &kv : unifiedVertexMap) {
-        vertices->at(vertexIndex) = kv.second;
-        vertexIndices[kv.first] = vertexIndex++;
-    }
-    unifiedVertexMap.clear();
-
-    // Calculate triangle index buffer.
-    triangles->clear();
-    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-        const tinyobj::shape_t &shape = shapes[sIdx];
-        size_t idxOffset = 0;
-        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-            if (numFaceVertices != 3) {
-                idxOffset += numFaceVertices;
-                continue;
-            }
-
-            tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
-            tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
-            tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-            auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
-            auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
-            auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
-
-            triangles->push_back(Shared::Triangle{
-                vertexIndices.at(key0),
-                vertexIndices.at(key1),
-                vertexIndices.at(key2) });
-
-            idxOffset += numFaceVertices;
-        }
-    }
-    vertexIndices.clear();
-
-    for (int tIdx = 0; tIdx < triangles->size(); ++tIdx) {
-        const Shared::Triangle &tri = triangles->at(tIdx);
-        Shared::Vertex &v0 = vertices->at(tri.index0);
-        Shared::Vertex &v1 = vertices->at(tri.index1);
-        Shared::Vertex &v2 = vertices->at(tri.index2);
-        float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-        v0.normal += gn;
-        v1.normal += gn;
-        v2.normal += gn;
-    }
-    for (int vIdx = 0; vIdx < vertices->size(); ++vIdx) {
-        Shared::Vertex &v = vertices->at(vIdx);
-        v.normal = normalize(v.normal);
-    }
-}
+                        std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles);
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -905,4 +815,97 @@ int32_t main(int32_t argc, const char* argv[]) try {
 catch (const std::exception &ex) {
     hpprintf("Error: %s\n", ex.what());
     return -1;
+}
+
+void loadObjFile(const std::filesystem::path &filepath,
+                 std::vector<Shared::Vertex>* vertices, std::vector<Shared::Triangle>* triangles) {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn;
+    std::string err;
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                                filepath.string().c_str());
+
+    // Record unified unique vertices.
+    std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
+                tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
+                auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
+                unifiedVertexMap[key] = Shared::Vertex{
+                    make_float3(attrib.vertices[3 * idx.vertex_index + 0],
+                                attrib.vertices[3 * idx.vertex_index + 1],
+                                attrib.vertices[3 * idx.vertex_index + 2]),
+                    make_float3(0, 0, 0),
+                    make_float2(0, 0)
+                };
+            }
+
+            idxOffset += numFaceVertices;
+        }
+    }
+
+    // Assign a vertex index to each of unified unique unifiedVertexMap.
+    std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
+    vertices->resize(unifiedVertexMap.size());
+    uint32_t vertexIndex = 0;
+    for (const auto &kv : unifiedVertexMap) {
+        vertices->at(vertexIndex) = kv.second;
+        vertexIndices[kv.first] = vertexIndex++;
+    }
+    unifiedVertexMap.clear();
+
+    // Calculate triangle index buffer.
+    triangles->clear();
+    for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
+        const tinyobj::shape_t &shape = shapes[sIdx];
+        size_t idxOffset = 0;
+        for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
+            uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
+            if (numFaceVertices != 3) {
+                idxOffset += numFaceVertices;
+                continue;
+            }
+
+            tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
+            tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
+            tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
+            auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
+            auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
+            auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
+
+            triangles->push_back(Shared::Triangle{
+                vertexIndices.at(key0),
+                vertexIndices.at(key1),
+                vertexIndices.at(key2) });
+
+            idxOffset += numFaceVertices;
+        }
+    }
+    vertexIndices.clear();
+
+    for (int tIdx = 0; tIdx < triangles->size(); ++tIdx) {
+        const Shared::Triangle &tri = triangles->at(tIdx);
+        Shared::Vertex &v0 = vertices->at(tri.index0);
+        Shared::Vertex &v1 = vertices->at(tri.index1);
+        Shared::Vertex &v2 = vertices->at(tri.index2);
+        float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
+        v0.normal += gn;
+        v1.normal += gn;
+        v2.normal += gn;
+    }
+    for (int vIdx = 0; vIdx < vertices->size(); ++vIdx) {
+        Shared::Vertex &v = vertices->at(vIdx);
+        v.normal = normalize(v.normal);
+    }
 }
