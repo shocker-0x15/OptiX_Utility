@@ -1048,7 +1048,6 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(Pipeline);
 
-        void setMaxTraceDepth(uint32_t maxTraceDepth) const;
         void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
                                 const char* launchParamsVariableName, size_t sizeOfLaunchParams,
                                 bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
@@ -1066,7 +1065,7 @@ private: \
         ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
                                                 Module module_CC, const char* entryFunctionNameCC) const;
 
-        void link(OptixCompileDebugLevel debugLevel) const;
+        void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
 
         // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが無効化される。
         // EN: Calling the following APIs invalidate the (non-hit group) shader binding table layout.

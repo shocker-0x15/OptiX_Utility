@@ -800,7 +800,6 @@ namespace optixu {
         const _Context* context;
         OptixPipeline rawPipeline;
 
-        uint32_t maxTraceDepth;
         OptixPipelineCompileOptions pipelineCompileOptions;
         size_t sizeOfPipelineLaunchParams;
         std::unordered_set<OptixProgramGroup> programGroups;
@@ -832,7 +831,7 @@ namespace optixu {
 
         Priv(const _Context* ctxt) :
             context(ctxt), rawPipeline(nullptr),
-            maxTraceDepth(0), sizeOfPipelineLaunchParams(0),
+            sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
             pipelineLinked(false), sbtLayoutIsUpToDate(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {

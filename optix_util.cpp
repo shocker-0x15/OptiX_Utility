@@ -1404,10 +1404,6 @@ namespace optixu {
         delete m;
         m = nullptr;
     }
-       
-    void Pipeline::setMaxTraceDepth(uint32_t maxTraceDepth) const {
-        m->maxTraceDepth = maxTraceDepth;
-    }
 
     void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
                                       const char* launchParamsVariableName, size_t sizeOfLaunchParams,
@@ -1599,12 +1595,12 @@ namespace optixu {
 
 
 
-    void Pipeline::link(OptixCompileDebugLevel debugLevel) const {
+    void Pipeline::link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const {
         THROW_RUNTIME_ERROR(!m->pipelineLinked, "This pipeline has been already linked.");
 
         if (!m->pipelineLinked) {
             OptixPipelineLinkOptions pipelineLinkOptions = {};
-            pipelineLinkOptions.maxTraceDepth = m->maxTraceDepth;
+            pipelineLinkOptions.maxTraceDepth = maxTraceDepth;
             pipelineLinkOptions.debugLevel = debugLevel;
 
             std::vector<OptixProgramGroup> groups;
