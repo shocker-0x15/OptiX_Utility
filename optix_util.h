@@ -407,76 +407,165 @@ namespace optixu {
     // EN: Device-side function wrappers
 #if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
 
-    template <typename HeadType0, typename... TailTypes>
-    CUDA_DEVICE_FUNCTION constexpr size_t __calcSumDwords() {
-        uint32_t ret = sizeof(HeadType0) / 4;
-        if constexpr (sizeof...(TailTypes) > 0)
-            ret += __calcSumDwords<TailTypes...>();
-        return ret;
-    }
+    namespace detail {
+        template <typename HeadType0, typename... TailTypes>
+        CUDA_DEVICE_FUNCTION constexpr size_t _calcSumDwords() {
+            uint32_t ret = sizeof(HeadType0) / 4;
+            if constexpr (sizeof...(TailTypes) > 0)
+                ret += _calcSumDwords<TailTypes...>();
+            return ret;
+        }
 
-    template <typename... PayloadTypes>
-    CUDA_DEVICE_FUNCTION constexpr size_t _calcSumDwords() {
-        if constexpr (sizeof...(PayloadTypes) > 0)
-            return __calcSumDwords<PayloadTypes...>();
-        else
-            return 0;
-    }
+        template <typename... PayloadTypes>
+        CUDA_DEVICE_FUNCTION constexpr size_t calcSumDwords() {
+            if constexpr (sizeof...(PayloadTypes) > 0)
+                return _calcSumDwords<PayloadTypes...>();
+            else
+                return 0;
+        }
 
-    template <uint32_t start, typename HeadType, typename... TailTypes>
-    CUDA_DEVICE_FUNCTION void _packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
-        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+        template <uint32_t start, typename HeadType, typename... TailTypes>
+        CUDA_DEVICE_FUNCTION void packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
+            constexpr uint32_t numDwords = sizeof(HeadType) / 4;
 #pragma unroll
-        for (int i = 0; i < numDwords; ++i)
-            v[start + i] = *(reinterpret_cast<const uint32_t*>(&head) + i);
-        if constexpr (sizeof...(tails) > 0)
-            _packToUInts<start + numDwords>(v, tails...);
-    }
+            for (int i = 0; i < numDwords; ++i)
+                v[start + i] = *(reinterpret_cast<const uint32_t*>(&head) + i);
+            if constexpr (sizeof...(tails) > 0)
+                packToUInts<start + numDwords>(v, tails...);
+        }
 
-    template <typename Func, typename Type, uint32_t offset, uint32_t start>
-    CUDA_DEVICE_FUNCTION void _getValue(Type* value) {
-        if (!value)
-            return;
-        constexpr uint32_t numDwords = sizeof(Type) / 4;
-        *(reinterpret_cast<uint32_t*>(value) + offset) = Func::get<start>();
-        if constexpr (offset + 1 < numDwords)
-            _getValue<Func, Type, offset + 1, start + 1>(value);
-    }
+        template <typename Func, typename Type, uint32_t offset, uint32_t start>
+        CUDA_DEVICE_FUNCTION void getValue(Type* value) {
+            if (!value)
+                return;
+            constexpr uint32_t numDwords = sizeof(Type) / 4;
+            *(reinterpret_cast<uint32_t*>(value) + offset) = Func::get<start>();
+            if constexpr (offset + 1 < numDwords)
+                getValue<Func, Type, offset + 1, start + 1>(value);
+        }
 
-    template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
-    CUDA_DEVICE_FUNCTION void _getValues(HeadType* head, TailTypes*... tails) {
-        _getValue<Func, HeadType, 0, start>(head);
-        if constexpr (sizeof...(tails) > 0)
-            _getValues<Func, start + sizeof(HeadType) / 4>(tails...);
-    }
+        template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
+        CUDA_DEVICE_FUNCTION void getValues(HeadType* head, TailTypes*... tails) {
+            getValue<Func, HeadType, 0, start>(head);
+            if constexpr (sizeof...(tails) > 0)
+                getValues<Func, start + sizeof(HeadType) / 4>(tails...);
+        }
 
-    template <typename Func, typename Type, uint32_t offset, uint32_t start>
-    CUDA_DEVICE_FUNCTION void _setValue(const Type* payload) {
-        if (!payload)
-            return;
-        constexpr uint32_t numDwords = sizeof(Type) / 4;
-        Func::set<start>(*(reinterpret_cast<const uint32_t*>(payload) + offset));
-        if constexpr (offset + 1 < numDwords)
-            _setValue<Func, Type, offset + 1, start + 1>(payload);
-    }
+        template <typename Func, typename Type, uint32_t offset, uint32_t start>
+        CUDA_DEVICE_FUNCTION void setValue(const Type* payload) {
+            if (!payload)
+                return;
+            constexpr uint32_t numDwords = sizeof(Type) / 4;
+            Func::set<start>(*(reinterpret_cast<const uint32_t*>(payload) + offset));
+            if constexpr (offset + 1 < numDwords)
+                setValue<Func, Type, offset + 1, start + 1>(payload);
+        }
 
-    template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
-    CUDA_DEVICE_FUNCTION void _setValues(const HeadType* head, const TailTypes*... tails) {
-        _setValue<Func, HeadType, 0, start>(head);
-        if constexpr (sizeof...(tails) > 0)
-            _setValues<Func, start + sizeof(HeadType) / 4>(tails...);
-    }
+        template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
+        CUDA_DEVICE_FUNCTION void setValues(const HeadType* head, const TailTypes*... tails) {
+            setValue<Func, HeadType, 0, start>(head);
+            if constexpr (sizeof...(tails) > 0)
+                setValues<Func, start + sizeof(HeadType) / 4>(tails...);
+        }
 
-
-
-    template <uint32_t start, typename HeadType, typename... TailTypes>
-    CUDA_DEVICE_FUNCTION void _traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
-        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+        template <uint32_t start, typename HeadType, typename... TailTypes>
+        CUDA_DEVICE_FUNCTION void traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
+            constexpr uint32_t numDwords = sizeof(HeadType) / 4;
 #pragma unroll
-        for (int i = 0; i < numDwords; ++i)
-            p[start + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
-        if constexpr (sizeof...(tailPayloads) > 0)
-            _traceSetPayloads<start + numDwords>(p, tailPayloads...);
+            for (int i = 0; i < numDwords; ++i)
+                p[start + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
+            if constexpr (sizeof...(tailPayloads) > 0)
+                traceSetPayloads<start + numDwords>(p, tailPayloads...);
+        }
+
+        struct PayloadFunc {
+            template <uint32_t index>
+            CUDA_DEVICE_FUNCTION static uint32_t get() {
+                if constexpr (index == 0)
+                    return optixGetPayload_0();
+                if constexpr (index == 1)
+                    return optixGetPayload_1();
+                if constexpr (index == 2)
+                    return optixGetPayload_2();
+                if constexpr (index == 3)
+                    return optixGetPayload_3();
+                if constexpr (index == 4)
+                    return optixGetPayload_4();
+                if constexpr (index == 5)
+                    return optixGetPayload_5();
+                if constexpr (index == 6)
+                    return optixGetPayload_6();
+                if constexpr (index == 7)
+                    return optixGetPayload_7();
+                return 0;
+            }
+
+            template <uint32_t index>
+            CUDA_DEVICE_FUNCTION static void set(uint32_t p) {
+                if constexpr (index == 0)
+                    optixSetPayload_0(p);
+                if constexpr (index == 1)
+                    optixSetPayload_1(p);
+                if constexpr (index == 2)
+                    optixSetPayload_2(p);
+                if constexpr (index == 3)
+                    optixSetPayload_3(p);
+                if constexpr (index == 4)
+                    optixSetPayload_4(p);
+                if constexpr (index == 5)
+                    optixSetPayload_5(p);
+                if constexpr (index == 6)
+                    optixSetPayload_6(p);
+                if constexpr (index == 7)
+                    optixSetPayload_7(p);
+            }
+        };
+
+        struct AttributeFunc {
+            template <uint32_t index>
+            CUDA_DEVICE_FUNCTION static uint32_t get() {
+                if constexpr (index == 0)
+                    return optixGetAttribute_0();
+                if constexpr (index == 1)
+                    return optixGetAttribute_1();
+                if constexpr (index == 2)
+                    return optixGetAttribute_2();
+                if constexpr (index == 3)
+                    return optixGetAttribute_3();
+                if constexpr (index == 4)
+                    return optixGetAttribute_4();
+                if constexpr (index == 5)
+                    return optixGetAttribute_5();
+                if constexpr (index == 6)
+                    return optixGetAttribute_6();
+                if constexpr (index == 7)
+                    return optixGetAttribute_7();
+                return 0;
+            }
+        };
+
+        struct ExceptionDetailFunc {
+            template <uint32_t index>
+            CUDA_DEVICE_FUNCTION static uint32_t get() {
+                if constexpr (index == 0)
+                    return optixGetExceptionDetail_0();
+                if constexpr (index == 1)
+                    return optixGetExceptionDetail_1();
+                if constexpr (index == 2)
+                    return optixGetExceptionDetail_2();
+                if constexpr (index == 3)
+                    return optixGetExceptionDetail_3();
+                if constexpr (index == 4)
+                    return optixGetExceptionDetail_4();
+                if constexpr (index == 5)
+                    return optixGetExceptionDetail_5();
+                if constexpr (index == 6)
+                    return optixGetExceptionDetail_6();
+                if constexpr (index == 7)
+                    return optixGetExceptionDetail_7();
+                return 0;
+            }
+        };
     }
     
     // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
@@ -491,7 +580,7 @@ namespace optixu {
                                     OptixVisibilityMask visibilityMask, uint32_t rayFlags,
                                     uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
                                     PayloadTypes &... payloads) {
-        constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
 
 #define OPTIXU_TRACE_ARGUMENTS \
@@ -506,7 +595,7 @@ namespace optixu {
         }
         else {
             uint32_t* p[numDwords];
-            _traceSetPayloads<0>(p, payloads...);
+            detail::traceSetPayloads<0>(p, payloads...);
 
             if constexpr (numDwords == 1)
                 optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0]);
@@ -530,103 +619,37 @@ namespace optixu {
 
 
 
-    struct PayloadFunc {
-        template <uint32_t index>
-        CUDA_DEVICE_FUNCTION static uint32_t get() {
-            if constexpr (index == 0)
-                return optixGetPayload_0();
-            if constexpr (index == 1)
-                return optixGetPayload_1();
-            if constexpr (index == 2)
-                return optixGetPayload_2();
-            if constexpr (index == 3)
-                return optixGetPayload_3();
-            if constexpr (index == 4)
-                return optixGetPayload_4();
-            if constexpr (index == 5)
-                return optixGetPayload_5();
-            if constexpr (index == 6)
-                return optixGetPayload_6();
-            if constexpr (index == 7)
-                return optixGetPayload_7();
-            return 0;
-        }
-
-        template <uint32_t index>
-        CUDA_DEVICE_FUNCTION static void set(uint32_t p) {
-            if constexpr (index == 0)
-                optixSetPayload_0(p);
-            if constexpr (index == 1)
-                optixSetPayload_1(p);
-            if constexpr (index == 2)
-                optixSetPayload_2(p);
-            if constexpr (index == 3)
-                optixSetPayload_3(p);
-            if constexpr (index == 4)
-                optixSetPayload_4(p);
-            if constexpr (index == 5)
-                optixSetPayload_5(p);
-            if constexpr (index == 6)
-                optixSetPayload_6(p);
-            if constexpr (index == 7)
-                optixSetPayload_7(p);
-        }
-    };
-
     template <typename... PayloadTypes>
     CUDA_DEVICE_FUNCTION void getPayloads(PayloadTypes*... payloads) {
-        constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
         static_assert(numDwords > 0, "Calling this function without payloads has no effect.");
         if constexpr (numDwords > 0)
-            _getValues<PayloadFunc, 0>(payloads...);
+            detail::getValues<detail::PayloadFunc, 0>(payloads...);
     }
 
     template <typename... PayloadTypes>
     CUDA_DEVICE_FUNCTION void setPayloads(const PayloadTypes*... payloads) {
-        constexpr size_t numDwords = _calcSumDwords<PayloadTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
         static_assert(numDwords > 0, "Calling this function without payloads has no effect.");
         if constexpr (numDwords > 0)
-            _setValues<PayloadFunc, 0>(payloads...);
+            detail::setValues<detail::PayloadFunc, 0>(payloads...);
     }
 
 
 
-    struct AttributeFunc {
-        template <uint32_t index>
-        CUDA_DEVICE_FUNCTION static uint32_t get() {
-            if constexpr (index == 0)
-                return optixGetAttribute_0();
-            if constexpr (index == 1)
-                return optixGetAttribute_1();
-            if constexpr (index == 2)
-                return optixGetAttribute_2();
-            if constexpr (index == 3)
-                return optixGetAttribute_3();
-            if constexpr (index == 4)
-                return optixGetAttribute_4();
-            if constexpr (index == 5)
-                return optixGetAttribute_5();
-            if constexpr (index == 6)
-                return optixGetAttribute_6();
-            if constexpr (index == 7)
-                return optixGetAttribute_7();
-            return 0;
-        }
-    };
-
     template <typename... AttributeTypes>
     CUDA_DEVICE_FUNCTION void reportIntersection(float hitT, uint32_t hitKind,
                                                  const AttributeTypes &... attributes) {
-        constexpr size_t numDwords = _calcSumDwords<AttributeTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<AttributeTypes...>();
         static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         if constexpr (numDwords == 0) {
             optixReportIntersection(hitT, hitKind);
         }
         else {
             uint32_t a[numDwords];
-            _packToUInts<0>(a, attributes...);
+            detail::packToUInts<0>(a, attributes...);
 
             if constexpr (numDwords == 1)
                 optixReportIntersection(hitT, hitKind, a[0]);
@@ -649,49 +672,26 @@ namespace optixu {
     
     template <typename... AttributeTypes>
     CUDA_DEVICE_FUNCTION void getAttributes(AttributeTypes*... attributes) {
-        constexpr size_t numDwords = _calcSumDwords<AttributeTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<AttributeTypes...>();
         static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         static_assert(numDwords > 0, "Calling this function without attributes has no effect.");
         if constexpr (numDwords > 0)
-            _getValues<AttributeFunc, 0>(attributes...);
+            detail::getValues<detail::AttributeFunc, 0>(attributes...);
     }
 
 
 
-    struct ExceptionDetailFunc {
-        template <uint32_t index>
-        CUDA_DEVICE_FUNCTION static uint32_t get() {
-            if constexpr (index == 0)
-                return optixGetExceptionDetail_0();
-            if constexpr (index == 1)
-                return optixGetExceptionDetail_1();
-            if constexpr (index == 2)
-                return optixGetExceptionDetail_2();
-            if constexpr (index == 3)
-                return optixGetExceptionDetail_3();
-            if constexpr (index == 4)
-                return optixGetExceptionDetail_4();
-            if constexpr (index == 5)
-                return optixGetExceptionDetail_5();
-            if constexpr (index == 6)
-                return optixGetExceptionDetail_6();
-            if constexpr (index == 7)
-                return optixGetExceptionDetail_7();
-            return 0;
-        }
-    };
-
     template <typename... ExceptionDetailTypes>
     CUDA_DEVICE_FUNCTION void throwException(int32_t exceptionCode,
                                              const ExceptionDetailTypes &... exceptionDetails) {
-        constexpr size_t numDwords = _calcSumDwords<ExceptionDetailTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<ExceptionDetailTypes...>();
         static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
         if constexpr (numDwords == 0) {
             optixThrowException(exceptionCode);
         }
         else {
             uint32_t ed[numDwords];
-            _packToUInts<0>(ed, exceptionDetails...);
+            detail::packToUInts<0>(ed, exceptionDetails...);
 
             if constexpr (numDwords == 1)
                 optixThrowException(exceptionCode, ed[0]);
@@ -714,11 +714,11 @@ namespace optixu {
 
     template <typename... ExceptionDetailTypes>
     CUDA_DEVICE_FUNCTION void getExceptionDetails(ExceptionDetailTypes*... details) {
-        constexpr size_t numDwords = _calcSumDwords<ExceptionDetailTypes...>();
+        constexpr size_t numDwords = detail::calcSumDwords<ExceptionDetailTypes...>();
         static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
         static_assert(numDwords > 0, "Calling this function without exception details has no effect.");
         if constexpr (numDwords > 0)
-            _getValues<ExceptionDetailFunc, 0>(details...);
+            detail::getValues<detail::ExceptionDetailFunc, 0>(details...);
     }
 
 #endif // #if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
