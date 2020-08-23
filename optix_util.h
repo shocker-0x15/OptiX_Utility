@@ -673,6 +673,98 @@ namespace optixu {
             _getAttributes<0>(attributes...);
     }
 
+
+
+    template <uint32_t start, typename HeadType, typename... TailTypes>
+    CUDA_DEVICE_FUNCTION void _setExceptionDetails(uint32_t* ed, const HeadType &headDetail, const TailTypes &... tailDetails) {
+        constexpr uint32_t numDwords = sizeof(HeadType) / 4;
+#pragma unroll
+        for (int i = 0; i < numDwords; ++i)
+            ed[start + i] = *(reinterpret_cast<const uint32_t*>(&headDetail) + i);
+        if constexpr (sizeof...(tailDetails) > 0)
+            _setExceptionDetails<start + numDwords>(ed, tailDetails...);
+    }
+
+    template <typename... ExceptionDetailTypes>
+    CUDA_DEVICE_FUNCTION void throwException(int32_t exceptionCode,
+                                             const ExceptionDetailTypes &... exceptionDetails) {
+        constexpr size_t numDwords = _calcSumDwords<ExceptionDetailTypes...>();
+        static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
+        if constexpr (numDwords == 0) {
+            optixThrowException(exceptionCode);
+        }
+        else {
+            uint32_t ed[numDwords];
+            _setExceptionDetails<0>(ed, exceptionDetails...);
+
+            if constexpr (numDwords == 1)
+                optixThrowException(exceptionCode, ed[0]);
+            if constexpr (numDwords == 2)
+                optixThrowException(exceptionCode, ed[0], ed[1]);
+            if constexpr (numDwords == 3)
+                optixThrowException(exceptionCode, ed[0], ed[1], ed[2]);
+            if constexpr (numDwords == 4)
+                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3]);
+            if constexpr (numDwords == 5)
+                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4]);
+            if constexpr (numDwords == 6)
+                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4], ed[5]);
+            if constexpr (numDwords == 7)
+                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4], ed[5], ed[6]);
+            if constexpr (numDwords == 8)
+                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4], ed[5], ed[6], ed[7]);
+        }
+    }
+
+
+
+    template <uint32_t index>
+    CUDA_DEVICE_FUNCTION uint32_t _optixGetExceptionDetail() {
+        if constexpr (index == 0)
+            return optixGetExceptionDetail_0();
+        if constexpr (index == 1)
+            return optixGetExceptionDetail_1();
+        if constexpr (index == 2)
+            return optixGetExceptionDetail_2();
+        if constexpr (index == 3)
+            return optixGetExceptionDetail_3();
+        if constexpr (index == 4)
+            return optixGetExceptionDetail_4();
+        if constexpr (index == 5)
+            return optixGetExceptionDetail_5();
+        if constexpr (index == 6)
+            return optixGetExceptionDetail_6();
+        if constexpr (index == 7)
+            return optixGetExceptionDetail_7();
+        return 0;
+    }
+
+    template <typename ExceptionDetailType, uint32_t offset, uint32_t start>
+    CUDA_DEVICE_FUNCTION void _getExceptionDetail(ExceptionDetailType* detail) {
+        if (!detail)
+            return;
+        constexpr uint32_t numDwords = sizeof(ExceptionDetailType) / 4;
+        *(reinterpret_cast<uint32_t*>(detail) + offset) = _optixGetExceptionDetail<start>();
+        if constexpr (offset + 1 < numDwords)
+            _getExceptionDetail<ExceptionDetailType, offset + 1, start + 1>(detail);
+    }
+
+    template <uint32_t start, typename HeadType, typename... TailTypes>
+    CUDA_DEVICE_FUNCTION void _getExceptionDetails(HeadType* headDetail, TailTypes*... tailDetails) {
+        _getExceptionDetail<HeadType, 0, start>(headDetail);
+        if constexpr (sizeof...(tailDetails) > 0)
+            _getExceptionDetails<start + sizeof(HeadType) / 4>(tailDetails...);
+    }
+
+    template <typename... ExceptionDetailTypes>
+    CUDA_DEVICE_FUNCTION void getExceptionDetails(ExceptionDetailTypes*... details) {
+        constexpr size_t numDwords = _calcSumDwords<ExceptionDetailTypes...>();
+        static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
+        static_assert(numDwords > 0, "Calling this function without exception details has no effect.");
+        if constexpr (numDwords > 0)
+            _getExceptionDetails<0>(details...);
+    }
+
 #endif // #if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
     // END: Device-side function wrappers
     // ----------------------------------------------------------------
