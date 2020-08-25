@@ -267,6 +267,16 @@ namespace cudau {
         Managed = 3, // TODO: test
     };
 
+    //         ReadOnly: Do not issue a host-to-device transfer when unmapping.
+    //        ReadWrite: Do bidirectional transfers when mapping and unmapping.
+    // WriteOnlyDiscard: Do not issue a device-to-host transfer when mapping and
+    //                   the previous contents will be undefined.
+    enum class BufferMapFlag {
+        ReadWrite = 0,
+        ReadOnly,
+        WriteOnlyDiscard
+    };
+
     class Buffer {
         CUcontext m_cuContext;
         BufferType m_type;
@@ -277,6 +287,7 @@ namespace cudau {
         void* m_hostPointer;
         CUdeviceptr m_devicePointer;
         void* m_mappedPointer;
+        BufferMapFlag m_mapFlag;
 
         uint32_t m_GLBufferID;
         CUgraphicsResource m_cudaGfxResource;
@@ -356,10 +367,10 @@ namespace cudau {
         void endCUDAAccess(CUstream stream);
 
         void setMappedMemoryPersistent(bool b);
-        void* map(CUstream stream = 0);
+        void* map(CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite);
         template <typename T>
-        T* map(CUstream stream = 0) {
-            return reinterpret_cast<T*>(map(stream));
+        T* map(CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite) {
+            return reinterpret_cast<T*>(map(stream, flag));
         }
         void unmap(CUstream stream = 0);
         void* getMappedPointer() const {
@@ -438,8 +449,8 @@ namespace cudau {
             return reinterpret_cast<T*>(getCUdeviceptrAt(idx));
         }
 
-        T* map(CUstream stream = 0) {
-            return Buffer::map<T>(stream);
+        T* map(CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite) {
+            return Buffer::map<T>(stream, flag);
         }
         T* getMappedPointer() const {
             return Buffer::getMappedPointer<T>();
@@ -550,6 +561,7 @@ namespace cudau {
         void** m_mappedPointers;
         CUarray* m_mappedArrays;
         CUsurfObject* m_surfObjs;
+        BufferMapFlag m_mapFlag;
 
         uint32_t m_GLTexID;
         CUgraphicsResource m_cudaGfxResource;
@@ -671,10 +683,10 @@ namespace cudau {
         void beginCUDAAccess(CUstream stream, uint32_t mipmapLevel);
         void endCUDAAccess(CUstream stream, uint32_t mipmapLevel);
 
-        void* map(uint32_t mipmapLevel = 0, CUstream stream = 0);
+        void* map(uint32_t mipmapLevel = 0, CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite);
         template <typename T>
-        T* map(uint32_t mipmapLevel = 0, CUstream stream = 0) {
-            return reinterpret_cast<T*>(map(mipmapLevel, stream));
+        T* map(uint32_t mipmapLevel = 0, CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite) {
+            return reinterpret_cast<T*>(map(mipmapLevel, stream, flag));
         }
         void unmap(uint32_t mipmapLevel = 0, CUstream stream = 0);
         template <typename T>
@@ -696,7 +708,7 @@ namespace cudau {
             uint32_t depth = std::max<uint32_t>(1, m_depth);
             size_t size = static_cast<size_t>(m_stride) * depth * height * width;
             size_t numValues = size / sizeof(T);
-            auto dstValues = map<T>(mipmapLevel, stream);
+            auto dstValues = map<T>(mipmapLevel, stream, BufferMapFlag::WriteOnlyDiscard);
             std::fill_n(dstValues, numValues, value);
             unmap(mipmapLevel, stream);
         }

@@ -51,7 +51,7 @@ namespace cudau {
 
     Buffer::Buffer() :
         m_cuContext(nullptr),
-        m_hostPointer(nullptr), m_devicePointer(0), m_mappedPointer(nullptr),
+        m_hostPointer(nullptr), m_devicePointer(0), m_mappedPointer(nullptr), m_mapFlag(BufferMapFlag::ReadWrite),
         m_GLBufferID(0), m_cudaGfxResource(nullptr),
         m_initialized(false), m_persistentMappedMemory(false), m_mapped(false) {
     }
@@ -69,6 +69,7 @@ namespace cudau {
         m_hostPointer = b.m_hostPointer;
         m_devicePointer = b.m_devicePointer;
         m_mappedPointer = b.m_mappedPointer;
+        m_mapFlag = b.m_mapFlag;
         m_GLBufferID = b.m_GLBufferID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_initialized = b.m_initialized;
@@ -88,6 +89,7 @@ namespace cudau {
         m_hostPointer = b.m_hostPointer;
         m_devicePointer = b.m_devicePointer;
         m_mappedPointer = b.m_mappedPointer;
+        m_mapFlag = b.m_mapFlag;
         m_GLBufferID = b.m_GLBufferID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_initialized = b.m_initialized;
@@ -211,8 +213,8 @@ namespace cudau {
             CUDADRV_CHECK(cuMemcpyDtoDAsync(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy, stream));
         }
         else {
-            auto src = map<const uint8_t>(stream);
-            auto dst = newBuffer.map<uint8_t>(stream);
+            auto src = map<const uint8_t>(stream, BufferMapFlag::ReadOnly);
+            auto dst = newBuffer.map<uint8_t>(stream, BufferMapFlag::WriteOnlyDiscard);
             for (int i = 0; i < numElementsToCopy; ++i) {
                 std::memset(dst, 0, stride);
                 std::memcpy(dst, src, m_stride);
@@ -260,11 +262,12 @@ namespace cudau {
         }
     }
 
-    void* Buffer::map(CUstream stream) {
+    void* Buffer::map(CUstream stream, BufferMapFlag flag) {
         if (m_mapped)
             throw std::runtime_error("This buffer is already mapped.");
 
         m_mapped = true;
+        m_mapFlag = flag;
 
         if (m_type == BufferType::Device ||
             m_type == BufferType::GL_Interop) {
@@ -277,7 +280,8 @@ namespace cudau {
             if (m_type == BufferType::GL_Interop)
                 beginCUDAAccess(stream);
 
-            CUDADRV_CHECK(cuMemcpyDtoHAsync(m_mappedPointer, m_devicePointer, size, stream));
+            if (m_mapFlag != BufferMapFlag::WriteOnlyDiscard)
+                CUDADRV_CHECK(cuMemcpyDtoHAsync(m_mappedPointer, m_devicePointer, size, stream));
 
             return m_mappedPointer;
         }
@@ -298,7 +302,8 @@ namespace cudau {
 
             size_t size = static_cast<size_t>(m_numElements) * m_stride;
 
-            CUDADRV_CHECK(cuMemcpyHtoDAsync(m_devicePointer, m_mappedPointer, size, stream));
+            if (m_mapFlag != BufferMapFlag::ReadOnly)
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(m_devicePointer, m_mappedPointer, size, stream));
 
             if (m_type == BufferType::GL_Interop)
                 endCUDAAccess(stream);
@@ -455,6 +460,7 @@ namespace cudau {
     Array::Array() :
         m_cuContext(nullptr),
         m_array(0), m_mappedPointers(nullptr), m_mappedArrays(nullptr), m_surfObjs(nullptr),
+        m_mapFlag(BufferMapFlag::ReadWrite),
         m_GLTexID(0), m_cudaGfxResource(nullptr),
         m_surfaceLoadStore(false), m_cubemap(false), m_layered(false),
         m_initialized(false) {
@@ -480,6 +486,7 @@ namespace cudau {
         m_mappedPointers = b.m_mappedPointers;
         m_mappedArrays = b.m_mappedArrays;
         m_surfObjs = b.m_surfObjs;
+        m_mapFlag = b.m_mapFlag;
         m_GLTexID = b.m_GLTexID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_surfaceLoadStore = b.m_surfaceLoadStore;
@@ -507,6 +514,7 @@ namespace cudau {
         m_mappedPointers = b.m_mappedPointers;
         m_mappedArrays = b.m_mappedArrays;
         m_surfObjs = b.m_surfObjs;
+        m_mapFlag = b.m_mapFlag;
         m_GLTexID = b.m_GLTexID;
         m_cudaGfxResource = b.m_cudaGfxResource;
         m_surfaceLoadStore = b.m_surfaceLoadStore;
@@ -768,7 +776,7 @@ namespace cudau {
         CUDADRV_CHECK(cuGraphicsUnmapResources(1, &m_cudaGfxResource, stream));
     }
 
-    void* Array::map(uint32_t mipmapLevel, CUstream stream) {
+    void* Array::map(uint32_t mipmapLevel, CUstream stream, BufferMapFlag flag) {
         if (m_mappedPointers[mipmapLevel])
             throw std::runtime_error("This mip-map level is already mapped.");
         if (mipmapLevel >= m_numMipmapLevels)
@@ -799,6 +807,7 @@ namespace cudau {
         size_t sizePerRow = width * static_cast<size_t>(m_stride);
         size_t size = depth * height * sizePerRow;
         m_mappedPointers[mipmapLevel] = new uint8_t[size];
+        m_mapFlag = flag;
 
         CUDA_MEMCPY3D params = {};
         params.WidthInBytes = sizePerRow;
@@ -821,7 +830,8 @@ namespace cudau {
         params.dstZ = 0;
         // dstArray, dstDevice, dstLOD are not used in this case.
 
-        CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
+        if (m_mapFlag != BufferMapFlag::WriteOnlyDiscard)
+            CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
 
         return m_mappedPointers[mipmapLevel];
     }
@@ -860,7 +870,8 @@ namespace cudau {
         params.dstZ = 0;
         // dstDevice, dstHeight, dstHost, dstLOD, dstPitch are not used in this case.
 
-        CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
+        if (m_mapFlag != BufferMapFlag::ReadOnly)
+            CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
 
         delete[] m_mappedPointers[mipmapLevel];
         m_mappedPointers[mipmapLevel] = nullptr;
