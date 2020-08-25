@@ -267,8 +267,8 @@ namespace cudau {
         Managed = 3, // TODO: test
     };
 
-    //         ReadOnly: Do not issue a host-to-device transfer when unmapping.
     //        ReadWrite: Do bidirectional transfers when mapping and unmapping.
+    //         ReadOnly: Do not issue a host-to-device transfer when unmapping.
     // WriteOnlyDiscard: Do not issue a device-to-host transfer when mapping and
     //                   the previous contents will be undefined.
     enum class BufferMapFlag {

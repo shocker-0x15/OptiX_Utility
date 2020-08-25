@@ -27,6 +27,8 @@ EN: It is very likely for now that any API will have breaking changes.
 TODO:
 - Linux環境でのテスト。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
+- 複数のASをCompactionを使いつつメモリ上に詰めて配置する場合にcudau::Bufferを分割して使う仕組みが必要になる。
+- ASのRelocationサポート。
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
 - Deformation Blurサポート。
@@ -36,6 +38,7 @@ TODO:
 - Assertとexceptionの整理。
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
+- Multi GPUs?
 
 */
 
@@ -427,6 +430,7 @@ namespace optixu {
 
         template <uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
+            static_assert(sizeof(HeadType) >= 4, "Value type of size smaller than Dword is not supported.");
             constexpr uint32_t numDwords = sizeof(HeadType) / 4;
 #pragma unroll
             for (int i = 0; i < numDwords; ++i)
@@ -447,6 +451,7 @@ namespace optixu {
 
         template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void getValues(HeadType* head, TailTypes*... tails) {
+            static_assert(sizeof(HeadType) >= 4, "Value type of size smaller than Dword is not supported.");
             getValue<Func, HeadType, 0, start>(head);
             if constexpr (sizeof...(tails) > 0)
                 getValues<Func, start + sizeof(HeadType) / 4>(tails...);
@@ -464,6 +469,7 @@ namespace optixu {
 
         template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void setValues(const HeadType* head, const TailTypes*... tails) {
+            static_assert(sizeof(HeadType) >= 4, "Value type of size smaller than Dword is not supported.");
             setValue<Func, HeadType, 0, start>(head);
             if constexpr (sizeof...(tails) > 0)
                 setValues<Func, start + sizeof(HeadType) / 4>(tails...);
@@ -471,6 +477,7 @@ namespace optixu {
 
         template <uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
+            static_assert(sizeof(HeadType) >= 4, "Payload type of size smaller than Dword is not supported.");
             constexpr uint32_t numDwords = sizeof(HeadType) / 4;
 #pragma unroll
             for (int i = 0; i < numDwords; ++i)
