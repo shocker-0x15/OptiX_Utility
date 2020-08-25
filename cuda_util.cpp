@@ -310,7 +310,7 @@ namespace cudau {
         }
     }
 
-    Buffer Buffer::copy() const {
+    Buffer Buffer::copy(CUstream stream) const {
         if (m_GLBufferID != 0)
             throw std::runtime_error("Copying OpenGL buffer is not supported.");
 
@@ -322,9 +322,11 @@ namespace cudau {
         if (m_type == BufferType::Device) {
             CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
-            CUDADRV_CHECK(cuMemcpyDtoD(ret.m_devicePointer, m_devicePointer, size));
+            CUDADRV_CHECK(cuMemcpyDtoDAsync(ret.m_devicePointer, m_devicePointer, size, stream));
         }
         else {
+            // TODO: Test copy with stream.
+            CUDAUAssert_NotImplemented();
             std::memcpy(ret.m_hostPointer, m_hostPointer, size);
         }
 

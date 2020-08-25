@@ -229,7 +229,7 @@ void Group::propagateMarkDirty() const {
 
 
 
-void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
+void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* optixEnv) {
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(filepath.string(),
                                              aiProcess_Triangulate |
@@ -277,7 +277,7 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
                 p->finalize();
                 delete p;
             });
-        vertexBuffer->initialize(optixEnv->cuContext, g_bufferType, vertices);
+        vertexBuffer->initialize(optixEnv->cuContext, g_bufferType, vertices, stream);
 
         char name[256];
         sprintf_s(name, "%s-%d", basename.c_str(), meshIdx);
@@ -286,7 +286,7 @@ void loadFile(const std::filesystem::path &filepath, OptiXEnv* optixEnv) {
         geomInst->serialID = optixEnv->geomInstSerialID++;
         geomInst->name = name;
         geomInst->vertexBuffer = vertexBuffer;
-        geomInst->triangleBuffer.initialize(optixEnv->cuContext, g_bufferType, triangles);
+        geomInst->triangleBuffer.initialize(optixEnv->cuContext, g_bufferType, triangles, stream);
         geomInst->optixGeomInst = optixEnv->scene.createGeometryInstance();
         geomInst->optixGeomInst.setVertexBuffer(&*vertexBuffer);
         geomInst->optixGeomInst.setTriangleBuffer(&geomInst->triangleBuffer);
@@ -1453,7 +1453,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 static std::vector<std::filesystem::directory_entry> entries;
                 fileDialog.calcEntries(&entries);
                 
-                loadFile(entries[0], &optixEnv);
+                loadFile(entries[0], curCuStream, &optixEnv);
             }
 
             if (ImGui::Combo("Target", &travIndex,
