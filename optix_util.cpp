@@ -111,7 +111,7 @@ namespace optixu {
         THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= singleRecordSize * numSBTRecords,
                             "Hit group shader binding table size is not enough.");
 
-        auto records = sbt->map<uint8_t>(stream);
+        auto records = sbt->map<uint8_t>(stream, BufferMapFlag::WriteOnlyDiscard);
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
@@ -1350,7 +1350,7 @@ namespace optixu {
             for (int i = 0; i < numCallablePrograms; ++i)
                 THROW_RUNTIME_ERROR(callablePrograms[i], "Callable program is not set for index %d.", i);
 
-            auto records = sbt->map<uint8_t>(stream);
+            auto records = sbt->map<uint8_t>(stream, BufferMapFlag::WriteOnlyDiscard);
             size_t offset = 0;
 
             size_t rayGenRecordOffset = offset;

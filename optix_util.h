@@ -89,6 +89,7 @@ TODO:
 namespace optixu {
 #if !defined(__CUDA_ARCH__)
     using cudau::BufferType;
+    using cudau::BufferMapFlag;
     using cudau::Buffer;
     using cudau::TypedBuffer;
 #endif
