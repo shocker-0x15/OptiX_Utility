@@ -208,7 +208,7 @@ namespace cudau {
         uint32_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
             size_t numBytesToCopy = static_cast<size_t>(numElementsToCopy) * m_stride;
-            CUDADRV_CHECK(cuMemcpyDtoD(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy));
+            CUDADRV_CHECK(cuMemcpyDtoDAsync(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy, stream));
         }
         else {
             auto src = map<const uint8_t>(stream);
