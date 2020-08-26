@@ -152,6 +152,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
         geomData.matSR_N = transpose(inverse(matSR));
 
+        // JP: GeometryInstanceに頂点バッファーと三角形(インデックス)バッファーを渡す。
+        //     GeometryInstanceはバッファーの参照を持つだけなので一時変数のバッファーを渡したり
+        //     Acceleration Structureのビルド時に解放されていないように注意。
+        // EN: Pass the vertex buffer and triangle (index) buffer to the GeometryInstance.
+        //     Note that GeometryInstance just takes a reference to a buffer and doesn't hold it,
+        //     so do not pass a buffer of temporary variable or be careful so that the buffer is not
+        //     released when building an acceleration structure.
         roomGeomInst.setVertexBuffer(&roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
         roomGeomInst.setNumMaterials(1, nullptr);

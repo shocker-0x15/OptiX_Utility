@@ -414,7 +414,7 @@ namespace optixu {
     namespace detail {
         template <typename HeadType0, typename... TailTypes>
         CUDA_DEVICE_FUNCTION constexpr size_t _calcSumDwords() {
-            uint32_t ret = sizeof(HeadType0) / 4;
+            uint32_t ret = sizeof(HeadType0) / sizeof(uint32_t);
             if constexpr (sizeof...(TailTypes) > 0)
                 ret += _calcSumDwords<TailTypes...>();
             return ret;
@@ -430,7 +430,8 @@ namespace optixu {
 
         template <uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
-            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0, "Value type of size not multiple of Dword is not supported.");
+            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
+                          "Value type of size not multiple of Dword is not supported.");
             constexpr uint32_t numDwords = sizeof(HeadType) / sizeof(uint32_t);
 #pragma unroll
             for (int i = 0; i < numDwords; ++i)
@@ -451,25 +452,27 @@ namespace optixu {
 
         template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void getValues(HeadType* head, TailTypes*... tails) {
-            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0, "Value type of size not multiple of Dword is not supported.");
+            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
+                          "Value type of size not multiple of Dword is not supported.");
             getValue<Func, HeadType, 0, start>(head);
             if constexpr (sizeof...(tails) > 0)
                 getValues<Func, start + sizeof(HeadType) / sizeof(uint32_t)>(tails...);
         }
 
         template <typename Func, typename Type, uint32_t offset, uint32_t start>
-        CUDA_DEVICE_FUNCTION void setValue(const Type* payload) {
-            if (!payload)
+        CUDA_DEVICE_FUNCTION void setValue(const Type* value) {
+            if (!value)
                 return;
             constexpr uint32_t numDwords = sizeof(Type) / sizeof(uint32_t);
-            Func::set<start>(*(reinterpret_cast<const uint32_t*>(payload) + offset));
+            Func::set<start>(*(reinterpret_cast<const uint32_t*>(value) + offset));
             if constexpr (offset + 1 < numDwords)
-                setValue<Func, Type, offset + 1, start + 1>(payload);
+                setValue<Func, Type, offset + 1, start + 1>(value);
         }
 
         template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void setValues(const HeadType* head, const TailTypes*... tails) {
-            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0, "Value type of size not multiple of Dword is not supported.");
+            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
+                          "Value type of size not multiple of Dword is not supported.");
             setValue<Func, HeadType, 0, start>(head);
             if constexpr (sizeof...(tails) > 0)
                 setValues<Func, start + sizeof(HeadType) / sizeof(uint32_t)>(tails...);
@@ -477,7 +480,8 @@ namespace optixu {
 
         template <uint32_t start, typename HeadType, typename... TailTypes>
         CUDA_DEVICE_FUNCTION void traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
-            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0, "Payload type of size not multiple of Dword is not supported.");
+            static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
+                          "Payload type of size not multiple of Dword is not supported.");
             constexpr uint32_t numDwords = sizeof(HeadType) / sizeof(uint32_t);
 #pragma unroll
             for (int i = 0; i < numDwords; ++i)
