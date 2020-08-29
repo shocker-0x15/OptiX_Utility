@@ -32,7 +32,7 @@
     <ProjectGuid>{69A22E89-BFE0-40C4-A225-02D33982BEAD}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>03.custom_primitive</ProjectName>
+    <ProjectName>04.custom_primitive</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

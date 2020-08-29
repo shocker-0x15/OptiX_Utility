@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="util">
+      <UniqueIdentifier>{4b27c78f-aa9b-4702-a1f9-06ffbecb9072}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials">
+      <UniqueIdentifier>{204572b1-033d-45c2-891c-f73eabeb563e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\shaders">
+      <UniqueIdentifier>{f6d52ae3-a435-4ecb-b8df-9f95abd259d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext">
+      <UniqueIdentifier>{deedc77f-7d7e-4e3b-af11-4814f3b6d9c6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext\gl3w">
+      <UniqueIdentifier>{e3c080d0-415e-499d-9b2d-90531eb5fc5b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext\glfw">
+      <UniqueIdentifier>{e2c02e55-41f0-4568-a4ac-1df5452bce34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext\imgui">
+      <UniqueIdentifier>{7e3b6433-5b72-4468-a55a-df86488fb6f7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext\imgui\core">
+      <UniqueIdentifier>{8bf58b5c-c656-450f-a58e-cbe738adc15a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\ext\gl3w\gl3w.c">
+      <Filter>non-essentials\ext\gl3w</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_demo.cpp">
+      <Filter>non-essentials\ext\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_impl_glfw.cpp">
+      <Filter>non-essentials\ext\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_impl_opengl3.cpp">
+      <Filter>non-essentials\ext\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui.cpp">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\cuda_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\optix_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="as_update_main.cpp" />
+    <ClCompile Include="..\common\common.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
+      <Filter>non-essentials\ext\gl3w</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\gl3w\include\GL\glcorearb.h">
+      <Filter>non-essentials\ext\gl3w</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3.h">
+      <Filter>non-essentials\ext\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3native.h">
+      <Filter>non-essentials\ext\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_glfw.h">
+      <Filter>non-essentials\ext\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3.h">
+      <Filter>non-essentials\ext\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imgui_internal.h">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imgui.h">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imstb_rectpack.h">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imstb_textedit.h">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imstb_truetype.h">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imconfig.h">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util_private.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\cuda_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="as_update_shared.h" />
+    <ClInclude Include="..\common\common.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\GLToolkit.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\..\ext\imgui\natvis\imgui.natvis">
+      <Filter>non-essentials\ext\imgui</Filter>
+    </Natvis>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\drawOptiXResult.vert">
+      <Filter>non-essentials\shaders</Filter>
+    </None>
+    <None Include="shaders\drawOptiXResult.frag">
+      <Filter>non-essentials\shaders</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="optix_kernels.cu" />
+  </ItemGroup>
+</Project>

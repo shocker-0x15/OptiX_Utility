@@ -19,6 +19,15 @@
 
 
 
+#if defined(HP_Platform_Windows_MSVC)
+#   define NOMINMAX
+#   define _USE_MATH_DEFINES
+#   include <Windows.h>
+#   undef near
+#   undef far
+#   undef RGB
+#endif
+
 // #includes
 #if defined(__CUDA_ARCH__)
 #else
@@ -45,6 +54,8 @@
 #   include "stopwatch.h"
 #endif
 
+
+
 #include "../../optix_util.h"
 #if !defined(__CUDA_ARCH__)
 #   undef CUDA_DEVICE_FUNCTION
@@ -52,15 +63,6 @@
 #endif
 
 
-
-#if defined(HP_Platform_Windows_MSVC)
-#   define NOMINMAX
-#   define _USE_MATH_DEFINES
-#   include <Windows.h>
-#   undef near
-#   undef far
-#   undef RGB
-#endif
 
 #ifdef HP_Platform_Windows_MSVC
 void devPrintf(const char* fmt, ...);

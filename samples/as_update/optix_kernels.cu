@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "scene_edit_shared.h"
+#include "as_update_shared.h"
 
 using namespace Shared;
 
@@ -24,7 +24,6 @@ struct HitPointParameter {
 
 struct HitGroupSBTRecordData {
     GeometryData geomData;
-    GASData gasData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
@@ -74,13 +73,6 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     float b0 = 1 - (hp.b1 + hp.b2);
     float3 sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
 
-    // JP: ここではoptixGetSbtGASIndex()をGAS中のジオメトリのインデックスとして使っているが、
-    //     GeometryInstanceで複数のマテリアルを使っていた場合はジオメトリのインデックスとしては使えないことに注意。
-    // EN: Note that optixGetSbtGASIndex() is used to get the index of a Geometry in a GAS here
-    //     but it can't be used in the case where GeometryInstances use multiple materials.
-    const GASData &gasData = sbtr.gasData;
-    const GeometryInstancePreTransform &preTransform = gasData.preTransforms[optixGetSbtGASIndex()];
-    sn = preTransform.transformNormalFromObjectToWorld(sn);
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
     // JP: 法線を可視化。

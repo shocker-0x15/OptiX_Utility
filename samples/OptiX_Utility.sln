@@ -9,15 +9,17 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "00.single_gas", "single_gas
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "01.single_level_instancing", "single_level_instancing\single_level_instancing.vcxproj", "{B322E6D0-51AF-4484-9AFB-407651A9FCB2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "06.scene_edit", "scene_edit\scene_edit.vcxproj", "{95A8399F-C511-427E-B39E-34E4F6692064}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "07.scene_edit", "scene_edit\scene_edit.vcxproj", "{95A8399F-C511-427E-B39E-34E4F6692064}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "04.multi_level_instancing", "multi_level_instancing\multi_level_instancing.vcxproj", "{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "05.multi_level_instancing", "multi_level_instancing\multi_level_instancing.vcxproj", "{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "03.custom_primitive", "custom_primitive\custom_primitive.vcxproj", "{69A22E89-BFE0-40C4-A225-02D33982BEAD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "05.denoiser", "denoiser\denoiser.vcxproj", "{2D96E67E-8C6A-4B87-8B88-93E3921D874A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "06.denoiser", "denoiser\denoiser.vcxproj", "{2D96E67E-8C6A-4B87-8B88-93E3921D874A}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02.material_sets", "material_sets\material_sets.vcxproj", "{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "04.as_update", "as_update\as_update.vcxproj", "{B51DBDB9-482C-406E-A2BC-5AADE82C6AF7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -57,6 +59,10 @@ Global
 		{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}.Debug|x64.Build.0 = Debug|x64
 		{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}.Release|x64.ActiveCfg = Release|x64
 		{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}.Release|x64.Build.0 = Release|x64
+		{B51DBDB9-482C-406E-A2BC-5AADE82C6AF7}.Debug|x64.ActiveCfg = Debug|x64
+		{B51DBDB9-482C-406E-A2BC-5AADE82C6AF7}.Debug|x64.Build.0 = Debug|x64
+		{B51DBDB9-482C-406E-A2BC-5AADE82C6AF7}.Release|x64.ActiveCfg = Release|x64
+		{B51DBDB9-482C-406E-A2BC-5AADE82C6AF7}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
