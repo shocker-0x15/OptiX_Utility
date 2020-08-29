@@ -1,5 +1,5 @@
 OptiX Utility's license is based on Apache License described below
-except for all files under ./ext and some model data under ./data directories.
+except for all files under ./ext and some model data and textures under ./data directories.
 All files there follow their respective licenses.
 
 ----

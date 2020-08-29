@@ -1,4 +1,23 @@
-﻿#include "multi_level_instancing_shared.h"
+﻿/*
+
+JP: このサンプルはマルチレベルのインスタンシングとモーショントランスフォームの使用方法を示します。
+    OptiXはシングルレベルのインスタンシングに加えて、マルチレベルインスタンシングをサポートします。
+    マルチレベルインスタンシングではIASに所属するインスタンスがGASだけではなく、
+    他のIASやトランスフォームを参照することができます。
+    モーショントランスフォームにはひとつのASをセットし、ASのある時間中の動きを記述します。
+    モーショントランスフォームを配下に持つIASは空間に加えて時間も考慮したレイトレース高速化機構を構築し、
+    効率的なモーションブラーのレンダリングに使用できます。
+
+EN: This sample shows how to use multi-level instancing as well as motion transform.
+    OptiX supports multi-level instancing in addition to single-level instancing.
+    In the case of multi-level instancing, an instance belonging to an IAS can refer not only GAS but also
+    another IAS or a transform.
+    Motion transform has an AS and describes the motion of the AS during a time interval.
+    An IAS having a motion transform as a child builds an acceleration structure for raytracing which
+    consider time as well as space, enabling efficient motion blur rendering.
+*/
+
+#include "multi_level_instancing_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"

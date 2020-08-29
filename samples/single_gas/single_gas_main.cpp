@@ -1,4 +1,16 @@
-﻿#include "single_gas_shared.h"
+﻿/*
+
+JP: このサンプルはOptiXがサポートするグラフのなかで最もシンプルな構成である
+    単一のGeometry Acceleration Strucutre (GAS)の構築方法を示します。
+    ひとつのGASは複数のジオメトリ(とそれぞれの静的なトランスフォーム)から構築されます。
+    
+EN: This sample shows how to build a single geometry acceleration structure (GAS)
+    which is the simplest graph configuration the OptiX supports.
+    A GAS builds from multiple geometries (and their static transforms).
+
+*/
+
+#include "single_gas_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"

@@ -1,4 +1,14 @@
-﻿#include "scene_edit_shared.h"
+﻿/*
+
+JP: このサンプルはインタラクティブなアプリケーション上で
+    動的にオブジェクトを追加・削除・移動する方法の一例を示します。
+
+EN: This sample demonstrates an example of dynamically add, remove and move objects
+    in an interactive application.
+
+*/
+
+#include "scene_edit_shared.h"
 
 // Include glfw3.h after our OpenGL definitions
 #include "../common/GLToolkit.h"

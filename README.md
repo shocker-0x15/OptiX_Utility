@@ -52,8 +52,7 @@ optixu::ProgramGroup visibilityRayHitProgramGroup =
                                    mainModule, RT_AH_NAME_STR("visibility"),
                                    emptyModule, nullptr);
 // ...
-pipeline.setMaxTraceDepth(2);
-pipeline.link(OPTIX_COMPILE_DEBUG_LEVEL_FULL);
+pipeline.link(2, OPTIX_COMPILE_DEBUG_LEVEL_FULL);
 
 // Allocate a shader binding table.
 cudau::Buffer sbt;

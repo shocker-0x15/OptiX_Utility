@@ -32,13 +32,17 @@ TODO:
 - BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
 - Deformation Blurサポート。
-- HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
+- Multi GPUs?
 - Assertとexceptionの整理。
+
+検討事項:
+- HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
-- Multi GPUs?
+- ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
+- GAS中のGeometryInstanceのインデックスを取得できるようにする。
 
 */
 

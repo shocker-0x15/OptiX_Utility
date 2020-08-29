@@ -1,4 +1,27 @@
-﻿#include "material_sets_shared.h"
+﻿/*
+
+JP: 前の「single-level instancingサンプル」は複製されたGAS全てに同じマテリアルを使用していましたが、
+    このサンプルでは同じGASを参照するそれぞれのインスタンスで異なるマテリアルを使用する方法を示します。
+    GASの配下には複数のジオメトリインスタンスが所属し、そしてそれぞれに複数のマテリアルが設定されうるため
+    これら複数マテリアルはひとつのGASのなかで「マテリアルセット」の概念をなします。
+    そしてGASには複数のマテリアルセットを設定することができ、GASを参照するインスタンス単位でいずれかの
+    マテリアルセットを指定します。ジオメトリインスタンスにマテリアルを設定する際、
+    マテリアルのインデックスだけでなくもう一つのインデックス、「マテリアルセットインデックス」を使用します。
+    これまでのサンプルではマテリアルセットインデックスに常にゼロを設定していましたが、
+    このインデックスを変えることで同じマテリアルのインデックスに複数のマテリアルを設定することができます。
+
+EN: The previous "single-level instancing" sample used the same material for all the replicated GASs,
+    but this sample shows how to use different materials for each of instances referring the same GAS.
+    Multiple geometry instances belong to a GAS and each of them can be set multiple materials,
+    these multiple materials inside a GAS forms the concept of "material set".
+    A GAS can have multiple material sets and every instance referring a GAS specifies any of material sets.
+    We use a material index as well as another index, "material set index" when setting a material to
+    a GeometryInstance. Previous samples always use zero as a material set index,
+    multiple materials can be set to the same material index by changing the material set index.
+
+*/
+
+#include "material_sets_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"

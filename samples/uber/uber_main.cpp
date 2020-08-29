@@ -1,5 +1,12 @@
-﻿// This sample is a spaghetti test place for the author.
-// No specific theme, No clean code. Someday, may disappears.
+﻿/*
+
+JP: このサンプルは作者による適当な実験用です。
+    具体的なテーマも整ったコードも無く、いつか消えるかもしれません。
+
+EN: This sample is a spaghetti test place for the author.
+    No specific theme, No clean code. Someday, may disappears.
+
+*/
 
 #include "uber_shared.h"
 

@@ -1,4 +1,16 @@
-﻿#include "custom_primitive_shared.h"
+﻿/*
+
+JP: このサンプルは三角形以外のカスタムプリミティブを扱う方法を示します。
+    三角形とレイの交叉判定はOptiXによって内部的に扱われますが、カスタムプリミティブの場合は
+    ユーザーが独自の交叉判定プログラムを記述します。
+
+EN: This sample shows how to handle custom primitives other than triangles.
+    Intersection test between a ray and a triangle is handled internally by OptiX
+    but in the case of custom primitives the user writes own program to test intersection.
+
+*/
+
+#include "custom_primitive_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"

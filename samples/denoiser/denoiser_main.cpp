@@ -1,4 +1,16 @@
-﻿#include "denoiser_shared.h"
+﻿/*
+
+JP: このサンプルはデノイザーの使用方法を示します。
+    OptiXはモンテカルロレイトレーシングによるレンダリング結果の分散、
+    画像中のノイズを低減するデノイザーを提供しています。
+
+EN: This sample shows how to use the denoiser.
+    OptiX provides the denoiser to reduce noises in the image coming from variance of the rendering result
+    by Monte Carlo ray tracing.
+
+*/
+
+#include "denoiser_shared.h"
 
 #include "../common/dds_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
