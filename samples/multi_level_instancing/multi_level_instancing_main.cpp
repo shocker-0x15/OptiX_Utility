@@ -15,6 +15,7 @@ EN: This sample shows how to use multi-level instancing as well as motion transf
     Motion transform has an AS and describes the motion of the AS during a time interval.
     An IAS having a motion transform as a child builds an acceleration structure for raytracing which
     consider time as well as space, enabling efficient motion blur rendering.
+
 */
 
 #include "multi_level_instancing_shared.h"

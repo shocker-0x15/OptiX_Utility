@@ -1,16 +1,18 @@
 ﻿/*
 
 JP: このサンプルはGASを参照する複数のインスタンスからInstance Acceleration Structure (IAS)
-    を構築する方法を示します。インスタンスにはトランスフォームを設定することが可能で、
-    複数のインスタンスから同一のGASを参照することができるためシーン中にジオメトリを大量に複製することができます。
+    を構築する方法を示します。それぞれのインスタンスにはトランスフォームを設定することが可能で、
+    複数のインスタンスから同一のGASを参照することができるため、
+    シーン中にジオメトリを省メモリかつ大量に複製することができます。
     また、インスタンスのトランスフォームを更新した場合もIASの再構築またはアップデートだけ行えば良いので
     動的なシーンを低負荷に扱うことができます。
 
 EN: This sample shows how to build an instance acceleration structure (IAS) from multiple instances where
-    each of them refers a GAS. An instance can set a transform and it is possible to refer the same GAS from
-    multiple instances, allowing to replicate a lot of geometry in a scene.
+    each of them refers a GAS. Each instance can set a transform and it is possible to refer the same GAS from
+    multiple instances, allowing to replicate a lot of geometry in a scene without much memory.
     Additionally, only rebuilding or updating an IAS is required when updating an instance's transform so
     you can handle dynamic scene with low cost.
+
 */
 
 #include "single_level_instancing_shared.h"

@@ -25,6 +25,7 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
+- GAS updateサンプル。
 - Linux環境でのテスト。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - 複数のASをCompactionを使いつつメモリ上に詰めて配置する場合にcudau::Bufferを分割して使う仕組みが必要になる。
