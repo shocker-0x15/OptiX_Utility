@@ -397,6 +397,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     accumBuffer.finalize();
 
+
+
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
@@ -430,6 +432,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     matForSpheres.destroy();
     matForTriangles.destroy();
+
+
 
     shaderBindingTable.finalize();
 

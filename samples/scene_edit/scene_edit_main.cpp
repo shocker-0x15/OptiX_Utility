@@ -2152,6 +2152,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixEnv.material.destroy();
 
+
+
     shaderBindingTable.finalize();
 
     hitProgramGroup.destroy();
@@ -2167,6 +2169,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuStreamDestroy(cuStream[1]));
     CUDADRV_CHECK(cuStreamDestroy(cuStream[0]));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
+
+
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

@@ -381,6 +381,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     accumBuffer.finalize();
 
+
+
     hitGroupSBT.finalize();
 
     gasCompactedMem.finalize();
@@ -405,6 +407,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     scene.destroy();
 
     mat0.destroy();
+
+
 
     shaderBindingTable.finalize();
 

@@ -134,5 +134,6 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="deform.cu" />
   </ItemGroup>
 </Project>

@@ -1,8 +1,12 @@
 ﻿/*
 
-JP: 
+JP: このサンプルはGAS, IASのアップデート方法を示します。
+    一般的にAS(特にGAS)を作り直すことはそれなりに高コストであるため、頂点やインスタンスの
+    変位量が小さなときはリビルドの代わりにアップデートで済ますほうが好ましい場合があります。
 
-EN: 
+EN: This sample shows how to update GAS and IAS.
+    Building an acceleration structure from scratch is costly in general so only updating is sometime
+    preferrable instead of rebuild when the displacement of each vertex or instance is small.
 
 */
 
@@ -334,6 +338,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
     pipeline.setShaderBindingTable(&shaderBindingTable);
 
+
+
+    // JP: 頂点変異・法線計算カーネルを準備する。
+    // EN: Prepare kernels for vertex displacement and recalculate normals.
+    CUmodule moduleDeform;
+    CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "as_update/ptxes/deform.ptx").string().c_str()));
+    cudau::Kernel deform(moduleDeform, "deform", cudau::dim3(32), 0);
+    cudau::Kernel accumulateVertexNormals(moduleDeform, "accumulateVertexNormals", cudau::dim3(32), 0);
+    cudau::Kernel normalizeVertexNormals(moduleDeform, "normalizeVertexNormals", cudau::dim3(32), 0);
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -450,6 +464,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryInstance bunnyGeomInst = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> bunnyVertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> bunnyTriangleBuffer;
+    cudau::TypedBuffer<Shared::Vertex> deformedBunnyVertexBuffer;
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
@@ -457,12 +472,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         bunnyVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         bunnyTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
+        deformedBunnyVertexBuffer = bunnyVertexBuffer.copy();
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
+        geomData.vertexBuffer = deformedBunnyVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
 
-        bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
+        bunnyGeomInst.setVertexBuffer(&deformedBunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
         bunnyGeomInst.setNumMaterials(1, nullptr);
         bunnyGeomInst.setMaterial(0, 0, mat0);
@@ -503,13 +519,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::GeometryAccelerationStructure bunnyGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer bunnyGasMem;
-    bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    // JP: update()を使用するためにアップデート可能に設定しておく。
+    // EN: Make the AS updatable to use update().
+    bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, true, false);
     bunnyGas.setNumMaterialSets(1);
     bunnyGas.setNumRayTypes(0, Shared::NumRayTypes);
     bunnyGas.addChild(bunnyGeomInst);
     bunnyGas.prepareForBuild(&asMemReqs);
     bunnyGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
@@ -648,7 +666,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.prepareForBuild(&asMemReqs, &numInstances);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
@@ -853,6 +871,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::End();
         }
 
+
+
+        // JP: Bunnyの頂点に変異を加えてGASをアップデートする。
+        //     法線ベクトルも修正する。
+        // EN: Deform bunnys' vertices and update its GAS.
+        //     Modify normal vectors as well.
+        {
+            float t = 0.5f + 0.5f * std::sin(2 * M_PI * static_cast<float>(frameIndex % 180) / 180);
+            deform(curCuStream, deform.calcGridDim(bunnyVertexBuffer.numElements()),
+                   bunnyVertexBuffer.getDevicePointer(), deformedBunnyVertexBuffer.getDevicePointer(),
+                   bunnyVertexBuffer.numElements(), 20.0f, t);
+            accumulateVertexNormals(curCuStream, accumulateVertexNormals.calcGridDim(bunnyTriangleBuffer.numElements()),
+                                    deformedBunnyVertexBuffer.getDevicePointer(), bunnyTriangleBuffer.getDevicePointer(),
+                                    bunnyTriangleBuffer.numElements());
+            normalizeVertexNormals(curCuStream, normalizeVertexNormals.calcGridDim(bunnyVertexBuffer.numElements()),
+                                   deformedBunnyVertexBuffer.getDevicePointer(),
+                                   bunnyVertexBuffer.numElements());
+            bunnyGas.update(curCuStream, asBuildScratchMem);
+        }
+
         // JP: 各インスタンスのトランスフォームを更新する。
         // EN: Update the transform of each instance.
         for (int i = 0; i < bunnies.size(); ++i)
@@ -916,6 +954,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream[frameIndex % 2]));
 
+
+
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
 
     drawOptiXResultShader.finalize();
@@ -925,6 +965,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     outputBufferSurfaceHolder.finalize();
     outputArray.finalize();
     outputTexture.finalize();
+
+
 
     asBuildScratchMem.finalize();
 
@@ -948,6 +990,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomGasMem.finalize();
     roomGas.destroy();
 
+    deformedBunnyVertexBuffer.finalize();
     bunnyTriangleBuffer.finalize();
     bunnyVertexBuffer.finalize();
     bunnyGeomInst.destroy();
@@ -963,6 +1006,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     scene.destroy();
 
     mat0.destroy();
+
+
+
+    CUDADRV_CHECK(cuModuleUnload(moduleDeform));
 
     shaderBindingTable.finalize();
 

@@ -731,6 +731,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     rngBuffer.finalize();
     accumBuffer.finalize();
 
+
+
     asBuildScratchMem.finalize();
 
     topInstanceBuffer.finalize();
@@ -766,6 +768,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     scene.destroy();
 
     mat0.destroy();
+
+
 
     shaderBindingTable.finalize();
 

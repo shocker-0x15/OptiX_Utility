@@ -72,9 +72,9 @@ void devPrintf(const char* fmt, ...);
 
 #ifdef ENABLE_ASSERT
 #   if defined(__CUDA_ARCH__)
-#       define Assert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); assert(false); } 0
+#       define Assert(expr, fmt, ...) do { if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); assert(false); } } while (0)
 #   else
-#       define Assert(expr, fmt, ...) if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } 0
+#       define Assert(expr, fmt, ...) do { if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } } while (0)
 #   endif
 #else
 #   define Assert(expr, fmt, ...)
@@ -805,3 +805,201 @@ CUDA_DEVICE_FUNCTION static Quaternion qRotateZ(float angle) { return qRotate(an
 CUDA_DEVICE_FUNCTION Quaternion qFromEulerAngles(float roll, float pitch, float yaw) {
     return qRotateZ(roll) * qRotateY(yaw) * qRotateX(pitch);
 }
+
+
+
+// Reference:
+// Long-Period Hash Functions for Procedural Texturing
+// combined permutation table of the hash function of period 739,024 = lcm(11, 13, 16, 17, 19)
+CUDA_CONSTANT_MEM static uint8_t PermutationTable[] = {
+    // table 0: 11 numbers
+    0, 10, 2, 7, 3, 5, 6, 4, 8, 1, 9,
+    // table 1: 13 numbers
+    5, 11, 6, 8, 1, 10, 12, 9, 3, 7, 0, 4, 2,
+    // table 2: 16 numbers = the range of the hash function required by Perlin noise.
+    13, 10, 11, 5, 6, 9, 4, 3, 8, 7, 14, 2, 0, 1, 15, 12,
+    // table 3: 17 numbers
+    1, 13, 5, 14, 12, 3, 6, 16, 0, 8, 9, 2, 11, 4, 15, 7, 10,
+    // table 4: 19 numbers
+    10, 6, 5, 8, 15, 0, 17, 7, 14, 18, 13, 16, 2, 9, 12, 1, 11, 4, 3,
+    //// table 6: 23 numbers
+    //20, 21, 4, 5, 0, 18, 14, 2, 6, 22, 10, 17, 3, 7, 8, 16, 19, 11, 9, 13, 1, 15, 12
+};
+
+// References
+// Improving Noise
+// This code is based on the web site: adrian's soapbox
+// http://flafla2.github.io/2014/08/09/perlinnoise.html
+class PerlinNoise3D {
+    int32_t m_repeat;
+
+    CUDA_DEVICE_FUNCTION static uint8_t hash(int32_t x, int32_t y, int32_t z) {
+        uint32_t sum = 0;
+        sum += PermutationTable[0 + (PermutationTable[0 + (PermutationTable[0 + x % 11] + y) % 11] + z) % 11];
+        sum += PermutationTable[11 + (PermutationTable[11 + (PermutationTable[11 + x % 13] + y) % 13] + z) % 13];
+        sum += PermutationTable[24 + (PermutationTable[24 + (PermutationTable[24 + x % 16] + y) % 16] + z) % 16];
+        sum += PermutationTable[40 + (PermutationTable[40 + (PermutationTable[40 + x % 17] + y) % 17] + z) % 17];
+        sum += PermutationTable[57 + (PermutationTable[57 + (PermutationTable[57 + x % 19] + y) % 19] + z) % 19];
+        return sum % 16;
+    }
+
+    CUDA_DEVICE_FUNCTION static float gradient(uint32_t hash, float xu, float yu, float zu) {
+        switch (hash & 0xF) {
+            // Dot products with 12 vectors defined by the directions from the center of a cube to its edges.
+        case 0x0: return  xu + yu; // ( 1,  1,  0)
+        case 0x1: return -xu + yu; // (-1,  1,  0)
+        case 0x2: return  xu - yu; // ( 1, -1,  0)
+        case 0x3: return -xu - yu; // (-1, -1,  0)
+        case 0x4: return  xu + zu; // ( 1,  0,  1)
+        case 0x5: return -xu + zu; // (-1,  0,  1)
+        case 0x6: return  xu - zu; // ( 1,  0, -1)
+        case 0x7: return -xu - zu; // (-1,  0, -1)
+        case 0x8: return  yu + zu; // ( 0,  1,  1)
+        case 0x9: return -yu + zu; // ( 0, -1,  1)
+        case 0xA: return  yu - zu; // ( 0,  1, -1)
+        case 0xB: return -yu - zu; // ( 0, -1, -1)
+
+            // To avoid the cost of dividing by 12, we pad to 16 gradient directions.
+            // These form a regular tetrahedron, so adding them redundantly introduces no visual bias in the texture.
+        case 0xC: return  xu + yu; // ( 1,  1,  0)
+        case 0xD: return -yu + zu; // ( 0, -1,  1)
+        case 0xE: return -xu + yu; // (-1 , 1,  0)
+        case 0xF: return -yu - zu; // ( 0, -1, -1)
+
+        default: return 0; // never happens
+        }
+    }
+
+public:
+    CUDA_DEVICE_FUNCTION PerlinNoise3D(int32_t repeat) : m_repeat(repeat) {}
+
+    CUDA_DEVICE_FUNCTION float evaluate(const float3 &p, float frequency) const {
+        float x = frequency * p.x;
+        float y = frequency * p.y;
+        float z = frequency * p.z;
+        const uint32_t repeat = static_cast<uint32_t>(m_repeat * frequency);
+
+        // If we have any repeat on, change the coordinates to their "local" repetitions.
+        if (repeat > 0) {
+            x = fmodf(x, repeat);
+            y = fmodf(y, repeat);
+            z = fmodf(z, repeat);
+            if (x < 0)
+                x += repeat;
+            if (y < 0)
+                y += repeat;
+            if (z < 0)
+                z += repeat;
+        }
+
+        // Calculate the "unit cube" that the point asked will be located in.
+        // The left bound is ( |_x_|,|_y_|,|_z_| ) and the right bound is that plus 1.
+        int32_t xi = std::floor(x);
+        int32_t yi = std::floor(y);
+        int32_t zi = std::floor(z);
+
+        const auto fade = [](float t) {
+            // Fade function as defined by Ken Perlin.
+            // This eases coordinate values so that they will "ease" towards integral values.
+            // This ends up smoothing the final output.
+            // 6t^5 - 15t^4 + 10t^3
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        };
+
+        // Next we calculate the location (from 0.0 to 1.0) in that cube.
+        // We also fade the location to smooth the result.
+        float xu = x - xi;
+        float yu = y - yi;
+        float zu = z - zi;
+        float u = fade(xu);
+        float v = fade(yu);
+        float w = fade(zu);
+
+        const auto inc = [this, repeat](int32_t num) {
+            ++num;
+            if (repeat > 0)
+                num %= repeat;
+            return num;
+        };
+
+        uint8_t lll, llu, lul, luu, ull, ulu, uul, uuu;
+        lll = hash(xi, yi, zi);
+        ull = hash(inc(xi), yi, zi);
+        lul = hash(xi, inc(yi), zi);
+        uul = hash(inc(xi), inc(yi), zi);
+        llu = hash(xi, yi, inc(zi));
+        ulu = hash(inc(xi), yi, inc(zi));
+        luu = hash(xi, inc(yi), inc(zi));
+        uuu = hash(inc(xi), inc(yi), inc(zi));
+
+        const auto lerp = [](float v0, float v1, float t) {
+            return v0 * (1 - t) + v1 * t;
+        };
+
+        // The gradient function calculates the dot product between a pseudorandom gradient vector and 
+        // the vector from the input coordinate to the 8 surrounding points in its unit cube.
+        // This is all then lerped together as a sort of weighted average based on the faded (u,v,w) values we made earlier.
+        float _llValue = lerp(gradient(lll, xu, yu, zu), gradient(ull, xu - 1, yu, zu), u);
+        float _ulValue = lerp(gradient(lul, xu, yu - 1, zu), gradient(uul, xu - 1, yu - 1, zu), u);
+        float __lValue = lerp(_llValue, _ulValue, v);
+
+        float _luValue = lerp(gradient(llu, xu, yu, zu - 1), gradient(ulu, xu - 1, yu, zu - 1), u);
+        float _uuValue = lerp(gradient(luu, xu, yu - 1, zu - 1), gradient(uuu, xu - 1, yu - 1, zu - 1), u);
+        float __uValue = lerp(_luValue, _uuValue, v);
+
+        float ret = lerp(__lValue, __uValue, w);
+        return ret;
+    }
+};
+
+class MultiOctavePerlinNoise3D {
+    PerlinNoise3D m_primaryNoiseGen;
+    uint32_t m_numOctaves;
+    float m_initialFrequency;
+    float m_initialAmplitude;
+    float m_frequencyMultiplier;
+    float m_persistence;
+    float m_supValue;
+
+public:
+    CUDA_DEVICE_FUNCTION MultiOctavePerlinNoise3D(uint32_t numOctaves, float initialFrequency, float supValueOrInitialAmplitude, bool supSpecified,
+                                                  float frequencyMultiplier, float persistence, uint32_t repeat) :
+        m_primaryNoiseGen(repeat),
+        m_numOctaves(numOctaves),
+        m_initialFrequency(initialFrequency),
+        m_frequencyMultiplier(frequencyMultiplier), m_persistence(persistence) {
+        if (supSpecified) {
+            float amplitude = 1.0f;
+            float tempSupValue = 0;
+            for (int i = 0; i < m_numOctaves; ++i) {
+                tempSupValue += amplitude;
+                amplitude *= m_persistence;
+            }
+            m_initialAmplitude = supValueOrInitialAmplitude / tempSupValue;
+            m_supValue = supValueOrInitialAmplitude;
+        }
+        else {
+            m_initialAmplitude = supValueOrInitialAmplitude;
+            float amplitude = m_initialAmplitude;
+            m_supValue = 0;
+            for (int i = 0; i < m_numOctaves; ++i) {
+                m_supValue += amplitude;
+                amplitude *= m_persistence;
+            }
+        }
+    }
+
+    CUDA_DEVICE_FUNCTION float evaluate(const float3 &p) const {
+        float total = 0;
+        float frequency = m_initialFrequency;
+        float amplitude = m_initialAmplitude;
+        for (int i = 0; i < m_numOctaves; ++i) {
+            total += m_primaryNoiseGen.evaluate(p, frequency) * amplitude;
+
+            amplitude *= m_persistence;
+            frequency *= m_frequencyMultiplier;
+        }
+
+        return total;
+    }
+};

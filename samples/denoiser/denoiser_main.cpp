@@ -754,6 +754,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     albedoAccumBuffer.finalize();
     colorAccumBuffer.finalize();
 
+
+
     asBuildScratchMem.finalize();
 
     instanceBuffer.finalize();
@@ -804,6 +806,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     farSideWallArray.finalize();
     farSideWallMat.destroy();
     ceilingMat.destroy();
+
+
 
     shaderBindingTable.finalize();
 
