@@ -389,14 +389,22 @@ namespace cudau {
             CUDADRV_CHECK(cuMemcpyHtoDAsync(getCUdeviceptr(), srcValues, transferSize, stream));
         }
         template <typename T>
-        void transfer(const std::vector<T> &values, CUstream stream = 0) {
+        void transfer(const std::vector<T> &values, CUstream stream = 0) const {
             transfer(values.data(), values.size(), stream);
         }
         template <typename T>
         void fill(const T &value, CUstream stream = 0) const {
             size_t numValues = (static_cast<size_t>(m_stride) * m_numElements) / sizeof(T);
-            std::vector values(numValues, value);
-            transfer(values, stream);
+            if (m_persistentMappedMemory) {
+                T* values = reinterpret_cast<T*>(m_mappedPointer);
+                for (int i = 0; i < numValues; ++i)
+                    values[i] = value;
+                transfer(values, numValues, stream);
+            }
+            else {
+                std::vector values(numValues, value);
+                transfer(values, stream);
+            }
         }
 
         Buffer copy(CUstream stream = 0) const;
@@ -424,7 +432,8 @@ namespace cudau {
         }
         void initialize(CUcontext context, BufferType type, int32_t numElements, const T &value, CUstream stream = 0) {
             std::vector<T> values(numElements, value);
-            Buffer::initialize(context, type, values, stream);
+            initialize(context, type, values.size());
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), values.data(), values.size() * sizeof(T), stream));
         }
         void initialize(CUcontext context, BufferType type, const T* v, uint32_t numElements, CUstream stream = 0) {
             initialize(context, type, numElements);
@@ -455,10 +464,10 @@ namespace cudau {
         T* getMappedPointer() const {
             return Buffer::getMappedPointer<T>();
         }
-        void transfer(const T* srcValues, uint32_t numValues, CUstream stream = 0) {
+        void transfer(const T* srcValues, uint32_t numValues, CUstream stream = 0) const {
             Buffer::transfer<T>(srcValues, numValues, stream);
         }
-        void fill(const T &value, CUstream stream = 0) {
+        void fill(const T &value, CUstream stream = 0) const {
             Buffer::fill<T>(value, stream);
         }
 

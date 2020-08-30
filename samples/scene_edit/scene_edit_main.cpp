@@ -1133,13 +1133,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUcontext cuContext;
     int32_t cuDeviceCount;
-    CUstream cuStream[2];
+    CUstream cuStream;
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream[0], 0));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream[1], 0));
+    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
 
     optixu::Context optixContext = optixu::Context::create(cuContext);
 
@@ -1422,15 +1421,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-        CUstream &prevCuStream = cuStream[(bufferIndex + 1) % 2];
-        CUstream &curCuStream = cuStream[bufferIndex];
-        
-        // JP: 前回同じストリームを使った処理が完了するのを待つ。
-        // EN: Wait the previous processing which uses the same stream to finish.
-        CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
-
-
-
         {
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -1463,7 +1453,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 static std::vector<std::filesystem::directory_entry> entries;
                 fileDialog.calcEntries(&entries);
                 
-                loadFile(entries[0], curCuStream, &optixEnv);
+                loadFile(entries[0], cuStream, &optixEnv);
             }
 
             if (ImGui::Combo("Target", &travIndex,
@@ -1516,7 +1506,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         geomGroup->optixGAS.setUserData(gasData);
 
                         geomInstList.loopForSelected(
-                            [&optixEnv, &geomGroup, &curCuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                            [&optixEnv, &geomGroup, &cuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
                                 const GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
                                 for (uint32_t index : indices) {
                                     const GeometryInstanceRef &geomInst = fileGroup.geomInsts[index];
@@ -1544,7 +1534,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
                                                         preTransforms.data(),
                                                         geomGroup->preTransformBuffer.sizeInBytes(),
-                                                        curCuStream));
+                                                        cuStream));
 
                         hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
@@ -1602,7 +1592,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                     if (ImGui::Button("Create Instances", geomGroupSelected)) {
                         geomGroupList.loopForSelectedGeomGroups(
-                            [&optixEnv, &curCuStream](const GeometryGroupRef &geomGroup) {
+                            [&optixEnv, &cuStream](const GeometryGroupRef &geomGroup) {
                                 uint32_t serialID = optixEnv.instSerialID++;
                                 InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
                                 inst->optixEnv = &optixEnv;
@@ -1671,7 +1661,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
                                                             geomGroup->preTransforms.data(),
                                                             geomGroup->preTransformBuffer.sizeInBytes(),
-                                                            curCuStream));
+                                                            cuStream));
                         }
                         geomGroupList.clearSelection();
                         onSelectionChange();
@@ -1733,7 +1723,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         CUDADRV_CHECK(cuMemcpyHtoDAsync(activeGroup->preTransformBuffer.getCUdeviceptrAt(selectedGeomInstIndex),
                                                         &dstPreTransform,
                                                         sizeof(dstPreTransform),
-                                                        curCuStream));
+                                                        cuStream));
 
                         activeGroup->optixGAS.markDirty();
                         activeGroup->propagateMarkDirty();
@@ -1899,7 +1889,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                     if (ImGui::Button("Create Instances", numGroupsSelected > 0)) {
                         groupList.loopForSelectedGroups(
-                            [&optixEnv, &curCuStream](const GroupRef &group) {
+                            [&optixEnv, &cuStream](const GroupRef &group) {
                                 uint32_t serialID = optixEnv.instSerialID++;
                                 InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
                                 inst->optixEnv = &optixEnv;
@@ -1986,7 +1976,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             OptixAccelBufferSizes bufferSizes;
             geomGroup->optixGAS.prepareForBuild(&bufferSizes);
             if (bufferSizes.tempSizeInBytes >= optixEnv.asScratchBuffer.sizeInBytes())
-                optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, curCuStream);
+                optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, cuStream);
             hpprintf("GAS: %s\n", kv.second->name.c_str());
             hpprintf("AS Size: %llu bytes\n", bufferSizes.outputSizeInBytes);
             hpprintf("Scratch Size: %llu bytes\n", bufferSizes.tempSizeInBytes);
@@ -1998,16 +1988,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
             //     if you don't want to interfere CPU/GPU asynchronous execution.
             if (geomGroup->optixGasMem.isInitialized()) {
                 if (bufferSizes.outputSizeInBytes > geomGroup->optixGasMem.sizeInBytes()) {
-                    CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
-                    geomGroup->optixGasMem.resize(bufferSizes.outputSizeInBytes, 1, curCuStream);
-                    // TODO: prevCuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
+                    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+                    geomGroup->optixGasMem.resize(bufferSizes.outputSizeInBytes, 1, cuStream);
+                    // TODO: cuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
                 }
             }
             else {
-                CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
+                CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                 geomGroup->optixGasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
             }
-            geomGroup->optixGAS.rebuild(curCuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
+            geomGroup->optixGAS.rebuild(cuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
         }
 
         if (hitGroupSbtLayoutUpdated) {
@@ -2017,7 +2007,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             size_t hitGroupSbtSize;
             optixEnv.scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
             if (curHitGroupSBT->isInitialized())
-                curHitGroupSBT->resize(hitGroupSbtSize, 1, curCuStream);
+                curHitGroupSBT->resize(hitGroupSbtSize, 1, cuStream);
             else
                 curHitGroupSBT->initialize(cuContext, g_bufferType, hitGroupSbtSize, 1);
             pipeline.setHitGroupShaderBindingTable(curHitGroupSBT);
@@ -2036,7 +2026,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             hpprintf("AS Size: %llu bytes\n", bufferSizes.outputSizeInBytes);
             hpprintf("Scratch Size: %llu bytes\n", bufferSizes.tempSizeInBytes);
             if (bufferSizes.tempSizeInBytes >= optixEnv.asScratchBuffer.sizeInBytes())
-                optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, curCuStream);
+                optixEnv.asScratchBuffer.resize(bufferSizes.tempSizeInBytes, 1, cuStream);
             // JP: ASのメモリをGPUが使用中に確保しなおすのは危険なため使用の完了を待つ。
             //     CPU/GPUの非同期実行を邪魔しないためには、完全に別のバッファーを用意してそれと切り替える必要がある。
             // EN: It is dangerous to reallocate AS memory during the GPU is using it,
@@ -2046,18 +2036,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (group->optixIasMem.isInitialized()) {
                 if (bufferSizes.outputSizeInBytes > group->optixIasMem.sizeInBytes() ||
                     numInstances > group->optixInstanceBuffer.numElements()) {
-                    CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
-                    group->optixIasMem.resize(bufferSizes.outputSizeInBytes, 1, curCuStream);
+                    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+                    group->optixIasMem.resize(bufferSizes.outputSizeInBytes, 1, cuStream);
                     group->optixInstanceBuffer.resize(numInstances);
-                    // TODO: prevCuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
+                    // TODO: cuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
                 }
             }
             else {
-                CUDADRV_CHECK(cuStreamSynchronize(prevCuStream));
+                CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                 group->optixIasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
                 group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, numInstances);
             }
-            group->optixIAS.rebuild(curCuStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
+            group->optixIAS.rebuild(cuStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
         }
 
         if (traversablesUpdated) {
@@ -2086,15 +2076,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         
         // Render
-        outputBufferSurfaceHolder.beginCUDAAccess(curCuStream);
+        outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
 
         plp.travHandle = curTravHandle;
         plp.resultBuffer = outputBufferSurfaceHolder.getNext();
 
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
-        pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
 
-        outputBufferSurfaceHolder.endCUDAAccess(curCuStream);
+        outputBufferSurfaceHolder.endCUDAAccess(cuStream);
 
 
 
@@ -2128,7 +2118,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ++frameIndex;
     }
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream[frameIndex % 2]));
+    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
 
@@ -2166,8 +2156,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixContext.destroy();
 
-    CUDADRV_CHECK(cuStreamDestroy(cuStream[1]));
-    CUDADRV_CHECK(cuStreamDestroy(cuStream[0]));
+    CUDADRV_CHECK(cuStreamDestroy(cuStream));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
 

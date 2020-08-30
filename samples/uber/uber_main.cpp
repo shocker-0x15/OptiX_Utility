@@ -407,14 +407,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUcontext cuContext;
     int32_t cuDeviceCount;
-    CUstream cuStream[2];
+    CUstream cuStream;
     GPUTimer gpuTimer[2];
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream[0], 0));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream[1], 0));
+    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
     gpuTimer[0].initialize(cuContext);
     gpuTimer[1].initialize(cuContext);
 
@@ -1016,7 +1015,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: カスタムプリミティブのAABBを計算するカーネルを実行。
     // EN: Execute a kernel to compute AABBs of custom primitives.
     cudau::dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
-    kernelCalculateBoundingBoxesForSpheres(cuStream[0], dimBB,
+    kernelCalculateBoundingBoxesForSpheres(cuStream, dimBB,
                                            customPrimParameters.getDevicePointer(), customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
 
     // JP: Geometry Acceleration Structureをビルドする。
@@ -1024,10 +1023,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Build geometry acceleration structures.
     //     Share the scratch buffer among them.
     asBuildScratchMem.initialize(cuContext, g_bufferType, maxSizeOfScratchBuffer, 1);
-    travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream[0], gasCornellBoxMem, asBuildScratchMem);
-    travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream[0], gasAreaLightMem, asBuildScratchMem);
-    travHandles[gasObjectIndex] = gasObject.rebuild(cuStream[0], gasObjectMem, asBuildScratchMem);
-    travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream[0], gasCustomPrimObjectMem, asBuildScratchMem);
+    travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream, gasCornellBoxMem, asBuildScratchMem);
+    travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream, gasAreaLightMem, asBuildScratchMem);
+    travHandles[gasObjectIndex] = gasObject.rebuild(cuStream, gasObjectMem, asBuildScratchMem);
+    travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream, gasCustomPrimObjectMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
@@ -1036,8 +1035,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCornellBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     gasAreaLight.prepareForCompact(&compactedASSize);
     gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream[0], gasCornellBoxCompactedMem);
-    travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream[0], gasAreaLightCompactedMem);
+    travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream, gasCornellBoxCompactedMem);
+    travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream, gasAreaLightCompactedMem);
     gasCornellBox.removeUncompacted();
     gasAreaLight.removeUncompacted();
 
@@ -1107,10 +1106,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Instance Acceleration Structureをビルドする。
     // EN: Build the instance acceleration structure.
-    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream[0], instanceBuffer, iasSceneMem, asBuildScratchMem);
+    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
 
     travHandleBuffer.unmap();
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream[0]));
+    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -1233,7 +1232,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     struct CPUTimeRecord {
         float frameTime;
         float frameBeginTime;
-        float syncTime;
         float imGuiTime;
         float updateIASTime;
         float renderCmdTime;
@@ -1245,7 +1243,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         CPUTimeRecord() :
             frameTime(0.0f),
             frameBeginTime(0.0f),
-            syncTime(0.0f),
             imGuiTime(0.0f),
             updateIASTime(0.0f),
             renderCmdTime(0.0f),
@@ -1398,14 +1395,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-        CUstream &curCuStream = cuStream[bufferIndex];
         GPUTimer &curGPUTimer = gpuTimer[bufferIndex];
-        
-        // JP: 前フレームの処理が完了するのを待つ。
-        // EN: Wait the previous frame processing to finish.
-        sw.start(); // Sync
-        CUDADRV_CHECK(cuStreamSynchronize(curCuStream));
-        cpuTimeRecord.syncTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         // JP: 非同期実行を確かめるためにCPU側にダミー負荷を与える。
         // EN: Have dummy load on CPU to verify asynchronous execution.
@@ -1453,7 +1443,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             const CPUTimeRecord prevCpuTimeRecord = cpuTimeRecords[(cpuTimeRecordIndex + lengthof(cpuTimeRecords) - 1) % lengthof(cpuTimeRecords)];
             ImGui::Text("CPU %.3f [ms]:", prevCpuTimeRecord.frameTime);
             ImGui::Text("  Begin: %.3f [ms]", prevCpuTimeRecord.frameBeginTime);
-            ImGui::Text("  Sync: %.3f [ms]", prevCpuTimeRecord.syncTime);
             ImGui::Text("  ImGui: %.3f [ms]", prevCpuTimeRecord.imGuiTime);
             ImGui::Text("  Update IAS: %.3f [ms]", prevCpuTimeRecord.updateIASTime);
             ImGui::Text("  Render: %.3f [ms]", prevCpuTimeRecord.renderCmdTime);
@@ -1488,7 +1477,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     const CPUTimeRecord &record = cpuTimeRecords[(cpuTimeRecordIndex + i) % lengthof(cpuTimeRecords)];
                     hpprintf("CPU Time Frame %llu: %.3f [ms]\n", frameIndex - lengthof(cpuTimeRecords) + i, record.frameTime);
                     hpprintf("  Begin: %.3f [ms]\n", record.frameBeginTime);
-                    hpprintf("  Sync: %.3f [ms]\n", record.syncTime);
                     hpprintf("  ImGui: %.3f [ms]\n", record.imGuiTime);
                     hpprintf("  Update IAS: %.3f [ms]\n", record.updateIASTime);
                     hpprintf("  Render: %.3f [ms]\n", record.renderCmdTime);
@@ -1566,7 +1554,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                   ImGuiColorEditFlags_Float)) {
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matLeftWallIndex),
                                                 &matLeftWallData, sizeof(matLeftWallData),
-                                                curCuStream));
+                                                cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Right Wall", reinterpret_cast<float*>(&matRightWallData.albedo),
@@ -1574,7 +1562,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                   ImGuiColorEditFlags_Float)) {
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matRightWallIndex),
                                                 &matRightWallData, sizeof(matRightWallData),
-                                                curCuStream));
+                                                cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Other Walls", reinterpret_cast<float*>(&matGrayWallData.albedo),
@@ -1582,7 +1570,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                   ImGuiColorEditFlags_Float)) {
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matGrayWallIndex),
                                                 &matGrayWallData, sizeof(matGrayWallData),
-                                                curCuStream));
+                                                cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Object 0", reinterpret_cast<float*>(&matObject0Data.albedo),
@@ -1590,7 +1578,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                   ImGuiColorEditFlags_Float)) {
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matObject0Index),
                                                 &matObject0Data, sizeof(matObject0Data),
-                                                curCuStream));
+                                                cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Object 1", reinterpret_cast<float*>(&matObject1Data.albedo),
@@ -1598,7 +1586,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                   ImGuiColorEditFlags_Float)) {
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matObject1Index),
                                                 &matObject1Data, sizeof(matObject1Data),
-                                                curCuStream));
+                                                cuStream));
                 sceneEdited = true;
             }
             static int32_t floorTexID;
@@ -1607,7 +1595,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 matFloorData.texID = floorTexID;
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matFloorIndex),
                                                 &matFloorData, sizeof(matFloorData),
-                                                curCuStream));
+                                                cuStream));
                 sceneEdited = true;
             }
 
@@ -1618,7 +1606,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-        curGPUTimer.frame.start(curCuStream);
+        curGPUTimer.frame.start(cuStream);
 
         sw.start();
         curGPUTimer.animated = false;
@@ -1627,19 +1615,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // JP: ジオメトリの非剛体変形。
             // EN: Non-rigid deformation of a geometry.
-            curGPUTimer.deform.start(curCuStream);
+            curGPUTimer.deform.start(cuStream);
             cudau::dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
-            kernelDeform(curCuStream, dimDeform,
+            kernelDeform(cuStream, dimDeform,
                          orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
                          0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             cudau::dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
-            kernelAccumulateVertexNormals(curCuStream, dimAccum,
+            kernelAccumulateVertexNormals(cuStream, dimAccum,
                                           meshObject.getVertexBuffer().getDevicePointer(),
                                           triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
-            kernelNormalizeVertexNormals(curCuStream, dimDeform,
+            kernelNormalizeVertexNormals(cuStream, dimDeform,
                                          meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
-            curGPUTimer.deform.stop(curCuStream);
+            curGPUTimer.deform.stop(cuStream);
 
             // JP: 変形したジオメトリを基にGASをアップデート。
             //     たまにリビルドを実行するが、ここでは頂点情報以外変化しないため、
@@ -1647,16 +1635,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // EN: Update the GAS based on the deformed geometry.
             //     It sometimes performs rebuild, but all the information except for vertices doesn't change here
             //     so neither recalculation of nor reallocating memory is not required.
-            curGPUTimer.updateGAS.start(curCuStream);
+            curGPUTimer.updateGAS.start(cuStream);
             OptixTraversableHandle gasHandle;
             if (enablePeriodicGASRebuild && animFrameIndex % gasRebuildInterval == 0)
-                gasHandle = gasObject.rebuild(curCuStream, gasObjectMem, asBuildScratchMem);
+                gasHandle = gasObject.rebuild(cuStream, gasObjectMem, asBuildScratchMem);
             else
-                gasHandle = gasObject.update(curCuStream, asBuildScratchMem);
-            curGPUTimer.updateGAS.stop(curCuStream);
+                gasHandle = gasObject.update(cuStream, asBuildScratchMem);
+            curGPUTimer.updateGAS.stop(cuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
                                             &gasHandle, sizeof(gasHandle),
-                                            curCuStream));
+                                            cuStream));
 
             // JP: インスタンスのトランスフォーム。
             // EN: Transform instances.
@@ -1687,16 +1675,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // JP: IASをアップデート。
             // EN: Update the IAS.
-            curGPUTimer.updateIAS.start(curCuStream);
+            curGPUTimer.updateIAS.start(cuStream);
             OptixTraversableHandle iasHandle;
             if (enablePeriodicIASRebuild && animFrameIndex % iasRebuildInterval == 0)
-                iasHandle = iasScene.rebuild(curCuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
+                iasHandle = iasScene.rebuild(cuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
             else
-                iasHandle = iasScene.update(curCuStream, asBuildScratchMem);
-            curGPUTimer.updateIAS.stop(curCuStream);
+                iasHandle = iasScene.update(cuStream, asBuildScratchMem);
+            curGPUTimer.updateIAS.stop(cuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
                                             &iasHandle, sizeof(iasHandle),
-                                            curCuStream));
+                                            cuStream));
 
             ++animFrameIndex;
         }
@@ -1709,18 +1697,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Render
         sw.start();
-        curGPUTimer.render.start(curCuStream);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curCuStream));
-        pipeline.launch(curCuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-        curGPUTimer.render.stop(curCuStream);
+        curGPUTimer.render.start(cuStream);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        curGPUTimer.render.stop(cuStream);
         cpuTimeRecord.renderCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
 
         // Post Process
         sw.start();
-        curGPUTimer.postProcess.start(curCuStream);
+        curGPUTimer.postProcess.start(cuStream);
         cudau::dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
-        outputBufferSurfaceHolder.beginCUDAAccess(curCuStream);
-        kernelPostProcess(curCuStream, dimPostProcess,
+        outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
+        kernelPostProcess(cuStream, dimPostProcess,
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
                           arrayAccumBuffer.getSurfaceObject(0),
 #else
@@ -1728,12 +1716,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #endif
                           renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
                           outputBufferSurfaceHolder.getNext());
-        outputBufferSurfaceHolder.endCUDAAccess(curCuStream);
-        curGPUTimer.postProcess.stop(curCuStream);
+        outputBufferSurfaceHolder.endCUDAAccess(cuStream);
+        curGPUTimer.postProcess.stop(cuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;
 
-        curGPUTimer.frame.stop(curCuStream);
+        curGPUTimer.frame.stop(cuStream);
 
 
 
@@ -1928,8 +1916,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     gpuTimer[1].finalize();
     gpuTimer[0].finalize();
-    CUDADRV_CHECK(cuStreamDestroy(cuStream[1]));
-    CUDADRV_CHECK(cuStreamDestroy(cuStream[0]));
+    CUDADRV_CHECK(cuStreamDestroy(cuStream));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();

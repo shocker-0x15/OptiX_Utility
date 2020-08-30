@@ -48,6 +48,27 @@ namespace cudau {
 #endif
 
 
+//#define USE_PINNED_MAPPED_MEMORY
+
+    static void* allocHostMem(size_t size) {
+#if defined(USE_PINNED_MAPPED_MEMORY)
+        void* ret;
+        CUDADRV_CHECK(cuMemAllocHost(&ret, size));
+        return ret;
+#else
+        return new uint8_t[size];
+#endif
+    }
+
+    static void releaseHostMem(void* ptr) {
+#if defined(USE_PINNED_MAPPED_MEMORY)
+        CUDADRV_CHECK(cuMemFreeHost(ptr));
+#else
+        delete[] ptr;
+#endif
+    }
+
+
 
     Buffer::Buffer() :
         m_cuContext(nullptr),
@@ -161,7 +182,7 @@ namespace cudau {
 
         if ((m_type == BufferType::Device || m_type == BufferType::GL_Interop) &&
             m_persistentMappedMemory)
-            delete[] m_mappedPointer;
+            releaseHostMem(m_mappedPointer);
         m_mappedPointer = nullptr;
         m_persistentMappedMemory = false;
 
@@ -254,10 +275,10 @@ namespace cudau {
         m_persistentMappedMemory = b;
         if (m_persistentMappedMemory && !m_mapped) {
             size_t size = static_cast<size_t>(m_numElements) * m_stride;
-            m_mappedPointer = new uint8_t[size];
+            m_mappedPointer = allocHostMem(size);
         }
         if (!m_persistentMappedMemory && !m_mapped) {
-            delete[] m_mappedPointer;
+            releaseHostMem(m_mappedPointer);
             m_mappedPointer = nullptr;
         }
     }
@@ -275,13 +296,17 @@ namespace cudau {
 
             size_t size = static_cast<size_t>(m_numElements) * m_stride;
             if (!m_persistentMappedMemory)
-                m_mappedPointer = new uint8_t[size];
+                m_mappedPointer = allocHostMem(size);
 
             if (m_type == BufferType::GL_Interop)
                 beginCUDAAccess(stream);
 
-            if (m_mapFlag != BufferMapFlag::WriteOnlyDiscard)
+            if (m_mapFlag != BufferMapFlag::WriteOnlyDiscard) {
                 CUDADRV_CHECK(cuMemcpyDtoHAsync(m_mappedPointer, m_devicePointer, size, stream));
+#if defined(USE_PINNED_MAPPED_MEMORY)
+                CUDADRV_CHECK(cuStreamSynchronize(stream));
+#endif
+            }
 
             return m_mappedPointer;
         }
@@ -309,7 +334,7 @@ namespace cudau {
                 endCUDAAccess(stream);
 
             if (!m_persistentMappedMemory) {
-                delete[] m_mappedPointer;
+                releaseHostMem(m_mappedPointer);
                 m_mappedPointer = nullptr;
             }
         }
@@ -806,7 +831,7 @@ namespace cudau {
         uint32_t depth = std::max<uint32_t>(1, m_depth);
         size_t sizePerRow = width * static_cast<size_t>(m_stride);
         size_t size = depth * height * sizePerRow;
-        m_mappedPointers[mipmapLevel] = new uint8_t[size];
+        m_mappedPointers[mipmapLevel] = allocHostMem(size);
         m_mapFlag = flag;
 
         CUDA_MEMCPY3D params = {};
@@ -830,8 +855,12 @@ namespace cudau {
         params.dstZ = 0;
         // dstArray, dstDevice, dstLOD are not used in this case.
 
-        if (m_mapFlag != BufferMapFlag::WriteOnlyDiscard)
+        if (m_mapFlag != BufferMapFlag::WriteOnlyDiscard) {
             CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
+#if defined(USE_PINNED_MAPPED_MEMORY)
+            CUDADRV_CHECK(cuStreamSynchronize(stream));
+#endif
+        }
 
         return m_mappedPointers[mipmapLevel];
     }
@@ -873,7 +902,7 @@ namespace cudau {
         if (m_mapFlag != BufferMapFlag::ReadOnly)
             CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
 
-        delete[] m_mappedPointers[mipmapLevel];
+        releaseHostMem(m_mappedPointers[mipmapLevel]);
         m_mappedPointers[mipmapLevel] = nullptr;
     }
 
