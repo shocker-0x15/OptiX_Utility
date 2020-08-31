@@ -1636,11 +1636,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             //     It sometimes performs rebuild, but all the information except for vertices doesn't change here
             //     so neither recalculation of nor reallocating memory is not required.
             curGPUTimer.updateGAS.start(cuStream);
-            OptixTraversableHandle gasHandle;
+            OptixTraversableHandle gasHandle = gasObject.getHandle();
             if (enablePeriodicGASRebuild && animFrameIndex % gasRebuildInterval == 0)
                 gasHandle = gasObject.rebuild(cuStream, gasObjectMem, asBuildScratchMem);
             else
-                gasHandle = gasObject.update(cuStream, asBuildScratchMem);
+                gasObject.update(cuStream, asBuildScratchMem);
             curGPUTimer.updateGAS.stop(cuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
                                             &gasHandle, sizeof(gasHandle),
@@ -1676,11 +1676,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // JP: IASをアップデート。
             // EN: Update the IAS.
             curGPUTimer.updateIAS.start(cuStream);
-            OptixTraversableHandle iasHandle;
+            OptixTraversableHandle iasHandle = iasScene.getHandle();
             if (enablePeriodicIASRebuild && animFrameIndex % iasRebuildInterval == 0)
                 iasHandle = iasScene.rebuild(cuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
             else
-                iasHandle = iasScene.update(cuStream, asBuildScratchMem);
+                iasScene.update(cuStream, asBuildScratchMem);
             curGPUTimer.updateIAS.stop(cuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
                                             &iasHandle, sizeof(iasHandle),

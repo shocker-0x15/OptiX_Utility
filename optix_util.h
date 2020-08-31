@@ -25,7 +25,6 @@ EN: It is very likely for now that any API will have breaking changes.
 
 ----------------------------------------------------------------
 TODO:
-- GAS updateサンプル。
 - Linux環境でのテスト。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - 複数のASをCompactionを使いつつメモリ上に詰めて配置する場合にcudau::Bufferを分割して使う仕組みが必要になる。
@@ -933,16 +932,21 @@ private: \
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
-        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)
+        // JP: リビルド・コンパクトを行った場合はGASが(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which the GAS (indirectly) belongs
-        //     is required when performing rebuild / compact / update.
+        //     is required when performing rebuild / compact.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted() const;
-        OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
+
+        // JP: アップデートを行った場合はGASが(間接的に)所属するTraversable (例: IAS)
+        //     もアップデートもしくはリビルドする必要がある。
+        // EN: Updating or rebuilding a traversable (e.g. IAS) to which the GAS (indirectly) belongs
+        //     is required when performing update.
+        void update(CUstream stream, const Buffer &scratchBuffer) const;
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
@@ -1029,10 +1033,10 @@ private: \
         void removeChild(Instance instance) const;
         void markDirty() const;
 
-        // JP: リビルド・コンパクト・アップデートを行った場合は(間接的に)所属するTraversable (例: IAS)
+        // JP: リビルド・コンパクトを行った場合はIASが(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which the IAS (indirectly) belongs
-        //     is required when performing rebuild / compact / update.
+        //     is required when performing rebuild / compact.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
                              uint32_t* numAABBs = nullptr) const;
         // JP: インスタンスバッファーもユーザー管理にしたいため、今の形になっているが微妙かもしれない。
@@ -1050,7 +1054,12 @@ private: \
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
         void removeUncompacted() const;
-        OptixTraversableHandle update(CUstream stream, const Buffer &scratchBuffer) const;
+
+        // JP: アップデートを行った場合はIASが(間接的に)所属するTraversable (例: IAS)
+        //     もアップデートもしくはリビルドする必要がある。
+        // EN: Updating or rebuilding a traversable (e.g. IAS) to which the GAS (indirectly) belongs
+        //     is required when performing update.
+        void update(CUstream stream, const Buffer &scratchBuffer) const;
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;

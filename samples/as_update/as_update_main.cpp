@@ -899,7 +899,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         if (frameIndex % 10 == 0)
             plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
         else
-            plp.travHandle = ias.update(cuStream, asBuildScratchMem);
+            ias.update(cuStream, asBuildScratchMem);
         
         // Render
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
