@@ -795,7 +795,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t adjustPosMoveSpeed = decideDirection(g_keyFasterPosMovSpeed, g_keySlowerPosMovSpeed);
 
             g_cameraPositionalMovingSpeed *= 1.0f + 0.02f * adjustPosMoveSpeed;
-            g_cameraPositionalMovingSpeed = std::min(std::max(g_cameraPositionalMovingSpeed, 1e-6f), 1e+6f);
+            g_cameraPositionalMovingSpeed = std::clamp(g_cameraPositionalMovingSpeed, 1e-6f, 1e+6f);
 
             static double deltaX = 0, deltaY = 0;
             static double lastX, lastY;

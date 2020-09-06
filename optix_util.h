@@ -830,9 +830,13 @@ private: \
 
         CUcontext getCUcontext() const;
 
+        [[nodiscard]]
         Pipeline createPipeline() const;
+        [[nodiscard]]
         Material createMaterial() const;
+        [[nodiscard]]
         Scene createScene() const;
+        [[nodiscard]]
         Denoiser createDenoiser(OptixDenoiserInputKind inputKind) const;
     };
 
@@ -866,10 +870,15 @@ private: \
         void destroy();
         OPTIX_COMMON_FUNCTIONS(Scene);
 
+        [[nodiscard]]
         GeometryInstance createGeometryInstance(bool forCustomPrimitives = false) const;
+        [[nodiscard]]
         GeometryAccelerationStructure createGeometryAccelerationStructure(bool forCustomPrimitives = false) const;
+        [[nodiscard]]
         Transform createTransform() const;
+        [[nodiscard]]
         Instance createInstance() const;
+        [[nodiscard]]
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
@@ -1078,15 +1087,21 @@ private: \
                                 bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
                                 uint32_t supportedPrimitiveTypeFlags) const;
 
+        [[nodiscard]]
         Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
                                          OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
 
+        [[nodiscard]]
         ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;
+        [[nodiscard]]
         ProgramGroup createExceptionProgram(Module module, const char* entryFunctionName) const;
+        [[nodiscard]]
         ProgramGroup createMissProgram(Module module, const char* entryFunctionName) const;
+        [[nodiscard]]
         ProgramGroup createHitProgramGroup(Module module_CH, const char* entryFunctionNameCH,
                                            Module module_AH, const char* entryFunctionNameAH,
                                            Module module_IS, const char* entryFunctionNameIS) const;
+        [[nodiscard]]
         ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
                                                 Module module_CC, const char* entryFunctionNameCC) const;
 

@@ -727,6 +727,7 @@ namespace cudau {
         CUsurfObject getSurfaceObject(uint32_t mipmapLevel) const {
             return m_surfObjs[mipmapLevel];
         }
+        [[nodiscard]]
         CUsurfObject createGLSurfaceObject(uint32_t mipmapLevel) const {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             if (m_GLTexID == 0)
@@ -855,6 +856,7 @@ namespace cudau {
                 m_texDesc.flags &= ~CU_TRSF_SRGB;
         }
 
+        [[nodiscard]]
         CUtexObject createTextureObject(const Array &array) {
             CUDA_RESOURCE_DESC resDesc = {};
             CUDA_RESOURCE_VIEW_DESC resViewDesc = {};
