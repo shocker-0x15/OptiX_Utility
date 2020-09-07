@@ -162,7 +162,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         roomGeomInst.setVertexBuffer(&roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, nullptr);
+        roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, matForTriangles);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
@@ -192,7 +192,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
-        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, matForTriangles);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLightGeomInst.setUserData(geomData);
@@ -238,7 +238,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.paramBuffer = spheresParamBuffer.getDevicePointer();
 
         spheresGeomInst.setCustomPrimitiveAABBBuffer(&spheresAabbBuffer);
-        spheresGeomInst.setNumMaterials(1, nullptr);
+        spheresGeomInst.setNumMaterials(1, optixu::BufferView());
         spheresGeomInst.setMaterial(0, 0, matForSpheres);
         spheresGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         spheresGeomInst.setUserData(geomData);
@@ -255,7 +255,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create geometry acceleration structures.
     optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer roomGasMem;
-    cudau::Buffer roomGasCompactedMem;
     roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -271,7 +270,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     Specify that the GAS is for custom primitives at the creation.
     optixu::GeometryAccelerationStructure customPrimitivesGas = scene.createGeometryAccelerationStructure(true);
     cudau::Buffer customPrimitivesGasMem;
-    cudau::Buffer customPrimitivesGasCompactedMem;
     customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     customPrimitivesGas.setNumMaterialSets(1);
     customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -283,21 +281,42 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
-    customPrimitivesGas.rebuild(cuStream, customPrimitivesGasMem, asBuildScratchMem);
+    roomGas.rebuild(cuStream, &roomGasMem, &asBuildScratchMem);
+    customPrimitivesGas.rebuild(cuStream, &customPrimitivesGasMem, &asBuildScratchMem);
 
-    // JP: 静的なGASはコンパクションもしておく。
-    // EN: Perform compaction for static GAS.
-    size_t compactedASSize;
-    roomGas.prepareForCompact(&compactedASSize);
-    roomGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    roomGas.compact(cuStream, roomGasCompactedMem);
-    roomGas.removeUncompacted();
-
-    customPrimitivesGas.prepareForCompact(&compactedASSize);
-    customPrimitivesGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    customPrimitivesGas.compact(cuStream, customPrimitivesGasCompactedMem);
-    customPrimitivesGas.removeUncompacted();
+    // JP: 静的なメッシュはコンパクションもしておく。
+    //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
+    // EN: Perform compaction for static meshes.
+    //     Record ASs of multiple meshes into single buffer back to back.
+    struct CompactedASInfo {
+        optixu::GeometryAccelerationStructure gas;
+        size_t offset;
+        size_t size;
+    };
+    CompactedASInfo gasList[] = {
+        { roomGas, 0, 0 },
+        { customPrimitivesGas, 0, 0 },
+    };
+    size_t compactedASMemOffset = 0;
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        CompactedASInfo &info = gasList[i];
+        compactedASMemOffset = alignUp(compactedASMemOffset, OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+        info.offset = compactedASMemOffset;
+        info.gas.prepareForCompact(&info.size);
+        compactedASMemOffset += info.size;
+    }
+    cudau::Buffer compactedASMem;
+    compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        const CompactedASInfo &info = gasList[i];
+        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
+                                                      info.size, 1));
+    }
+    // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
+    // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
+    //     so separating calls is recommended.
+    for (int i = 0; i < lengthof(gasList); ++i)
+        gasList[i].gas.removeUncompacted();
 
 
 
@@ -335,7 +354,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -408,11 +427,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     hitGroupSBT.finalize();
 
+    compactedASMem.finalize();
     asBuildScratchMem.finalize();
-    customPrimitivesGasCompactedMem.finalize();
     customPrimitivesGasMem.finalize();
     customPrimitivesGas.destroy();
-    roomGasCompactedMem.finalize();
     roomGasMem.finalize();
     roomGas.destroy();
 

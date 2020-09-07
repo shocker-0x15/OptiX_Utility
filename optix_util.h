@@ -94,13 +94,6 @@ TODO:
 
 
 namespace optixu {
-#if !defined(__CUDA_ARCH__)
-    using cudau::BufferType;
-    using cudau::BufferMapFlag;
-    using cudau::Buffer;
-    using cudau::TypedBuffer;
-#endif
-
 #ifdef _DEBUG
 #   define OPTIX_ENABLE_ASSERT
 #endif
@@ -281,7 +274,7 @@ namespace optixu {
 #if !defined(__CUDA_ARCH__)
     template <typename T, uint32_t log2BlockWidth>
     class HostBlockBuffer2D {
-        TypedBuffer<T> m_rawBuffer;
+        cudau::TypedBuffer<T> m_rawBuffer;
         uint32_t m_width;
         uint32_t m_height;
         uint32_t m_numXBlocks;
@@ -320,7 +313,7 @@ namespace optixu {
             return *this;
         }
 
-        void initialize(CUcontext context, BufferType type, uint32_t width, uint32_t height) {
+        void initialize(CUcontext context, cudau::BufferType type, uint32_t width, uint32_t height) {
             m_width = width;
             m_height = height;
             constexpr uint32_t blockWidth = 1 << log2BlockWidth;
@@ -373,7 +366,7 @@ namespace optixu {
         CUcontext getCUcontext() const {
             return m_rawBuffer.getCUcontext();
         }
-        BufferType getBufferType() const {
+        cudau::BufferType getBufferType() const {
             return m_rawBuffer.getBufferType();
         }
 
@@ -820,6 +813,34 @@ private: \
 
 
 
+    class BufferView {
+        CUdeviceptr m_devicePtr;
+        size_t m_numElements;
+        uint32_t m_stride;
+
+    public:
+        BufferView() :
+            m_devicePtr(0),
+            m_numElements(0), m_stride(0) {}
+        BufferView(CUdeviceptr devicePtr, size_t numElements, uint32_t stride) :
+            m_devicePtr(devicePtr),
+            m_numElements(numElements), m_stride(stride) {}
+        BufferView(const cudau::Buffer* buffer) :
+            m_devicePtr(buffer->getCUdeviceptr()),
+            m_numElements(buffer->numElements()), m_stride(buffer->stride()) {}
+
+        CUdeviceptr getCUdeviceptr() const { return m_devicePtr; }
+        size_t numElements() const { return m_numElements; }
+        uint32_t stride() const { return m_stride; }
+        size_t sizeInBytes() const { return m_numElements * m_stride; }
+
+        bool isValid() const {
+            return m_devicePtr != 0;
+        }
+    };
+
+
+
     class Context {
         OPTIX_PIMPL();
 
@@ -898,14 +919,11 @@ private: \
         // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
         //     required when calling the following APIs.
         //     (It is okay to use update instead of calling markDirty() when changing only vertex/AABB buffer.)
-        void setVertexBuffer(const Buffer* vertexBuffer, OptixVertexFormat format = OPTIX_VERTEX_FORMAT_FLOAT3,
-                             uint32_t offsetInBytes = 0, uint32_t numVertices = UINT32_MAX) const;
-        void setTriangleBuffer(const Buffer* triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
-                               uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
-        void setCustomPrimitiveAABBBuffer(const Buffer* primitiveAABBBuffer,
-                                          uint32_t offsetInBytes = 0, uint32_t numPrimitives = UINT32_MAX) const;
+        void setVertexBuffer(const BufferView &vertexBuffer, OptixVertexFormat format = OPTIX_VERTEX_FORMAT_FLOAT3) const;
+        void setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
+        void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
-        void setNumMaterials(uint32_t numMaterials, const Buffer* matIndexOffsetBuffer, uint32_t indexOffsetSize = sizeof(uint32_t)) const;
+        void setNumMaterials(uint32_t numMaterials, const BufferView &matIndexOffsetBuffer, uint32_t indexOffsetSize = sizeof(uint32_t)) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
@@ -946,16 +964,16 @@ private: \
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which this GAS (indirectly) belongs
         //     is required when performing rebuild / compact.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
-        OptixTraversableHandle rebuild(CUstream stream, const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
+        OptixTraversableHandle rebuild(CUstream stream, const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
-        OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
+        OptixTraversableHandle compact(CUstream stream, const BufferView &compactedAccelBuffer) const;
         void removeUncompacted() const;
 
         // JP: アップデートを行った場合はこのGASが(間接的に)所属するTraversable (例: IAS)
         //     もアップデートもしくはリビルドする必要がある。
         // EN: Updating or rebuilding a traversable (e.g. IAS) to which this GAS (indirectly) belongs
         //     is required when performing update.
-        void update(CUstream stream, const Buffer &scratchBuffer) const;
+        void update(CUstream stream, const BufferView &scratchBuffer) const;
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
@@ -996,7 +1014,7 @@ private: \
         // JP: (間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which the transform
         //     (indirectly) belongs is required.
-        OptixTraversableHandle rebuild(CUstream stream, const Buffer &trDeviceMem);
+        OptixTraversableHandle rebuild(CUstream stream, const BufferView &trDeviceMem);
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
@@ -1055,19 +1073,19 @@ private: \
         //     is required when performing rebuild / compact.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
                              uint32_t* numAABBs = nullptr) const;
-        OptixTraversableHandle rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer,
-                                       const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
-        OptixTraversableHandle rebuild(CUstream stream, const TypedBuffer<OptixInstance> &instanceBuffer, const TypedBuffer<OptixAabb> &aabbBuffer,
-                                       const Buffer &accelBuffer, const Buffer &scratchBuffer) const;
+        OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer,
+                                       const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
+        OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
+                                       const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
-        OptixTraversableHandle compact(CUstream stream, const Buffer &compactedAccelBuffer) const;
+        OptixTraversableHandle compact(CUstream stream, const BufferView &compactedAccelBuffer) const;
         void removeUncompacted() const;
 
         // JP: アップデートを行った場合はこのIASが(間接的に)所属するTraversable (例: IAS)
         //     もアップデートもしくはリビルドする必要がある。
         // EN: Updating or rebuilding a traversable (e.g. IAS) to which this IAS (indirectly) belongs
         //     is required when performing update.
-        void update(CUstream stream, const Buffer &scratchBuffer) const;
+        void update(CUstream stream, const BufferView &scratchBuffer) const;
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
@@ -1127,7 +1145,7 @@ private: \
         void setExceptionProgram(ProgramGroup program) const;
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
         void setCallableProgram(uint32_t index, ProgramGroup program) const;
-        void setShaderBindingTable(Buffer* shaderBindingTable) const;
+        void setShaderBindingTable(cudau::Buffer* shaderBindingTable) const;
 
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルがdirty状態になり
         //     ローンチ時に再セットアップされる。
@@ -1139,7 +1157,7 @@ private: \
         //     and transfer, so double buffered SBT is required for safety
         //     in the case performing asynchronous update.
         void setScene(const Scene &scene) const;
-        void setHitGroupShaderBindingTable(Buffer* shaderBindingTable) const;
+        void setHitGroupShaderBindingTable(cudau::Buffer* shaderBindingTable) const;
         void markHitGroupShaderBindingTableDirty() const;
 
         void setStackSize(uint32_t directCallableStackSizeFromTraversal,
@@ -1196,11 +1214,11 @@ private: \
                      size_t* stateBufferSize, size_t* scratchBufferSize, size_t* scratchBufferSizeForComputeIntensity,
                      uint32_t* numTasks) const;
         void getTasks(DenoisingTask* tasks) const;
-        void setLayers(const Buffer* color, const Buffer* albedo, const Buffer* normal, const Buffer* denoisedColor,
+        void setLayers(const BufferView &color, const BufferView &albedo, const BufferView &normal, const BufferView &denoisedColor,
                        OptixPixelFormat colorFormat, OptixPixelFormat albedoFormat, OptixPixelFormat normalFormat) const;
-        void setupState(CUstream stream, const Buffer &stateBuffer, const Buffer &scratchBuffer) const;
+        void setupState(CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const;
 
-        void computeIntensity(CUstream stream, const Buffer &scratchBuffer, CUdeviceptr outputIntensity);
+        void computeIntensity(CUstream stream, const BufferView &scratchBuffer, CUdeviceptr outputIntensity);
         void invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
                     const DenoisingTask &task);
     };

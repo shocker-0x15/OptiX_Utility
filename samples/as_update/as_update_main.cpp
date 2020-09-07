@@ -424,7 +424,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         roomGeomInst.setVertexBuffer(&roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, nullptr);
+        roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, mat0);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
@@ -454,7 +454,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
-        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, mat0);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLightGeomInst.setUserData(geomData);
@@ -479,7 +479,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         bunnyGeomInst.setVertexBuffer(&deformedBunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
-        bunnyGeomInst.setNumMaterials(1, nullptr);
+        bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
         bunnyGeomInst.setMaterial(0, 0, mat0);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunnyGeomInst.setUserData(geomData);
@@ -496,7 +496,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create geometry acceleration structures.
     optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer roomGasMem;
-    cudau::Buffer roomGasCompactedMem;
     roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -507,7 +506,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::GeometryAccelerationStructure areaLightGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer areaLightGasMem;
-    cudau::Buffer areaLightGasCompactedMem;
     areaLightGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     areaLightGas.setNumMaterialSets(1);
     areaLightGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -531,23 +529,43 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
-    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
-    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
+    roomGas.rebuild(cuStream, &roomGasMem, &asBuildScratchMem);
+    areaLightGas.rebuild(cuStream, &areaLightGasMem, &asBuildScratchMem);
+    bunnyGas.rebuild(cuStream, &bunnyGasMem, &asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
+    //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
     // EN: Perform compaction for static meshes.
-    size_t roomGasCompactedSize;
-    roomGas.prepareForCompact(&roomGasCompactedSize);
-    roomGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, roomGasCompactedSize, 1);
-    size_t areaLightGasCompactedSize;
-    areaLightGas.prepareForCompact(&areaLightGasCompactedSize);
-    areaLightGasCompactedMem.initialize(cuContext, cudau::BufferType::Device, areaLightGasCompactedSize, 1);
-
-    roomGas.compact(cuStream, roomGasCompactedMem);
-    roomGas.removeUncompacted();
-    areaLightGas.compact(cuStream, areaLightGasCompactedMem);
-    areaLightGas.removeUncompacted();
+    //     Record ASs of multiple meshes into single buffer back to back.
+    struct CompactedASInfo {
+        optixu::GeometryAccelerationStructure gas;
+        size_t offset;
+        size_t size;
+    };
+    CompactedASInfo gasList[] = {
+        { roomGas, 0, 0 },
+        { areaLightGas, 0, 0 },
+    };
+    size_t compactedASMemOffset = 0;
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        CompactedASInfo &info = gasList[i];
+        compactedASMemOffset = alignUp(compactedASMemOffset, OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+        info.offset = compactedASMemOffset;
+        info.gas.prepareForCompact(&info.size);
+        compactedASMemOffset += info.size;
+    }
+    cudau::Buffer compactedASMem;
+    compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        const CompactedASInfo &info = gasList[i];
+        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
+                                                      info.size, 1));
+    }
+    // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
+    // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
+    //     so separating calls is recommended.
+    for (int i = 0; i < lengthof(gasList); ++i)
+        gasList[i].gas.removeUncompacted();
 
 
 
@@ -670,7 +688,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -879,7 +897,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             normalizeVertexNormals(cuStream, normalizeVertexNormals.calcGridDim(bunnyVertexBuffer.numElements()),
                                    deformedBunnyVertexBuffer.getDevicePointer(),
                                    bunnyVertexBuffer.numElements());
-            bunnyGas.update(cuStream, asBuildScratchMem);
+            bunnyGas.update(cuStream, &asBuildScratchMem);
         }
 
         // JP: 各インスタンスのトランスフォームを更新する。
@@ -897,9 +915,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     add/remove of instances and changes of AS build settings
         //     so neither of markDirty() nor prepareForBuild() is required.
         if (frameIndex % 10 == 0)
-            plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+            plp.travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
         else
-            ias.update(cuStream, asBuildScratchMem);
+            ias.update(cuStream, &asBuildScratchMem);
         
         // Render
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
@@ -972,8 +990,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLightInst.destroy();
     roomInst.destroy();
 
-    areaLightGasCompactedMem.finalize();
-    roomGasCompactedMem.finalize();
+    compactedASMem.finalize();
     bunnyGasMem.finalize();
     bunnyGas.destroy();
     areaLightGasMem.finalize();

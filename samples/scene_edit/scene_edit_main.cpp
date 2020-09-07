@@ -300,7 +300,7 @@ void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* 
         geomInst->optixGeomInst = optixEnv->scene.createGeometryInstance();
         geomInst->optixGeomInst.setVertexBuffer(&*vertexBuffer);
         geomInst->optixGeomInst.setTriangleBuffer(&geomInst->triangleBuffer);
-        geomInst->optixGeomInst.setNumMaterials(1, nullptr);
+        geomInst->optixGeomInst.setNumMaterials(1, optixu::BufferView());
         geomInst->optixGeomInst.setMaterial(0, 0, optixEnv->material);
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = vertexBuffer->getDevicePointer();
@@ -1997,7 +1997,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                 geomGroup->optixGasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
             }
-            geomGroup->optixGAS.rebuild(cuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
+            geomGroup->optixGAS.rebuild(cuStream, &geomGroup->optixGasMem, &optixEnv.asScratchBuffer);
         }
 
         if (hitGroupSbtLayoutUpdated) {
@@ -2047,7 +2047,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group->optixIasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
                 group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, numInstances);
             }
-            group->optixIAS.rebuild(cuStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
+            group->optixIAS.rebuild(cuStream, &group->optixInstanceBuffer, &group->optixIasMem, &optixEnv.asScratchBuffer);
         }
 
         if (traversablesUpdated) {

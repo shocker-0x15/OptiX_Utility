@@ -173,7 +173,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     released when building an acceleration structure.
         roomGeomInst.setVertexBuffer(&roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, nullptr);
+        roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, mat0);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
@@ -231,7 +231,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
 #endif
-        areaLightGeomInst.setNumMaterials(1, nullptr);
+        areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, mat0);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLightGeomInst.setUserData(geomData);
@@ -261,7 +261,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
-        bunnyGeomInst.setNumMaterials(1, nullptr);
+        bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
         bunnyGeomInst.setMaterial(0, 0, mat0);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunnyGeomInst.setUserData(geomData);
@@ -304,14 +304,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    OptixTraversableHandle travHandle = gas.rebuild(cuStream, gasMem, asBuildScratchMem);
+    OptixTraversableHandle travHandle = gas.rebuild(cuStream, &gasMem, &asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
     size_t compactedASSize;
     gas.prepareForCompact(&compactedASSize);
     gasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    travHandle = gas.compact(cuStream, gasCompactedMem);
+    travHandle = gas.compact(cuStream, &gasCompactedMem);
     gas.removeUncompacted();
 
 

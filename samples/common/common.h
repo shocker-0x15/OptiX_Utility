@@ -92,6 +92,11 @@ constexpr size_t lengthof(const T (&array)[size]) {
 
 
 
+template <typename T>
+CUDA_DEVICE_FUNCTION T alignUp(T value, uint32_t alignment) {
+    return (value + alignment - 1) / alignment * alignment;
+}
+
 CUDA_DEVICE_FUNCTION uint32_t tzcnt(uint32_t x) {
 #if defined(__CUDA_ARCH__)
     return __clz(__brev(x));
