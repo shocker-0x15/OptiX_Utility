@@ -32,6 +32,8 @@
 
 #include <optix_function_table_definition.h>
 
+#include <cuda.h>
+#include <sstream>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -40,6 +42,20 @@
 #include <intrin.h>
 
 #include <stdexcept>
+
+#define CUDADRV_CHECK(call) \
+    do { \
+        CUresult error = call; \
+        if (error != CUDA_SUCCESS) { \
+            std::stringstream ss; \
+            const char* errMsg = "failed to get an error message."; \
+            cuGetErrorString(error, &errMsg); \
+            ss << "CUDA call (" << #call << " ) failed with error: '" \
+               << errMsg \
+               << "' (" __FILE__ << ":" << __LINE__ << ")\n"; \
+            throw std::runtime_error(ss.str().c_str()); \
+        } \
+    } while (0)
 
 #define OPTIX_CHECK(call) \
     do { \
@@ -355,7 +371,7 @@ namespace optixu {
         uint32_t getSingleRecordSize() const {
             return singleRecordSize;
         }
-        void setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, cudau::Buffer* sbt);
+        void setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, const BufferView &sbt, void* hostMem);
 
         bool isReady(bool* hasMotionAS);
     };
@@ -469,7 +485,7 @@ namespace optixu {
         OptixAccelBufferSizes memoryRequirement;
 
         CUevent finishEvent;
-        cudau::TypedBuffer<size_t> compactedSizeOnDevice;
+        CUdeviceptr compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
 
@@ -505,14 +521,14 @@ namespace optixu {
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
                                         CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
-            compactedSizeOnDevice.initialize(scene->getCUDAContext(), cudau::BufferType::Device, 1);
+            CUDADRV_CHECK(cuMemAlloc(&compactedSizeOnDevice, sizeof(size_t)));
 
             propertyCompactedSize = OptixAccelEmitDesc{};
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = compactedSizeOnDevice.getCUdeviceptr();
+            propertyCompactedSize.result = compactedSizeOnDevice;
         }
         ~Priv() {
-            compactedSizeOnDevice.finalize();
+            cuMemFree(compactedSizeOnDevice);
             cuEventDestroy(finishEvent);
 
             scene->removeGAS(this);
@@ -699,7 +715,7 @@ namespace optixu {
         OptixAccelBufferSizes memoryRequirement;
 
         CUevent finishEvent;
-        cudau::TypedBuffer<size_t> compactedSizeOnDevice;
+        CUdeviceptr compactedSizeOnDevice;
         size_t compactedSize;
         OptixAccelEmitDesc propertyCompactedSize;
 
@@ -736,14 +752,14 @@ namespace optixu {
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
                                         CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
-            compactedSizeOnDevice.initialize(scene->getCUDAContext(), cudau::BufferType::Device, 1);
+            CUDADRV_CHECK(cuMemAlloc(&compactedSizeOnDevice, sizeof(size_t)));
 
             std::memset(&propertyCompactedSize, 0, sizeof(propertyCompactedSize));
             propertyCompactedSize.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
-            propertyCompactedSize.result = compactedSizeOnDevice.getCUdeviceptr();
+            propertyCompactedSize.result = compactedSizeOnDevice;
         }
         ~Priv() {
-            compactedSizeOnDevice.finalize();
+            cuMemFree(compactedSizeOnDevice);
             cuEventDestroy(finishEvent);
 
             scene->removeIAS(this);
@@ -802,8 +818,10 @@ namespace optixu {
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
         std::vector<_ProgramGroup*> callablePrograms;
-        cudau::Buffer* sbt;
-        cudau::Buffer* hitGroupSbt;
+        BufferView sbt;
+        void* sbtHostMem;
+        BufferView hitGroupSbt;
+        void* hitGroupSbtHostMem;
         OptixShaderBindingTable sbtParams;
 
         struct {
@@ -822,7 +840,7 @@ namespace optixu {
             context(ctxt), rawPipeline(nullptr),
             sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
-            rayGenProgram(nullptr), exceptionProgram(nullptr), hitGroupSbt(nullptr),
+            rayGenProgram(nullptr), exceptionProgram(nullptr),
             pipelineLinked(false), sbtLayoutIsUpToDate(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
             sbtParams = {};
         }

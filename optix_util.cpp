@@ -107,11 +107,11 @@ namespace optixu {
             _ias->markDirty();
     }
 
-    void Scene::Priv::setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, cudau::Buffer* sbt) {
-        THROW_RUNTIME_ERROR(sbt->sizeInBytes() >= singleRecordSize * numSBTRecords,
+    void Scene::Priv::setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, const BufferView &sbt, void* hostMem) {
+        THROW_RUNTIME_ERROR(sbt.sizeInBytes() >= singleRecordSize * numSBTRecords,
                             "Hit group shader binding table size is not enough.");
 
-        auto records = sbt->map<uint8_t>(stream, cudau::BufferMapFlag::WriteOnlyDiscard);
+        auto records = reinterpret_cast<uint8_t*>(hostMem);
 
         for (_GeometryAccelerationStructure* gas : geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
@@ -121,7 +121,7 @@ namespace optixu {
             }
         }
 
-        sbt->unmap(stream);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(sbt.getCUdeviceptr(), hostMem, sbt.sizeInBytes(), stream));
     }
 
     bool Scene::Priv::isReady(bool* hasMotionAS) {
@@ -1344,7 +1344,7 @@ namespace optixu {
             for (int i = 0; i < numCallablePrograms; ++i)
                 THROW_RUNTIME_ERROR(callablePrograms[i], "Callable program is not set for index %d.", i);
 
-            auto records = sbt->map<uint8_t>(stream, cudau::BufferMapFlag::WriteOnlyDiscard);
+            auto records = reinterpret_cast<uint8_t*>(sbtHostMem);
             size_t offset = 0;
 
             size_t rayGenRecordOffset = offset;
@@ -1368,9 +1368,9 @@ namespace optixu {
                 offset += OPTIX_SBT_RECORD_HEADER_SIZE;
             }
 
-            sbt->unmap(stream);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(sbt.getCUdeviceptr(), sbtHostMem, sbt.sizeInBytes(), stream));
 
-            CUdeviceptr baseAddress = sbt->getCUdeviceptr();
+            CUdeviceptr baseAddress = sbt.getCUdeviceptr();
             sbtParams.raygenRecord = baseAddress + rayGenRecordOffset;
             sbtParams.exceptionRecord = exceptionProgram ? baseAddress + exceptionRecordOffset : 0;
             sbtParams.missRecordBase = baseAddress + missRecordOffset;
@@ -1384,11 +1384,11 @@ namespace optixu {
         }
 
         if (!hitGroupSbtIsUpToDate) {
-            scene->setupHitGroupSBT(stream, this, hitGroupSbt);
+            scene->setupHitGroupSBT(stream, this, hitGroupSbt, hitGroupSbtHostMem);
 
-            sbtParams.hitgroupRecordBase = hitGroupSbt->getCUdeviceptr();
+            sbtParams.hitgroupRecordBase = hitGroupSbt.getCUdeviceptr();
             sbtParams.hitgroupRecordStrideInBytes = scene->getSingleRecordSize();
-            sbtParams.hitgroupRecordCount = hitGroupSbt->sizeInBytes() / scene->getSingleRecordSize();
+            sbtParams.hitgroupRecordCount = hitGroupSbt.sizeInBytes() / scene->getSingleRecordSize();
 
             hitGroupSbtIsUpToDate = true;
         }
@@ -1682,19 +1682,27 @@ namespace optixu {
         m->sbtIsUpToDate = false;
     }
 
-    void Pipeline::setShaderBindingTable(cudau::Buffer* shaderBindingTable) const {
+    void Pipeline::setShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const {
+        THROW_RUNTIME_ERROR(shaderBindingTable.sizeInBytes() >= m->sbtSize,
+                            "Hit group shader binding table size is not enough.");
+        THROW_RUNTIME_ERROR(hostMem,
+                            "Host-side SBT counterpart must be provided.");
         m->sbt = shaderBindingTable;
+        m->sbtHostMem = hostMem;
         m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setScene(const Scene &scene) const {
         m->scene = extract(scene);
-        m->hitGroupSbt = nullptr;
+        m->hitGroupSbt = BufferView();
         m->hitGroupSbtIsUpToDate = false;
     }
 
-    void Pipeline::setHitGroupShaderBindingTable(cudau::Buffer* shaderBindingTable) const {
+    void Pipeline::setHitGroupShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const {
+        THROW_RUNTIME_ERROR(hostMem,
+                            "Host-side hit group SBT counterpart must be provided.");
         m->hitGroupSbt = shaderBindingTable;
+        m->hitGroupSbtHostMem = hostMem;
         m->hitGroupSbtIsUpToDate = false;
     }
 
@@ -1719,15 +1727,15 @@ namespace optixu {
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
         THROW_RUNTIME_ERROR(m->sbtLayoutIsUpToDate, "Shader binding table layout is outdated.");
-        THROW_RUNTIME_ERROR(m->sbt, "Shader binding table is not set.");
-        THROW_RUNTIME_ERROR(m->sbt->sizeInBytes() >= m->sbtSize,
+        THROW_RUNTIME_ERROR(m->sbt.isValid(), "Shader binding table is not set.");
+        THROW_RUNTIME_ERROR(m->sbt.sizeInBytes() >= m->sbtSize,
                             "Shader binding table size is not enough.");
         THROW_RUNTIME_ERROR(m->scene, "Scene is not set.");
         bool hasMotionAS;
         THROW_RUNTIME_ERROR(m->scene->isReady(&hasMotionAS), "Scene is not ready.");
         THROW_RUNTIME_ERROR(m->pipelineCompileOptions.usesMotionBlur || !hasMotionAS,
                             "Scene has a motion AS but the pipeline has not been configured for motion.");
-        THROW_RUNTIME_ERROR(m->hitGroupSbt, "Hitgroup shader binding table is not set.");
+        THROW_RUNTIME_ERROR(m->hitGroupSbt.isValid(), "Hitgroup shader binding table is not set.");
 
         m->setupShaderBindingTable(stream);
 

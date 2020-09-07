@@ -26,6 +26,7 @@
     <ClCompile Include="uber_main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\GLToolkit.h" />

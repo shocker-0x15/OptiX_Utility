@@ -127,6 +127,9 @@
     <ClInclude Include="..\common\imgui_file_dialog.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\optixu_on_cudau.h">
+      <Filter>util</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\..\ext\imgui\natvis\imgui.natvis">

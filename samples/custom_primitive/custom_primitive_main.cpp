@@ -81,7 +81,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t sbtSize;
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
-    pipeline.setShaderBindingTable(&shaderBindingTable);
+    shaderBindingTable.setMappedMemoryPersistent(true);
+    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -160,8 +161,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
-        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setVertexBuffer(getView(roomVertexBuffer));
+        roomGeomInst.setTriangleBuffer(getView(roomTriangleBuffer));
         roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, matForTriangles);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -190,8 +191,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 
-        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
-        areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
+        areaLightGeomInst.setVertexBuffer(getView(areaLightVertexBuffer));
+        areaLightGeomInst.setTriangleBuffer(getView(areaLightTriangleBuffer));
         areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, matForTriangles);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -237,7 +238,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.aabbBuffer = spheresAabbBuffer.getDevicePointer();
         geomData.paramBuffer = spheresParamBuffer.getDevicePointer();
 
-        spheresGeomInst.setCustomPrimitiveAABBBuffer(&spheresAabbBuffer);
+        spheresGeomInst.setCustomPrimitiveAABBBuffer(getView(spheresAabbBuffer));
         spheresGeomInst.setNumMaterials(1, optixu::BufferView());
         spheresGeomInst.setMaterial(0, 0, matForSpheres);
         spheresGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -281,8 +282,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, &roomGasMem, &asBuildScratchMem);
-    customPrimitivesGas.rebuild(cuStream, &customPrimitivesGasMem, &asBuildScratchMem);
+    roomGas.rebuild(cuStream, getView(roomGasMem), getView(asBuildScratchMem));
+    customPrimitivesGas.rebuild(cuStream, getView(customPrimitivesGasMem), getView(asBuildScratchMem));
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -324,6 +325,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    hitGroupSBT.setMappedMemoryPersistent(true);
 
 
 
@@ -354,7 +356,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -381,7 +383,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
+    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));

@@ -56,7 +56,7 @@
 
 
 
-#include "../../optix_util.h"
+#include "../../optixu_on_cudau.h"
 #if !defined(__CUDA_ARCH__)
 #   undef CUDA_DEVICE_FUNCTION
 #   define CUDA_DEVICE_FUNCTION inline

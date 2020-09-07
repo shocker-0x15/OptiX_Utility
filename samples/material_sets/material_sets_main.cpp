@@ -86,7 +86,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t sbtSize;
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
-    pipeline.setShaderBindingTable(&shaderBindingTable);
+    shaderBindingTable.setMappedMemoryPersistent(true);
+    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -211,9 +212,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
-        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(5, &roomMatIndexBuffer, sizeof(uint8_t));
+        roomGeomInst.setVertexBuffer(getView(roomVertexBuffer));
+        roomGeomInst.setTriangleBuffer(getView(roomTriangleBuffer));
+        roomGeomInst.setNumMaterials(5, getView(roomMatIndexBuffer), sizeof(uint8_t));
         roomGeomInst.setMaterial(0, 0, floorMat);
         roomGeomInst.setMaterial(0, 1, farSideWallMat);
         roomGeomInst.setMaterial(0, 2, ceilingMat);
@@ -255,9 +256,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = multiMatPolygonVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = multiMatPolygonTriangleBuffer.getDevicePointer();
 
-        multiMatPolygonGeomInst.setVertexBuffer(&multiMatPolygonVertexBuffer);
-        multiMatPolygonGeomInst.setTriangleBuffer(&multiMatPolygonTriangleBuffer);
-        multiMatPolygonGeomInst.setNumMaterials(Ngon, &multiMatPolygonMaterialIndexBuffer, sizeof(uint8_t));
+        multiMatPolygonGeomInst.setVertexBuffer(getView(multiMatPolygonVertexBuffer));
+        multiMatPolygonGeomInst.setTriangleBuffer(getView(multiMatPolygonTriangleBuffer));
+        multiMatPolygonGeomInst.setNumMaterials(Ngon, getView(multiMatPolygonMaterialIndexBuffer), sizeof(uint8_t));
         // JP: GASのインスタンスごとに異なるマテリアルを使用できるように
         //     各マテリアルセットのスロットにマテリアルをセットする。
         // EN: Set a material to each slot of material sets
@@ -325,8 +326,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, &roomGasMem, &asBuildScratchMem);
-    polygonGas.rebuild(cuStream, &polygonGasMem, &asBuildScratchMem);
+    roomGas.rebuild(cuStream, getView(roomGasMem), getView(asBuildScratchMem));
+    polygonGas.rebuild(cuStream, getView(polygonGasMem), getView(asBuildScratchMem));
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -408,6 +409,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    hitGroupSBT.setMappedMemoryPersistent(true);
 
 
 
@@ -429,7 +431,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -456,7 +458,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
+    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));

@@ -19,9 +19,12 @@ The purpose of this OptiX Utility is to provide classes and functions which enca
   This doesn't contain any OptiX-related code.
 - optix_util.h, optix_util_private.h, optix_util.cpp\
   optix_util.hはOptiXのオブジェクトをホスト側で管理するためのAPIを公開し、デバイス側の関数ラッパーも提供しています。\
-  これは上記CUDAユーティリティに依存しています。\
+  CUDAユーティリティには依存していません。\
   optix_util.h exposes API to manage OptiX objects on host-side and provides device-side function wrappers as well.\
-  This depends on the CUDA Utility above.
+  This doesn't depend on the CUDA Utility above.
+- optixu_on_cudau.h\
+  僅かな補助クラスと関数と定義した取るに足らないファイルです。
+  This file trivially defines a few auxiliary classes and functions.
 
 ## Code example
 ### Host-side
@@ -59,7 +62,7 @@ cudau::Buffer sbt;
 size_t sbtSize;
 scene.generateShaderBindingTableLayout(&sbtSize);
 //...
-pipeline.setShaderBindingTable(&sbt);
+pipeline.setShaderBindingTable(getView(sbt), sbt.getMappedPointer());
 
 // Create materials.
 optix::Material defaultMat = optixContext.createMaterial();
@@ -76,10 +79,10 @@ optixu::GeometryInstance geomInst0 = scene.createGeometryInstance();
 cudau::TypedBuffer<Vertex> vertexBuffer;
 cudau::TypedBuffer<Triangle> triangleBuffer;
 // ...
-geomInst0.setVertexBuffer(&vertexBuffer);
-geomInst0.setTriangleBuffer(&triangleBuffer);
+geomInst0.setVertexBuffer(getView(vertexBuffer));
+geomInst0.setTriangleBuffer(getView(triangleBuffer));
 geomInst0.setUserData(...);
-geomInst0.setNumMaterials(1, nullptr);
+geomInst0.setNumMaterials(1, BufferView());
 geomInst0.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
 geomInst0.setMaterial(0, 0, defaultMat);
 
@@ -98,7 +101,7 @@ optixu::GeometryAccelerationStructure gas1 = scene.createGeometryAccelerationStr
 cudau::Buffer gas0Mem;
 gas0.prepareForBuild(&asMemReqs);
 // ...
-OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, gas0Mem, asBuildScratchMem);
+OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, getView(gas0Mem), getView(asBuildScratchMem));
 
 // Create instances.
 optixu::Instance inst0 = scene.createInstance();
@@ -118,7 +121,7 @@ optixu::InstanceAccelerationStructure ias1 = scene.createInstanceAccelerationStr
 cudau::Buffer ias0Mem;
 ias0.prepareForBuild(&asMemReqs);
 // ...
-OptixTraversableHandle ias0Handle = ias0.rebuild(cuStream, instBuffer, ias0Mem, asBuildScratchMem);
+OptixTraversableHandle ias0Handle = ias0.rebuild(cuStream, getView(instBuffer), getView(ias0Mem), getView(asBuildScratchMem));
 
 // Allocate a shader binding table for hit groups.
 cudau::Buffer hitGroupSbt;
@@ -128,7 +131,7 @@ scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
 
 // Associate the pipeline and the scene/shader binding table.
 pipeline.setScene(scene);
-pipeline.setHitGroupShaderBindingTable(hitGroupSbt);
+pipeline.setHitGroupShaderBindingTable(getView(hitGroupSbt), hitGroupSbt.getMappedPointer());
 
 // Setup pipeline launch parameters and allocate memory for it on the device.
 PipelineLaunchParameter plp;

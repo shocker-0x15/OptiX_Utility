@@ -26,6 +26,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
+    <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\GLToolkit.h" />
     <ClInclude Include="..\..\cuda_util.h" />

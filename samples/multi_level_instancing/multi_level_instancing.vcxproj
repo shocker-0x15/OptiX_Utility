@@ -18,6 +18,7 @@
     <ClCompile Include="multi_level_instancing_main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />

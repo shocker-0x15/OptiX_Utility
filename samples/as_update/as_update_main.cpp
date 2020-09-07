@@ -335,7 +335,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t sbtSize;
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
-    pipeline.setShaderBindingTable(&shaderBindingTable);
+    shaderBindingTable.setMappedMemoryPersistent(true);
+    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
 
 
 
@@ -422,8 +423,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
-        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setVertexBuffer(getView(roomVertexBuffer));
+        roomGeomInst.setTriangleBuffer(getView(roomTriangleBuffer));
         roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, mat0);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -452,8 +453,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 
-        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
-        areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
+        areaLightGeomInst.setVertexBuffer(getView(areaLightVertexBuffer));
+        areaLightGeomInst.setTriangleBuffer(getView(areaLightTriangleBuffer));
         areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, mat0);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -477,8 +478,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = deformedBunnyVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
 
-        bunnyGeomInst.setVertexBuffer(&deformedBunnyVertexBuffer);
-        bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
+        bunnyGeomInst.setVertexBuffer(getView(deformedBunnyVertexBuffer));
+        bunnyGeomInst.setTriangleBuffer(getView(bunnyTriangleBuffer));
         bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
         bunnyGeomInst.setMaterial(0, 0, mat0);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -529,9 +530,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, &roomGasMem, &asBuildScratchMem);
-    areaLightGas.rebuild(cuStream, &areaLightGasMem, &asBuildScratchMem);
-    bunnyGas.rebuild(cuStream, &bunnyGasMem, &asBuildScratchMem);
+    roomGas.rebuild(cuStream, getView(roomGasMem), getView(asBuildScratchMem));
+    areaLightGas.rebuild(cuStream, getView(areaLightGasMem), getView(asBuildScratchMem));
+    bunnyGas.rebuild(cuStream, getView(bunnyGasMem), getView(asBuildScratchMem));
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -663,6 +664,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    hitGroupSBT.setMappedMemoryPersistent(true);
 
 
 
@@ -688,7 +690,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -734,7 +736,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
+    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -897,7 +899,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             normalizeVertexNormals(cuStream, normalizeVertexNormals.calcGridDim(bunnyVertexBuffer.numElements()),
                                    deformedBunnyVertexBuffer.getDevicePointer(),
                                    bunnyVertexBuffer.numElements());
-            bunnyGas.update(cuStream, &asBuildScratchMem);
+            bunnyGas.update(cuStream, getView(asBuildScratchMem));
         }
 
         // JP: 各インスタンスのトランスフォームを更新する。
@@ -915,9 +917,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     add/remove of instances and changes of AS build settings
         //     so neither of markDirty() nor prepareForBuild() is required.
         if (frameIndex % 10 == 0)
-            plp.travHandle = ias.rebuild(cuStream, &instanceBuffer, &iasMem, &asBuildScratchMem);
+            plp.travHandle = ias.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
         else
-            ias.update(cuStream, &asBuildScratchMem);
+            ias.update(cuStream, getView(asBuildScratchMem));
         
         // Render
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);

@@ -78,7 +78,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t sbtSize;
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
-    pipeline.setShaderBindingTable(&shaderBindingTable);
+    shaderBindingTable.setMappedMemoryPersistent(true);
+    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -171,8 +172,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     Note that GeometryInstance just takes a reference to a buffer and doesn't hold it,
         //     so do not pass a buffer of temporary variable or be careful so that the buffer is not
         //     released when building an acceleration structure.
-        roomGeomInst.setVertexBuffer(&roomVertexBuffer);
-        roomGeomInst.setTriangleBuffer(&roomTriangleBuffer);
+        roomGeomInst.setVertexBuffer(getView(roomVertexBuffer));
+        roomGeomInst.setTriangleBuffer(getView(roomTriangleBuffer));
         roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, mat0);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -227,7 +228,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
         // EN: It will be interpreted as triangle soup if not setting an index buffer.
-        areaLightGeomInst.setVertexBuffer(&areaLightVertexBuffer);
+        areaLightGeomInst.setVertexBuffer(getView(areaLightVertexBuffer));
 #if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
 #endif
@@ -259,8 +260,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
         geomData.matSR_N = transpose(inverse(matSR));
 
-        bunnyGeomInst.setVertexBuffer(&bunnyVertexBuffer);
-        bunnyGeomInst.setTriangleBuffer(&bunnyTriangleBuffer);
+        bunnyGeomInst.setVertexBuffer(getView(bunnyVertexBuffer));
+        bunnyGeomInst.setTriangleBuffer(getView(bunnyTriangleBuffer));
         bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
         bunnyGeomInst.setMaterial(0, 0, mat0);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -304,14 +305,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    OptixTraversableHandle travHandle = gas.rebuild(cuStream, &gasMem, &asBuildScratchMem);
+    OptixTraversableHandle travHandle = gas.rebuild(cuStream, getView(gasMem), getView(asBuildScratchMem));
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
     size_t compactedASSize;
     gas.prepareForCompact(&compactedASSize);
     gasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    travHandle = gas.compact(cuStream, &gasCompactedMem);
+    travHandle = gas.compact(cuStream, getView(gasCompactedMem));
     gas.removeUncompacted();
 
 
@@ -320,6 +321,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    hitGroupSBT.setMappedMemoryPersistent(true);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -346,7 +348,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(&hitGroupSBT);
+    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));

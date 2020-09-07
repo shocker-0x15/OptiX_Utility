@@ -21,6 +21,7 @@
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
+    <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\common.h" />
