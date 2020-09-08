@@ -199,7 +199,7 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly on the following environment.
 
-* Windows 10 (1909) & Visual Studio 2019 (16.7.2)
+* Windows 10 (1909) & Visual Studio 2019 (16.7.3)
 * Core i9-9900K, 32GB, RTX 2070 8GB
 * NVIDIA Driver 451.67
 

@@ -736,6 +736,9 @@ namespace optixu {
             unsigned int compactedAvailable : 1;
         };
 
+        OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
+                                       const BufferView &accelBuffer, const BufferView &scratchBuffer);
+
     public:
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 

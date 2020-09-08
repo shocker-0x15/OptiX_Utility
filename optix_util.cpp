@@ -620,6 +620,7 @@ namespace optixu {
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
+        // TODO: ? stream
         CUDADRV_CHECK(cuEventSynchronize(m->finishEvent));
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
 
@@ -1031,6 +1032,57 @@ namespace optixu {
         readyToCompact = false;
         compactedAvailable = false;
     }
+
+    OptixTraversableHandle InstanceAccelerationStructure::Priv::rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
+                                                                        const BufferView &accelBuffer, const BufferView &scratchBuffer) {
+        THROW_RUNTIME_ERROR(readyToBuild, "You need to call prepareForBuild() before rebuild.");
+        THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= memoryRequirement.outputSizeInBytes,
+                            "Size of the given buffer is not enough.");
+        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= memoryRequirement.tempSizeInBytes,
+                            "Size of the given scratch buffer is not enough.");
+        THROW_RUNTIME_ERROR(instanceBuffer.sizeInBytes() >= instances.size() * sizeof(OptixInstance),
+                            "Size of the given instance buffer is not enough.");
+
+        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
+        //     インスタンス情報を更新する処理をここにも書いておく必要がある。
+        // EN: User is not required to call prepareForBuild() when performing rebuild
+        //     for purpose of update so updating instance information should be here.
+        uint32_t childIdx = 0;
+        for (const _Instance* child : children)
+            child->updateInstance(&instances[childIdx++]);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), instances.data(),
+                                        instanceBuffer.sizeInBytes(),
+                                        stream));
+        buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
+        if (aabbBuffer.isValid()) {
+            uint32_t numAABBs = motionOptions.numKeys * children.size();
+            THROW_RUNTIME_ERROR(aabbBuffer.sizeInBytes() >= numAABBs * sizeof(OptixAabb),
+                                "Size of the given AABB buffer is not enough.");
+            buildInput.instanceArray.aabbs = aabbBuffer.getCUdeviceptr();
+            buildInput.instanceArray.numAabbs = numAABBs;
+        }
+
+        bool compactionEnabled = (buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+
+        buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        OPTIX_CHECK(optixAccelBuild(getRawContext(), stream, &buildOptions, &buildInput, 1,
+                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
+                                    &handle,
+                                    compactionEnabled ? &propertyCompactedSize : nullptr,
+                                    compactionEnabled ? 1 : 0));
+        CUDADRV_CHECK(cuEventRecord(finishEvent, stream));
+
+        this->instanceBuffer = instanceBuffer;
+        this->accelBuffer = accelBuffer;
+        this->aabbBuffer = aabbBuffer;
+        available = true;
+        readyToCompact = false;
+        compactedHandle = 0;
+        compactedAvailable = false;
+
+        return handle;
+    }
     
     void InstanceAccelerationStructure::destroy() {
         delete m;
@@ -1140,96 +1192,14 @@ namespace optixu {
 
     OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const BufferView &instanceBuffer,
                                                                   const BufferView &accelBuffer, const BufferView &scratchBuffer) const {
-        THROW_RUNTIME_ERROR(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
-        THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-                            "Size of the given buffer is not enough.");
-        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
-                            "Size of the given scratch buffer is not enough.");
-        THROW_RUNTIME_ERROR(instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
-                            "Size of the given instance buffer is not enough.");
         THROW_RUNTIME_ERROR(!m->aabbsRequired, "You need to call the motion-enabled variant of this function for this IAS.");
-
-        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
-        //     インスタンス情報を更新する処理をここにも書いておく必要がある。
-        // EN: User is not required to call prepareForBuild() when performing rebuild
-        //     for purpose of update so updating instance information should be here.
-        uint32_t childIdx = 0;
-        for (const _Instance* child : m->children)
-            child->updateInstance(&m->instances[childIdx++]);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
-                                        instanceBuffer.sizeInBytes(),
-                                        stream));
-        m->buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
-
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-
-        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
-        OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
-                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
-                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
-                                    &m->handle,
-                                    compactionEnabled ? &m->propertyCompactedSize : nullptr,
-                                    compactionEnabled ? 1 : 0));
-        CUDADRV_CHECK(cuEventRecord(m->finishEvent, stream));
-
-        m->instanceBuffer = instanceBuffer;
-        m->accelBuffer = accelBuffer;
-        m->available = true;
-        m->readyToCompact = false;
-        m->compactedHandle = 0;
-        m->compactedAvailable = false;
-
-        return m->handle;
+        return m->rebuild(stream, instanceBuffer, BufferView(), accelBuffer, scratchBuffer);
     }
 
     OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
                                                                   const BufferView &accelBuffer, const BufferView &scratchBuffer) const {
-        THROW_RUNTIME_ERROR(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
-        THROW_RUNTIME_ERROR(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-                            "Size of the given buffer is not enough.");
-        THROW_RUNTIME_ERROR(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
-                            "Size of the given scratch buffer is not enough.");
-        THROW_RUNTIME_ERROR(instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
-                            "Size of the given instance buffer is not enough.");
-        uint32_t numAABBs = m->motionOptions.numKeys * m->children.size();
-        THROW_RUNTIME_ERROR(aabbBuffer.sizeInBytes() >= numAABBs * sizeof(OptixAabb),
-                            "Size of the given AABB buffer is not enough.");
         THROW_RUNTIME_ERROR(m->aabbsRequired, "You need to call the motion-disabled variant of this function for this IAS.");
-
-        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
-        //     インスタンス情報を更新する処理をここにも書いておく必要がある。
-        // EN: User is not required to call prepareForBuild() when performing rebuild
-        //     for purpose of update so updating instance information should be here.
-        uint32_t childIdx = 0;
-        for (const _Instance* child : m->children)
-            child->updateInstance(&m->instances[childIdx++]);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
-                                        instanceBuffer.sizeInBytes(),
-                                        stream));
-        m->buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
-        m->buildInput.instanceArray.aabbs = aabbBuffer.getCUdeviceptr();
-        m->buildInput.instanceArray.numAabbs = numAABBs;
-
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-
-        m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
-        OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream, &m->buildOptions, &m->buildInput, 1,
-                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
-                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
-                                    &m->handle,
-                                    compactionEnabled ? &m->propertyCompactedSize : nullptr,
-                                    compactionEnabled ? 1 : 0));
-        CUDADRV_CHECK(cuEventRecord(m->finishEvent, stream));
-
-        m->instanceBuffer = instanceBuffer;
-        m->accelBuffer = accelBuffer;
-        m->aabbBuffer = aabbBuffer;
-        m->available = true;
-        m->readyToCompact = false;
-        m->compactedHandle = 0;
-        m->compactedAvailable = false;
-
-        return m->handle;
+        return m->rebuild(stream, instanceBuffer, aabbBuffer, accelBuffer, scratchBuffer);
     }
 
     void InstanceAccelerationStructure::prepareForCompact(size_t* compactedAccelBufferSize) const {
@@ -1242,6 +1212,7 @@ namespace optixu {
 
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
+        // TODO: ? stream
         CUDADRV_CHECK(cuEventSynchronize(m->finishEvent));
         CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
 

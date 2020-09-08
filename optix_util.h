@@ -76,28 +76,29 @@ TODO:
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
 #   define RT_PIPELINE_LAUNCH_PARAMETERS extern "C" __constant__
 #   define RT_DEVICE_FUNCTION __device__ __forceinline__
+
+#   define RT_RG_NAME(name) __raygen__ ## name
+#   define RT_MS_NAME(name) __miss__ ## name
+#   define RT_EX_NAME(name) __exception__ ## name
+#   define RT_CH_NAME(name) __closesthit__ ## name
+#   define RT_AH_NAME(name) __anyhit__ ## name
+#   define RT_IS_NAME(name) __intersection__ ## name
+#   define RT_DC_NAME(name) __direct_callable__ ## name
+#   define RT_CC_NAME(name) __continuation_callable__ ## name
 #else
 #   define RT_CALLABLE_PROGRAM
 #   define RT_PIPELINE_LAUNCH_PARAMETERS
 #   define RT_DEVICE_FUNCTION
-#endif
 
-#define RT_RG_NAME(name) __raygen__ ## name
-#define RT_MS_NAME(name) __miss__ ## name
-#define RT_EX_NAME(name) __exception__ ## name
-#define RT_CH_NAME(name) __closesthit__ ## name
-#define RT_AH_NAME(name) __anyhit__ ## name
-#define RT_IS_NAME(name) __intersection__ ## name
-#define RT_DC_NAME(name) __direct_callable__ ## name
-#define RT_CC_NAME(name) __continuation_callable__ ## name
-#define RT_RG_NAME_STR(name) "__raygen__" name
-#define RT_MS_NAME_STR(name) "__miss__" name
-#define RT_EX_NAME_STR(name) "__exception__" name
-#define RT_CH_NAME_STR(name) "__closesthit__" name
-#define RT_AH_NAME_STR(name) "__anyhit__" name
-#define RT_IS_NAME_STR(name) "__intersection__" name
-#define RT_DC_NAME_STR(name) "__direct_callable__" name
-#define RT_CC_NAME_STR(name) "__continuation_callable__" name
+#   define RT_RG_NAME_STR(name) "__raygen__" name
+#   define RT_MS_NAME_STR(name) "__miss__" name
+#   define RT_EX_NAME_STR(name) "__exception__" name
+#   define RT_CH_NAME_STR(name) "__closesthit__" name
+#   define RT_AH_NAME_STR(name) "__anyhit__" name
+#   define RT_IS_NAME_STR(name) "__intersection__" name
+#   define RT_DC_NAME_STR(name) "__direct_callable__" name
+#   define RT_CC_NAME_STR(name) "__continuation_callable__" name
+#endif
 
 
 
@@ -558,7 +559,7 @@ namespace optixu {
 
     // ----------------------------------------------------------------
     // JP: ホスト側API
-    // EN: Host-side APIs.
+    // EN: Host-side API.
 #if !defined(__CUDA_ARCH__)
     /*
 
@@ -780,8 +781,12 @@ private: \
         //     is required when performing rebuild / compact.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
+        // JP: リビルドが完了するのをホスト側で待つ。
+        // EN: Wait on the host until rebuild operation finishes.
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const BufferView &compactedAccelBuffer) const;
+        // JP: コンパクトが完了するのをホスト側で待つ。
+        // EN: Wait on the host until compact operation finishes.
         void removeUncompacted() const;
 
         // JP: アップデートを行った場合はこのGASが(間接的に)所属するTraversable (例: IAS)
@@ -892,8 +897,12 @@ private: \
                                        const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
         OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
                                        const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
+        // JP: リビルドが完了するのをホスト側で待つ。
+        // EN: Wait on the host until rebuild operation finishes.
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
         OptixTraversableHandle compact(CUstream stream, const BufferView &compactedAccelBuffer) const;
+        // JP: コンパクトが完了するのをホスト側で待つ。
+        // EN: Wait on the host until compact operation finishes.
         void removeUncompacted() const;
 
         // JP: アップデートを行った場合はこのIASが(間接的に)所属するTraversable (例: IAS)
@@ -1044,6 +1053,6 @@ private: \
 #undef OPTIX_PIMPL
 
 #endif // #if !defined(__CUDA_ARCH__)
-    // END: Host-side APIs.
+    // END: Host-side API.
     // ----------------------------------------------------------------
 } // namespace optixu
