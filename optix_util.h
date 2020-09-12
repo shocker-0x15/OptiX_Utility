@@ -76,6 +76,11 @@ TODO:
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
 #   define RT_PIPELINE_LAUNCH_PARAMETERS extern "C" __constant__
 #   define RT_DEVICE_FUNCTION __device__ __forceinline__
+#else
+#   define RT_CALLABLE_PROGRAM
+#   define RT_PIPELINE_LAUNCH_PARAMETERS
+#   define RT_DEVICE_FUNCTION
+#endif
 
 #   define RT_RG_NAME(name) __raygen__ ## name
 #   define RT_MS_NAME(name) __miss__ ## name
@@ -85,10 +90,6 @@ TODO:
 #   define RT_IS_NAME(name) __intersection__ ## name
 #   define RT_DC_NAME(name) __direct_callable__ ## name
 #   define RT_CC_NAME(name) __continuation_callable__ ## name
-#else
-#   define RT_CALLABLE_PROGRAM
-#   define RT_PIPELINE_LAUNCH_PARAMETERS
-#   define RT_DEVICE_FUNCTION
 
 #   define RT_RG_NAME_STR(name) "__raygen__" name
 #   define RT_MS_NAME_STR(name) "__miss__" name
@@ -98,7 +99,6 @@ TODO:
 #   define RT_IS_NAME_STR(name) "__intersection__" name
 #   define RT_DC_NAME_STR(name) "__direct_callable__" name
 #   define RT_CC_NAME_STR(name) "__continuation_callable__" name
-#endif
 
 
 
@@ -639,13 +639,13 @@ namespace optixu {
 
 
 
-#define OPTIX_PIMPL() \
+#define OPTIXU_PIMPL() \
 public: \
     class Priv; \
 private: \
     Priv* m = nullptr
 
-#define OPTIX_COMMON_FUNCTIONS(SelfType) \
+#define OPTIXU_COMMON_FUNCTIONS(SelfType) \
     operator bool() const { return m; } \
     bool operator==(const SelfType &r) const { return m == r.m; } \
     bool operator!=(const SelfType &r) const { return m != r.m; } \
@@ -658,12 +658,12 @@ private: \
 
 
     class Context {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         static Context create(CUcontext cudaContext);
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Context);
+        OPTIXU_COMMON_FUNCTIONS(Context);
 
         CUcontext getCUcontext() const;
 
@@ -680,11 +680,11 @@ private: \
 
 
     class Material {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Material);
+        OPTIXU_COMMON_FUNCTIONS(Material);
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
@@ -701,11 +701,11 @@ private: \
 
 
     class Scene {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Scene);
+        OPTIXU_COMMON_FUNCTIONS(Scene);
 
         [[nodiscard]]
         GeometryInstance createGeometryInstance(bool forCustomPrimitives = false) const;
@@ -724,11 +724,11 @@ private: \
 
 
     class GeometryInstance {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(GeometryInstance);
+        OPTIXU_COMMON_FUNCTIONS(GeometryInstance);
 
         // JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
         //     (頂点/AABBバッファーの変更のみの場合は、markDirty()を呼ばずにGASのアップデートだけでも良い。)
@@ -757,11 +757,11 @@ private: \
 
 
     class GeometryAccelerationStructure {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(GeometryAccelerationStructure);
+        OPTIXU_COMMON_FUNCTIONS(GeometryAccelerationStructure);
 
         // JP: 以下のAPIを呼んだ場合はGASがdirty状態になる。
         // EN: Calling the following APIs marks the GAS dirty.
@@ -812,11 +812,11 @@ private: \
 
 
     class Transform {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Transform);
+        OPTIXU_COMMON_FUNCTIONS(Transform);
 
         // JP: 以下のAPIを呼んだ場合はTransformがdirty状態になる。
         // EN: Calling the following APIs marks the transform dirty.
@@ -843,11 +843,11 @@ private: \
 
 
     class Instance {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Instance);
+        OPTIXU_COMMON_FUNCTIONS(Instance);
 
         // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a IAS to which the instance belongs is required.
@@ -873,11 +873,11 @@ private: \
     //       アップデート処理はリビルド時に書かれたインスタンスバッファーの内容を期待しているため、
     //       基本的にインスタンスバッファーとASのメモリ(コンパクション版にもなり得る)は同じ寿命で扱ったほうが良さそう。
     class InstanceAccelerationStructure {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(InstanceAccelerationStructure);
+        OPTIXU_COMMON_FUNCTIONS(InstanceAccelerationStructure);
 
         // JP: 以下のAPIを呼んだ場合はIASがdirty状態になる。
         // EN: Calling the following APIs marks the IAS dirty.
@@ -918,11 +918,11 @@ private: \
 
 
     class Pipeline {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Pipeline);
+        OPTIXU_COMMON_FUNCTIONS(Pipeline);
 
         void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
                                 const char* launchParamsVariableName, size_t sizeOfLaunchParams,
@@ -999,21 +999,21 @@ private: \
 
     // The lifetime of a module must extend to the lifetime of any ProgramGroup that reference that module.
     class Module {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Module);
+        OPTIXU_COMMON_FUNCTIONS(Module);
     };
 
 
 
     class ProgramGroup {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(ProgramGroup);
+        OPTIXU_COMMON_FUNCTIONS(ProgramGroup);
 
         void getStackSize(OptixStackSizes* sizes) const;
     };
@@ -1027,11 +1027,11 @@ private: \
     };
     
     class Denoiser {
-        OPTIX_PIMPL();
+        OPTIXU_PIMPL();
 
     public:
         void destroy();
-        OPTIX_COMMON_FUNCTIONS(Denoiser);
+        OPTIXU_COMMON_FUNCTIONS(Denoiser);
 
         void setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const;
         void prepare(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
@@ -1049,8 +1049,8 @@ private: \
 
 
 
-#undef OPTIX_COMMON_FUNCTIONS
-#undef OPTIX_PIMPL
+#undef OPTIXU_COMMON_FUNCTIONS
+#undef OPTIXU_PIMPL
 
 #endif // #if !defined(__CUDA_ARCH__)
     // END: Host-side API.
