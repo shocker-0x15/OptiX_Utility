@@ -4,6 +4,45 @@
 #include "optix_util.h"
 
 namespace optixu {
+    template <typename T>
+    class NativeBlockBuffer2D {
+        CUsurfObject m_surfObject;
+
+    public:
+        RT_DEVICE_FUNCTION NativeBlockBuffer2D() : m_surfObject(0) {}
+        RT_DEVICE_FUNCTION NativeBlockBuffer2D(CUsurfObject surfObject) : m_surfObject(surfObject) {};
+
+        RT_DEVICE_FUNCTION NativeBlockBuffer2D &operator=(CUsurfObject surfObject) {
+            m_surfObject = surfObject;
+            return *this;
+        }
+
+#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+        RT_DEVICE_FUNCTION T read(uint2 idx) const {
+            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        RT_DEVICE_FUNCTION void write(uint2 idx, const T &value) const {
+            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        template <uint32_t comp, typename U>
+        RT_DEVICE_FUNCTION void writeComp(uint2 idx, U value) const {
+            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T) + comp * sizeof(U), idx.y);
+        }
+        RT_DEVICE_FUNCTION T read(int2 idx) const {
+            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        RT_DEVICE_FUNCTION void write(int2 idx, const T &value) const {
+            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+        }
+        template <uint32_t comp, typename U>
+        RT_DEVICE_FUNCTION void writeComp(int2 idx, U value) const {
+            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T) + comp * sizeof(U), idx.y);
+        }
+#endif
+    };
+
+
+
     template <typename T, uint32_t log2BlockWidth>
     class BlockBuffer2D {
         T* m_rawBuffer;

@@ -82,23 +82,23 @@ TODO:
 #   define RT_DEVICE_FUNCTION
 #endif
 
-#   define RT_RG_NAME(name) __raygen__ ## name
-#   define RT_MS_NAME(name) __miss__ ## name
-#   define RT_EX_NAME(name) __exception__ ## name
-#   define RT_CH_NAME(name) __closesthit__ ## name
-#   define RT_AH_NAME(name) __anyhit__ ## name
-#   define RT_IS_NAME(name) __intersection__ ## name
-#   define RT_DC_NAME(name) __direct_callable__ ## name
-#   define RT_CC_NAME(name) __continuation_callable__ ## name
+#define RT_RG_NAME(name) __raygen__ ## name
+#define RT_MS_NAME(name) __miss__ ## name
+#define RT_EX_NAME(name) __exception__ ## name
+#define RT_CH_NAME(name) __closesthit__ ## name
+#define RT_AH_NAME(name) __anyhit__ ## name
+#define RT_IS_NAME(name) __intersection__ ## name
+#define RT_DC_NAME(name) __direct_callable__ ## name
+#define RT_CC_NAME(name) __continuation_callable__ ## name
 
-#   define RT_RG_NAME_STR(name) "__raygen__" name
-#   define RT_MS_NAME_STR(name) "__miss__" name
-#   define RT_EX_NAME_STR(name) "__exception__" name
-#   define RT_CH_NAME_STR(name) "__closesthit__" name
-#   define RT_AH_NAME_STR(name) "__anyhit__" name
-#   define RT_IS_NAME_STR(name) "__intersection__" name
-#   define RT_DC_NAME_STR(name) "__direct_callable__" name
-#   define RT_CC_NAME_STR(name) "__continuation_callable__" name
+#define RT_RG_NAME_STR(name) "__raygen__" name
+#define RT_MS_NAME_STR(name) "__miss__" name
+#define RT_EX_NAME_STR(name) "__exception__" name
+#define RT_CH_NAME_STR(name) "__closesthit__" name
+#define RT_AH_NAME_STR(name) "__anyhit__" name
+#define RT_IS_NAME_STR(name) "__intersection__" name
+#define RT_DC_NAME_STR(name) "__direct_callable__" name
+#define RT_CC_NAME_STR(name) "__continuation_callable__" name
 
 
 
@@ -175,45 +175,6 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
         RT_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
             return optixContinuationCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
-        }
-#endif
-    };
-
-
-
-    template <typename T>
-    class NativeBlockBuffer2D {
-        CUsurfObject m_surfObject;
-
-    public:
-        RT_DEVICE_FUNCTION NativeBlockBuffer2D() : m_surfObject(0) {}
-        RT_DEVICE_FUNCTION NativeBlockBuffer2D(CUsurfObject surfObject) : m_surfObject(surfObject) {};
-
-        RT_DEVICE_FUNCTION NativeBlockBuffer2D &operator=(CUsurfObject surfObject) {
-            m_surfObject = surfObject;
-            return *this;
-        }
-
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
-        RT_DEVICE_FUNCTION T read(uint2 idx) const {
-            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
-        }
-        RT_DEVICE_FUNCTION void write(uint2 idx, const T &value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
-        }
-        template <uint32_t comp, typename U>
-        RT_DEVICE_FUNCTION void writeComp(uint2 idx, U value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T) + comp * sizeof(U), idx.y);
-        }
-        RT_DEVICE_FUNCTION T read(int2 idx) const {
-            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
-        }
-        RT_DEVICE_FUNCTION void write(int2 idx, const T &value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
-        }
-        template <uint32_t comp, typename U>
-        RT_DEVICE_FUNCTION void writeComp(int2 idx, U value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T) + comp * sizeof(U), idx.y);
         }
 #endif
     };
