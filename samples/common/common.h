@@ -208,7 +208,7 @@ CUDA_DEVICE_FUNCTION uint32_t nthSetBit(uint32_t value, int32_t n) {
 
 
 
-#if !defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if !defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
 #if 1
 #   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
@@ -342,7 +342,7 @@ public:
 
 // JP: CUDAビルトインに対応する型・関数をホスト側で定義しておく。
 // EN: Define types and functions on the host corresponding to CUDA built-ins.
-#if !defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if !defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 struct alignas(8) int2 {
     int32_t x, y;
     constexpr int2(int32_t v = 0) : x(v), y(v) {}

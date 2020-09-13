@@ -17,7 +17,7 @@ namespace optixu {
             return *this;
         }
 
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION T read(uint2 idx) const {
             return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
         }

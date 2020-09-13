@@ -63,7 +63,7 @@ namespace Shared {
             raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = translation.z;
         }
 
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         CUDA_DEVICE_FUNCTION float3 transformNormalFromObjectToWorld(const float3 &n) const {
             float3 sn = n / scale;
             return orientation.toMatrix3x3() * sn;

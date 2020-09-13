@@ -20,7 +20,7 @@
 
 #include "optix_util.h"
 
-#if defined(OPTIX_Platform_Windows_MSVC)
+#if defined(OPTIXU_Platform_Windows_MSVC)
 #   define _USE_MATH_DEFINES
 #   include <Windows.h>
 #   undef min

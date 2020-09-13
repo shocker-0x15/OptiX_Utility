@@ -47,15 +47,15 @@ TODO:
 
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
-#   define OPTIX_Platform_Windows
+#   define OPTIXU_Platform_Windows
 #   if defined(_MSC_VER)
-#       define OPTIX_Platform_Windows_MSVC
+#       define OPTIXU_Platform_Windows_MSVC
 #       if defined(__INTELLISENSE__)
-#           define OPTIX_CODE_COMPLETION
+#           define OPTIXU_Platform_CodeCompletion
 #       endif
 #   endif
 #elif defined(__APPLE__)
-#   define OPTIX_Platform_macOS
+#   define OPTIXU_Platform_macOS
 #endif
 
 #if defined(__CUDACC_RTC__)
@@ -104,10 +104,10 @@ TODO:
 
 namespace optixu {
 #ifdef _DEBUG
-#   define OPTIX_ENABLE_ASSERT
+#   define OPTIXU_ENABLE_ASSERT
 #endif
 
-#if defined(OPTIX_Platform_Windows_MSVC)
+#if defined(OPTIXU_Platform_Windows_MSVC)
     void devPrintf(const char* fmt, ...);
 #else
 #   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
@@ -119,7 +119,7 @@ namespace optixu {
 #   define optixPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
-#if defined(OPTIX_ENABLE_ASSERT)
+#if defined(OPTIXU_ENABLE_ASSERT)
 #   if defined(__CUDA_ARCH__)
 #   define optixAssert(expr, fmt, ...) do { if (!(expr)) { printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); printf(fmt"\n", ##__VA_ARGS__); assert(0); } } while (0)
 #   else
@@ -153,7 +153,7 @@ namespace optixu {
         RT_DEVICE_FUNCTION explicit DirectCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
         RT_DEVICE_FUNCTION explicit operator uint32_t() const { return m_sbtIndex; }
 
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
             return optixDirectCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
         }
@@ -172,7 +172,7 @@ namespace optixu {
         RT_DEVICE_FUNCTION explicit ContinuationCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
         RT_DEVICE_FUNCTION explicit operator uint32_t() const { return m_sbtIndex; }
 
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
             return optixContinuationCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
         }
@@ -188,7 +188,7 @@ namespace optixu {
     // ----------------------------------------------------------------
     // JP: デバイス関数のラッパー
     // EN: Device-side function wrappers
-#if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
         template <typename HeadType0, typename... TailTypes>
@@ -512,7 +512,7 @@ namespace optixu {
             detail::getValues<detail::ExceptionDetailFunc, 0>(details...);
     }
 
-#endif // #if defined(__CUDA_ARCH__) || defined(OPTIX_CODE_COMPLETION)
+#endif // #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
     // END: Device-side function wrappers
     // ----------------------------------------------------------------
 
