@@ -79,23 +79,23 @@ namespace optixu {
         }
 
         RT_DEVICE_FUNCTION const T &operator[](uint2 idx) const {
-            optixAssert(idx.x < m_width && idx.y < m_height,
-                        "Out of bounds: %u, %u", idx.x, idx.y);
+            optixuAssert(idx.x < m_width && idx.y < m_height,
+                         "Out of bounds: %u, %u", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_DEVICE_FUNCTION T &operator[](uint2 idx) {
-            optixAssert(idx.x < m_width && idx.y < m_height,
-                        "Out of bounds: %u, %u", idx.x, idx.y);
+            optixuAssert(idx.x < m_width && idx.y < m_height,
+                         "Out of bounds: %u, %u", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_DEVICE_FUNCTION const T &operator[](int2 idx) const {
-            optixAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
-                        "Out of bounds: %d, %d", idx.x, idx.y);
+            optixuAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
+                         "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_DEVICE_FUNCTION T &operator[](int2 idx) {
-            optixAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
-                        "Out of bounds: %d, %d", idx.x, idx.y);
+            optixuAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
+                         "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
 #endif

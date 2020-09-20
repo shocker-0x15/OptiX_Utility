@@ -109,33 +109,26 @@ namespace optixu {
 #   define OPTIXU_ENABLE_ASSERT
 #endif
 
-#if defined(OPTIXU_Platform_Windows_MSVC)
     void devPrintf(const char* fmt, ...);
-#else
-#   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
-#endif
 
 #if 1
-#   define optixPrintf(fmt, ...) do { optixu::devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
+#   define optixuPrintf(fmt, ...) do { optixu::devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
 #else
-#   define optixPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#   define optixuPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
 #if defined(OPTIXU_ENABLE_ASSERT)
 #   if defined(__CUDA_ARCH__)
-#   define optixAssert(expr, fmt, ...) do { if (!(expr)) { printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); printf(fmt"\n", ##__VA_ARGS__); assert(0); } } while (0)
+#   define optixuAssert(expr, fmt, ...) do { if (!(expr)) { printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); printf(fmt"\n", ##__VA_ARGS__); assert(0); } } while (0)
 #   else
-#   define optixAssert(expr, fmt, ...) do { if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } } while (0)
+#   define optixuAssert(expr, fmt, ...) do { if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } } while (0)
 #   endif
 #else
-#   define optixAssert(expr, fmt, ...)
+#   define optixuAssert(expr, fmt, ...)
 #endif
 
-#define optixAssert_ShouldNotBeCalled() optixAssert(false, "Should not be called!")
-#define optixAssert_NotImplemented() optixAssert(false, "Not implemented yet!")
-
-    template <typename T>
-    RT_DEVICE_FUNCTION constexpr bool false_T() { return false; }
+#define optixuAssert_ShouldNotBeCalled() optixuAssert(false, "Should not be called!")
+#define optixuAssert_NotImplemented() optixuAssert(false, "Not implemented yet!")
 
 
 
