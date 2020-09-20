@@ -74,12 +74,14 @@ TODO:
 
 #if defined(__CUDA_ARCH__)
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
-#   define RT_PIPELINE_LAUNCH_PARAMETERS extern "C" __constant__
 #   define RT_DEVICE_FUNCTION __device__ __forceinline__
+#   if !defined(RT_PIPELINE_LAUNCH_PARAMETERS)
+#       define RT_PIPELINE_LAUNCH_PARAMETERS extern "C" __constant__
+#   endif
 #else
 #   define RT_CALLABLE_PROGRAM
-#   define RT_PIPELINE_LAUNCH_PARAMETERS
 #   define RT_DEVICE_FUNCTION
+#   define RT_PIPELINE_LAUNCH_PARAMETERS
 #endif
 
 #define RT_RG_NAME(name) __raygen__ ## name

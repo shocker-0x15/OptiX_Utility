@@ -112,8 +112,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array farSideWallArray;
     {
         cudau::TextureSampler texSampler;
-        texSampler.setFilterMode(cudau::TextureFilterMode::Linear,
-                                 cudau::TextureFilterMode::Linear);
+        texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
+        texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Linear);
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
@@ -168,8 +168,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array floorArray;
     {
         cudau::TextureSampler texSampler;
-        texSampler.setFilterMode(cudau::TextureFilterMode::Linear,
-                                 cudau::TextureFilterMode::Linear);
+        texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
+        texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Linear);
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 

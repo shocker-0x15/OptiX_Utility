@@ -556,8 +556,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUtexObject* textureObjects = textureObjectBuffer.map();
 
     cudau::TextureSampler texSampler;
-    texSampler.setFilterMode(cudau::TextureFilterMode::Point,
-                             cudau::TextureFilterMode::Point);
+    texSampler.setXyFilterMode(cudau::TextureFilterMode::Point);
+    texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Point);
     texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
     texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
