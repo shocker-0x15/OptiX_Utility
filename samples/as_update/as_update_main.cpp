@@ -407,7 +407,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // floor
             { 0, 1, 2 }, { 0, 2, 3 },
             // back wall
-            { 4, 5, 6 }, { 4, 6, 7 },
+            { 4, 7, 6 }, { 4, 6, 5 },
             // ceiling
             { 8, 11, 10 }, { 8, 10, 9 },
             // left wall
