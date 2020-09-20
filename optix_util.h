@@ -112,16 +112,34 @@ namespace optixu {
     void devPrintf(const char* fmt, ...);
 
 #if 1
-#   define optixuPrintf(fmt, ...) do { optixu::devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
+#   define optixuPrintf(fmt, ...) \
+        do { \
+            optixu::devPrintf(fmt, ##__VA_ARGS__); \
+            printf(fmt, ##__VA_ARGS__); \
+        } while (0)
 #else
 #   define optixuPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
 #if defined(OPTIXU_ENABLE_ASSERT)
 #   if defined(__CUDA_ARCH__)
-#       define optixuAssert(expr, fmt, ...) do { if (!(expr)) { printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); printf(fmt"\n", ##__VA_ARGS__); assert(0); } } while (0)
+#       define optixuAssert(expr, fmt, ...) \
+            do { \
+                if (!(expr)) { \
+                    printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
+                    printf(fmt"\n", ##__VA_ARGS__); \
+                    assert(0); \
+                } \
+            } while (0)
 #   else
-#       define optixuAssert(expr, fmt, ...) do { if (!(expr)) { optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); optixu::devPrintf(fmt"\n", ##__VA_ARGS__); abort(); } } while (0)
+#       define optixuAssert(expr, fmt, ...) \
+            do { \
+                if (!(expr)) { \
+                    optixu::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
+                    optixu::devPrintf(fmt"\n", ##__VA_ARGS__); \
+                    abort(); \
+                } \
+            } while (0)
 #   endif
 #else
 #   define optixuAssert(expr, fmt, ...)

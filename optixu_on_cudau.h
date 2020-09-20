@@ -180,7 +180,7 @@ namespace optixu {
                                            numBytesToCopy));
             }
             else {
-                for (int yb = 0; yb < numYBlocksToCopy; ++yb) {
+                for (uint32_t yb = 0; yb < numYBlocksToCopy; ++yb) {
                     size_t srcOffset = (m_numXBlocks * blockWidth * blockWidth * yb) * sizeof(T);
                     size_t dstOffset = (newBuffer.m_numXBlocks * blockWidth * blockWidth * yb) * sizeof(T);
                     size_t numBytesToCopy = (numXBlocksToCopy * blockWidth * blockWidth) * sizeof(T);
