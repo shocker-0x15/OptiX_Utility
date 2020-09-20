@@ -59,11 +59,10 @@ TODO:
 #endif
 
 #if defined(__CUDACC_RTC__)
-
+// Defining cstdint and cfloat (under cuda/std) is left to the user.
 #else
 #include <cstdint>
 #include <cfloat>
-#include <type_traits>
 #include <string>
 #endif
 #include <optix.h>

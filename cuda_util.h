@@ -40,7 +40,7 @@
 
 
 #if defined(__CUDACC_RTC__)
-// Including cstdint and cfloat (under cuda/std) is left to the user.
+// Defining cstdint and cfloat (under cuda/std) is left to the user.
 typedef unsigned long long CUtexObject;
 typedef unsigned long long CUsurfObject;
 #else
