@@ -920,17 +920,17 @@ namespace optixu {
     static inline uint32_t getPixelSize(OptixPixelFormat format) {
         switch (format) {
         case OPTIX_PIXEL_FORMAT_HALF3:
-            return static_cast<uint32_t>(3 * sizeof(uint16_t));
+            return 3 * sizeof(uint16_t);
         case OPTIX_PIXEL_FORMAT_HALF4:
-            return static_cast<uint32_t>(4 * sizeof(uint16_t));
+            return 4 * sizeof(uint16_t);
         case OPTIX_PIXEL_FORMAT_FLOAT3:
-            return static_cast<uint32_t>(3 * sizeof(float));
+            return 3 * sizeof(float);
         case OPTIX_PIXEL_FORMAT_FLOAT4:
-            return static_cast<uint32_t>(4 * sizeof(float));
+            return 4 * sizeof(float);
         case OPTIX_PIXEL_FORMAT_UCHAR3:
-            return static_cast<uint32_t>(3 * sizeof(uint8_t));
+            return 3 * sizeof(uint8_t);
         case OPTIX_PIXEL_FORMAT_UCHAR4:
-            return static_cast<uint32_t>(4 * sizeof(uint8_t));
+            return 4 * sizeof(uint8_t);
         default:
             optixuAssert_ShouldNotBeCalled();
             break;
