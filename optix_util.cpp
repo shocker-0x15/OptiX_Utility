@@ -930,10 +930,8 @@ namespace optixu {
 
     void Instance::Priv::fillInstance(OptixInstance* instance) const {
         *instance = {};
-        instance->instanceId = id;
-        instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
-        instance->flags = flags;
+        instance->instanceId = id;
 
         if (type == ChildType::GAS) {
             THROW_RUNTIME_ERROR(childGas->isReady(), "GAS %p is not ready.", childGas);
@@ -957,14 +955,37 @@ namespace optixu {
         else {
             optixAssert_ShouldNotBeCalled();
         }
+
+        instance->visibilityMask = visibilityMask;
+        instance->flags = flags;
     }
 
     void Instance::Priv::updateInstance(OptixInstance* instance) const {
-        instance->instanceId = id;
-        instance->visibilityMask = visibilityMask;
         std::copy_n(instTransform, 12, instance->transform);
-        //instance->flags = flags; これは変えられない？
-        //instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
+        instance->instanceId = id;
+
+        if (type == ChildType::GAS) {
+            THROW_RUNTIME_ERROR(childGas->isReady(), "GAS %p is not ready.", childGas);
+            instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
+        }
+        else if (type == ChildType::IAS) {
+            THROW_RUNTIME_ERROR(childIas->isReady(), "IAS %p is not ready.", childGas);
+            instance->sbtOffset = 0;
+        }
+        else if (type == ChildType::Transform) {
+            THROW_RUNTIME_ERROR(childXfm->isReady(), "Transform %p is not ready.", childXfm);
+            _GeometryAccelerationStructure* desGas = childXfm->getDescendantGAS();
+            if (desGas)
+                instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
+            else
+                instance->sbtOffset = 0;
+        }
+        else {
+            optixAssert_ShouldNotBeCalled();
+        }
+
+        instance->visibilityMask = visibilityMask;
+        instance->flags = flags;
     }
 
     bool Instance::Priv::isMotionAS() const {
@@ -1022,6 +1043,10 @@ namespace optixu {
 
     void Instance::setFlags(OptixInstanceFlags flags) const {
         m->flags = flags;
+    }
+
+    void Instance::setMaterialSetIndex(uint32_t matSetIdx) const {
+        m->matSetIndex = matSetIdx;
     }
 
 
