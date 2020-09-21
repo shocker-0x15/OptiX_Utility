@@ -1404,8 +1404,10 @@ namespace optixu {
 
     void Pipeline::setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
                                       const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-                                      bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
-                                      uint32_t supportedPrimitiveTypeFlags) const {
+                                      bool useMotionBlur,
+                                      OptixTraversableGraphFlags traversableGraphFlags,
+                                      OptixExceptionFlags exceptionFlags,
+                                      OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags) const {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
         // EN: Set pipeline compile options common among modules in the pipeline and the pipeline itself.
         m->pipelineCompileOptions = {};

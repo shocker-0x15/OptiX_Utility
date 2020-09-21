@@ -103,6 +103,30 @@ TODO:
 
 
 
+inline OptixGeometryFlags operator|(OptixGeometryFlags a, OptixGeometryFlags b) {
+    return static_cast<OptixGeometryFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline OptixPrimitiveTypeFlags operator|(OptixPrimitiveTypeFlags a, OptixPrimitiveTypeFlags b) {
+    return static_cast<OptixPrimitiveTypeFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline OptixInstanceFlags operator|(OptixInstanceFlags a, OptixInstanceFlags b) {
+    return static_cast<OptixInstanceFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline OptixMotionFlags operator|(OptixMotionFlags a, OptixMotionFlags b) {
+    return static_cast<OptixMotionFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline OptixRayFlags operator|(OptixRayFlags a, OptixRayFlags b) {
+    return static_cast<OptixRayFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline OptixTraversableGraphFlags operator|(OptixTraversableGraphFlags a, OptixTraversableGraphFlags b) {
+    return static_cast<OptixTraversableGraphFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline OptixExceptionFlags operator|(OptixExceptionFlags a, OptixExceptionFlags b) {
+    return static_cast<OptixExceptionFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
+
+
 namespace optixu {
 #ifdef _DEBUG
 #   define OPTIXU_ENABLE_ASSERT
@@ -380,7 +404,7 @@ namespace optixu {
     RT_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
                                   const float3 &origin, const float3 &direction,
                                   float tmin, float tmax, float rayTime,
-                                  OptixVisibilityMask visibilityMask, uint32_t rayFlags,
+                                  OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
                                   uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
                                   PayloadTypes &... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
@@ -900,8 +924,10 @@ private: \
 
         void setPipelineOptions(uint32_t numPayloadValues, uint32_t numAttributeValues,
                                 const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-                                bool useMotionBlur, uint32_t traversableGraphFlags, uint32_t exceptionFlags,
-                                uint32_t supportedPrimitiveTypeFlags) const;
+                                bool useMotionBlur,
+                                OptixTraversableGraphFlags traversableGraphFlags,
+                                OptixExceptionFlags exceptionFlags,
+                                OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags) const;
 
         [[nodiscard]]
         Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
