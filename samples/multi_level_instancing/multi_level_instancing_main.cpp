@@ -26,8 +26,7 @@ EN: This sample shows how to use multi-level instancing as well as motion transf
 
 static void loadObj(const std::string &filepath,
                     std::vector<Shared::Vertex>* vertices,
-                    std::vector<Shared::Triangle>* triangles,
-                    AABB* bbox);
+                    std::vector<Shared::Triangle>* triangles);
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -285,8 +284,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
         loadObj("../../data/stanford_bunny_309_faces.obj",
-                &vertices, &triangles,
-                &bunny.bbox);
+                &vertices, &triangles);
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         bunny.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
@@ -318,8 +316,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
         loadObj("../../data/subd_cube.obj",
-                &vertices, &triangles,
-                &cube.bbox);
+                &vertices, &triangles);
 
         cube.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         cube.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
@@ -434,7 +431,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
     std::vector<Transform> objectTransforms;
     std::vector<optixu::Instance> objectInsts;
-    std::vector<AABB> objectBaseAABBs;
 
     // Bunny
     {
@@ -473,8 +469,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::Instance inst = scene.createInstance();
         inst.setChild(tr.optixTransform);
         objectInsts.push_back(inst);
-
-        objectBaseAABBs.push_back(bunny.bbox);
     }
 
     // Cube
@@ -521,8 +515,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         };
         inst.setTransform(instXfm);
         objectInsts.push_back(inst);
-
-        objectBaseAABBs.push_back(cube.bbox);
     }
 
 
@@ -755,8 +747,7 @@ catch (const std::exception &ex) {
 
 void loadObj(const std::string &filepath,
              std::vector<Shared::Vertex>* vertices,
-             std::vector<Shared::Triangle>* triangles,
-             AABB* bbox) {
+             std::vector<Shared::Triangle>* triangles) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -796,11 +787,9 @@ void loadObj(const std::string &filepath,
     std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
     vertices->resize(unifiedVertexMap.size());
     uint32_t vertexIndex = 0;
-    *bbox = AABB();
     for (const auto &kv : unifiedVertexMap) {
         (*vertices)[vertexIndex] = kv.second;
         vertexIndices[kv.first] = vertexIndex++;
-        bbox->unify(kv.second.position);
     }
     unifiedVertexMap.clear();
 
