@@ -722,22 +722,17 @@ namespace optixu {
         OptixTraversableHandle handle;
         OptixTraversableHandle compactedHandle;
         BufferView instanceBuffer;
-        BufferView aabbBuffer;
         BufferView accelBuffer;
         BufferView compactedAccelBuffer;
         ASTradeoff tradeoff;
         struct {
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
-            unsigned int aabbsRequired : 1;
             unsigned int readyToBuild : 1;
             unsigned int available : 1;
             unsigned int readyToCompact : 1;
             unsigned int compactedAvailable : 1;
         };
-
-        OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
-                                       const BufferView &accelBuffer, const BufferView &scratchBuffer);
 
     public:
         OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);

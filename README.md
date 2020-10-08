@@ -199,15 +199,15 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly on the following environment.
 
-* Windows 10 (1909) & Visual Studio 2019 (16.7.3)
+* Windows 10 (1909) & Visual Studio 2019 (16.7.5)
 * Core i9-9900K, 32GB, RTX 2070 8GB
-* NVIDIA Driver 451.67
+* NVIDIA Driver 456.55
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 11.0 Update 1
-* OptiX 7.1.0 (requires Maxwell or later generation NVIDIA GPU)
+* CUDA 11.1
+* OptiX 7.2.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))

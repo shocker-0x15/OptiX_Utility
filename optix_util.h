@@ -28,7 +28,6 @@ TODO:
 - Linux環境でのテスト。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - ASのRelocationサポート。
-- BuildInputのどの内容がアップデート時に変更できるのか確認。
 - Curve Primitiveサポート。
 - Deformation Blurサポート。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
@@ -889,11 +888,8 @@ private: \
         //     のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which this IAS (indirectly) belongs
         //     is required when performing rebuild / compact.
-        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances,
-                             uint32_t* numAABBs = nullptr) const;
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const;
         OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer,
-                                       const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
-        OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer, const BufferView &aabbBuffer,
                                        const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
         // JP: リビルドが完了するのをホスト側で待つ。
         // EN: Wait on the host until rebuild operation finishes.

@@ -532,9 +532,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure lowerIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     uint32_t numInstances;
-    uint32_t numAABBs;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    cudau::TypedBuffer<OptixAabb> aabbBuffer;
     constexpr uint32_t numMotionKeys = 3;
     lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -542,71 +540,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     lowerIas.addChild(areaLightInst);
     for (int i = 0; i < objectInsts.size(); ++i)
         lowerIas.addChild(objectInsts[i]);
-    lowerIas.prepareForBuild(&asMemReqs, &numInstances, &numAABBs);
+    lowerIas.prepareForBuild(&asMemReqs, &numInstances);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
-    aabbBuffer.initialize(cuContext, cudau::BufferType::Device, numAABBs);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    // JP: IASに属するインスタンスのモーションAABBを計算する。
-    // EN: Compute motion AABBs of each instance belonging to the IAS.
-    {
-        OptixAabb* aabbs = aabbBuffer.map();
-        // First two instances don't require AABBs and its values will be ignored.
-        for (int instIdx = 2; instIdx < (2 + objectInsts.size()); ++instIdx) {
-            const Transform &tr = objectTransforms[instIdx - 2];
-            const AABB &baseAABB = objectBaseAABBs[instIdx - 2];
-            for (int keyIdx = 0; keyIdx < numMotionKeys; ++keyIdx) {
-                OptixAabb &aabb = aabbs[instIdx * numMotionKeys + keyIdx];
-
-                const Transform::SRT &srt = tr.srts[keyIdx];
-                Matrix3x3 sr =
-                    srt.o.toMatrix3x3() *
-                    scale3x3(srt.s);
-                float3 trans = srt.t;
-
-                float3 c;
-                AABB trBBox;
-
-                c = sr * float3(baseAABB.minP.x, baseAABB.minP.y, baseAABB.minP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.maxP.x, baseAABB.minP.y, baseAABB.minP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.minP.x, baseAABB.maxP.y, baseAABB.minP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.maxP.x, baseAABB.maxP.y, baseAABB.minP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.minP.x, baseAABB.minP.y, baseAABB.maxP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.maxP.x, baseAABB.minP.y, baseAABB.maxP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.minP.x, baseAABB.maxP.y, baseAABB.maxP.z) + trans;
-                trBBox.unify(c);
-                c = sr * float3(baseAABB.maxP.x, baseAABB.maxP.y, baseAABB.maxP.z) + trans;
-                trBBox.unify(c);
-
-                // JP: 回転が絡む場合、キーフレーム間の頂点の軌跡をすべて内包する最小限のAABBを計算するのは
-                //     結構複雑になる。ここでは簡単のために各キーにおけるAABBを単純に2倍に拡大する。
-                // EN: It is fairly complex to compute a tight AABB which contains all trajectories of vertices
-                //     between keyframes when rotation is involved.
-                //     Simply dilate the AABB of each key by 2 for simplicity here.
-                trBBox.dilate(2.0f);
-
-                aabb.minX = trBBox.minP.x;
-                aabb.minY = trBBox.minP.y;
-                aabb.minZ = trBBox.minP.z;
-                aabb.maxX = trBBox.maxP.x;
-                aabb.maxY = trBBox.maxP.y;
-                aabb.maxZ = trBBox.maxP.z;
-            }
-        }
-        aabbBuffer.unmap();
-    }
-
-    lowerIas.rebuild(cuStream, getView(instanceBuffer), getView(aabbBuffer), getView(iasMem), getView(asBuildScratchMem));
+    lowerIas.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
 
 
 
@@ -762,7 +704,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     topInstB.destroy();
     topInstA.destroy();
 
-    aabbBuffer.finalize();
     instanceBuffer.finalize();
     iasMem.finalize();
     lowerIas.destroy();
