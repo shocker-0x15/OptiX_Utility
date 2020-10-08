@@ -184,12 +184,16 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(Context);
 
-        Priv(CUcontext cuContext) : cudaContext(cuContext) {
+        Priv(CUcontext cuContext, bool enableValidation) : cudaContext(cuContext) {
             OPTIX_CHECK(optixInit());
 
             OptixDeviceContextOptions options = {};
             options.logCallbackFunction = &logCallBack;
+            options.logCallbackData = nullptr;
             options.logCallbackLevel = 4;
+            options.validationMode = enableValidation ?
+                OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL :
+                OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF;
             OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
             OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
                                                       &maxInstanceID, sizeof(maxInstanceID)));

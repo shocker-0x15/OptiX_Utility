@@ -657,7 +657,7 @@ private: \
         OPTIXU_PIMPL();
 
     public:
-        static Context create(CUcontext cudaContext);
+        static Context create(CUcontext cudaContext, bool enableValidation = false);
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(Context);
 

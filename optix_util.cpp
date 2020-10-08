@@ -34,8 +34,8 @@ namespace optixu {
 
 
 
-    Context Context::create(CUcontext cudaContext) {
-        return (new _Context(cudaContext))->getPublicType();
+    Context Context::create(CUcontext cudaContext, bool enableValidation) {
+        return (new _Context(cudaContext, enableValidation))->getPublicType();
     }
 
     void Context::destroy() {
