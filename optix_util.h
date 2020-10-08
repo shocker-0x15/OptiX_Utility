@@ -30,6 +30,7 @@ TODO:
 - ASのRelocationサポート。
 - Curve Primitiveサポート。
 - Deformation Blurサポート。
+- AOV Denoiserサポート。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
 - Multi GPUs?

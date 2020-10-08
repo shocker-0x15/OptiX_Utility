@@ -1751,6 +1751,8 @@ namespace optixu {
     void Denoiser::setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const {
         THROW_RUNTIME_ERROR((kind != OPTIX_DENOISER_MODEL_KIND_USER) != (data != nullptr),
                             "When a user model is used, data must be provided, otherwise data must be null.");
+        THROW_RUNTIME_ERROR(kind != OPTIX_DENOISER_MODEL_KIND_AOV,
+                            "OPTIX_DENOISER_MODEL_KIND_AOV is currently not supported.");
         OPTIX_CHECK(optixDenoiserSetModel(m->rawDenoiser, kind, data, sizeInBytes));
 
         m->stateIsReady = false;
