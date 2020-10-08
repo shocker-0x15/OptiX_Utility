@@ -928,7 +928,8 @@ private: \
 
         [[nodiscard]]
         Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
-                                         OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const;
+                                         OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+                                         OptixModuleCompileBoundValueEntry* boundValues = nullptr, uint32_t numBoundValues = 0) const;
 
         [[nodiscard]]
         ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;

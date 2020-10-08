@@ -1396,11 +1396,14 @@ namespace optixu {
 
 
     Module Pipeline::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
-                                               OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel) const {
+                                               OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+                                               OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues) const {
         OptixModuleCompileOptions moduleCompileOptions = {};
         moduleCompileOptions.maxRegisterCount = maxRegisterCount;
         moduleCompileOptions.optLevel = optLevel;
         moduleCompileOptions.debugLevel = debugLevel;
+        moduleCompileOptions.boundValues = boundValues;
+        moduleCompileOptions.numBoundValues = numBoundValues;
 
         OptixModule rawModule;
 
