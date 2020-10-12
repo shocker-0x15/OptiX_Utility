@@ -26,6 +26,7 @@ EN: It is very likely for now that any API will have breaking changes.
 ----------------------------------------------------------------
 TODO:
 - Linux環境でのテスト。
+- CMake整備。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - ASのRelocationサポート。
 - Curve Primitiveサポート。

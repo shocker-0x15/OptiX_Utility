@@ -27,13 +27,18 @@ Currently based on OptiX 7.2.0
   - [x] Full build
   - [x] Fast update
   - [x] Compaction
+  - [ ] Relocation
 - Shader binding table management
   - Automatic build
   - Memory management is still under user control
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX AI denoiser
+  - [x] LDR/HDR
+  - [x] User
+  - [ ] AOV
 - Automatic payload/attribute value packing in kernel code
+- [ ] Multi-GPU
 
 ## 構成要素 / Components
 - **optix_util.h, optix_util_private.h, optix_util.cpp**\
