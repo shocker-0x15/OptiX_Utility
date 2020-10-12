@@ -10,22 +10,51 @@
 It provides fine-level controllability but requires the user to write troublesome setup code to do anything.
 The purpose of this OptiX Utility is to provide classes and functions which encapsulates parts which tend to be boilerplate code while keeping fine controllability.
 
-- optix_util.h, optix_util_private.h, optix_util.cpp\
+## 機能 / Features
+Currently based on OptiX 7.2.0
+- Traversable types
+  - [x] Single GAS
+  - [x] Single-level instancing
+  - [x] Multi-level instancing
+- Primitive types
+  - [x] Triangles
+  - [x] User-defined custom primitives
+  - [ ] Curves
+- Motion blur types
+  - [x] Instance motion blur
+  - [ ] Deformation blur
+- Acceleration structure management
+  - [x] Full build
+  - [x] Fast update
+  - [x] Compaction
+- Shader binding table management
+  - Automatic build
+  - Memory management is still under user control
+- Geometry instancing with different material sets
+- Callable programs
+- OptiX AI denoiser
+- Automatic payload/attribute value packing in kernel code
+
+## 構成要素 / Components
+- **optix_util.h, optix_util_private.h, optix_util.cpp**\
   OptiXのオブジェクトをホスト側で管理するためのAPIと、デバイス側の関数ラッパーを提供しています。\
   This provides API to manage OptiX objects on host-side and device-side function wrappers.
-- cuda_util.h, cuda_util.cpp \
+- **cuda_util.h, cuda_util.cpp**\
   このCUDAユーティリティはCUDAのbufferやarrayの生成、そしてカーネルの実行のためのクラス・関数を提供しています。\
   現在のOptiXはCUDAに基づいたAPIになっているため、ユーザーはOptiXのコードと併せて頻繁に純粋なCUDAのコードも扱う必要があります。\
   これにはOptiX関連のコードは含まれず、OptiX Utilityとも直接関係しません。\
   This CUDA Utility provides classes and functions for CUDA buffer, array creation and kernel execution.
   OptiX is now CUDA-centric API, so the user often needs to manage pure CUDA code along with OptiX code.\
   This doesn't contain any OptiX-related code and is not directly related to the OptiX Utility.
-- optixu_on_cudau.h\
+- **optixu_on_cudau.h**\
   OptiX UtilityをCUDA Utilityと組み合わせて使うための関数といくつかの補助クラスを定義した取るに足らないファイルです。\
   This trivial file defines a function to use OptiX Utility combined with the CUDA Utility and defines several auxiliary classes.
+- **samples**\
+  OptiX Utilityの基本的な使い方を網羅した複数のサンプルがあります。\
+  Multiple samples cover basic usage of the OptiX Utility.
 
-## Code example
-### Host-side
+## コード例 / Code example
+### ホスト側 / Host-side
 OptiX UtilityはシェーダーバインディングテーブルのセットアップといったOptiXカーネルを実行するまでに必要な面倒な手続きを可能な限り隠蔽します。
 
 OptiX utility hides troublesome procedures like setting up shader binding table required to execute OptiX kernels as much as possible.
@@ -143,7 +172,7 @@ pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 //...
 ```
 
-### Device-side
+### デバイス側 / Device-side
 OptiX Utilityはペイロードのパッキングを簡単にしたりカーネル間通信における型の不一致を回避するため、デバイス側の組み込み関数のラッパーを提供しています。
 
 OptiX utility provides template wrapper for device-side builtin functions to ease packing of payloads and to avoid type incosistency for inter-kernel communications.
