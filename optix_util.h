@@ -41,8 +41,10 @@ TODO:
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
+  しかしビルドやアップデートを明示的にしているため結局ASであるということをユーザーが意識する必要がある。
 - ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
 - GAS中のGeometryInstanceのインデックスを取得できるようにする。
+  各GeometryInstanceが1つのSBTレコードしか使っていない場合はoptixGetSbtGASIndex()で代用できる。
 
 */
 
@@ -996,7 +998,8 @@ private: \
 
 
 
-    // The lifetime of a module must extend to the lifetime of any ProgramGroup that reference that module.
+    // JP: Moduleの寿命はそれを参照するあらゆるProgramGroupの寿命よりも長い必要がある。
+    // EN: The lifetime of a module must extend to the lifetime of any ProgramGroup that reference that module.
     class Module {
         OPTIXU_PIMPL();
 

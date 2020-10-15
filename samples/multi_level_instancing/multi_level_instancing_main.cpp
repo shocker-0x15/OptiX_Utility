@@ -144,7 +144,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     struct Geometry {
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
         cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
-        AABB bbox;
         optixu::GeometryInstance optixGeomInst;
         optixu::GeometryAccelerationStructure optixGas;
         cudau::Buffer gasMem;
@@ -202,13 +201,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
-        for (int i = 0; i < lengthof(triangles); ++i) {
-            const Shared::Triangle &tri = triangles[i];
-            room.bbox.unify(vertices[tri.index0].position);
-            room.bbox.unify(vertices[tri.index1].position);
-            room.bbox.unify(vertices[tri.index2].position);
-        }
-
         room.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         room.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
@@ -246,13 +238,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::Triangle triangles[] = {
             { 0, 1, 2 }, { 0, 2, 3 },
         };
-
-        for (int i = 0; i < lengthof(triangles); ++i) {
-            const Shared::Triangle &tri = triangles[i];
-            areaLight.bbox.unify(vertices[tri.index0].position);
-            areaLight.bbox.unify(vertices[tri.index1].position);
-            areaLight.bbox.unify(vertices[tri.index2].position);
-        }
 
         areaLight.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         areaLight.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
