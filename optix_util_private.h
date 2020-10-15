@@ -387,20 +387,20 @@ namespace optixu {
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
 
-        // TODO: support deformation blur (multiple vertex buffers)
         union {
             struct {
                 CUdeviceptr* vertexBufferArray;
-                BufferView vertexBuffer;
+                BufferView* vertexBuffers;
                 BufferView triangleBuffer;
                 OptixVertexFormat vertexFormat;
                 OptixIndicesFormat indexFormat;
             };
             struct {
                 CUdeviceptr* primitiveAabbBufferArray;
-                BufferView primitiveAABBBuffer;
+                BufferView* primitiveAabbBuffers;
             };
         };
+        uint32_t numMotionSteps;
         uint32_t primitiveIndexOffset;
         uint32_t materialIndexOffsetSize;
         BufferView materialIndexOffsetBuffer;
@@ -421,25 +421,32 @@ namespace optixu {
             primitiveIndexOffset(0),
             materialIndexOffsetSize(0),
             forCustomPrimitives(_forCustomPrimitives) {
+            numMotionSteps = 1;
             if (forCustomPrimitives) {
-                primitiveAabbBufferArray = new CUdeviceptr[1];
+                primitiveAabbBufferArray = new CUdeviceptr[numMotionSteps];
                 primitiveAabbBufferArray[0] = 0;
-                primitiveAABBBuffer = BufferView();
+                primitiveAabbBuffers = new BufferView[numMotionSteps];
+                primitiveAabbBuffers[0] = BufferView();
             }
             else {
-                vertexBufferArray = new CUdeviceptr[1];
+                vertexBufferArray = new CUdeviceptr[numMotionSteps];
                 vertexBufferArray[0] = 0;
-                vertexBuffer = BufferView();
+                vertexBuffers = new BufferView[numMotionSteps];
+                vertexBuffers[0] = BufferView();
                 triangleBuffer = BufferView();
-                vertexFormat = OPTIX_VERTEX_FORMAT_NONE;
+                vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
                 indexFormat = OPTIX_INDICES_FORMAT_NONE;
             }
         }
         ~Priv() {
-            if (forCustomPrimitives)
+            if (forCustomPrimitives) {
+                delete[] primitiveAabbBuffers;
                 delete[] primitiveAabbBufferArray;
-            else
+            }
+            else {
+                delete[] vertexBuffers;
                 delete[] vertexBufferArray;
+            }
         }
 
         const _Scene* getScene() const {
@@ -561,7 +568,7 @@ namespace optixu {
         uint32_t calcNumSBTRecords(uint32_t matSetIdx) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const;
         bool hasMotion() const {
-            return false;
+            return buildOptions.motionOptions.numKeys >= 2;
         }
         
         void markDirty();
@@ -714,7 +721,6 @@ namespace optixu {
         OptixBuildInput buildInput;
         std::vector<OptixInstance> instances;
 
-        OptixMotionOptions motionOptions;
         OptixAccelBuildOptions buildOptions;
         OptixAccelBufferSizes memoryRequirement;
 
@@ -750,7 +756,7 @@ namespace optixu {
             readyToCompact(false), compactedAvailable(false) {
             scene->addIAS(this);
 
-            motionOptions = {};
+            buildOptions = {};
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
                                         CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
@@ -780,7 +786,7 @@ namespace optixu {
 
 
         bool hasMotion() const {
-            return motionOptions.numKeys >= 2;
+            return buildOptions.motionOptions.numKeys >= 2;
         }
 
 

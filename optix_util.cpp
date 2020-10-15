@@ -216,16 +216,21 @@ namespace optixu {
         *input = OptixBuildInput{};
 
         if (forCustomPrimitives) {
-            THROW_RUNTIME_ERROR(primitiveAABBBuffer.isValid(), "Custom Primitive AABB buffer is not set.");
-
             input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
             OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
 
-            primitiveAabbBufferArray[0] = primitiveAABBBuffer.getCUdeviceptr();
+            uint32_t stride = primitiveAabbBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(primitiveAabbBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                primitiveAabbBufferArray[i] = primitiveAabbBuffers[i].getCUdeviceptr();
+                THROW_RUNTIME_ERROR(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
+                THROW_RUNTIME_ERROR(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                THROW_RUNTIME_ERROR(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
+            }
 
             customPrimArray.aabbBuffers = primitiveAabbBufferArray;
-            customPrimArray.numPrimitives = static_cast<uint32_t>(primitiveAABBBuffer.numElements());
-            customPrimArray.strideInBytes = primitiveAABBBuffer.stride();
+            customPrimArray.numPrimitives = numElements;
+            customPrimArray.strideInBytes = stride;
             customPrimArray.primitiveIndexOffset = primitiveIndexOffset;
 
             customPrimArray.numSbtRecords = static_cast<uint32_t>(buildInputFlags.size());
@@ -243,19 +248,25 @@ namespace optixu {
             customPrimArray.flags = buildInputFlags.data();
         }
         else {
-            THROW_RUNTIME_ERROR(vertexBuffer.isValid(), "Vertex buffer is not set.");
             THROW_RUNTIME_ERROR((indexFormat != OPTIX_INDICES_FORMAT_NONE) == triangleBuffer.isValid(),
                                 "Triangle buffer must be provided if using a index format other than None, otherwise must not be provided.");
 
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
-            vertexBufferArray[0] = vertexBuffer.getCUdeviceptr();
+            uint32_t vertexStride = vertexBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
+                THROW_RUNTIME_ERROR(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
+                THROW_RUNTIME_ERROR(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                THROW_RUNTIME_ERROR(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
+            }
 
             triArray.vertexBuffers = vertexBufferArray;
-            triArray.numVertices = static_cast<uint32_t>(vertexBuffer.numElements());
+            triArray.numVertices = numElements;
             triArray.vertexFormat = vertexFormat;
-            triArray.vertexStrideInBytes = vertexBuffer.stride();
+            triArray.vertexStrideInBytes = vertexStride;
 
             if (indexFormat != OPTIX_INDICES_FORMAT_NONE) {
                 triArray.indexBuffer = triangleBuffer.getCUdeviceptr();
@@ -293,7 +304,14 @@ namespace optixu {
         if (forCustomPrimitives) {
             OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
 
-            primitiveAabbBufferArray[0] = primitiveAABBBuffer.getCUdeviceptr();
+            uint32_t stride = primitiveAabbBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(primitiveAabbBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                primitiveAabbBufferArray[i] = primitiveAabbBuffers[i].getCUdeviceptr();
+                THROW_RUNTIME_ERROR(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
+                THROW_RUNTIME_ERROR(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                THROW_RUNTIME_ERROR(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
+            }
             customPrimArray.aabbBuffers = primitiveAabbBufferArray;
 
             if (customPrimArray.numSbtRecords > 1)
@@ -302,7 +320,14 @@ namespace optixu {
         else {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
-            vertexBufferArray[0] = vertexBuffer.getCUdeviceptr();
+            uint32_t vertexStride = vertexBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
+                THROW_RUNTIME_ERROR(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
+                THROW_RUNTIME_ERROR(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                THROW_RUNTIME_ERROR(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
+            }
             triArray.vertexBuffers = vertexBufferArray;
 
             if (indexFormat != OPTIX_INDICES_FORMAT_NONE)
@@ -366,10 +391,31 @@ namespace optixu {
         m = nullptr;
     }
 
-    void GeometryInstance::setVertexBuffer(const BufferView &vertexBuffer, OptixVertexFormat format) const {
-        THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
-        m->vertexBuffer = vertexBuffer;
+    void GeometryInstance::setNumMotionSteps(uint32_t n) const {
+        n = std::max(n, 1u);
+        if (m->forCustomPrimitives) {
+            delete[] m->primitiveAabbBuffers;
+            delete[] m->primitiveAabbBufferArray;
+            m->primitiveAabbBufferArray = new CUdeviceptr[n];
+            m->primitiveAabbBuffers = new BufferView[n];
+        }
+        else {
+            delete[] m->vertexBuffers;
+            delete[] m->vertexBufferArray;
+            m->vertexBufferArray = new CUdeviceptr[n];
+            m->vertexBuffers = new BufferView[n];
+        }
+    }
+
+    void GeometryInstance::setVertexFormat(OptixVertexFormat format) const {
         m->vertexFormat = format;
+    }
+
+    void GeometryInstance::setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep) const {
+        THROW_RUNTIME_ERROR(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
+        THROW_RUNTIME_ERROR(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                            motionStep, m->numMotionSteps);
+        m->vertexBuffers[motionStep] = vertexBuffer;
     }
 
     void GeometryInstance::setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format) const {
@@ -378,9 +424,11 @@ namespace optixu {
         m->indexFormat = format;
     }
 
-    void GeometryInstance::setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer) const {
+    void GeometryInstance::setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep) const {
         THROW_RUNTIME_ERROR(m->forCustomPrimitives, "This geometry instance was created for triangles.");
-        m->primitiveAABBBuffer = primitiveAABBBuffer;
+        THROW_RUNTIME_ERROR(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                            motionStep, m->numMotionSteps);
+        m->primitiveAabbBuffers[motionStep] = primitiveAABBBuffer;
     }
 
     void GeometryInstance::setPrimitiveIndexOffset(uint32_t offset) const {
@@ -499,6 +547,15 @@ namespace optixu {
 
         if (changed)
             m->markDirty();
+    }
+
+    void GeometryAccelerationStructure::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
+        m->buildOptions.motionOptions.numKeys = numKeys;
+        m->buildOptions.motionOptions.timeBegin = timeBegin;
+        m->buildOptions.motionOptions.timeEnd = timeEnd;
+        m->buildOptions.motionOptions.flags = flags;
+
+        markDirty();
     }
 
     void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
@@ -1084,10 +1141,10 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
-        m->motionOptions.numKeys = numKeys;
-        m->motionOptions.timeBegin = timeBegin;
-        m->motionOptions.timeEnd = timeEnd;
-        m->motionOptions.flags = flags;
+        m->buildOptions.motionOptions.numKeys = numKeys;
+        m->buildOptions.motionOptions.timeBegin = timeBegin;
+        m->buildOptions.motionOptions.timeEnd = timeEnd;
+        m->buildOptions.motionOptions.flags = flags;
 
         markDirty();
     }
@@ -1142,15 +1199,14 @@ namespace optixu {
             instArray.numInstances = static_cast<uint32_t>(m->children.size());
         }
 
-        m->buildOptions = {};
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        m->buildOptions.buildFlags = 0;
         if (m->tradeoff == ASTradeoff::PreferFastTrace)
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
         else if (m->tradeoff == ASTradeoff::PreferFastBuild)
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
         m->buildOptions.buildFlags |= ((m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                        (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
-        m->buildOptions.motionOptions = m->motionOptions;
 
         OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
                                                  &m->buildInput, 1,

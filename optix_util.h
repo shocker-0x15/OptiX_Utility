@@ -30,7 +30,6 @@ TODO:
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - ASのRelocationサポート。
 - Curve Primitiveサポート。
-- Deformation Blurサポート。
 - AOV Denoiserサポート。
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
@@ -735,9 +734,11 @@ private: \
         // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
         //     required when calling the following APIs.
         //     (It is okay to use update instead of calling markDirty() when changing only vertex/AABB buffer.)
-        void setVertexBuffer(const BufferView &vertexBuffer, OptixVertexFormat format = OPTIX_VERTEX_FORMAT_FLOAT3) const;
+        void setNumMotionSteps(uint32_t n) const;
+        void setVertexFormat(OptixVertexFormat format) const;
+        void setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep = 0) const;
         void setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
-        void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer) const;
+        void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, const BufferView &matIndexOffsetBuffer, uint32_t indexOffsetSize = sizeof(uint32_t)) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
@@ -766,6 +767,7 @@ private: \
         // JP: 以下のAPIを呼んだ場合はGASがdirty状態になる。
         // EN: Calling the following APIs marks the GAS dirty.
         void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
+        void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void markDirty() const;
