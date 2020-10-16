@@ -613,11 +613,11 @@ namespace optixu {
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
         uint32_t childIdx = 0;
-        uint32_t numMotionSteps = m->buildOptions.motionOptions.numKeys;
+        uint32_t numMotionSteps = std::max<uint32_t>(m->buildOptions.motionOptions.numKeys, 1u);
         for (const Priv::Child &child : m->children) {
             child.geomInst->fillBuildInput(&m->buildInputs[childIdx++], child.preTransform);
             uint32_t childNumMotionSteps = child.geomInst->getNumMotionSteps();
-            THROW_RUNTIME_ERROR(childNumMotionSteps == numMotionSteps || numMotionSteps == 0,
+            THROW_RUNTIME_ERROR(childNumMotionSteps == numMotionSteps,
                                 "This GAS has %u motion steps but the GeometryInstance %p has the number %u.",
                                 numMotionSteps, child.geomInst, childNumMotionSteps);
         }

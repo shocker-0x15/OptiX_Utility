@@ -8,6 +8,8 @@ EN: This sample shows how to build a GAS to handle deformation blur.
     set appropriate motion configuration to a GAS to build a GAS capable of deformation blur.
 */
 
+// TODO: Demonstrate custom primitive deformation blur.
+
 #include "deformation_blur_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
