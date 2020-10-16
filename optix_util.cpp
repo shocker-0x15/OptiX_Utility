@@ -405,6 +405,7 @@ namespace optixu {
             m->vertexBufferArray = new CUdeviceptr[n];
             m->vertexBuffers = new BufferView[n];
         }
+        m->numMotionSteps = n;
     }
 
     void GeometryInstance::setVertexFormat(OptixVertexFormat format) const {
@@ -612,11 +613,17 @@ namespace optixu {
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
         uint32_t childIdx = 0;
-        for (const Priv::Child &child : m->children)
+        uint32_t numMotionSteps = m->buildOptions.motionOptions.numKeys;
+        for (const Priv::Child &child : m->children) {
             child.geomInst->fillBuildInput(&m->buildInputs[childIdx++], child.preTransform);
+            uint32_t childNumMotionSteps = child.geomInst->getNumMotionSteps();
+            THROW_RUNTIME_ERROR(childNumMotionSteps == numMotionSteps || numMotionSteps == 0,
+                                "This GAS has %u motion steps but the GeometryInstance %p has the number %u.",
+                                numMotionSteps, child.geomInst, childNumMotionSteps);
+        }
 
-        m->buildOptions = {};
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+        m->buildOptions.buildFlags = 0;
         if (m->tradeoff == ASTradeoff::PreferFastTrace)
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
         else if (m->tradeoff == ASTradeoff::PreferFastBuild)
@@ -624,7 +631,6 @@ namespace optixu {
         m->buildOptions.buildFlags |= ((m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
                                        (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0) |
                                        (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0));
-        //m->buildOptions.motionOptions
 
         uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,

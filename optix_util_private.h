@@ -461,6 +461,9 @@ namespace optixu {
         bool isCustomPrimitiveInstance() const {
             return forCustomPrimitives;
         }
+        uint32_t getNumMotionSteps() const {
+            return numMotionSteps;
+        }
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
@@ -529,6 +532,8 @@ namespace optixu {
             readyToBuild(false), available(false), 
             readyToCompact(false), compactedAvailable(false) {
             scene->addGAS(this);
+
+            buildOptions = {};
 
             CUDADRV_CHECK(cuEventCreate(&finishEvent,
                                         CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));

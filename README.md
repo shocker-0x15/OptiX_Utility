@@ -22,7 +22,7 @@ Currently based on OptiX 7.2.0
   - [ ] Curves
 - Motion blur types
   - [x] Instance motion blur
-  - [ ] Deformation blur
+  - [x] Deformation blur
 - Acceleration structure management
   - [x] Full build
   - [x] Fast update
@@ -233,7 +233,7 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly on the following environment.
 
-* Windows 10 (1909) & Visual Studio 2019 (16.7.5)
+* Windows 10 (1909) & Visual Studio 2019 (16.7.6)
 * Core i9-9900K, 32GB, RTX 2070 8GB
 * NVIDIA Driver 456.55
 
