@@ -108,10 +108,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t maxSizeOfScratchBuffer = 0;
     OptixAccelBufferSizes asMemReqs;
 
-    // JP: このサンプルではマルチレベルインスタンシングやトランスフォームに焦点を当て、
+    // JP: このサンプルではデフォーメーションブラーに焦点を当て、
     //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
     // EN: Use one GeometryInstance per GAS for simplicty and
-    //     to focus on multi-level instancing and transforms in this sample.
+    //     to focus on deformation blur in this sample.
     struct Geometry {
         std::vector<cudau::TypedBuffer<Shared::Vertex>> vertexBuffers;
         cudau::TypedBuffer<Shared::Triangle> triangleBuffer;

@@ -2,9 +2,11 @@
 
 JP: このサンプルはインタラクティブなアプリケーション上で
     動的にオブジェクトを追加・削除・移動する方法の一例を示します。
+    APIの使い方として新しいものを示すサンプルではありません。
 
 EN: This sample demonstrates an example of dynamically add, remove and move objects
     in an interactive application.
+    This sample has nothing new for API usage.
 
 */
 
