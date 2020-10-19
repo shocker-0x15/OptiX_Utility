@@ -229,18 +229,19 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
-        template <typename HeadType0, typename... TailTypes>
+        template <typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION constexpr size_t _calcSumDwords() {
-            uint32_t ret = sizeof(HeadType0) / sizeof(uint32_t);
+            uint32_t ret = sizeof(HeadType) / sizeof(uint32_t);
             if constexpr (sizeof...(TailTypes) > 0)
                 ret += _calcSumDwords<TailTypes...>();
             return ret;
         }
 
-        template <typename... PayloadTypes>
+        // JP: calcSumDwords()には引数が無いため、0個の型を正しく扱うためには現状の実装が必要。
+        template <typename... Types>
         RT_DEVICE_FUNCTION constexpr size_t calcSumDwords() {
-            if constexpr (sizeof...(PayloadTypes) > 0)
-                return _calcSumDwords<PayloadTypes...>();
+            if constexpr (sizeof...(Types) > 0)
+                return _calcSumDwords<Types...>();
             else
                 return 0;
         }

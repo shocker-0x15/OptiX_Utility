@@ -255,16 +255,16 @@ namespace optixu {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
             uint32_t vertexStride = vertexBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
+            uint32_t numVertices = static_cast<uint32_t>(vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
                 THROW_RUNTIME_ERROR(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
-                THROW_RUNTIME_ERROR(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                THROW_RUNTIME_ERROR(vertexBuffers[i].numElements() == numVertices, "Num elements for motion step %u doesn't match that of 0.", i);
                 THROW_RUNTIME_ERROR(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
             }
 
             triArray.vertexBuffers = vertexBufferArray;
-            triArray.numVertices = numElements;
+            triArray.numVertices = numVertices;
             triArray.vertexFormat = vertexFormat;
             triArray.vertexStrideInBytes = vertexStride;
 
