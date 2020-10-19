@@ -20,8 +20,15 @@
 
 /*
 
-JP: 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
-EN: It is very likely for now that any API will have breaking changes.
+Note:
+JP:
+- 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
+- (少なくともホスト側コンパイラーがMSVC 16.7.6の場合は)"-std=c++17"をptxのコンパイル時に設定する必要あり。
+- Visual StudioにおけるCUDAのプロパティ"Use Fast Math"はptxコンパイルに対して機能していない？
+EN:
+- It is very likely for now that any API will have breaking changes.
+- Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.7.6).
+- In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 ----------------------------------------------------------------
 TODO:
@@ -229,21 +236,9 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
-        template <typename HeadType, typename... TailTypes>
-        RT_DEVICE_FUNCTION constexpr size_t _calcSumDwords() {
-            uint32_t ret = sizeof(HeadType) / sizeof(uint32_t);
-            if constexpr (sizeof...(TailTypes) > 0)
-                ret += _calcSumDwords<TailTypes...>();
-            return ret;
-        }
-
-        // JP: calcSumDwords()には引数が無いため、0個の型を正しく扱うためには現状の実装が必要。
         template <typename... Types>
         RT_DEVICE_FUNCTION constexpr size_t calcSumDwords() {
-            if constexpr (sizeof...(Types) > 0)
-                return _calcSumDwords<Types...>();
-            else
-                return 0;
+            return ((... + sizeof(Types)) + 3) / 4;
         }
 
         template <uint32_t start, typename HeadType, typename... TailTypes>
