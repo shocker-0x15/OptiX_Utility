@@ -258,54 +258,52 @@ namespace optixu {
                 packToUInts<start + numDwords>(v, tails...);
         }
 
-        template <typename Func, typename Type, uint32_t offset, uint32_t start>
+        template <typename Func, typename Type, uint32_t offsetInDst, uint32_t srcSlot>
         RT_DEVICE_FUNCTION void getValue(Type* value) {
             if (!value)
                 return;
-            constexpr uint32_t numDwords = sizeof(Type) / sizeof(uint32_t);
-            *(reinterpret_cast<uint32_t*>(value) + offset) = Func::get<start>();
-            if constexpr (offset + 1 < numDwords)
-                getValue<Func, Type, offset + 1, start + 1>(value);
+            *(reinterpret_cast<uint32_t*>(value) + offsetInDst) = Func::get<srcSlot>();
+            if constexpr (offsetInDst + 1 < getNumDwords<Type>())
+                getValue<Func, Type, offsetInDst + 1, srcSlot + 1>(value);
         }
 
-        template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
+        template <typename Func, uint32_t srcStartSlot, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION void getValues(HeadType* head, TailTypes*... tails) {
             static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
                           "Value type of size not multiple of Dword is not supported.");
-            getValue<Func, HeadType, 0, start>(head);
+            getValue<Func, HeadType, 0, srcStartSlot>(head);
             if constexpr (sizeof...(tails) > 0)
-                getValues<Func, start + sizeof(HeadType) / sizeof(uint32_t)>(tails...);
+                getValues<Func, srcStartSlot + getNumDwords<HeadType>()>(tails...);
         }
 
-        template <typename Func, typename Type, uint32_t offset, uint32_t start>
+        template <typename Func, typename Type, uint32_t offsetInSrc, uint32_t dstSlot>
         RT_DEVICE_FUNCTION void setValue(const Type* value) {
             if (!value)
                 return;
-            constexpr uint32_t numDwords = sizeof(Type) / sizeof(uint32_t);
-            Func::set<start>(*(reinterpret_cast<const uint32_t*>(value) + offset));
-            if constexpr (offset + 1 < numDwords)
-                setValue<Func, Type, offset + 1, start + 1>(value);
+            Func::set<dstSlot>(*(reinterpret_cast<const uint32_t*>(value) + offsetInSrc));
+            if constexpr (offsetInSrc + 1 < getNumDwords<Type>())
+                setValue<Func, Type, offsetInSrc + 1, dstSlot + 1>(value);
         }
 
-        template <typename Func, uint32_t start, typename HeadType, typename... TailTypes>
+        template <typename Func, uint32_t dstStartSlot, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION void setValues(const HeadType* head, const TailTypes*... tails) {
             static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
                           "Value type of size not multiple of Dword is not supported.");
-            setValue<Func, HeadType, 0, start>(head);
+            setValue<Func, HeadType, 0, dstStartSlot>(head);
             if constexpr (sizeof...(tails) > 0)
-                setValues<Func, start + sizeof(HeadType) / sizeof(uint32_t)>(tails...);
+                setValues<Func, dstStartSlot + getNumDwords<HeadType>()>(tails...);
         }
 
-        template <uint32_t start, typename HeadType, typename... TailTypes>
+        template <uint32_t startSlot, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION void traceSetPayloads(uint32_t** p, HeadType &headPayload, TailTypes &... tailPayloads) {
             static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
                           "Payload type of size not multiple of Dword is not supported.");
-            constexpr uint32_t numDwords = sizeof(HeadType) / sizeof(uint32_t);
+            constexpr uint32_t numDwords = getNumDwords<HeadType>();
 #pragma unroll
             for (int i = 0; i < numDwords; ++i)
-                p[start + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
+                p[startSlot + i] = reinterpret_cast<uint32_t*>(&headPayload) + i;
             if constexpr (sizeof...(tailPayloads) > 0)
-                traceSetPayloads<start + numDwords>(p, tailPayloads...);
+                traceSetPayloads<startSlot + numDwords>(p, tailPayloads...);
         }
 
         struct PayloadFunc {

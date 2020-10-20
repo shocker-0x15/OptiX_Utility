@@ -3,6 +3,10 @@
 #include "../common/common.h"
 
 namespace Shared {
+    static constexpr float Pi = 3.14159265358979323846f;
+
+
+
     enum RayType {
         RayType_Primary = 0,
         NumRayTypes
@@ -56,11 +60,23 @@ namespace Shared {
     };
 
 
-    
+
+    struct SphereParameter {
+        float3 center;
+        float radius;
+    };
+
     struct GeometryData {
-        const Vertex* vertexBuffers[2];
-        const Triangle* triangleBuffer;
-        uint32_t numMotionSteps;
+        union {
+            struct {
+                const Vertex* vertexBuffers[2];
+                const Triangle* triangleBuffer;
+            };
+            struct {
+                const AABB* aabbBuffers[2];
+                const SphereParameter* paramBuffers[2];
+            };
+        };
     };
 
 

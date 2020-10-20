@@ -8,8 +8,6 @@ EN: This sample shows how to build a GAS to handle deformation blur.
     set appropriate motion configuration to a GAS to build a GAS capable of deformation blur.
 */
 
-// TODO: Demonstrate custom primitive deformation blur.
-
 #include "deformation_blur_shared.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -39,12 +37,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
+    //     カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: This sample uses two-level AS (single-level instancing).
+    //     Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
     pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
                                 true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG,
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
@@ -60,10 +60,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
     // EN: This group is for ray-triangle intersection, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
+    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroup(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         emptyModule, nullptr);
+
+    // JP: このヒットグループはレイと球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
+    // EN: This is for ray-sphere intersection, so pass a custom intersection program.
+    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroup(
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        moduleOptiX, RT_IS_NAME_STR("intersectSphere"));
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -91,8 +98,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-    optixu::Material mat0 = optixContext.createMaterial();
-    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    optixu::Material matForTriangles = optixContext.createMaterial();
+    matForTriangles.setHitGroup(Shared::RayType_Primary, hitProgramGroupForTriangles);
+    optixu::Material matForSpheres = optixContext.createMaterial();
+    matForSpheres.setHitGroup(Shared::RayType_Primary, hitProgramGroupForSpheres);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -113,8 +122,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Use one GeometryInstance per GAS for simplicty and
     //     to focus on deformation blur in this sample.
     struct Geometry {
-        std::vector<cudau::TypedBuffer<Shared::Vertex>> vertexBuffers;
-        cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
+        struct TriangleMesh {
+            std::vector<cudau::TypedBuffer<Shared::Vertex>> vertexBuffers;
+            cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
+        };
+        struct CustomPrimitives {
+            std::vector<cudau::TypedBuffer<AABB>> aabbBuffers;
+            std::vector<cudau::TypedBuffer<Shared::SphereParameter>> paramBuffers;
+        };
+        std::variant<TriangleMesh, CustomPrimitives> shape;
+        bool isTriangleMesh;
         optixu::GeometryInstance optixGeomInst;
         optixu::GeometryAccelerationStructure optixGas;
         cudau::Buffer gasMem;
@@ -123,122 +140,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
         void finalize() {
             gasMem.finalize();
             optixGas.destroy();
-            triangleBuffer.finalize();
-            for (int i = vertexBuffers.size() - 1; i >= 0; --i)
-                vertexBuffers[i].finalize();
+            if (std::holds_alternative<TriangleMesh>(shape)) {
+                auto &triMesh = std::get<TriangleMesh>(shape);
+                triMesh.triangleBuffer.finalize();
+                for (int i = triMesh.vertexBuffers.size() - 1; i >= 0; --i)
+                    triMesh.vertexBuffers[i].finalize();
+            }
+            else {
+                auto &customPrims = std::get<CustomPrimitives>(shape);
+                for (int i = customPrims.aabbBuffers.size() - 1; i >= 0; --i) {
+                    customPrims.aabbBuffers[i].finalize();
+                    customPrims.paramBuffers[i].finalize();
+                }
+            }
             optixGeomInst.destroy();
         }
     };
-
-    Geometry room;
-    {
-        Shared::Vertex vertices[] = {
-            // floor
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
-            { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
-            // back wall
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 0) },
-            // ceiling
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(1, 0) },
-            // left wall
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(1, 0, 0), make_float2(0, 1) },
-            { make_float3(-1.0f, 1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 1) },
-            { make_float3(-1.0f, -1.0f, 1.0f), make_float3(1, 0, 0), make_float2(1, 0) },
-            // right wall
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 0) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(-1, 0, 0), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, 1.0f), make_float3(-1, 0, 0), make_float2(1, 0) },
-        };
-
-        Shared::Triangle triangles[] = {
-            // floor
-            { 0, 1, 2 }, { 0, 2, 3 },
-            // back wall
-            { 4, 7, 6 }, { 4, 6, 5 },
-            // ceiling
-            { 8, 11, 10 }, { 8, 10, 9 },
-            // left wall
-            { 15, 12, 13 }, { 15, 13, 14 },
-            // right wall
-            { 16, 19, 18 }, { 16, 18, 17 }
-        };
-
-        room.vertexBuffers.resize(1);
-        room.vertexBuffers[0].initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        room.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-
-        Shared::GeometryData geomData = {};
-        geomData.vertexBuffers[0] = room.vertexBuffers[0].getDevicePointer();
-        geomData.triangleBuffer = room.triangleBuffer.getDevicePointer();
-        geomData.numMotionSteps = 1;
-
-        room.optixGeomInst = scene.createGeometryInstance();
-        room.optixGeomInst.setVertexBuffer(getView(room.vertexBuffers[0]));
-        room.optixGeomInst.setTriangleBuffer(getView(room.triangleBuffer));
-        room.optixGeomInst.setNumMaterials(1, optixu::BufferView());
-        room.optixGeomInst.setMaterial(0, 0, mat0);
-        room.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setUserData(geomData);
-
-        room.optixGas = scene.createGeometryAccelerationStructure();
-        room.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-        room.optixGas.setNumMaterialSets(1);
-        room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
-        room.optixGas.addChild(room.optixGeomInst);
-        room.optixGas.prepareForBuild(&asMemReqs);
-        room.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-    }
-
-    Geometry areaLight;
-    {
-        Shared::Vertex vertices[] = {
-            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
-        };
-
-        Shared::Triangle triangles[] = {
-            { 0, 1, 2 }, { 0, 2, 3 },
-        };
-
-        areaLight.vertexBuffers.resize(1);
-        areaLight.vertexBuffers[0].initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        areaLight.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-
-        Shared::GeometryData geomData = {};
-        geomData.vertexBuffers[0] = areaLight.vertexBuffers[0].getDevicePointer();
-        geomData.triangleBuffer = areaLight.triangleBuffer.getDevicePointer();
-        geomData.numMotionSteps = 1;
-
-        areaLight.optixGeomInst = scene.createGeometryInstance();
-        areaLight.optixGeomInst.setVertexBuffer(getView(areaLight.vertexBuffers[0]));
-        areaLight.optixGeomInst.setTriangleBuffer(getView(areaLight.triangleBuffer));
-        areaLight.optixGeomInst.setNumMaterials(1, optixu::BufferView());
-        areaLight.optixGeomInst.setMaterial(0, 0, mat0);
-        areaLight.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        areaLight.optixGeomInst.setUserData(geomData);
-
-        areaLight.optixGas = scene.createGeometryAccelerationStructure();
-        areaLight.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-        areaLight.optixGas.setNumMaterialSets(1);
-        areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
-        areaLight.optixGas.addChild(areaLight.optixGeomInst);
-        areaLight.optixGas.prepareForBuild(&asMemReqs);
-        areaLight.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-    }
 
     Geometry bunny;
     {
@@ -247,35 +164,37 @@ int32_t main(int32_t argc, const char* argv[]) try {
         loadObj("../../data/stanford_bunny_309_faces.obj",
                 &vertices, &triangles);
 
+        bunny.shape = Geometry::TriangleMesh();
+        auto &shape = std::get<Geometry::TriangleMesh>(bunny.shape);
+
         // JP: 頂点バッファーを2ステップ分作る。
         //     2ステップ目は頂点位置を爆発するようにずらす。
         // EN: Create vertex buffer for two steps.
         //     The second step displaces the positions of vertices like explosion.
         uint32_t numMotionSteps = 2;
-        bunny.vertexBuffers.resize(numMotionSteps);
-        bunny.vertexBuffers[0].initialize(cuContext, cudau::BufferType::Device, vertices);
+        shape.vertexBuffers.resize(numMotionSteps);
+        shape.vertexBuffers[0].initialize(cuContext, cudau::BufferType::Device, vertices);
         for (int i = 0; i < vertices.size(); ++i) {
             Shared::Vertex &v = vertices[i];
             v.position = v.position + v.normal * length(v.position - float3(0, 0, 42)) * 0.25f;
         }
-        bunny.vertexBuffers[1].initialize(cuContext, cudau::BufferType::Device, vertices);
-        bunny.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
+        shape.vertexBuffers[1].initialize(cuContext, cudau::BufferType::Device, vertices);
+        shape.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Shared::GeometryData geomData = {};
         for (int i = 0; i < numMotionSteps; ++i)
-            geomData.vertexBuffers[i] = bunny.vertexBuffers[i].getDevicePointer();
-        geomData.triangleBuffer = bunny.triangleBuffer.getDevicePointer();
-        geomData.numMotionSteps = numMotionSteps;
+            geomData.vertexBuffers[i] = shape.vertexBuffers[i].getDevicePointer();
+        geomData.triangleBuffer = shape.triangleBuffer.getDevicePointer();
 
         bunny.optixGeomInst = scene.createGeometryInstance();
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
         bunny.optixGeomInst.setNumMotionSteps(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
-            bunny.optixGeomInst.setVertexBuffer(getView(bunny.vertexBuffers[i]), i);
-        bunny.optixGeomInst.setTriangleBuffer(getView(bunny.triangleBuffer));
+            bunny.optixGeomInst.setVertexBuffer(getView(shape.vertexBuffers[i]), i);
+        bunny.optixGeomInst.setTriangleBuffer(getView(shape.triangleBuffer));
         bunny.optixGeomInst.setNumMaterials(1, optixu::BufferView());
-        bunny.optixGeomInst.setMaterial(0, 0, mat0);
+        bunny.optixGeomInst.setMaterial(0, 0, matForTriangles);
         bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunny.optixGeomInst.setUserData(geomData);
 
@@ -292,6 +211,85 @@ int32_t main(int32_t argc, const char* argv[]) try {
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
+    Geometry spheres;
+    {
+        spheres.shape = Geometry::CustomPrimitives();
+        auto &shape = std::get<Geometry::CustomPrimitives>(spheres.shape);
+
+        constexpr uint32_t numPrimitives = 25;
+        std::vector<AABB> aabbs0(numPrimitives);
+        std::vector<AABB> aabbs1(numPrimitives);
+        std::vector<Shared::SphereParameter> sphereParams0(numPrimitives);
+        std::vector<Shared::SphereParameter> sphereParams1(numPrimitives);
+
+        std::mt19937 rng(1290527201);
+        std::uniform_real_distribution u01;
+        for (int i = 0; i < numPrimitives; ++i) {
+            Shared::SphereParameter &param0 = sphereParams0[i];
+            float x = -0.8f + 1.6f * (i % 5) / 4.0f;
+            float y = -1.0f + 0.4f * u01(rng);
+            float z = -0.8f + 1.6f * (i / 5) / 4.0f;
+            param0.center = float3(x, y, z);
+            param0.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
+
+            Shared::SphereParameter &param1 = sphereParams1[i];
+            param1 = param0;
+            param1.center += 0.4f * float3(u01(rng) - 0.5f,
+                                           u01(rng) - 0.5f,
+                                           u01(rng) - 0.5f);
+            param1.radius *= 0.5f + 1.0f * u01(rng);
+
+            AABB &aabb0 = aabbs0[i];
+            aabb0 = AABB();
+            aabb0.unify(param0.center - float3(param0.radius));
+            aabb0.unify(param0.center + float3(param0.radius));
+
+            AABB &aabb1 = aabbs1[i];
+            aabb1 = AABB();
+            aabb1.unify(param1.center - float3(param1.radius));
+            aabb1.unify(param1.center + float3(param1.radius));
+        }
+
+        // JP: AABBバッファーを2ステップ分作る。
+        // EN: Create AABB buffer for two steps.
+        uint32_t numMotionSteps = 2;
+        shape.aabbBuffers.resize(numMotionSteps);
+        shape.aabbBuffers[0].initialize(cuContext, cudau::BufferType::Device, aabbs0);
+        shape.aabbBuffers[1].initialize(cuContext, cudau::BufferType::Device, aabbs1);
+        shape.paramBuffers.resize(numMotionSteps);
+        shape.paramBuffers[0].initialize(cuContext, cudau::BufferType::Device, sphereParams0);
+        shape.paramBuffers[1].initialize(cuContext, cudau::BufferType::Device, sphereParams1);
+
+        Shared::GeometryData geomData = {};
+        for (int i = 0; i < numMotionSteps; ++i) {
+            geomData.aabbBuffers[i] = shape.aabbBuffers[i].getDevicePointer();
+            geomData.paramBuffers[i] = shape.paramBuffers[i].getDevicePointer();
+        }
+
+        spheres.optixGeomInst = scene.createGeometryInstance(true);
+        // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
+        // EN: Set the number of motion steps then set the vertex buffer for each step.
+        spheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        for (int i = 0; i < numMotionSteps; ++i)
+            spheres.optixGeomInst.setCustomPrimitiveAABBBuffer(getView(shape.aabbBuffers[i]), i);
+        spheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        spheres.optixGeomInst.setMaterial(0, 0, matForSpheres);
+        spheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        spheres.optixGeomInst.setUserData(geomData);
+
+        spheres.optixGas = scene.createGeometryAccelerationStructure(true);
+        spheres.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        // JP: GASのモーション設定を行う。
+        // EN: Set the GAS's motion configuration.
+        spheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+        spheres.optixGas.setNumMaterialSets(1);
+        spheres.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        spheres.optixGas.addChild(spheres.optixGeomInst);
+        spheres.optixGas.prepareForBuild(&asMemReqs);
+        spheres.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    }
+
 
 
     cudau::Buffer asBuildScratchMem;
@@ -299,13 +297,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    room.optixGas.rebuild(cuStream, getView(room.gasMem), getView(asBuildScratchMem));
-    areaLight.optixGas.rebuild(cuStream, getView(areaLight.gasMem), getView(asBuildScratchMem));
     bunny.optixGas.rebuild(cuStream, getView(bunny.gasMem), getView(asBuildScratchMem));
+    spheres.optixGas.rebuild(cuStream, getView(spheres.gasMem), getView(asBuildScratchMem));
 
     // JP: 静的なメッシュはコンパクションもしておく。
+    //     ここではモーションがあることが"動的"を意味しない。頻繁にASのリビルドが必要なものを"動的"、そうでないものを"静的"とする。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
     // EN: Perform compaction for static meshes.
+    //     The existence of motion does not mean "dynamic" here.
+    //     Call things as "dynamic" for which we often need to rebuild the AS otherwise call them as "static".
     //     Record ASs of multiple meshes into single buffer back to back.
     struct CompactedASInfo {
         optixu::GeometryAccelerationStructure gas;
@@ -313,9 +313,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         size_t size;
     };
     CompactedASInfo gasList[] = {
-        { room.optixGas, 0, 0 },
-        { areaLight.optixGas, 0, 0 },
         { bunny.optixGas, 0, 0 },
+        { spheres.optixGas, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -354,27 +353,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: インスタンスを作成する。
     // EN: Create instances.
-    optixu::Instance roomInst = scene.createInstance();
-    roomInst.setChild(room.optixGas);
-
-    float areaLightInstXfm[] = {
-        1, 0, 0, 0,
-        0, 1, 0, 0.9f,
-        0, 0, 1, 0
-    };
-    optixu::Instance areaLightInst = scene.createInstance();
-    areaLightInst.setChild(areaLight.optixGas);
-    areaLightInst.setTransform(areaLightInstXfm);
-
-    Matrix3x3 bunnyMatSR = rotateY3x3(M_PI / 4) * scale3x3(0.012f);
+    Matrix3x3 bunnyMatSR = rotateY3x3(M_PI / 4) * scale3x3(0.015f);
     float bunnyInstXfm[] = {
         bunnyMatSR.m00, bunnyMatSR.m01, bunnyMatSR.m02, 0,
-        bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.5f,
+        bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.2f,
         bunnyMatSR.m20, bunnyMatSR.m21, bunnyMatSR.m22, 0
     };
     optixu::Instance bunnyInst = scene.createInstance();
     bunnyInst.setChild(bunny.optixGas);
     bunnyInst.setTransform(bunnyInstXfm);
+
+    optixu::Instance spheresInst = scene.createInstance();
+    spheresInst.setChild(spheres.optixGas);
 
 
 
@@ -384,11 +374,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer iasMem;
     uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    constexpr uint32_t numMotionKeys = 3;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(roomInst);
-    ias.addChild(areaLightInst);
     ias.addChild(bunnyInst);
+    ias.addChild(spheresInst);
     ias.prepareForBuild(&asMemReqs, &numInstances);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
@@ -491,23 +479,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     hitGroupSBT.finalize();
 
+    spheresInst.destroy();
     bunnyInst.destroy();
-    areaLightInst.destroy();
-    roomInst.destroy();
 
+    spheres.finalize();
     bunny.finalize();
-    areaLight.finalize();
-    room.finalize();
 
     scene.destroy();
 
-    mat0.destroy();
+    matForSpheres.destroy();
+    matForTriangles.destroy();
 
 
 
     shaderBindingTable.finalize();
 
-    hitProgramGroup.destroy();
+    hitProgramGroupForSpheres.destroy();
+    hitProgramGroupForTriangles.destroy();
 
     missProgram.destroy();
     rayGenProgram.destroy();

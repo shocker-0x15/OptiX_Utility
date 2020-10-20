@@ -48,6 +48,7 @@
 #   include <functional>
 #   include <thread>
 #   include <chrono>
+#   include <variant>
 
 #   include <immintrin.h>
 

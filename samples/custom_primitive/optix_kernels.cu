@@ -128,7 +128,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         sn = normalize(sn);
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
-        const SphereParameter &param = geom.paramBuffer[hp.primIndex];
+        //const SphereParameter &param = geom.paramBuffer[hp.primIndex];
         float theta = hp.b1;
         float phi = hp.b2;
         float sinTheta = std::sin(theta);
