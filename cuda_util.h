@@ -311,6 +311,9 @@ namespace cudau {
         Buffer(Buffer &&b);
         Buffer &operator=(Buffer &&b);
 
+        template <typename T>
+        inline operator T() const;
+
         void initialize(CUcontext context, BufferType type,
                         uint32_t numElements, uint32_t stride) {
             initialize(context, type, numElements, stride, 0);

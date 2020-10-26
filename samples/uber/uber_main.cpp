@@ -150,8 +150,8 @@ public:
         m_sceneContext->geometryDataBuffer.unmap();
 
         optixu::GeometryInstance geomInst = m_sceneContext->optixScene.createGeometryInstance();
-        geomInst.setVertexBuffer(getView(m_vertexBuffer));
-        geomInst.setTriangleBuffer(getView(*triangleBuffer));
+        geomInst.setVertexBuffer(m_vertexBuffer);
+        geomInst.setTriangleBuffer(*triangleBuffer);
         geomInst.setUserData(m_sceneContext->geometryID);
         geomInst.setNumMaterials(1, optixu::BufferView());
         geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -484,7 +484,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
     shaderBindingTable.setMappedMemoryPersistent(true);
-    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
+    pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
     OptixStackSizes stackSizes;
 
@@ -932,7 +932,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         static_assert(sizeof(AABB) == sizeof(OptixAabb),
                       "Custom AABB buffer must obey the same format as OptixAabb.");
-        customPrimInstance.setCustomPrimitiveAABBBuffer(getView(customPrimAABBs));
+        customPrimInstance.setCustomPrimitiveAABBBuffer(customPrimAABBs);
         customPrimInstance.setNumMaterials(1, optixu::BufferView());
         customPrimInstance.setMaterial(0, 0, matCustomPrimObject);
         customPrimInstance.setUserData(sceneContext.geometryID);
@@ -1024,10 +1024,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Build geometry acceleration structures.
     //     Share the scratch buffer among them.
     asBuildScratchMem.initialize(cuContext, g_bufferType, maxSizeOfScratchBuffer, 1);
-    travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream, getView(gasCornellBoxMem), getView(asBuildScratchMem));
-    travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream, getView(gasAreaLightMem), getView(asBuildScratchMem));
-    travHandles[gasObjectIndex] = gasObject.rebuild(cuStream, getView(gasObjectMem), getView(asBuildScratchMem));
-    travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream, getView(gasCustomPrimObjectMem), getView(asBuildScratchMem));
+    travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream, gasCornellBoxMem, asBuildScratchMem);
+    travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream, gasAreaLightMem, asBuildScratchMem);
+    travHandles[gasObjectIndex] = gasObject.rebuild(cuStream, gasObjectMem, asBuildScratchMem);
+    travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream, gasCustomPrimObjectMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     // EN: Perform compaction for static meshes.
@@ -1036,8 +1036,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCornellBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     gasAreaLight.prepareForCompact(&compactedASSize);
     gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
-    travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream, getView(gasCornellBoxCompactedMem));
-    travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream, getView(gasAreaLightCompactedMem));
+    travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream, gasCornellBoxCompactedMem);
+    travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream, gasAreaLightCompactedMem);
     gasCornellBox.removeUncompacted();
     gasAreaLight.removeUncompacted();
 
@@ -1108,7 +1108,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Instance Acceleration Structureをビルドする。
     // EN: Build the instance acceleration structure.
-    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream, getView(instanceBuffer), getView(iasSceneMem), getView(asBuildScratchMem));
+    travHandles[iasSceneIndex] = iasScene.rebuild(cuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
 
     travHandleBuffer.unmap();
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
@@ -1211,7 +1211,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.textures = textureObjectBuffer.getDevicePointer();
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
+    pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -1640,9 +1640,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curGPUTimer.updateGAS.start(cuStream);
             OptixTraversableHandle gasHandle = gasObject.getHandle();
             if (enablePeriodicGASRebuild && animFrameIndex % gasRebuildInterval == 0)
-                gasHandle = gasObject.rebuild(cuStream, getView(gasObjectMem), getView(asBuildScratchMem));
+                gasHandle = gasObject.rebuild(cuStream, gasObjectMem, asBuildScratchMem);
             else
-                gasObject.update(cuStream, getView(asBuildScratchMem));
+                gasObject.update(cuStream, asBuildScratchMem);
             curGPUTimer.updateGAS.stop(cuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
                                             &gasHandle, sizeof(gasHandle),
@@ -1680,9 +1680,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curGPUTimer.updateIAS.start(cuStream);
             OptixTraversableHandle iasHandle = iasScene.getHandle();
             if (enablePeriodicIASRebuild && animFrameIndex % iasRebuildInterval == 0)
-                iasHandle = iasScene.rebuild(cuStream, getView(instanceBuffer), getView(iasSceneMem), getView(asBuildScratchMem));
+                iasHandle = iasScene.rebuild(cuStream, instanceBuffer, iasSceneMem, asBuildScratchMem);
             else
-                iasScene.update(cuStream, getView(asBuildScratchMem));
+                iasScene.update(cuStream, asBuildScratchMem);
             curGPUTimer.updateIAS.stop(cuStream);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
                                             &iasHandle, sizeof(iasHandle),

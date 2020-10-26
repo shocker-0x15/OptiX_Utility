@@ -94,7 +94,7 @@ cudau::Buffer sbt;
 size_t sbtSize;
 scene.generateShaderBindingTableLayout(&sbtSize);
 //...
-pipeline.setShaderBindingTable(getView(sbt), sbt.getMappedPointer());
+pipeline.setShaderBindingTable(sbt, sbt.getMappedPointer());
 
 // Create materials.
 optix::Material defaultMat = optixContext.createMaterial();
@@ -111,8 +111,8 @@ optixu::GeometryInstance geomInst0 = scene.createGeometryInstance();
 cudau::TypedBuffer<Vertex> vertexBuffer;
 cudau::TypedBuffer<Triangle> triangleBuffer;
 // ...
-geomInst0.setVertexBuffer(getView(vertexBuffer));
-geomInst0.setTriangleBuffer(getView(triangleBuffer));
+geomInst0.setVertexBuffer(vertexBuffer);
+geomInst0.setTriangleBuffer(triangleBuffer);
 geomInst0.setUserData(...);
 geomInst0.setNumMaterials(1, BufferView());
 geomInst0.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -133,7 +133,7 @@ optixu::GeometryAccelerationStructure gas1 = scene.createGeometryAccelerationStr
 cudau::Buffer gas0Mem;
 gas0.prepareForBuild(&asMemReqs);
 // ...
-OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, getView(gas0Mem), getView(asBuildScratchMem));
+OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, gas0Mem, asBuildScratchMem);
 
 // Create instances.
 optixu::Instance inst0 = scene.createInstance();
@@ -153,7 +153,7 @@ optixu::InstanceAccelerationStructure ias1 = scene.createInstanceAccelerationStr
 cudau::Buffer ias0Mem;
 ias0.prepareForBuild(&asMemReqs);
 // ...
-OptixTraversableHandle ias0Handle = ias0.rebuild(cuStream, getView(instBuffer), getView(ias0Mem), getView(asBuildScratchMem));
+OptixTraversableHandle ias0Handle = ias0.rebuild(cuStream, instBuffer, ias0Mem, asBuildScratchMem);
 
 // Allocate a shader binding table for hit groups.
 cudau::Buffer hitGroupSbt;
@@ -163,7 +163,7 @@ scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
 
 // Associate the pipeline and the scene/shader binding table.
 pipeline.setScene(scene);
-pipeline.setHitGroupShaderBindingTable(getView(hitGroupSbt), hitGroupSbt.getMappedPointer());
+pipeline.setHitGroupShaderBindingTable(hitGroupSbt, hitGroupSbt.getMappedPointer());
 
 // Setup pipeline launch parameters and allocate memory for it on the device.
 PipelineLaunchParameter plp;
@@ -234,8 +234,8 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 I've confirmed that the program runs correctly on the following environment.
 
 * Windows 10 (1909) & Visual Studio 2019 (16.7.6)
-* Core i9-9900K, 32GB, RTX 2070 8GB
-* NVIDIA Driver 456.55
+* Core i9-9900K, 32GB, RTX 3080 10GB
+* NVIDIA Driver 456.71
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.

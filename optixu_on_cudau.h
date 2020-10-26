@@ -229,7 +229,13 @@ namespace optixu {
 }
 
 #if !defined(__CUDA_ARCH__)
-inline optixu::BufferView getView(const cudau::Buffer &buffer) {
-    return optixu::BufferView(buffer.getCUdeviceptr(), buffer.numElements(), buffer.stride());
+
+template <>
+cudau::Buffer::operator optixu::BufferView() const {
+    return optixu::BufferView(getCUdeviceptr(), numElements(), stride());
 }
+
+//inline optixu::BufferView getView(const cudau::Buffer &buffer) {
+//    return optixu::BufferView(buffer.getCUdeviceptr(), buffer.numElements(), buffer.stride());
+//}
 #endif // !defined(__CUDA_ARCH__)

@@ -300,8 +300,8 @@ void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* 
         geomInst->vertexBuffer = vertexBuffer;
         geomInst->triangleBuffer.initialize(optixEnv->cuContext, g_bufferType, triangles, stream);
         geomInst->optixGeomInst = optixEnv->scene.createGeometryInstance();
-        geomInst->optixGeomInst.setVertexBuffer(getView(*vertexBuffer));
-        geomInst->optixGeomInst.setTriangleBuffer(getView(geomInst->triangleBuffer));
+        geomInst->optixGeomInst.setVertexBuffer(*vertexBuffer);
+        geomInst->optixGeomInst.setTriangleBuffer(geomInst->triangleBuffer);
         geomInst->optixGeomInst.setNumMaterials(1, optixu::BufferView());
         geomInst->optixGeomInst.setMaterial(0, 0, optixEnv->material);
         Shared::GeometryData geomData = {};
@@ -1186,7 +1186,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
     shaderBindingTable.setMappedMemoryPersistent(true);
-    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
+    pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
     OptixStackSizes stackSizes;
 
@@ -2000,7 +2000,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                 geomGroup->optixGasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
             }
-            geomGroup->optixGAS.rebuild(cuStream, getView(geomGroup->optixGasMem), getView(optixEnv.asScratchBuffer));
+            geomGroup->optixGAS.rebuild(cuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
         }
 
         if (hitGroupSbtLayoutUpdated) {
@@ -2016,7 +2016,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 curHitGroupSBT->initialize(cuContext, g_bufferType, hitGroupSbtSize, 1);
                 curHitGroupSBT->setMappedMemoryPersistent(true);
             }
-            pipeline.setHitGroupShaderBindingTable(getView(*curHitGroupSBT), curHitGroupSBT->getMappedPointer());
+            pipeline.setHitGroupShaderBindingTable(*curHitGroupSBT, curHitGroupSBT->getMappedPointer());
             hitGroupSbtLayoutUpdated = false;
         }
 
@@ -2053,7 +2053,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group->optixIasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
                 group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, numInstances);
             }
-            group->optixIAS.rebuild(cuStream, getView(group->optixInstanceBuffer), getView(group->optixIasMem), getView(optixEnv.asScratchBuffer));
+            group->optixIAS.rebuild(cuStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
         }
 
         if (traversablesUpdated) {

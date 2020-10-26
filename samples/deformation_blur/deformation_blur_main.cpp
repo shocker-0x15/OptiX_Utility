@@ -87,7 +87,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
     shaderBindingTable.setMappedMemoryPersistent(true);
-    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
+    pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -131,7 +131,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             std::vector<cudau::TypedBuffer<Shared::SphereParameter>> paramBuffers;
         };
         std::variant<TriangleMesh, CustomPrimitives> shape;
-        bool isTriangleMesh;
         optixu::GeometryInstance optixGeomInst;
         optixu::GeometryAccelerationStructure optixGas;
         cudau::Buffer gasMem;
@@ -191,8 +190,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // EN: Set the number of motion steps then set the vertex buffer for each step.
         bunny.optixGeomInst.setNumMotionSteps(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
-            bunny.optixGeomInst.setVertexBuffer(getView(shape.vertexBuffers[i]), i);
-        bunny.optixGeomInst.setTriangleBuffer(getView(shape.triangleBuffer));
+            bunny.optixGeomInst.setVertexBuffer(shape.vertexBuffers[i], i);
+        bunny.optixGeomInst.setTriangleBuffer(shape.triangleBuffer);
         bunny.optixGeomInst.setNumMaterials(1, optixu::BufferView());
         bunny.optixGeomInst.setMaterial(0, 0, matForTriangles);
         bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -271,7 +270,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // EN: Set the number of motion steps then set the vertex buffer for each step.
         spheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
-            spheres.optixGeomInst.setCustomPrimitiveAABBBuffer(getView(shape.aabbBuffers[i]), i);
+            spheres.optixGeomInst.setCustomPrimitiveAABBBuffer(shape.aabbBuffers[i], i);
         spheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
         spheres.optixGeomInst.setMaterial(0, 0, matForSpheres);
         spheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -297,8 +296,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    bunny.optixGas.rebuild(cuStream, getView(bunny.gasMem), getView(asBuildScratchMem));
-    spheres.optixGas.rebuild(cuStream, getView(spheres.gasMem), getView(asBuildScratchMem));
+    bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
+    spheres.optixGas.rebuild(cuStream, spheres.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     ここではモーションがあることが"動的"を意味しない。頻繁にASのリビルドが必要なものを"動的"、そうでないものを"静的"とする。
@@ -385,7 +384,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -430,7 +429,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
+    pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));

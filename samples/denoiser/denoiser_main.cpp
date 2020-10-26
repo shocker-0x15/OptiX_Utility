@@ -84,7 +84,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.generateShaderBindingTableLayout(&sbtSize);
     shaderBindingTable.initialize(cuContext, cudau::BufferType::Device, sbtSize, 1);
     shaderBindingTable.setMappedMemoryPersistent(true);
-    pipeline.setShaderBindingTable(getView(shaderBindingTable), shaderBindingTable.getMappedPointer());
+    pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -292,9 +292,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
 
-        roomGeomInst.setVertexBuffer(getView(roomVertexBuffer));
-        roomGeomInst.setTriangleBuffer(getView(roomTriangleBuffer));
-        roomGeomInst.setNumMaterials(5, getView(roomMatIndexBuffer), sizeof(uint8_t));
+        roomGeomInst.setVertexBuffer(roomVertexBuffer);
+        roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
+        roomGeomInst.setNumMaterials(5, roomMatIndexBuffer, sizeof(uint8_t));
         roomGeomInst.setMaterial(0, 0, floorMat);
         roomGeomInst.setMaterial(0, 1, farSideWallMat);
         roomGeomInst.setMaterial(0, 2, ceilingMat);
@@ -330,8 +330,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 
-        areaLightGeomInst.setVertexBuffer(getView(areaLightVertexBuffer));
-        areaLightGeomInst.setTriangleBuffer(getView(areaLightTriangleBuffer));
+        areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
+        areaLightGeomInst.setTriangleBuffer(areaLightTriangleBuffer);
         areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, areaLightMat);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -353,8 +353,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
         geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
 
-        bunnyGeomInst.setVertexBuffer(getView(bunnyVertexBuffer));
-        bunnyGeomInst.setTriangleBuffer(getView(bunnyTriangleBuffer));
+        bunnyGeomInst.setVertexBuffer(bunnyVertexBuffer);
+        bunnyGeomInst.setTriangleBuffer(bunnyTriangleBuffer);
         bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
             bunnyGeomInst.setMaterial(matSetIdx, 0, bunnyMats[matSetIdx]);
@@ -405,9 +405,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, getView(roomGasMem), getView(asBuildScratchMem));
-    areaLightGas.rebuild(cuStream, getView(areaLightGasMem), getView(asBuildScratchMem));
-    bunnyGas.rebuild(cuStream, getView(bunnyGasMem), getView(asBuildScratchMem));
+    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
+    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
+    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -521,7 +521,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
         asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, getView(instanceBuffer), getView(iasMem), getView(asBuildScratchMem));
+    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -597,12 +597,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
     denoiser.getTasks(denoisingTasks.data());
 
-    denoiser.setLayers(getView(linearColorBuffer),
-                       getView(linearAlbedoBuffer),
-                       getView(linearNormalBuffer),
-                       getView(linearOutputBuffer),
+    denoiser.setLayers(linearColorBuffer,
+                       linearAlbedoBuffer,
+                       linearNormalBuffer,
+                       linearOutputBuffer,
                                                                                                                   OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4);
-    denoiser.setupState(cuStream, getView(denoiserStateBuffer), getView(denoiserScratchBuffer));
+    denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
 
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
@@ -628,7 +628,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.orientation = rotateY3x3(M_PI);
 
     pipeline.setScene(scene);
-    pipeline.setHitGroupShaderBindingTable(getView(hitGroupSBT), hitGroupSBT.getMappedPointer());
+    pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
 
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
@@ -672,7 +672,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     You can also create a custom computeIntensity().
     //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
     timerDenoise.start(cuStream);
-    denoiser.computeIntensity(cuStream, getView(denoiserScratchBuffer), hdrIntensity);
+    denoiser.computeIntensity(cuStream, denoiserScratchBuffer, hdrIntensity);
     for (int i = 0; i < denoisingTasks.size(); ++i)
         denoiser.invoke(cuStream, false, hdrIntensity, 0.0f, denoisingTasks[i]);
     timerDenoise.stop(cuStream);
