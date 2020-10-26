@@ -74,6 +74,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
+    // JP: シーンに依存しないシェーダーバインディングテーブルの確保。
+    //     OptiX UtilityのAPIにCUDA UtilityのBufferを直接渡しているように見えるが、
+    //     実際には暗黙的な変換がかかっていることに注意(optixu_on_cudau.h 参照)。
+    //     OptiX UtilityはCUDA Utilityには直接依存しない。
+    // EN: Allocate the shader binding table which doesn't depend on a scene.
+    //     It appears directly passing Buffer of CUDA Utility to OptiX Utility API
+    //     but note that there is actually implicit conversion (see optixu_on_cudau.h).
+    //     OptiX Utility is not directly dependent on CUDA Utility.
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
     pipeline.generateShaderBindingTableLayout(&sbtSize);
@@ -168,10 +176,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: GeometryInstanceに頂点バッファーと三角形(インデックス)バッファーを渡す。
         //     GeometryInstanceはバッファーの参照を持つだけなので一時変数のバッファーを渡したり
         //     Acceleration Structureのビルド時に解放されていないように注意。
+        //     OptiX UtilityのAPIにCUDA UtilityのBufferを直接渡しているように見えるが、
+        //     実際には暗黙的な変換がかかっていることに注意(optixu_on_cudau.h 参照)。
         // EN: Pass the vertex buffer and triangle (index) buffer to the GeometryInstance.
         //     Note that GeometryInstance just takes a reference to a buffer and doesn't hold it,
         //     so do not pass a buffer of temporary variable or be careful so that the buffer is not
         //     released when building an acceleration structure.
+        //     It appears directly passing Buffer of CUDA Utility to OptiX Utility API
+        //     but note that there is actually implicit conversion (see optixu_on_cudau.h).
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
         roomGeomInst.setNumMaterials(1, optixu::BufferView());
@@ -317,6 +329,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    // JP: シーンのシェーダーバインディングテーブルの確保。
+    // EN: Allocate the shader binding table for the scene.
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
