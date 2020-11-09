@@ -176,7 +176,7 @@ namespace optixu {
 
 
     class Context::Priv {
-        CUcontext cudaContext;
+        CUcontext cuContext;
         OptixDeviceContext rawContext;
         uint32_t maxInstanceID;
         uint32_t numVisibilityMaskBits;
@@ -184,7 +184,7 @@ namespace optixu {
     public:
         OPTIX_OPAQUE_BRIDGE(Context);
 
-        Priv(CUcontext cuContext, bool enableValidation) : cudaContext(cuContext) {
+        Priv(CUcontext _cuContext, bool enableValidation) : cuContext(_cuContext) {
             OPTIX_CHECK(optixInit());
 
             OptixDeviceContextOptions options = {};
@@ -194,7 +194,7 @@ namespace optixu {
             options.validationMode = enableValidation ?
                 OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL :
                 OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF;
-            OPTIX_CHECK(optixDeviceContextCreate(cudaContext, &options, &rawContext));
+            OPTIX_CHECK(optixDeviceContextCreate(cuContext, &options, &rawContext));
             OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
                                                       &maxInstanceID, sizeof(maxInstanceID)));
             OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK,
@@ -211,9 +211,6 @@ namespace optixu {
             return numVisibilityMaskBits;
         }
 
-        CUcontext getCUDAContext() const {
-            return cudaContext;
-        }
         OptixDeviceContext getRawContext() const {
             return rawContext;
         }
@@ -333,9 +330,6 @@ namespace optixu {
 
         const _Context* getContext() const {
             return context;
-        }
-        CUcontext getCUDAContext() const {
-            return context->getCUDAContext();
         }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
@@ -553,9 +547,6 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        CUcontext getCUDAContext() const {
-            return scene->getCUDAContext();
-        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
@@ -646,9 +637,6 @@ namespace optixu {
 
         const _Scene* getScene() const {
             return scene;
-        }
-        CUcontext getCUDAContext() const {
-            return scene->getCUDAContext();
         }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
@@ -781,9 +769,6 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        CUcontext getCUDAContext() const {
-            return scene->getCUDAContext();
-        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
@@ -862,9 +847,6 @@ namespace optixu {
                 optixPipelineDestroy(rawPipeline);
         }
 
-        CUcontext getCUDAContext() const {
-            return context->getCUDAContext();
-        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
@@ -1021,9 +1003,6 @@ namespace optixu {
             optixDenoiserDestroy(rawDenoiser);
         }
 
-        CUcontext getCUDAContext() const {
-            return context->getCUDAContext();
-        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }

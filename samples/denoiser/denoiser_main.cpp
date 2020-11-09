@@ -571,8 +571,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    // ----------------------------------------------------------------
     // JP: デノイザーのセットアップ。
     // EN: Setup a denoiser.
+
     constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
     constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
     constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
@@ -612,6 +614,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUdeviceptr hdrIntensity;
     CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
+
+    // END: Setup a denoiser.
+    // ----------------------------------------------------------------
 
 
 
