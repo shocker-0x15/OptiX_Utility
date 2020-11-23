@@ -94,7 +94,11 @@ namespace optixu {
         return std::runtime_error(str);
     }
 
-#define THROW_RUNTIME_ERROR(expr, fmt, ...) do { if (!(expr)) throw make_runtime_error(fmt, ##__VA_ARGS__); } while (0)
+#if defined(OPTIXU_ENABLE_RUNTIME_ERROR)
+#   define THROW_RUNTIME_ERROR(expr, fmt, ...) do { if (!(expr)) throw make_runtime_error(fmt, ##__VA_ARGS__); } while (0)
+#else
+#   define THROW_RUNTIME_ERROR(expr, fmt, ...)
+#endif
 
     static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
         optixuPrintf("[%2u][%12s]: %s\n", level, tag, message);
@@ -106,24 +110,14 @@ namespace optixu {
 
 
 
-#define OPTIX_ALIAS_PIMPL(Name) using _ ## Name = Name::Priv
-
-    OPTIX_ALIAS_PIMPL(Context);
-    OPTIX_ALIAS_PIMPL(Material);
-    OPTIX_ALIAS_PIMPL(Scene);
-    OPTIX_ALIAS_PIMPL(GeometryInstance);
-    OPTIX_ALIAS_PIMPL(GeometryAccelerationStructure);
-    OPTIX_ALIAS_PIMPL(Transform);
-    OPTIX_ALIAS_PIMPL(Instance);
-    OPTIX_ALIAS_PIMPL(InstanceAccelerationStructure);
-    OPTIX_ALIAS_PIMPL(Pipeline);
-    OPTIX_ALIAS_PIMPL(Module);
-    OPTIX_ALIAS_PIMPL(ProgramGroup);
-    OPTIX_ALIAS_PIMPL(Denoiser);
+    // Alias private classes.
+#define OPTIXU_PREPROCESS_OBJECT(Name) using _ ## Name = Name::Priv
+    OPTIXU_PREPROCESS_OBJECTS();
+#undef OPTIXU_PREPROCESS_OBJECT
 
 
 
-#define OPTIX_OPAQUE_BRIDGE(BaseName) \
+#define OPTIXU_OPAQUE_BRIDGE(BaseName) \
     friend class BaseName; \
 \
     BaseName getPublicType() { \
@@ -131,7 +125,6 @@ namespace optixu {
         ret.m = this; \
         return ret; \
     } \
-\
     static BaseName::Priv* extract(BaseName publicType) { \
         return publicType.m; \
     }
@@ -139,6 +132,14 @@ namespace optixu {
     template <typename PublicType>
     static typename PublicType::Priv* extract(const PublicType &obj) {
         return PublicType::Priv::extract(obj);
+    }
+
+#define OPTIXU_PRIV_NAME_INTERFACE() \
+    void setName(const std::string &name) const { \
+        getContext()->registerName(this, name); \
+    } \
+    std::string getName() const { \
+        return getContext()->getRegisteredName(this); \
     }
 
 
@@ -175,14 +176,17 @@ namespace optixu {
 
 
 
+#define THROW_RUNTIME_ERROR_CONTEXT(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Context %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+    
     class Context::Priv {
         CUcontext cuContext;
         OptixDeviceContext rawContext;
         uint32_t maxInstanceID;
         uint32_t numVisibilityMaskBits;
+        std::unordered_map<const void*, std::string> registeredNames;
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Context);
+        OPTIXU_OPAQUE_BRIDGE(Context);
 
         Priv(CUcontext _cuContext, bool enableValidation) : cuContext(_cuContext) {
             OPTIX_CHECK(optixInit());
@@ -211,12 +215,44 @@ namespace optixu {
             return numVisibilityMaskBits;
         }
 
+        _Context* getContext() {
+            return this;
+        }
         OptixDeviceContext getRawContext() const {
             return rawContext;
+        }
+
+        void registerName(const void* p, const std::string &name) {
+            optixuAssert(p, "Object must not be nullptr.");
+            registeredNames[p] = name;
+        }
+        void unregisterName(const void* p) {
+            optixuAssert(p, "Object must not be nullptr.");
+            optixuAssert(registeredNames.count(p) > 0, "The object %p has not been registered.", p);
+            registeredNames.erase(p);
+        }
+        std::string getRegisteredName(const void* p) const {
+            if (registeredNames.count(p) > 0) {
+                return registeredNames.at(p);
+            }
+            else {
+                char ptrStr[32];
+                sprintf_s(ptrStr, "%p", p);
+                return ptrStr;
+            }
+        }
+
+        void setName(const std::string &name) {
+            registerName(this, name);
+        }
+        std::string getName() const {
+            return getRegisteredName(this);
         }
     };
 
 
+
+#define THROW_RUNTIME_ERROR_MATERIAL(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Material %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class Material::Priv {
         struct Key {
@@ -258,15 +294,19 @@ namespace optixu {
         std::unordered_map<Key, const _ProgramGroup*, Key::Hash> programs;
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Material);
+        OPTIXU_OPAQUE_BRIDGE(Material);
 
         Priv(_Context* ctxt) :
             context(ctxt), userData(sizeof(uint32_t)) {}
         ~Priv() {}
 
+        _Context* getContext() const {
+            return context;
+        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
         SizeAlign getUserDataSizeAlign() const {
             return userDataSizeAlign;
@@ -276,6 +316,8 @@ namespace optixu {
 
 
     
+#define THROW_RUNTIME_ERROR_SCENE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Scene %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+
     class Scene::Priv {
         struct SBTOffsetKey {
             const _GeometryAccelerationStructure* gas;
@@ -309,7 +351,7 @@ namespace optixu {
             }
         };
 
-        const _Context* context;
+        _Context* context;
         std::unordered_set<_GeometryAccelerationStructure*> geomASs;
         std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> sbtOffsets;
         uint32_t singleRecordSize;
@@ -321,19 +363,20 @@ namespace optixu {
         };
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Scene);
+        OPTIXU_OPAQUE_BRIDGE(Scene);
 
-        Priv(const _Context* ctxt) : context(ctxt),
+        Priv(_Context* ctxt) : context(ctxt),
             singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
             sbtLayoutIsUpToDate(false) {}
         ~Priv() {}
 
-        const _Context* getContext() const {
+        _Context* getContext() const {
             return context;
         }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -360,11 +403,7 @@ namespace optixu {
             return sbtLayoutIsUpToDate;
         }
         void markSBTLayoutDirty();
-        uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
-            SBTOffsetKey key = SBTOffsetKey{ gas, matSetIdx };
-            THROW_RUNTIME_ERROR(sbtOffsets.count(key), "GAS %p: material set index %u is out of bounds.", gas, matSetIdx);
-            return sbtOffsets.at(key);
-        }
+        uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx);
 
         uint32_t getSingleRecordSize() const {
             return singleRecordSize;
@@ -375,6 +414,8 @@ namespace optixu {
     };
 
 
+
+#define THROW_RUNTIME_ERROR_GEOMINST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GeomInst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class GeometryInstance::Priv {
         _Scene* scene;
@@ -407,7 +448,7 @@ namespace optixu {
         };
 
     public:
-        OPTIX_OPAQUE_BRIDGE(GeometryInstance);
+        OPTIXU_OPAQUE_BRIDGE(GeometryInstance);
 
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
             scene(_scene),
@@ -446,9 +487,13 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -469,6 +514,8 @@ namespace optixu {
     };
 
 
+
+#define THROW_RUNTIME_ERROR_GAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class GeometryAccelerationStructure::Priv {
         struct Child {
@@ -514,7 +561,7 @@ namespace optixu {
         };
 
     public:
-        OPTIX_OPAQUE_BRIDGE(GeometryAccelerationStructure);
+        OPTIXU_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
         Priv(_Scene* _scene, bool _forCustomPrimitives) :
             scene(_scene),
@@ -547,9 +594,13 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -573,7 +624,7 @@ namespace optixu {
         }
 
         OptixTraversableHandle getHandle() const {
-            THROW_RUNTIME_ERROR(isReady(), "Traversable handle is not ready.");
+            THROW_RUNTIME_ERROR_GAS(isReady(), "Traversable handle is not ready.");
             if (compactedAvailable)
                 return compactedHandle;
             if (available)
@@ -592,6 +643,8 @@ namespace optixu {
     };
 
 
+
+#define THROW_RUNTIME_ERROR_XFM(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Transform %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class Transform::Priv {
         _Scene* scene;
@@ -612,7 +665,7 @@ namespace optixu {
         };
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Transform);
+        OPTIXU_OPAQUE_BRIDGE(Transform);
 
         Priv(_Scene* _scene) :
             scene(_scene), type(TransformType::Invalid),
@@ -638,9 +691,13 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -652,12 +709,14 @@ namespace optixu {
         }
 
         OptixTraversableHandle getHandle() const {
-            THROW_RUNTIME_ERROR(isReady(), "Traversable handle is not ready.");
+            THROW_RUNTIME_ERROR(isReady(), "IAS %s: Traversable handle is not ready.", getName().c_str());
             return handle;
         }
     };
 
 
+
+#define THROW_RUNTIME_ERROR_INST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Inst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class Instance::Priv {
         _Scene* scene;
@@ -674,7 +733,7 @@ namespace optixu {
         float instTransform[12];
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Instance);
+        OPTIXU_OPAQUE_BRIDGE(Instance);
 
         Priv(_Scene* _scene) :
             scene(_scene),
@@ -696,6 +755,10 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -706,6 +769,8 @@ namespace optixu {
     };
 
 
+
+#define THROW_RUNTIME_ERROR_IAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "IAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class InstanceAccelerationStructure::Priv {
         _Scene* scene;
@@ -738,7 +803,7 @@ namespace optixu {
         };
 
     public:
-        OPTIX_OPAQUE_BRIDGE(InstanceAccelerationStructure);
+        OPTIXU_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
         Priv(_Scene* _scene) :
             scene(_scene),
@@ -769,9 +834,13 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
         OptixDeviceContext getRawContext() const {
             return scene->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -799,8 +868,10 @@ namespace optixu {
 
 
 
+#define THROW_RUNTIME_ERROR_PIPELINE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Pipeline %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+
     class Pipeline::Priv {
-        const _Context* context;
+        _Context* context;
         OptixPipeline rawPipeline;
 
         OptixPipelineCompileOptions pipelineCompileOptions;
@@ -832,9 +903,9 @@ namespace optixu {
         void setupShaderBindingTable(CUstream stream);
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Pipeline);
+        OPTIXU_OPAQUE_BRIDGE(Pipeline);
 
-        Priv(const _Context* ctxt) :
+        Priv(_Context* ctxt) :
             context(ctxt), rawPipeline(nullptr),
             sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
@@ -847,9 +918,13 @@ namespace optixu {
                 optixPipelineDestroy(rawPipeline);
         }
 
+        _Context* getContext() const {
+            return context;
+        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
 
 
@@ -864,16 +939,20 @@ namespace optixu {
         OptixModule rawModule;
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Module);
+        OPTIXU_OPAQUE_BRIDGE(Module);
 
         Priv(const _Pipeline* pl, OptixModule _rawModule) :
             pipeline(pl), rawModule(_rawModule) {}
 
 
 
+        _Context* getContext() const {
+            return pipeline->getContext();
+        }
         const _Pipeline* getPipeline() const {
             return pipeline;
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
         OptixModule getRawModule() const {
             return rawModule;
@@ -887,16 +966,20 @@ namespace optixu {
         OptixProgramGroup rawGroup;
 
     public:
-        OPTIX_OPAQUE_BRIDGE(ProgramGroup);
+        OPTIXU_OPAQUE_BRIDGE(ProgramGroup);
 
         Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) :
             pipeline(pl), rawGroup(_rawGroup) {}
 
 
 
+        _Context* getContext() const {
+            return pipeline->getContext();
+        }
         const _Pipeline* getPipeline() const {
             return pipeline;
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
 
         OptixProgramGroup getRawProgramGroup() const {
             return rawGroup;
@@ -909,6 +992,8 @@ namespace optixu {
 
 
 
+#define THROW_RUNTIME_ERROR_DENOISER(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Denoiser %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+    
     static inline uint32_t getPixelSize(OptixPixelFormat format) {
         switch (format) {
         case OPTIX_PIXEL_FORMAT_HALF3:
@@ -953,7 +1038,7 @@ namespace optixu {
                   "Size/Alignment mismatch: DenoisingTask vs _DenoisingTask");
     
     class Denoiser::Priv {
-        const _Context* context;
+        _Context* context;
         OptixDenoiser rawDenoiser;
         OptixDenoiserInputKind inputKind;
 
@@ -986,9 +1071,9 @@ namespace optixu {
         };
 
     public:
-        OPTIX_OPAQUE_BRIDGE(Denoiser);
+        OPTIXU_OPAQUE_BRIDGE(Denoiser);
 
-        Priv(const _Context* ctxt, OptixDenoiserInputKind _inputKind) :
+        Priv(_Context* ctxt, OptixDenoiserInputKind _inputKind) :
             context(ctxt),
             inputKind(_inputKind),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
@@ -1003,8 +1088,12 @@ namespace optixu {
             optixDenoiserDestroy(rawDenoiser);
         }
 
+        _Context* getContext() const {
+            return context;
+        }
         OptixDeviceContext getRawContext() const {
             return context->getRawContext();
         }
+        OPTIXU_PRIV_NAME_INTERFACE();
     };
 }

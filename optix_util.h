@@ -23,12 +23,15 @@
 Note:
 JP:
 - 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
-- (少なくともホスト側コンパイラーがMSVC 16.7.6の場合は)"-std=c++17"をptxのコンパイル時に設定する必要あり。
+- (少なくともホスト側コンパイラーがMSVC 16.8.2の場合は)"-std=c++17"をptxのコンパイル時に設定する必要あり。
 - Visual StudioにおけるCUDAのプロパティ"Use Fast Math"はptxコンパイルに対して機能していない？
 EN:
 - It is very likely for now that any API will have breaking changes.
-- Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.7.6).
+- Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
+
+破壊的変更履歴 (直近5件) / Breaking Change History (recent 5 changes):
+- 
 
 ----------------------------------------------------------------
 TODO:
@@ -51,6 +54,18 @@ TODO:
 - ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
 - GAS中のGeometryInstanceのインデックスを取得できるようにする。
   各GeometryInstanceが1つのSBTレコードしか使っていない場合はoptixGetSbtGASIndex()で代用できる。
+- Material::setHitGroup()はレイタイプの数値が同じでもヒットグループのパイプラインが違っていれば別個に登録できるが、
+  これがAPI上からは読み取りづらい。あえて冗長だがパイプラインの識別情報も引数として受け取るべき？
+- Scene::generateShaderBindingTableLayout()はPipelineに依存すべき？
+  => その場合はこの関数自体setSceneを使った後に呼ばれるPipelineの関数となるべき？
+  SBT自体内容はパイプラインに依存するのでレイアウトがパイプラインに依存するのは問題ない？
+  現状の問題点：
+  - パイプラインごとにマテリアルに設定されているレイタイプ数が異なる場合に、
+    最大のレイタイプ数をGASに設定すると、SBTレコードを書き込む際にマテリアルがあるレイタイプに対して
+    設定されていないと言われてしまう。
+    => GASのレイタイプ数設定をパイプラインに依存させる？ => Sceneとパイプラインは切り離したい。
+  - GASがレイタイプ数設定を持っているのが不自然？ => パイプラインがレイタイプ数を持つようにして
+    SBTレイアウト計算もPipelineに依存させる？
 
 */
 
@@ -79,6 +94,11 @@ TODO:
 #if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
 #endif
+
+#ifdef _DEBUG
+#   define OPTIXU_ENABLE_ASSERT
+#endif
+#define OPTIXU_ENABLE_RUNTIME_ERROR
 
 #if defined(__CUDA_ARCH__)
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
@@ -137,10 +157,6 @@ inline OptixExceptionFlags operator|(OptixExceptionFlags a, OptixExceptionFlags 
 
 
 namespace optixu {
-#ifdef _DEBUG
-#   define OPTIXU_ENABLE_ASSERT
-#endif
-
     void devPrintf(const char* fmt, ...);
 
 #if 1
@@ -586,18 +602,23 @@ namespace optixu {
 
     */
 
-    class Context;
-    class Material;
-    class Scene;
-    class GeometryInstance;
-    class GeometryAccelerationStructure;
-    class Transform;
-    class Instance;
-    class InstanceAccelerationStructure;
-    class Pipeline;
-    class Module;
-    class ProgramGroup;
-    class Denoiser;
+#define OPTIXU_PREPROCESS_OBJECTS() \
+    OPTIXU_PREPROCESS_OBJECT(Context); \
+    OPTIXU_PREPROCESS_OBJECT(Material); \
+    OPTIXU_PREPROCESS_OBJECT(Scene); \
+    OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
+    OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
+    OPTIXU_PREPROCESS_OBJECT(Transform); \
+    OPTIXU_PREPROCESS_OBJECT(Instance); \
+    OPTIXU_PREPROCESS_OBJECT(InstanceAccelerationStructure); \
+    OPTIXU_PREPROCESS_OBJECT(Pipeline); \
+    OPTIXU_PREPROCESS_OBJECT(Module); \
+    OPTIXU_PREPROCESS_OBJECT(ProgramGroup); \
+    OPTIXU_PREPROCESS_OBJECT(Denoiser);
+
+#define OPTIXU_PREPROCESS_OBJECT(Type) class Type
+    OPTIXU_PREPROCESS_OBJECTS();
+#undef OPTIXU_PREPROCESS_OBJECT
 
     enum class ASTradeoff {
         Default = 0,
@@ -651,7 +672,9 @@ private: \
         static_assert(std::is_same<decltype(r), decltype(*this)>::value, \
                       "This function can be defined only for the self type."); \
         return m < r.m; \
-    }
+    } \
+    void setName(const std::string &name) const; \
+    std::string getName() const;
 
 
 

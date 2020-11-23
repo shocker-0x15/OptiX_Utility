@@ -377,10 +377,14 @@ namespace cudau {
         }
         void unmap(CUstream stream = 0);
         void* getMappedPointer() const {
+            if (m_mappedPointer == nullptr)
+                throw std::runtime_error("The buffer is not not mapped.");
             return m_mappedPointer;
         }
         template <typename T>
         T* getMappedPointer() const {
+            if (m_mappedPointer == nullptr)
+                throw std::runtime_error("The buffer is not not mapped.");
             return reinterpret_cast<T*>(m_mappedPointer);
         }
         template <typename T>
