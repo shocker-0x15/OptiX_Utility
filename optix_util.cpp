@@ -61,7 +61,7 @@ namespace optixu {
     Material Context::createMaterial() const {
         return (new _Material(m))->getPublicType();
     }
-    
+
     Scene Context::createScene() const {
         return (new _Scene(m))->getPublicType();
     }
@@ -91,7 +91,7 @@ namespace optixu {
         curSizeAlign->add(userDataSizeAlign, &offset);
         std::memcpy(record + offset, userData.data(), userDataSizeAlign.size);
     }
-    
+
     void Material::destroy() {
         delete m;
         m = nullptr;
@@ -104,7 +104,7 @@ namespace optixu {
         _Material::Key key{ _pipeline, rayType };
         m->programs[key] = extract(hitGroup);
     }
-    
+
     void Material::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
         THROW_RUNTIME_ERROR_MATERIAL(size <= s_maxMaterialUserDataSize,
                                      "Maximum user data size for Material is %u bytes.", s_maxMaterialUserDataSize);
@@ -117,7 +117,6 @@ namespace optixu {
 
 
 
-    
     void Scene::Priv::markSBTLayoutDirty() {
         sbtLayoutIsUpToDate = false;
 
@@ -178,7 +177,7 @@ namespace optixu {
         delete m;
         m = nullptr;
     }
-    
+
     GeometryInstance Scene::createGeometryInstance(bool forCustomPrimitives) const {
         return (new _GeometryInstance(m, forCustomPrimitives))->getPublicType();
     }
@@ -550,7 +549,7 @@ namespace optixu {
 
         scene->markSBTLayoutDirty();
     }
-    
+
     void GeometryAccelerationStructure::destroy() {
         delete m;
         m = nullptr;
@@ -1407,7 +1406,7 @@ namespace optixu {
         programGroups.erase(group);
         OPTIX_CHECK(optixProgramGroupDestroy(group));
     }
-    
+
     void Pipeline::Priv::setupShaderBindingTable(CUstream stream) {
         if (!sbtIsUpToDate) {
             THROW_RUNTIME_ERROR_PIPELINE(rayGenProgram, "Ray generation program is not set.");
@@ -1725,7 +1724,7 @@ namespace optixu {
 
         *memorySize = m->sbtSize;
     }
-    
+
     void Pipeline::setRayGenerationProgram(ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
         THROW_RUNTIME_ERROR_PIPELINE(_program, "Invalid program %p.", _program);

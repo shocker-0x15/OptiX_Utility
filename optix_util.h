@@ -616,6 +616,7 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECT(ProgramGroup); \
     OPTIXU_PREPROCESS_OBJECT(Denoiser);
 
+    // Forward Declarations
 #define OPTIXU_PREPROCESS_OBJECT(Type) class Type
     OPTIXU_PREPROCESS_OBJECTS();
 #undef OPTIXU_PREPROCESS_OBJECT
@@ -1051,7 +1052,7 @@ private: \
 
         // TODO: ? implement a function to query required window (tile + overlap).
     };
-    
+
     class Denoiser {
         OPTIXU_PIMPL();
 

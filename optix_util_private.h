@@ -100,6 +100,17 @@ namespace optixu {
 #   define THROW_RUNTIME_ERROR(expr, fmt, ...)
 #endif
 
+#define THROW_RUNTIME_ERROR_CONTEXT(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Context %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_MATERIAL(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Material %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_SCENE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Scene %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_GEOMINST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GeomInst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_GAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_XFM(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Transform %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_INST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Inst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_IAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "IAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_PIPELINE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Pipeline %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+#define THROW_RUNTIME_ERROR_DENOISER(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Denoiser %s: " fmt, getName().c_str(), ##__VA_ARGS__);
+
     static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
         optixuPrintf("[%2u][%12s]: %s\n", level, tag, message);
     }
@@ -176,8 +187,6 @@ namespace optixu {
 
 
 
-#define THROW_RUNTIME_ERROR_CONTEXT(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Context %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-    
     class Context::Priv {
         CUcontext cuContext;
         OptixDeviceContext rawContext;
@@ -252,8 +261,6 @@ namespace optixu {
 
 
 
-#define THROW_RUNTIME_ERROR_MATERIAL(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Material %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-
     class Material::Priv {
         struct Key {
             const _Pipeline* pipeline;
@@ -315,8 +322,6 @@ namespace optixu {
     };
 
 
-    
-#define THROW_RUNTIME_ERROR_SCENE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Scene %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class Scene::Priv {
         struct SBTOffsetKey {
@@ -415,8 +420,6 @@ namespace optixu {
 
 
 
-#define THROW_RUNTIME_ERROR_GEOMINST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GeomInst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-
     class GeometryInstance::Priv {
         _Scene* scene;
         SizeAlign userDataSizeAlign;
@@ -514,8 +517,6 @@ namespace optixu {
     };
 
 
-
-#define THROW_RUNTIME_ERROR_GAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class GeometryAccelerationStructure::Priv {
         struct Child {
@@ -617,7 +618,7 @@ namespace optixu {
         bool hasMotion() const {
             return buildOptions.motionOptions.numKeys >= 2;
         }
-        
+
         void markDirty();
         bool isReady() const {
             return available || compactedAvailable;
@@ -643,8 +644,6 @@ namespace optixu {
     };
 
 
-
-#define THROW_RUNTIME_ERROR_XFM(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Transform %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class Transform::Priv {
         _Scene* scene;
@@ -716,8 +715,6 @@ namespace optixu {
 
 
 
-#define THROW_RUNTIME_ERROR_INST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Inst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-
     class Instance::Priv {
         _Scene* scene;
         ChildType type;
@@ -769,8 +766,6 @@ namespace optixu {
     };
 
 
-
-#define THROW_RUNTIME_ERROR_IAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "IAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class InstanceAccelerationStructure::Priv {
         _Scene* scene;
@@ -867,8 +862,6 @@ namespace optixu {
     };
 
 
-
-#define THROW_RUNTIME_ERROR_PIPELINE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Pipeline %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     class Pipeline::Priv {
         _Context* context;
@@ -992,8 +985,6 @@ namespace optixu {
 
 
 
-#define THROW_RUNTIME_ERROR_DENOISER(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Denoiser %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-    
     static inline uint32_t getPixelSize(OptixPixelFormat format) {
         switch (format) {
         case OPTIX_PIXEL_FORMAT_HALF3:
@@ -1036,7 +1027,7 @@ namespace optixu {
     static_assert(sizeof(DenoisingTask) == sizeof(_DenoisingTask) &&
                   alignof(DenoisingTask) == alignof(_DenoisingTask),
                   "Size/Alignment mismatch: DenoisingTask vs _DenoisingTask");
-    
+
     class Denoiser::Priv {
         _Context* context;
         OptixDenoiser rawDenoiser;
