@@ -22,11 +22,11 @@
 
 Note:
 JP:
-- 現状ではあらゆるAPIに破壊的変更が入る可能性が非常に高い。
+- 現状ではあらゆるAPIに破壊的変更が入る可能性がある。
 - (少なくともホスト側コンパイラーがMSVC 16.8.2の場合は)"-std=c++17"をptxのコンパイル時に設定する必要あり。
 - Visual StudioにおけるCUDAのプロパティ"Use Fast Math"はptxコンパイルに対して機能していない？
 EN:
-- It is very likely for now that any API will have breaking changes.
+- It is likely for now that any API will have breaking changes.
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
@@ -55,10 +55,11 @@ TODO:
 - GAS中のGeometryInstanceのインデックスを取得できるようにする。
   各GeometryInstanceが1つのSBTレコードしか使っていない場合はoptixGetSbtGASIndex()で代用できる。
 - Material::setHitGroup()はレイタイプの数値が同じでもヒットグループのパイプラインが違っていれば別個に登録できるが、
-  これがAPI上からは読み取りづらい。あえて冗長だがパイプラインの識別情報も引数として受け取るべき？
+  これがAPI上からは読み取りづらい。冗長だが敢えてパイプラインの識別情報も引数として受け取るべき？
 - Scene::generateShaderBindingTableLayout()はPipelineに依存すべき？
   => その場合はこの関数自体setSceneを使った後に呼ばれるPipelineの関数となるべき？
-  SBT自体内容はパイプラインに依存するのでレイアウトがパイプラインに依存するのは問題ない？
+     SBT自体内容はレコードのヘッダーによって必ずパイプラインに依存するので
+     レイアウトがパイプラインに依存するのは問題ない？
   現状の問題点：
   - パイプラインごとにマテリアルに設定されているレイタイプ数が異なる場合に、
     最大のレイタイプ数をGASに設定すると、SBTレコードを書き込む際にマテリアルがあるレイタイプに対して
@@ -675,7 +676,7 @@ private: \
         return m < r.m; \
     } \
     void setName(const std::string &name) const; \
-    std::string getName() const;
+    const char* getName() const;
 
 
 

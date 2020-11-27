@@ -84,32 +84,12 @@
 
 
 namespace optixu {
-    static std::runtime_error make_runtime_error(const char* fmt, ...) {
-        va_list args;
-        va_start(args, fmt);
-        char str[4096];
-        vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
-        va_end(args);
-
-        return std::runtime_error(str);
+    template <typename... Types>
+    static void _throwRuntimeError(const char* fmt, const Types &... args) {
+        char str[2048];
+        snprintf(str, sizeof(str), fmt, args...);
+        throw std::runtime_error(str);
     }
-
-#if defined(OPTIXU_ENABLE_RUNTIME_ERROR)
-#   define THROW_RUNTIME_ERROR(expr, fmt, ...) do { if (!(expr)) throw make_runtime_error(fmt, ##__VA_ARGS__); } while (0)
-#else
-#   define THROW_RUNTIME_ERROR(expr, fmt, ...)
-#endif
-
-#define THROW_RUNTIME_ERROR_CONTEXT(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Context %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_MATERIAL(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Material %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_SCENE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Scene %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_GEOMINST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GeomInst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_GAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "GAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_XFM(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Transform %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_INST(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Inst %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_IAS(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "IAS %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_PIPELINE(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Pipeline %s: " fmt, getName().c_str(), ##__VA_ARGS__);
-#define THROW_RUNTIME_ERROR_DENOISER(expr, fmt, ...) THROW_RUNTIME_ERROR(expr, "Denoiser %s: " fmt, getName().c_str(), ##__VA_ARGS__);
 
     static void logCallBack(uint32_t level, const char* tag, const char* message, void* cbdata) {
         optixuPrintf("[%2u][%12s]: %s\n", level, tag, message);
@@ -149,9 +129,29 @@ namespace optixu {
     void setName(const std::string &name) const { \
         getContext()->registerName(this, name); \
     } \
-    std::string getName() const { \
+    const char* getRegisteredName() const { \
         return getContext()->getRegisteredName(this); \
+    } \
+    std::string getName() const { \
+        return getContext()->getName(this); \
     }
+
+#if defined(OPTIXU_ENABLE_RUNTIME_ERROR)
+#   define OPTIXU_THROW_RUNTIME_ERROR(TypeName) \
+        template <typename... Types> \
+        void throwRuntimeError(bool expr, const char* fmt, const Types &... args) const { \
+            if (expr) \
+                return; \
+\
+            std::stringstream ss; \
+            ss << TypeName ## " " << getName() << ": " << fmt; \
+            optixu::_throwRuntimeError(ss.str().c_str(), args...); \
+        }
+#else
+#   define OPTIXU_THROW_RUNTIME_ERROR(TypeName) \
+        template <typename... Types> \
+        void throwRuntimeError(bool, const char*, const Types &...) const {}
+#endif
 
 
 
@@ -240,9 +240,15 @@ namespace optixu {
             optixuAssert(registeredNames.count(p) > 0, "The object %p has not been registered.", p);
             registeredNames.erase(p);
         }
-        std::string getRegisteredName(const void* p) const {
-            if (registeredNames.count(p) > 0) {
-                return registeredNames.at(p);
+        const char* getRegisteredName(const void* p) const {
+            if (registeredNames.count(p) > 0)
+                return registeredNames.at(p).c_str();
+            return nullptr;
+        }
+        std::string getName(const void* p) const {
+            const char* regName = getRegisteredName(p);
+            if (regName) {
+                return regName;
             }
             else {
                 char ptrStr[32];
@@ -254,9 +260,22 @@ namespace optixu {
         void setName(const std::string &name) {
             registerName(this, name);
         }
-        std::string getName() const {
+        const char* getRegisteredName() const {
             return getRegisteredName(this);
         }
+        std::string getName() const {
+            const char* regName = getRegisteredName(this);
+            if (regName) {
+                return regName;
+            }
+            else {
+                char ptrStr[32];
+                sprintf_s(ptrStr, "%p", this);
+                return ptrStr;
+            }
+        }
+
+        OPTIXU_THROW_RUNTIME_ERROR("Context");
     };
 
 
@@ -314,6 +333,7 @@ namespace optixu {
             return context->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("Material");
 
         SizeAlign getUserDataSizeAlign() const {
             return userDataSizeAlign;
@@ -382,6 +402,7 @@ namespace optixu {
             return context->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("Scene");
 
 
 
@@ -497,6 +518,7 @@ namespace optixu {
             return scene->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("GeomInst");
 
 
 
@@ -602,6 +624,7 @@ namespace optixu {
             return scene->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("GAS");
 
 
 
@@ -625,7 +648,7 @@ namespace optixu {
         }
 
         OptixTraversableHandle getHandle() const {
-            THROW_RUNTIME_ERROR_GAS(isReady(), "Traversable handle is not ready.");
+            throwRuntimeError(isReady(), "Traversable handle is not ready.");
             if (compactedAvailable)
                 return compactedHandle;
             if (available)
@@ -697,6 +720,7 @@ namespace optixu {
             return scene->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("Transform");
 
 
 
@@ -708,7 +732,7 @@ namespace optixu {
         }
 
         OptixTraversableHandle getHandle() const {
-            THROW_RUNTIME_ERROR(isReady(), "IAS %s: Traversable handle is not ready.", getName().c_str());
+            throwRuntimeError(isReady(), "IAS %s: Traversable handle is not ready.", getName().c_str());
             return handle;
         }
     };
@@ -756,6 +780,7 @@ namespace optixu {
             return scene->getContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("Inst");
 
 
 
@@ -836,6 +861,7 @@ namespace optixu {
             return scene->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("IAS");
 
 
 
@@ -851,7 +877,7 @@ namespace optixu {
         }
 
         OptixTraversableHandle getHandle() const {
-            THROW_RUNTIME_ERROR(isReady(), "Traversable handle is not ready.");
+            throwRuntimeError(isReady(), "Traversable handle is not ready.");
             if (compactedAvailable)
                 return compactedHandle;
             if (available)
@@ -918,6 +944,7 @@ namespace optixu {
             return context->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("Pipeline");
 
 
 
@@ -1086,5 +1113,6 @@ namespace optixu {
             return context->getRawContext();
         }
         OPTIXU_PRIV_NAME_INTERFACE();
+        OPTIXU_THROW_RUNTIME_ERROR("Denoiser");
     };
 }

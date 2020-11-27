@@ -39,8 +39,8 @@ namespace optixu {
     void Type::setName(const std::string &name) const { \
         m->setName(name); \
     } \
-    std::string Type::getName() const { \
-        return m->getName(); \
+    const char* Type::getName() const { \
+        return m->getRegisteredName(); \
     }
     OPTIXU_PREPROCESS_OBJECTS();
 #undef OPTIXU_PREPROCESS_OBJECT
@@ -82,8 +82,8 @@ namespace optixu {
 
     void Material::Priv::setRecordData(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const {
         Key key{ pipeline, rayType };
-        THROW_RUNTIME_ERROR_MATERIAL(programs.count(key), "No hit group is set to the pipeline %s, ray type %u",
-                                     pipeline->getName().c_str(), rayType);
+        throwRuntimeError(programs.count(key), "No hit group is set to the pipeline %s, ray type %u",
+                          pipeline->getName().c_str(), rayType);
         const _ProgramGroup* hitGroup = programs.at(key);
         *curSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
         hitGroup->packHeader(record);
@@ -99,17 +99,17 @@ namespace optixu {
 
     void Material::setHitGroup(uint32_t rayType, ProgramGroup hitGroup) {
         auto _pipeline = extract(hitGroup)->getPipeline();
-        THROW_RUNTIME_ERROR_MATERIAL(_pipeline, "Invalid pipeline %p.", _pipeline);
+        m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
 
         _Material::Key key{ _pipeline, rayType };
         m->programs[key] = extract(hitGroup);
     }
 
     void Material::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
-        THROW_RUNTIME_ERROR_MATERIAL(size <= s_maxMaterialUserDataSize,
-                                     "Maximum user data size for Material is %u bytes.", s_maxMaterialUserDataSize);
-        THROW_RUNTIME_ERROR_MATERIAL(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
-                                     "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        m->throwRuntimeError(size <= s_maxMaterialUserDataSize,
+                             "Maximum user data size for Material is %u bytes.", s_maxMaterialUserDataSize);
+        m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                             "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
@@ -126,14 +126,14 @@ namespace optixu {
 
     uint32_t Scene::Priv::getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
         SBTOffsetKey key = SBTOffsetKey{ gas, matSetIdx };
-        THROW_RUNTIME_ERROR_SCENE(sbtOffsets.count(key), "GAS %s: material set index %u is out of bounds.",
-                                  gas->getName().c_str(), matSetIdx);
+        throwRuntimeError(sbtOffsets.count(key), "GAS %s: material set index %u is out of bounds.",
+                          gas->getName().c_str(), matSetIdx);
         return sbtOffsets.at(key);
     }
 
     void Scene::Priv::setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, const BufferView &sbt, void* hostMem) {
-        THROW_RUNTIME_ERROR_SCENE(sbt.sizeInBytes() >= singleRecordSize * numSBTRecords,
-                                  "Hit group shader binding table size is not enough.");
+        throwRuntimeError(sbt.sizeInBytes() >= singleRecordSize * numSBTRecords,
+                          "Hit group shader binding table size is not enough.");
 
         auto records = reinterpret_cast<uint8_t*>(hostMem);
 
@@ -243,9 +243,9 @@ namespace optixu {
             uint32_t numElements = static_cast<uint32_t>(primitiveAabbBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 primitiveAabbBufferArray[i] = primitiveAabbBuffers[i].getCUdeviceptr();
-                THROW_RUNTIME_ERROR_GEOMINST(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
+                throwRuntimeError(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
             }
 
             customPrimArray.aabbBuffers = primitiveAabbBufferArray;
@@ -268,8 +268,8 @@ namespace optixu {
             customPrimArray.flags = buildInputFlags.data();
         }
         else {
-            THROW_RUNTIME_ERROR_GEOMINST((indexFormat != OPTIX_INDICES_FORMAT_NONE) == triangleBuffer.isValid(),
-                                         "Triangle buffer must be provided if using a index format other than None, otherwise must not be provided.");
+            throwRuntimeError((indexFormat != OPTIX_INDICES_FORMAT_NONE) == triangleBuffer.isValid(),
+                              "Triangle buffer must be provided if using a index format other than None, otherwise must not be provided.");
 
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
@@ -278,9 +278,9 @@ namespace optixu {
             uint32_t numVertices = static_cast<uint32_t>(vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
-                THROW_RUNTIME_ERROR_GEOMINST(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(vertexBuffers[i].numElements() == numVertices, "Num elements for motion step %u doesn't match that of 0.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
+                throwRuntimeError(vertexBuffers[i].numElements() == numVertices, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
             }
 
             triArray.vertexBuffers = vertexBufferArray;
@@ -328,9 +328,9 @@ namespace optixu {
             uint32_t numElements = static_cast<uint32_t>(primitiveAabbBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 primitiveAabbBufferArray[i] = primitiveAabbBuffers[i].getCUdeviceptr();
-                THROW_RUNTIME_ERROR_GEOMINST(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
+                throwRuntimeError(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
             }
             customPrimArray.aabbBuffers = primitiveAabbBufferArray;
 
@@ -344,9 +344,9 @@ namespace optixu {
             uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
-                THROW_RUNTIME_ERROR_GEOMINST(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                THROW_RUNTIME_ERROR_GEOMINST(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
+                throwRuntimeError(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
             }
             triArray.vertexBuffers = vertexBufferArray;
 
@@ -364,7 +364,7 @@ namespace optixu {
     SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t gasMatSetIdx) const {
         SizeAlign maxRecordSizeAlign;
         for (int matIdx = 0; matIdx < materials.size(); ++matIdx) {
-            THROW_RUNTIME_ERROR_GEOMINST(materials[matIdx][0], "Default material (== material set 0) is not set for the slot %u.", matIdx);
+            throwRuntimeError(materials[matIdx][0], "Default material (== material set 0) is not set for the slot %u.", matIdx);
             uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
             const _Material* mat = materials[matIdx][matSetIdx];
             if (!mat)
@@ -386,7 +386,7 @@ namespace optixu {
                                                     uint32_t numRayTypes, uint8_t* records) const {
         uint32_t numMaterials = static_cast<uint32_t>(materials.size());
         for (uint32_t matIdx = 0; matIdx < numMaterials; ++matIdx) {
-            THROW_RUNTIME_ERROR_GEOMINST(materials[matIdx][0], "Default material (== material set 0) is not set for material %u.", matIdx);
+            throwRuntimeError(materials[matIdx][0], "Default material (== material set 0) is not set for material %u.", matIdx);
             uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
             const _Material* mat = materials[matIdx][matSetIdx];
             if (!mat)
@@ -433,22 +433,22 @@ namespace optixu {
     }
 
     void GeometryInstance::setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep) const {
-        THROW_RUNTIME_ERROR_GEOMINST(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
-        THROW_RUNTIME_ERROR_GEOMINST(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
-                                     motionStep, m->numMotionSteps);
+        m->throwRuntimeError(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
         m->vertexBuffers[motionStep] = vertexBuffer;
     }
 
     void GeometryInstance::setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format) const {
-        THROW_RUNTIME_ERROR_GEOMINST(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
+        m->throwRuntimeError(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
         m->triangleBuffer = triangleBuffer;
         m->indexFormat = format;
     }
 
     void GeometryInstance::setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep) const {
-        THROW_RUNTIME_ERROR_GEOMINST(m->forCustomPrimitives, "This geometry instance was created for triangles.");
-        THROW_RUNTIME_ERROR_GEOMINST(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
-                                     motionStep, m->numMotionSteps);
+        m->throwRuntimeError(m->forCustomPrimitives, "This geometry instance was created for triangles.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
         m->primitiveAabbBuffers[motionStep] = primitiveAABBBuffer;
     }
 
@@ -457,14 +457,14 @@ namespace optixu {
     }
 
     void GeometryInstance::setNumMaterials(uint32_t numMaterials, const BufferView &matIndexOffsetBuffer, uint32_t indexOffsetSize) const {
-        THROW_RUNTIME_ERROR_GEOMINST(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
-        THROW_RUNTIME_ERROR_GEOMINST((numMaterials == 1) != matIndexOffsetBuffer.isValid(),
-                                     "Material index offset buffer must be provided when multiple materials are used.");
-        THROW_RUNTIME_ERROR_GEOMINST(indexOffsetSize >= 1 && indexOffsetSize <= 4,
-                                     "Invalid index offset size.");
+        m->throwRuntimeError(numMaterials > 0, "Invalid number of materials %u.", numMaterials);
+        m->throwRuntimeError((numMaterials == 1) != matIndexOffsetBuffer.isValid(),
+                             "Material index offset buffer must be provided when multiple materials are used.");
+        m->throwRuntimeError(indexOffsetSize >= 1 && indexOffsetSize <= 4,
+                             "Invalid index offset size.");
         if (matIndexOffsetBuffer.isValid())
-            THROW_RUNTIME_ERROR_GEOMINST(matIndexOffsetBuffer.stride() >= indexOffsetSize,
-                                         "Buffer's stride is smaller than the given index offset size.");
+            m->throwRuntimeError(matIndexOffsetBuffer.stride() >= indexOffsetSize,
+                                 "Buffer's stride is smaller than the given index offset size.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         m->materialIndexOffsetBuffer = matIndexOffsetBuffer;
         m->materialIndexOffsetSize = indexOffsetSize;
@@ -476,16 +476,16 @@ namespace optixu {
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
         size_t numMaterials = m->materials.size();
-        THROW_RUNTIME_ERROR_GEOMINST(matIdx < numMaterials, "Out of material bounds [0, %u).",
-                                     static_cast<uint32_t>(numMaterials));
+        m->throwRuntimeError(matIdx < numMaterials, "Out of material bounds [0, %u).",
+                             static_cast<uint32_t>(numMaterials));
 
         m->buildInputFlags[matIdx] = flags;
     }
 
     void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const {
         size_t numMaterials = m->materials.size();
-        THROW_RUNTIME_ERROR_GEOMINST(matIdx < numMaterials, "Out of material bounds [0, %u).",
-                                     static_cast<uint32_t>(numMaterials));
+        m->throwRuntimeError(matIdx < numMaterials, "Out of material bounds [0, %u).",
+                             static_cast<uint32_t>(numMaterials));
 
         uint32_t prevNumMatSets = static_cast<uint32_t>(m->materials[matIdx].size());
         if (matSetIdx >= prevNumMatSets)
@@ -494,10 +494,10 @@ namespace optixu {
     }
 
     void GeometryInstance::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
-        THROW_RUNTIME_ERROR_GEOMINST(size <= s_maxGeometryInstanceUserDataSize,
-                                     "Maximum user data size for Material is %u bytes.", s_maxGeometryInstanceUserDataSize);
-        THROW_RUNTIME_ERROR_GEOMINST(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
-                                     "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        m->throwRuntimeError(size <= s_maxGeometryInstanceUserDataSize,
+                             "Maximum user data size for Material is %u bytes.", s_maxGeometryInstanceUserDataSize);
+        m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                             "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
@@ -523,9 +523,9 @@ namespace optixu {
     }
 
     uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const {
-        THROW_RUNTIME_ERROR_GAS(matSetIdx < numRayTypesPerMaterialSet.size(),
-                                "Material set index %u is out of bounds [0, %u).",
-                                matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
+        throwRuntimeError(matSetIdx < numRayTypesPerMaterialSet.size(),
+                          "Material set index %u is out of bounds [0, %u).",
+                          matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
 
         uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
         uint32_t sumRecords = 0;
@@ -559,8 +559,8 @@ namespace optixu {
                                                          bool allowUpdate,
                                                          bool allowCompaction,
                                                          bool allowRandomVertexAccess) const {
-        THROW_RUNTIME_ERROR_GAS(!(m->forCustomPrimitives && allowRandomVertexAccess),
-                                "Random vertex access is the feature only for triangle GAS.");
+        m->throwRuntimeError(!(m->forCustomPrimitives && allowRandomVertexAccess),
+                             "Random vertex access is the feature only for triangle GAS.");
         bool changed = false;
         changed |= m->tradeoff != tradeoff;
         m->tradeoff = tradeoff;
@@ -586,17 +586,17 @@ namespace optixu {
 
     void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
         auto _geomInst = extract(geomInst);
-        THROW_RUNTIME_ERROR_GAS(_geomInst, "Invalid geometry instance %p.", _geomInst);
-        THROW_RUNTIME_ERROR_GAS(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
-                                _geomInst->getName().c_str());
-        THROW_RUNTIME_ERROR_GAS(_geomInst->isCustomPrimitiveInstance() == m->forCustomPrimitives,
-                                "This GAS was created for %s.", m->forCustomPrimitives ? "custom primitives" : "triangles");
+        m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
+        m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
+                             _geomInst->getName().c_str());
+        m->throwRuntimeError(_geomInst->isCustomPrimitiveInstance() == m->forCustomPrimitives,
+                             "This GAS was created for %s.", m->forCustomPrimitives ? "custom primitives" : "triangles");
         Priv::Child child;
         child.geomInst = _geomInst;
         child.preTransform = preTransform;
         auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
-        THROW_RUNTIME_ERROR_GAS(idx == m->children.cend(), "Geometry instance %s with transform %p has been already added.",
-                                _geomInst->getName().c_str(), preTransform);
+        m->throwRuntimeError(idx == m->children.cend(), "Geometry instance %s with transform %p has been already added.",
+                             _geomInst->getName().c_str(), preTransform);
 
         m->children.push_back(child);
 
@@ -605,15 +605,15 @@ namespace optixu {
 
     void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
         auto _geomInst = extract(geomInst);
-        THROW_RUNTIME_ERROR_GAS(_geomInst, "Invalid geometry instance %p.", _geomInst);
-        THROW_RUNTIME_ERROR_GAS(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
-                                _geomInst->getName().c_str());
+        m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
+        m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
+                             _geomInst->getName().c_str());
         Priv::Child child;
         child.geomInst = _geomInst;
         child.preTransform = preTransform;
         auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
-        THROW_RUNTIME_ERROR_GAS(idx != m->children.cend(), "Geometry instance %s with transform %p has not been added.",
-                                _geomInst->getName().c_str(), preTransform);
+        m->throwRuntimeError(idx != m->children.cend(), "Geometry instance %s with transform %p has not been added.",
+                             _geomInst->getName().c_str(), preTransform);
 
         m->children.erase(idx);
 
@@ -631,9 +631,9 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
-        THROW_RUNTIME_ERROR_GAS(matSetIdx < m->numRayTypesPerMaterialSet.size(),
-                                "Material set index %u is out of bounds [0, %u).",
-                                matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
+        m->throwRuntimeError(matSetIdx < m->numRayTypesPerMaterialSet.size(),
+                             "Material set index %u is out of bounds [0, %u).",
+                             matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
         m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
 
         m->scene->markSBTLayoutDirty();
@@ -646,9 +646,9 @@ namespace optixu {
         for (const Priv::Child &child : m->children) {
             child.geomInst->fillBuildInput(&m->buildInputs[childIdx++], child.preTransform);
             uint32_t childNumMotionSteps = child.geomInst->getNumMotionSteps();
-            THROW_RUNTIME_ERROR_GAS(childNumMotionSteps == numMotionSteps,
-                                    "This GAS has %u motion steps but the GeometryInstance %s has the number %u.",
-                                    numMotionSteps, child.geomInst->getName().c_str(), childNumMotionSteps);
+            m->throwRuntimeError(childNumMotionSteps == numMotionSteps,
+                                 "This GAS has %u motion steps but the GeometryInstance %s has the number %u.",
+                                 numMotionSteps, child.geomInst->getName().c_str(), childNumMotionSteps);
         }
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
@@ -672,11 +672,11 @@ namespace optixu {
     }
 
     OptixTraversableHandle GeometryAccelerationStructure::rebuild(CUstream stream, const BufferView &accelBuffer, const BufferView &scratchBuffer) const {
-        THROW_RUNTIME_ERROR_GAS(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
-        THROW_RUNTIME_ERROR_GAS(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-                                "Size of the given buffer is not enough.");
-        THROW_RUNTIME_ERROR_GAS(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
-                                "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+        m->throwRuntimeError(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+                             "Size of the given buffer is not enough.");
+        m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+                             "Size of the given scratch buffer is not enough.");
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
@@ -710,8 +710,8 @@ namespace optixu {
 
     void GeometryAccelerationStructure::prepareForCompact(size_t* compactedAccelBufferSize) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-        THROW_RUNTIME_ERROR_GAS(compactionEnabled, "This AS does not allow compaction.");
-        THROW_RUNTIME_ERROR_GAS(m->available, "Uncompacted AS has not been built yet.");
+        m->throwRuntimeError(compactionEnabled, "This AS does not allow compaction.");
+        m->throwRuntimeError(m->available, "Uncompacted AS has not been built yet.");
 
         if (m->compactedAvailable)
             return;
@@ -729,11 +729,11 @@ namespace optixu {
 
     OptixTraversableHandle GeometryAccelerationStructure::compact(CUstream stream, const BufferView &compactedAccelBuffer) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-        THROW_RUNTIME_ERROR_GAS(compactionEnabled, "This AS does not allow compaction.");
-        THROW_RUNTIME_ERROR_GAS(m->readyToCompact, "You need to call prepareForCompact() before compaction.");
-        THROW_RUNTIME_ERROR_GAS(m->available, "Uncompacted AS has not been built yet.");
-        THROW_RUNTIME_ERROR_GAS(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
-                                "Size of the given buffer is not enough.");
+        m->throwRuntimeError(compactionEnabled, "This AS does not allow compaction.");
+        m->throwRuntimeError(m->readyToCompact, "You need to call prepareForCompact() before compaction.");
+        m->throwRuntimeError(m->available, "Uncompacted AS has not been built yet.");
+        m->throwRuntimeError(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
+                             "Size of the given buffer is not enough.");
 
         OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
                                       m->handle, compactedAccelBuffer.getCUdeviceptr(), compactedAccelBuffer.sizeInBytes(),
@@ -760,10 +760,10 @@ namespace optixu {
 
     void GeometryAccelerationStructure::update(CUstream stream, const BufferView &scratchBuffer) const {
         bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
-        THROW_RUNTIME_ERROR_GAS(updateEnabled, "This AS does not allow update.");
-        THROW_RUNTIME_ERROR_GAS(m->available || m->compactedAvailable, "AS has not been built yet.");
-        THROW_RUNTIME_ERROR_GAS(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
-                                "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(updateEnabled, "This AS does not allow update.");
+        m->throwRuntimeError(m->available || m->compactedAvailable, "AS has not been built yet.");
+        m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
+                             "Size of the given scratch buffer is not enough.");
 
         uint32_t childIdx = 0;
         for (const Priv::Child &child : m->children)
@@ -786,10 +786,10 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
-        THROW_RUNTIME_ERROR_GAS(size <= s_maxGASUserDataSize,
-                                "Maximum user data size for Material is %u bytes.", s_maxGASUserDataSize);
-        THROW_RUNTIME_ERROR_GAS(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
-                                "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        m->throwRuntimeError(size <= s_maxGASUserDataSize,
+                             "Maximum user data size for Material is %u bytes.", s_maxGASUserDataSize);
+        m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                             "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
@@ -887,10 +887,10 @@ namespace optixu {
     }
 
     void Transform::setMatrixMotionKey(uint32_t keyIdx, const float matrix[12]) const {
-        THROW_RUNTIME_ERROR_XFM(m->type == TransformType::MatrixMotion,
-                                "This transform has been configured as matrix motion transform.");
-        THROW_RUNTIME_ERROR_XFM(keyIdx <= m->options.numKeys,
-                                "Number of motion keys was set to %u", m->options.numKeys);
+        m->throwRuntimeError(m->type == TransformType::MatrixMotion,
+                             "This transform has been configured as matrix motion transform.");
+        m->throwRuntimeError(keyIdx <= m->options.numKeys,
+                             "Number of motion keys was set to %u", m->options.numKeys);
         auto motionData = reinterpret_cast<float*>(m->data + offsetof(OptixMatrixMotionTransform, transform));
         float* dataPerKey = motionData + 12 * keyIdx;
 
@@ -900,10 +900,10 @@ namespace optixu {
     }
 
     void Transform::setSRTMotionKey(uint32_t keyIdx, const float scale[3], const float orientation[4], const float translation[3]) const {
-        THROW_RUNTIME_ERROR_XFM(m->type == TransformType::SRTMotion,
-                                "This transform has been configured as SRT motion transform.");
-        THROW_RUNTIME_ERROR_XFM(keyIdx <= m->options.numKeys,
-                                "Number of motion keys was set to %u", m->options.numKeys);
+        m->throwRuntimeError(m->type == TransformType::SRTMotion,
+                             "This transform has been configured as SRT motion transform.");
+        m->throwRuntimeError(keyIdx <= m->options.numKeys,
+                             "Number of motion keys was set to %u", m->options.numKeys);
         auto motionData = reinterpret_cast<OptixSRTData*>(m->data + offsetof(OptixSRTMotionTransform, srtData));
         OptixSRTData* dataPerKey = motionData + keyIdx;
 
@@ -919,15 +919,15 @@ namespace optixu {
     }
 
     void Transform::setStaticTransform(const float matrix[12]) const {
-        THROW_RUNTIME_ERROR_XFM(m->type == TransformType::Static,
-                                "This transform has been configured as static transform.");
+        m->throwRuntimeError(m->type == TransformType::Static,
+                             "This transform has been configured as static transform.");
         float invDet = 1.0f / (matrix[ 0] * matrix[ 5] * matrix[10] +
                                matrix[ 1] * matrix[ 6] * matrix[ 8] +
                                matrix[ 2] * matrix[ 4] * matrix[ 9] -
                                matrix[ 2] * matrix[ 5] * matrix[ 8] -
                                matrix[ 1] * matrix[ 4] * matrix[10] -
                                matrix[ 0] * matrix[ 6] * matrix[ 9]);
-        THROW_RUNTIME_ERROR_XFM(invDet != 0.0f, "Given matrix is not invertible.");
+        m->throwRuntimeError(invDet != 0.0f, "Given matrix is not invertible.");
 
         auto xfm = reinterpret_cast<OptixStaticTransform*>(m->data);
 
@@ -977,10 +977,10 @@ namespace optixu {
     }
 
     OptixTraversableHandle Transform::rebuild(CUstream stream, const BufferView &trDeviceMem) {
-        THROW_RUNTIME_ERROR_XFM(m->type != TransformType::Invalid, "Transform type is invalid.");
-        THROW_RUNTIME_ERROR_XFM(trDeviceMem.sizeInBytes() >= m->dataSize,
-                                "Size of the given buffer is not enough.");
-        THROW_RUNTIME_ERROR_XFM(m->childType != ChildType::Invalid, "Child is invalid.");
+        m->throwRuntimeError(m->type != TransformType::Invalid, "Transform type is invalid.");
+        m->throwRuntimeError(trDeviceMem.sizeInBytes() >= m->dataSize,
+                             "Size of the given buffer is not enough.");
+        m->throwRuntimeError(m->childType != ChildType::Invalid, "Child is invalid.");
 
         OptixTraversableHandle childHandle = 0;
         if (m->childType == ChildType::GAS)
@@ -1034,17 +1034,17 @@ namespace optixu {
         instance->instanceId = id;
 
         if (type == ChildType::GAS) {
-            THROW_RUNTIME_ERROR_INST(childGas->isReady(), "GAS %s is not ready.", childGas->getName().c_str());
+            throwRuntimeError(childGas->isReady(), "GAS %s is not ready.", childGas->getName().c_str());
             instance->traversableHandle = childGas->getHandle();
             instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
         }
         else if (type == ChildType::IAS) {
-            THROW_RUNTIME_ERROR_INST(childIas->isReady(), "IAS %s is not ready.", childGas->getName().c_str());
+            throwRuntimeError(childIas->isReady(), "IAS %s is not ready.", childGas->getName().c_str());
             instance->traversableHandle = childIas->getHandle();
             instance->sbtOffset = 0;
         }
         else if (type == ChildType::Transform) {
-            THROW_RUNTIME_ERROR_INST(childXfm->isReady(), "Transform %s is not ready.", childXfm->getName().c_str());
+            throwRuntimeError(childXfm->isReady(), "Transform %s is not ready.", childXfm->getName().c_str());
             instance->traversableHandle = childXfm->getHandle();
             _GeometryAccelerationStructure* desGas = childXfm->getDescendantGAS();
             if (desGas)
@@ -1065,15 +1065,15 @@ namespace optixu {
         instance->instanceId = id;
 
         if (type == ChildType::GAS) {
-            THROW_RUNTIME_ERROR_INST(childGas->isReady(), "GAS %s is not ready.", childGas->getName().c_str());
+            throwRuntimeError(childGas->isReady(), "GAS %s is not ready.", childGas->getName().c_str());
             instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
         }
         else if (type == ChildType::IAS) {
-            THROW_RUNTIME_ERROR_INST(childIas->isReady(), "IAS %s is not ready.", childGas->getName().c_str());
+            throwRuntimeError(childIas->isReady(), "IAS %s is not ready.", childGas->getName().c_str());
             instance->sbtOffset = 0;
         }
         else if (type == ChildType::Transform) {
-            THROW_RUNTIME_ERROR_INST(childXfm->isReady(), "Transform %s is not ready.", childXfm->getName().c_str());
+            throwRuntimeError(childXfm->isReady(), "Transform %s is not ready.", childXfm->getName().c_str());
             _GeometryAccelerationStructure* desGas = childXfm->getDescendantGAS();
             if (desGas)
                 instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
@@ -1129,15 +1129,15 @@ namespace optixu {
 
     void Instance::setID(uint32_t value) const {
         uint32_t maxInstanceID = m->scene->getContext()->getMaxInstanceID();
-        THROW_RUNTIME_ERROR_INST(value <= maxInstanceID,
-                                 "Max instance ID value is 0x%08x.", maxInstanceID);
+        m->throwRuntimeError(value <= maxInstanceID,
+                             "Max instance ID value is 0x%08x.", maxInstanceID);
         m->id = value;
     }
 
     void Instance::setVisibilityMask(uint32_t mask) const {
         uint32_t numVisibilityMaskBits = m->scene->getContext()->getNumVisibilityMaskBits();
-        THROW_RUNTIME_ERROR_INST((mask >> numVisibilityMaskBits) == 0,
-                                 "Number of visibility mask bits is %u.", numVisibilityMaskBits);
+        m->throwRuntimeError((mask >> numVisibilityMaskBits) == 0,
+                             "Number of visibility mask bits is %u.", numVisibilityMaskBits);
         m->visibilityMask = mask;
     }
 
@@ -1187,12 +1187,12 @@ namespace optixu {
 
     void InstanceAccelerationStructure::addChild(Instance instance) const {
         _Instance* _inst = extract(instance);
-        THROW_RUNTIME_ERROR_IAS(_inst, "Invalid instance %p.");
-        THROW_RUNTIME_ERROR_IAS(_inst->getScene() == m->scene, "Scene mismatch for the given instance %s.",
-                                _inst->getName().c_str());
+        m->throwRuntimeError(_inst, "Invalid instance %p.");
+        m->throwRuntimeError(_inst->getScene() == m->scene, "Scene mismatch for the given instance %s.",
+                             _inst->getName().c_str());
         auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
-        THROW_RUNTIME_ERROR_IAS(idx == m->children.cend(), "Instance %s has been already added.",
-                                _inst->getName().c_str());
+        m->throwRuntimeError(idx == m->children.cend(), "Instance %s has been already added.",
+                             _inst->getName().c_str());
 
         m->children.push_back(_inst);
 
@@ -1201,12 +1201,12 @@ namespace optixu {
 
     void InstanceAccelerationStructure::removeChild(Instance instance) const {
         _Instance* _inst = extract(instance);
-        THROW_RUNTIME_ERROR_IAS(_inst, "Invalid instance %p.", _inst);
-        THROW_RUNTIME_ERROR_IAS(_inst->getScene() == m->scene, "Scene mismatch for the given instance %s.",
-                                _inst->getName().c_str());
+        m->throwRuntimeError(_inst, "Invalid instance %p.", _inst);
+        m->throwRuntimeError(_inst->getScene() == m->scene, "Scene mismatch for the given instance %s.",
+                             _inst->getName().c_str());
         auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
-        THROW_RUNTIME_ERROR_IAS(idx != m->children.cend(), "Instance %s has not been added.",
-                                _inst->getName().c_str());
+        m->throwRuntimeError(idx != m->children.cend(), "Instance %s has not been added.",
+                             _inst->getName().c_str());
 
         m->children.erase(idx);
 
@@ -1218,8 +1218,8 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const {
-        THROW_RUNTIME_ERROR_IAS(m->scene->sbtLayoutGenerationDone(),
-                                "Shader binding table layout generation has not been done.");
+        m->throwRuntimeError(m->scene->sbtLayoutGenerationDone(),
+                             "Shader binding table layout generation has not been done.");
         m->instances.resize(m->children.size());
         uint32_t childIdx = 0;
         bool transformExists = false;
@@ -1260,13 +1260,13 @@ namespace optixu {
 
     OptixTraversableHandle InstanceAccelerationStructure::rebuild(CUstream stream, const BufferView &instanceBuffer,
                                                                   const BufferView &accelBuffer, const BufferView &scratchBuffer) const {
-        THROW_RUNTIME_ERROR_IAS(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
-        THROW_RUNTIME_ERROR_IAS(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-                                "Size of the given buffer is not enough.");
-        THROW_RUNTIME_ERROR_IAS(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
-                                "Size of the given scratch buffer is not enough.");
-        THROW_RUNTIME_ERROR_IAS(instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
-                                "Size of the given instance buffer is not enough.");
+        m->throwRuntimeError(m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+        m->throwRuntimeError(accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+                             "Size of the given buffer is not enough.");
+        m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+                             "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
+                             "Size of the given instance buffer is not enough.");
 
         // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
         //     インスタンス情報を更新する処理をここにも書いておく必要がある。
@@ -1303,8 +1303,8 @@ namespace optixu {
 
     void InstanceAccelerationStructure::prepareForCompact(size_t* compactedAccelBufferSize) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-        THROW_RUNTIME_ERROR_IAS(compactionEnabled, "This AS does not allow compaction.");
-        THROW_RUNTIME_ERROR_IAS(m->available, "Uncompacted AS has not been built yet.");
+        m->throwRuntimeError(compactionEnabled, "This AS does not allow compaction.");
+        m->throwRuntimeError(m->available, "Uncompacted AS has not been built yet.");
 
         if (m->compactedAvailable)
             return;
@@ -1322,11 +1322,11 @@ namespace optixu {
 
     OptixTraversableHandle InstanceAccelerationStructure::compact(CUstream stream, const BufferView &compactedAccelBuffer) const {
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
-        THROW_RUNTIME_ERROR_IAS(compactionEnabled, "This AS does not allow compaction.");
-        THROW_RUNTIME_ERROR_IAS(m->readyToCompact, "You need to call prepareForCompact() before compaction.");
-        THROW_RUNTIME_ERROR_IAS(m->available, "Uncompacted AS has not been built yet.");
-        THROW_RUNTIME_ERROR_IAS(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
-                                "Size of the given buffer is not enough.");
+        m->throwRuntimeError(compactionEnabled, "This AS does not allow compaction.");
+        m->throwRuntimeError(m->readyToCompact, "You need to call prepareForCompact() before compaction.");
+        m->throwRuntimeError(m->available, "Uncompacted AS has not been built yet.");
+        m->throwRuntimeError(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
+                             "Size of the given buffer is not enough.");
 
         OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
                                       m->handle, compactedAccelBuffer.getCUdeviceptr(), compactedAccelBuffer.sizeInBytes(),
@@ -1353,10 +1353,10 @@ namespace optixu {
 
     void InstanceAccelerationStructure::update(CUstream stream, const BufferView &scratchBuffer) const {
         bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
-        THROW_RUNTIME_ERROR_IAS(updateEnabled, "This AS does not allow update.");
-        THROW_RUNTIME_ERROR_IAS(m->available || m->compactedAvailable, "AS has not been built yet.");
-        THROW_RUNTIME_ERROR_IAS(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
-                                "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(updateEnabled, "This AS does not allow update.");
+        m->throwRuntimeError(m->available || m->compactedAvailable, "AS has not been built yet.");
+        m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempUpdateSizeInBytes,
+                             "Size of the given scratch buffer is not enough.");
 
         uint32_t childIdx = 0;
         for (const _Instance* child : m->children)
@@ -1409,11 +1409,11 @@ namespace optixu {
 
     void Pipeline::Priv::setupShaderBindingTable(CUstream stream) {
         if (!sbtIsUpToDate) {
-            THROW_RUNTIME_ERROR_PIPELINE(rayGenProgram, "Ray generation program is not set.");
+            throwRuntimeError(rayGenProgram, "Ray generation program is not set.");
             for (uint32_t i = 0; i < numMissRayTypes; ++i)
-                THROW_RUNTIME_ERROR_PIPELINE(missPrograms[i], "Miss program is not set for ray type %d.", i);
+                throwRuntimeError(missPrograms[i], "Miss program is not set for ray type %d.", i);
             for (uint32_t i = 0; i < numCallablePrograms; ++i)
-                THROW_RUNTIME_ERROR_PIPELINE(callablePrograms[i], "Callable program is not set for index %d.", i);
+                throwRuntimeError(callablePrograms[i], "Callable program is not set for index %d.", i);
 
             auto records = reinterpret_cast<uint8_t*>(sbtHostMem);
             size_t offset = 0;
@@ -1520,10 +1520,10 @@ namespace optixu {
 
     ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR_PIPELINE(_module && entryFunctionName,
-                                     "Either of RayGen module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE(_module->getPipeline() == m,
-                                     "Pipeline mismatch for the given module %s.", _module->getName().c_str());
+        m->throwRuntimeError(_module && entryFunctionName,
+                             "Either of RayGen module or entry function name is not provided.");
+        m->throwRuntimeError(_module->getPipeline() == m,
+                             "Pipeline mismatch for the given module %s.", _module->getName().c_str());
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -1540,10 +1540,10 @@ namespace optixu {
 
     ProgramGroup Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR_PIPELINE(_module && entryFunctionName,
-                                     "Either of Exception module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE(_module->getPipeline() == m,
-                                     "Pipeline mismatch for the given module %s.", _module->getName().c_str());
+        m->throwRuntimeError(_module && entryFunctionName,
+                             "Either of Exception module or entry function name is not provided.");
+        m->throwRuntimeError(_module->getPipeline() == m,
+                             "Pipeline mismatch for the given module %s.", _module->getName().c_str());
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
@@ -1560,11 +1560,11 @@ namespace optixu {
 
     ProgramGroup Pipeline::createMissProgram(Module module, const char* entryFunctionName) const {
         _Module* _module = extract(module);
-        THROW_RUNTIME_ERROR_PIPELINE((_module != nullptr) == (entryFunctionName != nullptr),
-                                     "Either of Miss module or entry function name is not provided.");
+        m->throwRuntimeError((_module != nullptr) == (entryFunctionName != nullptr),
+                             "Either of Miss module or entry function name is not provided.");
         if (_module)
-            THROW_RUNTIME_ERROR_PIPELINE(_module->getPipeline() == m,
-                                         "Pipeline mismatch for the given module %s.", _module->getName().c_str());
+            m->throwRuntimeError(_module->getPipeline() == m,
+                                 "Pipeline mismatch for the given module %s.", _module->getName().c_str());
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
@@ -1586,26 +1586,26 @@ namespace optixu {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         _Module* _module_IS = extract(module_IS);
-        THROW_RUNTIME_ERROR_PIPELINE((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
-                                     "Either of CH module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE((_module_AH != nullptr) == (entryFunctionNameAH != nullptr),
-                                     "Either of AH module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE((_module_IS != nullptr) == (entryFunctionNameIS != nullptr),
-                                     "Either of IS module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE(entryFunctionNameCH || entryFunctionNameAH || entryFunctionNameIS,
-                                     "Either of CH/AH/IS entry function name must be provided.");
+        m->throwRuntimeError((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
+                             "Either of CH module or entry function name is not provided.");
+        m->throwRuntimeError((_module_AH != nullptr) == (entryFunctionNameAH != nullptr),
+                             "Either of AH module or entry function name is not provided.");
+        m->throwRuntimeError((_module_IS != nullptr) == (entryFunctionNameIS != nullptr),
+                             "Either of IS module or entry function name is not provided.");
+        m->throwRuntimeError(entryFunctionNameCH || entryFunctionNameAH || entryFunctionNameIS,
+                             "Either of CH/AH/IS entry function name must be provided.");
         if (_module_CH)
-            THROW_RUNTIME_ERROR_PIPELINE(_module_CH->getPipeline() == m,
-                                         "Pipeline mismatch for the given CH module %s.",
-                                         _module_CH->getName().c_str());
+            m->throwRuntimeError(_module_CH->getPipeline() == m,
+                                 "Pipeline mismatch for the given CH module %s.",
+                                 _module_CH->getName().c_str());
         if (_module_AH)
-            THROW_RUNTIME_ERROR_PIPELINE(_module_AH->getPipeline() == m,
-                                         "Pipeline mismatch for the given AH module %s.",
-                                         _module_AH->getName().c_str());
+            m->throwRuntimeError(_module_AH->getPipeline() == m,
+                                 "Pipeline mismatch for the given AH module %s.",
+                                 _module_AH->getName().c_str());
         if (_module_IS)
-            THROW_RUNTIME_ERROR_PIPELINE(_module_IS->getPipeline() == m,
-                                         "Pipeline mismatch for the given IS module %s.",
-                                         _module_IS->getName().c_str());
+            m->throwRuntimeError(_module_IS->getPipeline() == m,
+                                 "Pipeline mismatch for the given IS module %s.",
+                                 _module_IS->getName().c_str());
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
@@ -1634,20 +1634,20 @@ namespace optixu {
                                                       Module module_CC, const char* entryFunctionNameCC) const {
         _Module* _module_DC = extract(module_DC);
         _Module* _module_CC = extract(module_CC);
-        THROW_RUNTIME_ERROR_PIPELINE((_module_DC != nullptr) == (entryFunctionNameDC != nullptr),
-                                     "Either of DC module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE((_module_CC != nullptr) == (entryFunctionNameCC != nullptr),
-                                     "Either of CC module or entry function name is not provided.");
-        THROW_RUNTIME_ERROR_PIPELINE(entryFunctionNameDC || entryFunctionNameCC,
-                                     "Either of CC/DC entry function name must be provided.");
+        m->throwRuntimeError((_module_DC != nullptr) == (entryFunctionNameDC != nullptr),
+                             "Either of DC module or entry function name is not provided.");
+        m->throwRuntimeError((_module_CC != nullptr) == (entryFunctionNameCC != nullptr),
+                             "Either of CC module or entry function name is not provided.");
+        m->throwRuntimeError(entryFunctionNameDC || entryFunctionNameCC,
+                             "Either of CC/DC entry function name must be provided.");
         if (_module_DC)
-            THROW_RUNTIME_ERROR_PIPELINE(_module_DC->getPipeline() == m,
-                                         "Pipeline mismatch for the given DC module %s.",
-                                         _module_DC->getName().c_str());
+            m->throwRuntimeError(_module_DC->getPipeline() == m,
+                                 "Pipeline mismatch for the given DC module %s.",
+                                 _module_DC->getName().c_str());
         if (_module_CC)
-            THROW_RUNTIME_ERROR_PIPELINE(_module_CC->getPipeline() == m,
-                                         "Pipeline mismatch for the given CC module %s.",
-                                         _module_CC->getName().c_str());
+            m->throwRuntimeError(_module_CC->getPipeline() == m,
+                                 "Pipeline mismatch for the given CC module %s.",
+                                 _module_CC->getName().c_str());
 
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
@@ -1671,7 +1671,7 @@ namespace optixu {
 
 
     void Pipeline::link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const {
-        THROW_RUNTIME_ERROR_PIPELINE(!m->pipelineLinked, "This pipeline has been already linked.");
+        m->throwRuntimeError(!m->pipelineLinked, "This pipeline has been already linked.");
 
         if (!m->pipelineLinked) {
             OptixPipelineLinkOptions pipelineLinkOptions = {};
@@ -1727,9 +1727,9 @@ namespace optixu {
 
     void Pipeline::setRayGenerationProgram(ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        THROW_RUNTIME_ERROR_PIPELINE(_program, "Invalid program %p.", _program);
-        THROW_RUNTIME_ERROR_PIPELINE(_program->getPipeline() == m, "Pipeline mismatch for the given program %s.",
-                                     _program->getName().c_str());
+        m->throwRuntimeError(_program, "Invalid program %p.", _program);
+        m->throwRuntimeError(_program->getPipeline() == m, "Pipeline mismatch for the given program %s.",
+                             _program->getName().c_str());
 
         m->rayGenProgram = _program;
         m->sbtIsUpToDate = false;
@@ -1737,9 +1737,9 @@ namespace optixu {
 
     void Pipeline::setExceptionProgram(ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        THROW_RUNTIME_ERROR_PIPELINE(_program, "Invalid program %p.", _program);
-        THROW_RUNTIME_ERROR_PIPELINE(_program->getPipeline() == m, "Pipeline mismatch for the given program %s.",
-                                     _program->getName().c_str());
+        m->throwRuntimeError(_program, "Invalid program %p.", _program);
+        m->throwRuntimeError(_program->getPipeline() == m, "Pipeline mismatch for the given program %s.",
+                             _program->getName().c_str());
 
         m->exceptionProgram = _program;
         m->sbtIsUpToDate = false;
@@ -1747,10 +1747,10 @@ namespace optixu {
 
     void Pipeline::setMissProgram(uint32_t rayType, ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        THROW_RUNTIME_ERROR_PIPELINE(rayType < m->numMissRayTypes, "Invalid ray type.");
-        THROW_RUNTIME_ERROR_PIPELINE(_program, "Invalid program %p.", _program);
-        THROW_RUNTIME_ERROR_PIPELINE(_program->getPipeline() == m, "Pipeline mismatch for the given program %s.",
-                                     _program->getName().c_str());
+        m->throwRuntimeError(rayType < m->numMissRayTypes, "Invalid ray type.");
+        m->throwRuntimeError(_program, "Invalid program %p.", _program);
+        m->throwRuntimeError(_program->getPipeline() == m, "Pipeline mismatch for the given program %s.",
+                             _program->getName().c_str());
 
         m->missPrograms[rayType] = _program;
         m->sbtIsUpToDate = false;
@@ -1758,19 +1758,19 @@ namespace optixu {
 
     void Pipeline::setCallableProgram(uint32_t index, ProgramGroup program) const {
         _ProgramGroup* _program = extract(program);
-        THROW_RUNTIME_ERROR_PIPELINE(index < m->numCallablePrograms, "Invalid callable program index.");
-        THROW_RUNTIME_ERROR_PIPELINE(_program, "Invalid program %p.", _program);
-        THROW_RUNTIME_ERROR_PIPELINE(_program->getPipeline() == m, "Pipeline mismatch for the given program group %s.",
-                                     _program->getName().c_str());
+        m->throwRuntimeError(index < m->numCallablePrograms, "Invalid callable program index.");
+        m->throwRuntimeError(_program, "Invalid program %p.", _program);
+        m->throwRuntimeError(_program->getPipeline() == m, "Pipeline mismatch for the given program group %s.",
+                             _program->getName().c_str());
 
         m->callablePrograms[index] = _program;
         m->sbtIsUpToDate = false;
     }
 
     void Pipeline::setShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const {
-        THROW_RUNTIME_ERROR_PIPELINE(shaderBindingTable.sizeInBytes() >= m->sbtSize,
-                                     "Hit group shader binding table size is not enough.");
-        THROW_RUNTIME_ERROR_PIPELINE(hostMem, "Host-side SBT counterpart must be provided.");
+        m->throwRuntimeError(shaderBindingTable.sizeInBytes() >= m->sbtSize,
+                             "Hit group shader binding table size is not enough.");
+        m->throwRuntimeError(hostMem, "Host-side SBT counterpart must be provided.");
         m->sbt = shaderBindingTable;
         m->sbtHostMem = hostMem;
         m->sbtIsUpToDate = false;
@@ -1783,7 +1783,7 @@ namespace optixu {
     }
 
     void Pipeline::setHitGroupShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const {
-        THROW_RUNTIME_ERROR_PIPELINE(hostMem, "Host-side hit group SBT counterpart must be provided.");
+        m->throwRuntimeError(hostMem, "Host-side hit group SBT counterpart must be provided.");
         m->hitGroupSbt = shaderBindingTable;
         m->hitGroupSbtHostMem = hostMem;
         m->hitGroupSbtIsUpToDate = false;
@@ -1809,15 +1809,15 @@ namespace optixu {
     }
 
     void Pipeline::launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const {
-        THROW_RUNTIME_ERROR_PIPELINE(m->sbtLayoutIsUpToDate, "Shader binding table layout is outdated.");
-        THROW_RUNTIME_ERROR_PIPELINE(m->sbt.isValid(), "Shader binding table is not set.");
-        THROW_RUNTIME_ERROR_PIPELINE(m->sbt.sizeInBytes() >= m->sbtSize, "Shader binding table size is not enough.");
-        THROW_RUNTIME_ERROR_PIPELINE(m->scene, "Scene is not set.");
+        m->throwRuntimeError(m->sbtLayoutIsUpToDate, "Shader binding table layout is outdated.");
+        m->throwRuntimeError(m->sbt.isValid(), "Shader binding table is not set.");
+        m->throwRuntimeError(m->sbt.sizeInBytes() >= m->sbtSize, "Shader binding table size is not enough.");
+        m->throwRuntimeError(m->scene, "Scene is not set.");
         bool hasMotionAS;
-        THROW_RUNTIME_ERROR_PIPELINE(m->scene->isReady(&hasMotionAS), "Scene is not ready.");
-        THROW_RUNTIME_ERROR_PIPELINE(m->pipelineCompileOptions.usesMotionBlur || !hasMotionAS,
-                                     "Scene has a motion AS but the pipeline has not been configured for motion.");
-        THROW_RUNTIME_ERROR_PIPELINE(m->hitGroupSbt.isValid(), "Hitgroup shader binding table is not set.");
+        m->throwRuntimeError(m->scene->isReady(&hasMotionAS), "Scene is not ready.");
+        m->throwRuntimeError(m->pipelineCompileOptions.usesMotionBlur || !hasMotionAS,
+                             "Scene has a motion AS but the pipeline has not been configured for motion.");
+        m->throwRuntimeError(m->hitGroupSbt.isValid(), "Hitgroup shader binding table is not set.");
 
         m->setupShaderBindingTable(stream);
 
@@ -1855,10 +1855,10 @@ namespace optixu {
     }
 
     void Denoiser::setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const {
-        THROW_RUNTIME_ERROR_DENOISER((kind != OPTIX_DENOISER_MODEL_KIND_USER) != (data != nullptr),
-                                     "When a user model is used, data must be provided, otherwise data must be null.");
-        THROW_RUNTIME_ERROR_DENOISER(kind != OPTIX_DENOISER_MODEL_KIND_AOV,
-                                     "OPTIX_DENOISER_MODEL_KIND_AOV is currently not supported.");
+        m->throwRuntimeError((kind != OPTIX_DENOISER_MODEL_KIND_USER) != (data != nullptr),
+                             "When a user model is used, data must be provided, otherwise data must be null.");
+        m->throwRuntimeError(kind != OPTIX_DENOISER_MODEL_KIND_AOV,
+                             "OPTIX_DENOISER_MODEL_KIND_AOV is currently not supported.");
         OPTIX_CHECK(optixDenoiserSetModel(m->rawDenoiser, kind, data, sizeInBytes));
 
         m->stateIsReady = false;
@@ -1870,9 +1870,9 @@ namespace optixu {
     void Denoiser::prepare(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
                            size_t* stateBufferSize, size_t* scratchBufferSize, size_t* scratchBufferSizeForComputeIntensity,
                            uint32_t* numTasks) const {
-        THROW_RUNTIME_ERROR_DENOISER(m->modelSet, "Model has not been set.");
-        THROW_RUNTIME_ERROR_DENOISER(tileWidth <= imageWidth && tileHeight <= imageHeight,
-                                     "Tile width/height must be equal to or smaller than the image size.");
+        m->throwRuntimeError(m->modelSet, "Model has not been set.");
+        m->throwRuntimeError(tileWidth <= imageWidth && tileHeight <= imageHeight,
+                             "Tile width/height must be equal to or smaller than the image size.");
 
         if (tileWidth == 0)
             tileWidth = imageWidth;
@@ -1923,7 +1923,7 @@ namespace optixu {
     }
 
     void Denoiser::getTasks(DenoisingTask* tasks) const {
-        THROW_RUNTIME_ERROR_DENOISER(m->imageSizeSet, "Call prepare() before this function.");
+        m->throwRuntimeError(m->imageSizeSet, "Call prepare() before this function.");
 
         uint32_t taskIdx = 0;
         for (int32_t outputOffsetY = 0; outputOffsetY < static_cast<int32_t>(m->imageHeight);) {
@@ -1966,12 +1966,12 @@ namespace optixu {
 
     void Denoiser::setLayers(const BufferView &color, const BufferView &albedo, const BufferView &normal, const BufferView &denoisedColor,
                              OptixPixelFormat colorFormat, OptixPixelFormat albedoFormat, OptixPixelFormat normalFormat) const {
-        THROW_RUNTIME_ERROR_DENOISER(m->imageSizeSet, "Call prepare() before this function.");
-        THROW_RUNTIME_ERROR_DENOISER(color.isValid(), "Input color buffer must be set.");
+        m->throwRuntimeError(m->imageSizeSet, "Call prepare() before this function.");
+        m->throwRuntimeError(color.isValid(), "Input color buffer must be set.");
         if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO || m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
-            THROW_RUNTIME_ERROR_DENOISER(albedo.isValid(), "Denoiser requires albedo buffer.");
+            m->throwRuntimeError(albedo.isValid(), "Denoiser requires albedo buffer.");
         if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
-            THROW_RUNTIME_ERROR_DENOISER(normal.isValid(), "Denoiser requires normal buffer.");
+            m->throwRuntimeError(normal.isValid(), "Denoiser requires normal buffer.");
 
         m->colorBuffer = color;
         m->albedoBuffer = albedo;
@@ -1985,11 +1985,11 @@ namespace optixu {
     }
 
     void Denoiser::setupState(CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const {
-        THROW_RUNTIME_ERROR_DENOISER(m->imageSizeSet, "Call setImageSizes() before this function.");
-        THROW_RUNTIME_ERROR_DENOISER(stateBuffer.sizeInBytes() >= m->stateSize,
-                                     "Size of the given state buffer is not enough.");
-        THROW_RUNTIME_ERROR_DENOISER(scratchBuffer.sizeInBytes() >= m->scratchSize,
-                                     "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(m->imageSizeSet, "Call setImageSizes() before this function.");
+        m->throwRuntimeError(stateBuffer.sizeInBytes() >= m->stateSize,
+                             "Size of the given state buffer is not enough.");
+        m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->scratchSize,
+                             "Size of the given scratch buffer is not enough.");
         uint32_t maxInputWidth = m->useTiling ? (m->tileWidth + 2 * m->overlapWidth) : m->imageWidth;
         uint32_t maxInputHeight = m->useTiling ? (m->tileHeight + 2 * m->overlapWidth) : m->imageHeight;
         OPTIX_CHECK(optixDenoiserSetup(m->rawDenoiser, stream,
@@ -2003,9 +2003,9 @@ namespace optixu {
     }
 
     void Denoiser::computeIntensity(CUstream stream, const BufferView &scratchBuffer, CUdeviceptr outputIntensity) {
-        THROW_RUNTIME_ERROR_DENOISER(m->imageLayersSet, "You need to set image layers and formats before invoke.");
-        THROW_RUNTIME_ERROR_DENOISER(scratchBuffer.sizeInBytes() >= m->scratchSizeForComputeIntensity,
-                                     "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(m->imageLayersSet, "You need to set image layers and formats before invoke.");
+        m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->scratchSizeForComputeIntensity,
+                             "Size of the given scratch buffer is not enough.");
 
         OptixImage2D colorLayer = {};
         colorLayer.data = m->colorBuffer.getCUdeviceptr();
@@ -2022,8 +2022,8 @@ namespace optixu {
 
     void Denoiser::invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
                           const DenoisingTask &task) {
-        THROW_RUNTIME_ERROR_DENOISER(m->stateIsReady, "You need to call setupState() before invoke.");
-        THROW_RUNTIME_ERROR_DENOISER(m->imageLayersSet, "You need to set image layers and formats before invoke.");
+        m->throwRuntimeError(m->stateIsReady, "You need to call setupState() before invoke.");
+        m->throwRuntimeError(m->imageLayersSet, "You need to set image layers and formats before invoke.");
         OptixDenoiserParams params = {};
         params.denoiseAlpha = denoiseAlpha;
         params.hdrIntensity = hdrIntensity;
