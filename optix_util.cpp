@@ -781,8 +781,7 @@ namespace optixu {
                                     accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &tempHandle,
                                     nullptr, 0));
-        optixuAssert(tempHandle == handle, "GAS %s: Update should not change the handle itself, what's going on?",
-                     getName().c_str());
+        optixuAssert(tempHandle == handle, "GAS %s: Update should not change the handle itself, what's going on?", getName());
     }
 
     void GeometryAccelerationStructure::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
@@ -1376,8 +1375,7 @@ namespace optixu {
                                     accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
                                     &tempHandle,
                                     nullptr, 0));
-        optixuAssert(tempHandle == handle, "IAS %s: Update should not change the handle itself, what's going on?",
-                     getName().c_str());
+        optixuAssert(tempHandle == handle, "IAS %s: Update should not change the handle itself, what's going on?", getName());
     }
 
     bool InstanceAccelerationStructure::isReady() const {
