@@ -797,6 +797,16 @@ namespace optixu {
         std::memcpy(m->userData.data(), data, size);
     }
 
+    GeometryInstance GeometryAccelerationStructure::getChild(uint32_t index, CUdeviceptr* preTransform) const {
+        if (preTransform)
+            *preTransform = m->children[index].preTransform;
+        return m->children[index].geomInst->getPublicType();
+    }
+
+    uint32_t GeometryAccelerationStructure::getNumChildren() const {
+        return static_cast<uint32_t>(m->children.size());
+    }
+
     bool GeometryAccelerationStructure::isReady() const {
         return m->isReady();
     }
@@ -1224,13 +1234,8 @@ namespace optixu {
                              "Shader binding table layout generation has not been done.");
         m->instances.resize(m->children.size());
         uint32_t childIdx = 0;
-        bool transformExists = false;
-        bool motionASExists = false;
-        for (const _Instance* child : m->children) {
+        for (const _Instance* child : m->children)
             child->fillInstance(&m->instances[childIdx++]);
-            transformExists |= child->isTransform();
-            motionASExists |= child->isMotionAS();
-        }
 
         // Fill the build input.
         {
@@ -1379,6 +1384,14 @@ namespace optixu {
                                     &tempHandle,
                                     nullptr, 0));
         optixuAssert(tempHandle == handle, "IAS %s: Update should not change the handle itself, what's going on?", getName());
+    }
+
+    Instance InstanceAccelerationStructure::getChild(uint32_t index) const {
+        return m->children[index]->getPublicType();
+    }
+
+    uint32_t InstanceAccelerationStructure::getNumChildren() const {
+        return static_cast<uint32_t>(m->children.size());
     }
 
     bool InstanceAccelerationStructure::isReady() const {

@@ -833,6 +833,8 @@ private: \
             setUserData(&data, sizeof(T), alignof(T));
         }
 
+        GeometryInstance getChild(uint32_t index, CUdeviceptr* preTransform = nullptr) const;
+        uint32_t getNumChildren() const;
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
     };
@@ -937,6 +939,8 @@ private: \
         //     is required when performing update.
         void update(CUstream stream, const BufferView &scratchBuffer) const;
 
+        Instance getChild(uint32_t index) const;
+        uint32_t getNumChildren() const;
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
     };
