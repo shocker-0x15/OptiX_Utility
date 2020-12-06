@@ -46,12 +46,13 @@ TODO:
 - Multi GPUs?
 - Assertとexceptionの整理。
 
-検討事項:
+検討事項 (Items under author's consideration, ignore this :) ):
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
   しかしビルドやアップデートを明示的にしているため結局ASであるということをユーザーが意識する必要がある。
 - ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
+  => オフセット値を読み取った後にデータを読み取るというindirectionになるため、そもそもあまり好ましくない気も。
 - GAS中のGeometryInstanceのインデックスを取得できるようにする。
   各GeometryInstanceが1つのSBTレコードしか使っていない場合はoptixGetSbtGASIndex()で代用できる。
 - Material::setHitGroup()はレイタイプの数値が同じでもヒットグループのパイプラインが違っていれば別個に登録できるが、
@@ -675,6 +676,7 @@ private: \
                       "This function can be defined only for the self type."); \
         return m < r.m; \
     } \
+    Context getContext() const; \
     void setName(const std::string &name) const; \
     const char* getName() const;
 

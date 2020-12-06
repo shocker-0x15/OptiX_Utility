@@ -34,8 +34,11 @@ namespace optixu {
 
 
 
-    // Define name interfaces.
+    // Define common interfaces.
 #define OPTIXU_PREPROCESS_OBJECT(Type) \
+    Context Type::getContext() const { \
+        return m->getContext()->getPublicType(); \
+    } \
     void Type::setName(const std::string &name) const { \
         m->setName(name); \
     } \
