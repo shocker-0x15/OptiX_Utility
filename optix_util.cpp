@@ -278,16 +278,16 @@ namespace optixu {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
             uint32_t vertexStride = vertexBuffers[0].stride();
-            uint32_t numVertices = static_cast<uint32_t>(vertexBuffers[0].numElements());
+            uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
                 throwRuntimeError(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
-                throwRuntimeError(vertexBuffers[i].numElements() == numVertices, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
                 throwRuntimeError(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
             }
 
             triArray.vertexBuffers = vertexBufferArray;
-            triArray.numVertices = numVertices;
+            triArray.numVertices = numElements;
             triArray.vertexFormat = vertexFormat;
             triArray.vertexStrideInBytes = vertexStride;
 
@@ -1233,9 +1233,6 @@ namespace optixu {
         m->throwRuntimeError(m->scene->sbtLayoutGenerationDone(),
                              "Shader binding table layout generation has not been done.");
         m->instances.resize(m->children.size());
-        uint32_t childIdx = 0;
-        for (const _Instance* child : m->children)
-            child->fillInstance(&m->instances[childIdx++]);
 
         // Fill the build input.
         {
@@ -1275,13 +1272,9 @@ namespace optixu {
         m->throwRuntimeError(instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
                              "Size of the given instance buffer is not enough.");
 
-        // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
-        //     インスタンス情報を更新する処理をここにも書いておく必要がある。
-        // EN: User is not required to call prepareForBuild() when performing rebuild
-        //     for purpose of update so updating instance information should be here.
         uint32_t childIdx = 0;
         for (const _Instance* child : m->children)
-            child->updateInstance(&m->instances[childIdx++]);
+            child->fillInstance(&m->instances[childIdx++]);
         CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
                                         instanceBuffer.sizeInBytes(),
                                         stream));
