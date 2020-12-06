@@ -864,7 +864,7 @@ private: \
         // JP: (間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which the transform
         //     (indirectly) belongs is required.
-        OptixTraversableHandle rebuild(CUstream stream, const BufferView &trDeviceMem);
+        OptixTraversableHandle rebuild(CUstream stream, const BufferView &trDeviceMem) const;
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;

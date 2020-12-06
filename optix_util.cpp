@@ -988,7 +988,7 @@ namespace optixu {
         return m->markDirty();
     }
 
-    OptixTraversableHandle Transform::rebuild(CUstream stream, const BufferView &trDeviceMem) {
+    OptixTraversableHandle Transform::rebuild(CUstream stream, const BufferView &trDeviceMem) const {
         m->throwRuntimeError(m->type != TransformType::Invalid, "Transform type is invalid.");
         m->throwRuntimeError(trDeviceMem.sizeInBytes() >= m->dataSize,
                              "Size of the given buffer is not enough.");
@@ -1230,8 +1230,6 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const {
-        m->throwRuntimeError(m->scene->sbtLayoutGenerationDone(),
-                             "Shader binding table layout generation has not been done.");
         m->instances.resize(m->children.size());
 
         // Fill the build input.
@@ -1271,6 +1269,8 @@ namespace optixu {
                              "Size of the given scratch buffer is not enough.");
         m->throwRuntimeError(instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
                              "Size of the given instance buffer is not enough.");
+        m->throwRuntimeError(m->scene->sbtLayoutGenerationDone(),
+                             "Shader binding table layout generation has not been done.");
 
         uint32_t childIdx = 0;
         for (const _Instance* child : m->children)
