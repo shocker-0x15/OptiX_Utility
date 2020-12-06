@@ -100,7 +100,7 @@ namespace optixu {
         m = nullptr;
     }
 
-    void Material::setHitGroup(uint32_t rayType, ProgramGroup hitGroup) {
+    void Material::setHitGroup(uint32_t rayType, ProgramGroup hitGroup) const {
         auto _pipeline = extract(hitGroup)->getPipeline();
         m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
 
@@ -838,7 +838,7 @@ namespace optixu {
     }
 
     void Transform::setConfiguration(TransformType type, uint32_t numKeys,
-                                     size_t* transformSize) {
+                                     size_t* transformSize) const {
         m->type = type;
         numKeys = std::max(numKeys, 2u);
         if (m->type == TransformType::MatrixMotion) {
@@ -2009,7 +2009,7 @@ namespace optixu {
         m->stateIsReady = true;
     }
 
-    void Denoiser::computeIntensity(CUstream stream, const BufferView &scratchBuffer, CUdeviceptr outputIntensity) {
+    void Denoiser::computeIntensity(CUstream stream, const BufferView &scratchBuffer, CUdeviceptr outputIntensity) const {
         m->throwRuntimeError(m->imageLayersSet, "You need to set image layers and formats before invoke.");
         m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->scratchSizeForComputeIntensity,
                              "Size of the given scratch buffer is not enough.");
@@ -2028,7 +2028,7 @@ namespace optixu {
     }
 
     void Denoiser::invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
-                          const DenoisingTask &task) {
+                          const DenoisingTask &task) const {
         m->throwRuntimeError(m->stateIsReady, "You need to call setupState() before invoke.");
         m->throwRuntimeError(m->imageLayersSet, "You need to set image layers and formats before invoke.");
         OptixDenoiserParams params = {};

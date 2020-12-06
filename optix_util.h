@@ -715,7 +715,7 @@ private: \
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
-        void setHitGroup(uint32_t rayType, ProgramGroup hitGroup);
+        void setHitGroup(uint32_t rayType, ProgramGroup hitGroup) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
         void setUserData(const T &data) const {
@@ -851,7 +851,7 @@ private: \
         // JP: 以下のAPIを呼んだ場合はTransformがdirty状態になる。
         // EN: Calling the following APIs marks the transform dirty.
         void setConfiguration(TransformType type, uint32_t numKeys,
-                              size_t* transformSize);
+                              size_t* transformSize) const;
         void setMotionOptions(float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void setMatrixMotionKey(uint32_t keyIdx, const float matrix[12]) const;
         void setSRTMotionKey(uint32_t keyIdx, const float scale[3], const float orientation[4], const float translation[3]) const;
@@ -1076,9 +1076,9 @@ private: \
                        OptixPixelFormat colorFormat, OptixPixelFormat albedoFormat, OptixPixelFormat normalFormat) const;
         void setupState(CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const;
 
-        void computeIntensity(CUstream stream, const BufferView &scratchBuffer, CUdeviceptr outputIntensity);
+        void computeIntensity(CUstream stream, const BufferView &scratchBuffer, CUdeviceptr outputIntensity) const;
         void invoke(CUstream stream, bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
-                    const DenoisingTask &task);
+                    const DenoisingTask &task) const;
     };
 
 
