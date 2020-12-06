@@ -149,7 +149,7 @@ optixu::InstanceAccelerationStructure ias1 = scene.createInstanceAccelerationStr
 // ...
 cudau::TypedBuffer<OptixInstance> instBuffer;
 cudau::Buffer ias0Mem;
-ias0.prepareForBuild(&asMemReqs, &numInstances);
+ias0.prepareForBuild(&asMemReqs);
 
 // Build acceleration structures.
 cudau::Buffer asBuildScratchMem;

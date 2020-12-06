@@ -295,14 +295,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create an instance acceleration structure.
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
-    uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     ias.addChild(roomInst);
     ias.addChild(customPrimitivesInst);
-    ias.prepareForBuild(&asMemReqs, &numInstances);
+    ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

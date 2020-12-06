@@ -633,7 +633,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create an instance acceleration structure.
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
-    uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     // JP: update()を使用するためにアップデート可能に設定しておく。
     // EN: Make the AS updatable to use update().
@@ -642,9 +641,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnies.size(); ++i)
         ias.addChild(bunnies[i].inst);
-    ias.prepareForBuild(&asMemReqs, &numInstances);
+    ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, std::max(asMemReqs.tempSizeInBytes,
                                                                        asMemReqs.tempUpdateSizeInBytes));
 

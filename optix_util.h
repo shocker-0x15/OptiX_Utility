@@ -31,7 +31,14 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 破壊的変更履歴 (直近5件) / Breaking Change History (recent 5 changes):
-- 
+- JP: InstanceAccelerationStructure::prepareForBuild()が引数でインスタンス数を返さないように変更。
+      InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
+  EN: Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
+      Use InstanceAccelerationStructure::getNumChildren() instead.
+-
+-
+-
+-
 
 ----------------------------------------------------------------
 TODO:
@@ -922,7 +929,7 @@ private: \
         //     のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which this IAS (indirectly) belongs
         //     is required when performing rebuild / compact.
-        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const;
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         OptixTraversableHandle rebuild(CUstream stream, const BufferView &instanceBuffer,
                                        const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
         // JP: リビルドが完了するのをホスト側で待つ。

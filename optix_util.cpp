@@ -1229,7 +1229,7 @@ namespace optixu {
         m->markDirty();
     }
 
-    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement, uint32_t* numInstances) const {
+    void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         m->instances.resize(m->children.size());
 
         // Fill the build input.
@@ -1255,7 +1255,6 @@ namespace optixu {
                                                  &m->memoryRequirement));
 
         *memoryRequirement = m->memoryRequirement;
-        *numInstances = static_cast<uint32_t>(m->instances.size());
 
         m->readyToBuild = true;
     }

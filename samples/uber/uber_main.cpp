@@ -1024,15 +1024,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasSceneMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    uint32_t numInstances;
     iasScene.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instObject0);
     iasScene.addChild(instObject1);
     iasScene.addChild(instCustomPrimObject);
-    iasScene.prepareForBuild(&asMemReqs, &numInstances);
-    instanceBuffer.initialize(cuContext, g_bufferType, numInstances);
+    iasScene.prepareForBuild(&asMemReqs);
+    instanceBuffer.initialize(cuContext, g_bufferType, iasScene.getNumChildren());
     iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
     if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {

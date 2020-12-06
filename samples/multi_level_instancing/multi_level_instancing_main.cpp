@@ -481,7 +481,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create an instance acceleration structure of the lower layer.
     optixu::InstanceAccelerationStructure lowerIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
-    uint32_t numInstances;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     constexpr uint32_t numMotionKeys = 3;
     lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
@@ -490,9 +489,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     lowerIas.addChild(areaLightInst);
     for (int i = 0; i < objectInsts.size(); ++i)
         lowerIas.addChild(objectInsts[i]);
-    lowerIas.prepareForBuild(&asMemReqs, &numInstances);
+    lowerIas.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, lowerIas.getNumChildren());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 
@@ -541,16 +540,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create an instance acceleration structure of the top layer.
     optixu::InstanceAccelerationStructure topIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer topIasMem;
-    uint32_t numTopInstances;
     cudau::TypedBuffer<OptixInstance> topInstanceBuffer;
     topIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     topIas.addChild(topInstA);
     topIas.addChild(topInstB);
     topIas.addChild(topInstC);
     topIas.addChild(topInstD);
-    topIas.prepareForBuild(&asMemReqs, &numTopInstances);
+    topIas.prepareForBuild(&asMemReqs);
     topIasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    topInstanceBuffer.initialize(cuContext, cudau::BufferType::Device, numTopInstances);
+    topInstanceBuffer.initialize(cuContext, cudau::BufferType::Device, topIas.getNumChildren());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

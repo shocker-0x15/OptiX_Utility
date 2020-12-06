@@ -2026,8 +2026,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 continue;
 
             OptixAccelBufferSizes bufferSizes;
-            uint32_t numInstances;
-            group->optixIAS.prepareForBuild(&bufferSizes, &numInstances);
+            group->optixIAS.prepareForBuild(&bufferSizes);
             hpprintf("IAS: %s\n", kv.second->name.c_str());
             hpprintf("AS Size: %llu bytes\n", bufferSizes.outputSizeInBytes);
             hpprintf("Scratch Size: %llu bytes\n", bufferSizes.tempSizeInBytes);
@@ -2041,17 +2040,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             //     if you don't want to interfere CPU/GPU asynchronous execution.
             if (group->optixIasMem.isInitialized()) {
                 if (bufferSizes.outputSizeInBytes > group->optixIasMem.sizeInBytes() ||
-                    numInstances > group->optixInstanceBuffer.numElements()) {
+                    group->optixIAS.getNumChildren() > group->optixInstanceBuffer.numElements()) {
                     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                     group->optixIasMem.resize(bufferSizes.outputSizeInBytes, 1, cuStream);
-                    group->optixInstanceBuffer.resize(numInstances);
+                    group->optixInstanceBuffer.resize(group->optixIAS.getNumChildren());
                     // TODO: cuStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
                 }
             }
             else {
                 CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                 group->optixIasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
-                group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, numInstances);
+                group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, group->optixIAS.getNumChildren());
             }
             group->optixIAS.rebuild(cuStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
         }
