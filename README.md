@@ -89,7 +89,7 @@ optixu::ProgramGroup visibilityRayHitProgramGroup =
 // ...
 pipeline.link(2, OPTIX_COMPILE_DEBUG_LEVEL_FULL);
 
-// Allocate a shader binding table.
+// Allocate a shader binding table (scene independent part).
 cudau::Buffer sbt;
 size_t sbtSize;
 scene.generateShaderBindingTableLayout(&sbtSize);
@@ -119,7 +119,6 @@ geomInst0.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
 geomInst0.setMaterial(0, 0, defaultMat);
 
 OptixAccelBufferSizes asMemReqs;
-cudau::Buffer asBuildScratchMem;
 
 // Create geometry acceleration structures.
 optixu::GeometryAccelerationStructure gas0 = scene.createGeometryAccelerationStructure();
@@ -132,8 +131,6 @@ optixu::GeometryAccelerationStructure gas1 = scene.createGeometryAccelerationStr
 // ...
 cudau::Buffer gas0Mem;
 gas0.prepareForBuild(&asMemReqs);
-// ...
-OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, gas0Mem, asBuildScratchMem);
 
 // Create instances.
 optixu::Instance inst0 = scene.createInstance();
@@ -150,12 +147,18 @@ ias0.addChild(inst1);
 ias0.addChild(...);
 optixu::InstanceAccelerationStructure ias1 = scene.createInstanceAccelerationStructure();
 // ...
+cudau::TypedBuffer<OptixInstance> instBuffer;
 cudau::Buffer ias0Mem;
-ias0.prepareForBuild(&asMemReqs);
+ias0.prepareForBuild(&asMemReqs, &numInstances);
+
+// Build acceleration structures.
+cudau::Buffer asBuildScratchMem;
+// ...
+OptixTraversableHandle gas0Handle = gas0.rebuild(cuStream, gas0Mem, asBuildScratchMem);
 // ...
 OptixTraversableHandle ias0Handle = ias0.rebuild(cuStream, instBuffer, ias0Mem, asBuildScratchMem);
 
-// Allocate a shader binding table for hit groups.
+// Allocate a shader binding table (scene dependent part).
 cudau::Buffer hitGroupSbt;
 size_t hitGroupSbtSize;
 scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
