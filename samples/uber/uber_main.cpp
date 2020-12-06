@@ -18,7 +18,6 @@ EN: This sample is a spaghetti test place for the author.
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include "../../ext/tiny_obj_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 #include "../common/dds_loader.h"
@@ -810,93 +809,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
     TriangleMesh meshObject(cuContext, &sceneContext);
     uint32_t objectMatGroupIndex;
     {
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn;
-        std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "../../data/subd_cube.obj");
+        std::vector<obj::Vertex> objVertices;
+        std::vector<obj::MaterialGroup> objMatGroups;
+        obj::load("../../data/subd_cube.obj", &objVertices, &objMatGroups, nullptr);
 
-        constexpr float scale = 0.3f;
-        
-        // Record unified unique vertices.
-        std::map<std::tuple<int32_t, int32_t>, Shared::Vertex> unifiedVertexMap;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                for (int vIdx = 0; vIdx < numFaceVertices; ++vIdx) {
-                    tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
-                    auto key = std::make_tuple(idx.vertex_index, idx.normal_index);
-                    unifiedVertexMap[key] = Shared::Vertex{
-                        make_float3(scale * attrib.vertices[3 * idx.vertex_index + 0],
-                        scale * attrib.vertices[3 * idx.vertex_index + 1],
-                        scale * attrib.vertices[3 * idx.vertex_index + 2]),
-                        make_float3(0, 0, 0),
-                        make_float2(0, 0)
-                    };
-                }
-
-                idxOffset += numFaceVertices;
-            }
-        }
-
-        // Assign a vertex index to each of unified unique unifiedVertexMap.
-        std::map<std::tuple<int32_t, int32_t>, uint32_t> vertexIndices;
-        std::vector<Shared::Vertex> orgObjectVertices(unifiedVertexMap.size());
-        uint32_t vertexIndex = 0;
-        for (const auto &kv : unifiedVertexMap) {
-            orgObjectVertices[vertexIndex] = kv.second;
-            vertexIndices[kv.first] = vertexIndex++;
-        }
-
-        // Calculate triangle index buffer.
+        // JP: このサンプルではobjのマテリアルを区別しないのでグループをひとつにまとめる。
+        // EN: Combine groups into one because this sample doesn't distinguish obj materials.
+        std::vector<Shared::Vertex> orgObjectVertices;
         std::vector<Shared::Triangle> triangles;
-        for (int sIdx = 0; sIdx < shapes.size(); ++sIdx) {
-            const tinyobj::shape_t &shape = shapes[sIdx];
-            size_t idxOffset = 0;
-            for (int fIdx = 0; fIdx < shape.mesh.num_face_vertices.size(); ++fIdx) {
-                uint32_t numFaceVertices = shape.mesh.num_face_vertices[fIdx];
-                if (numFaceVertices != 3) {
-                    idxOffset += numFaceVertices;
-                    continue;
-                }
-
-                tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
-                tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
-                tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-                auto key0 = std::make_tuple(idx0.vertex_index, idx0.normal_index);
-                auto key1 = std::make_tuple(idx1.vertex_index, idx1.normal_index);
-                auto key2 = std::make_tuple(idx2.vertex_index, idx2.normal_index);
-
-                triangles.push_back(Shared::Triangle{
-                    vertexIndices.at(key0),
-                    vertexIndices.at(key1),
-                    vertexIndices.at(key2) });
-
-                idxOffset += numFaceVertices;
+        {
+            orgObjectVertices.resize(objVertices.size());
+            for (int vIdx = 0; vIdx < objVertices.size(); ++vIdx) {
+                const obj::Vertex &objVertex = objVertices[vIdx];
+                orgObjectVertices[vIdx] = Shared::Vertex{ 0.3f * objVertex.position, objVertex.normal, objVertex.texCoord };
             }
-        }
-
-        for (int tIdx = 0; tIdx < triangles.size(); ++tIdx) {
-            const Shared::Triangle &tri = triangles[tIdx];
-            Shared::Vertex &v0 = orgObjectVertices[tri.index0];
-            Shared::Vertex &v1 = orgObjectVertices[tri.index1];
-            Shared::Vertex &v2 = orgObjectVertices[tri.index2];
-            float3 gn = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-            v0.normal = v0.normal + gn;
-            v1.normal = v1.normal + gn;
-            v2.normal = v2.normal + gn;
-        }
-        for (int vIdx = 0; vIdx < orgObjectVertices.size(); ++vIdx) {
-            Shared::Vertex &v = orgObjectVertices[vIdx];
-            v.normal = normalize(v.normal);
+            for (int mIdx = 0; mIdx < objMatGroups.size(); ++mIdx) {
+                const obj::MaterialGroup &matGroup = objMatGroups[mIdx];
+                uint32_t baseIndex = triangles.size();
+                triangles.resize(triangles.size() + matGroup.triangles.size());
+                std::copy_n(reinterpret_cast<const Shared::Triangle*>(matGroup.triangles.data()),
+                            matGroup.triangles.size(),
+                            triangles.data() + baseIndex);
+            }
         }
 
         meshObject.setVertexBuffer(orgObjectVertices.data(), orgObjectVertices.size());
