@@ -277,48 +277,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunnyGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    // JP: Geometry Acceleration Structureをビルドする。
-    // EN: Build geometry acceleration structures.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
-    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
-    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
-    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
-
-    // JP: 静的なメッシュはコンパクションもしておく。
-    //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
-    // EN: Perform compaction for static meshes.
-    //     Record ASs of multiple meshes into single buffer back to back.
-    struct CompactedASInfo {
-        optixu::GeometryAccelerationStructure gas;
-        size_t offset;
-        size_t size;
-    };
-    CompactedASInfo gasList[] = {
-        { roomGas, 0, 0 },
-        { areaLightGas, 0, 0 },
-        { bunnyGas, 0, 0 }
-    };
-    size_t compactedASMemOffset = 0;
-    for (int i = 0; i < lengthof(gasList); ++i) {
-        CompactedASInfo &info = gasList[i];
-        compactedASMemOffset = alignUp(compactedASMemOffset, OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
-        info.offset = compactedASMemOffset;
-        info.gas.prepareForCompact(&info.size);
-        compactedASMemOffset += info.size;
-    }
-    cudau::Buffer compactedASMem;
-    compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
-    for (int i = 0; i < lengthof(gasList); ++i) {
-        const CompactedASInfo &info = gasList[i];
-        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
-    }
-    // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
-    // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
-    //     so separating calls is recommended.
-    for (int i = 0; i < lengthof(gasList); ++i)
-        gasList[i].gas.removeUncompacted();
-
 
 
     // JP: GASを元にインスタンスを作成する。
@@ -360,18 +318,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: IAS作成時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
-    //     確定している必要がある。
-    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     when creating an IAS.
-    cudau::Buffer hitGroupSBT;
-    size_t hitGroupSbtSize;
-    scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
-    hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
-    hitGroupSBT.setMappedMemoryPersistent(true);
-
-
-
     // JP: Instance Acceleration Structureを生成する。
     // EN: Create an instance acceleration structure.
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
@@ -388,8 +334,66 @@ int32_t main(int32_t argc, const char* argv[]) try {
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
-        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
+
+
+    // JP: ASビルド用のスクラッチメモリを確保する。
+    // EN: Allocate scratch memory for AS builds.
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+
+
+
+    // JP: Geometry Acceleration Structureをビルドする。
+    // EN: Build geometry acceleration structures.
+    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
+    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
+    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
+
+    // JP: 静的なメッシュはコンパクションもしておく。
+    //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
+    // EN: Perform compaction for static meshes.
+    //     Record ASs of multiple meshes into single buffer back to back.
+    struct CompactedASInfo {
+        optixu::GeometryAccelerationStructure gas;
+        size_t offset;
+        size_t size;
+    };
+    CompactedASInfo gasList[] = {
+        { roomGas, 0, 0 },
+        { areaLightGas, 0, 0 },
+        { bunnyGas, 0, 0 }
+    };
+    size_t compactedASMemOffset = 0;
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        CompactedASInfo &info = gasList[i];
+        compactedASMemOffset = alignUp(compactedASMemOffset, OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+        info.offset = compactedASMemOffset;
+        info.gas.prepareForCompact(&info.size);
+        compactedASMemOffset += info.size;
+    }
+    cudau::Buffer compactedASMem;
+    compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        const CompactedASInfo &info = gasList[i];
+        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
+                                                      info.size, 1));
+    }
+    // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
+    // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
+    //     so separating calls is recommended.
+    for (int i = 0; i < lengthof(gasList); ++i)
+        gasList[i].gas.removeUncompacted();
+
+
+
+    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
+    //     確定している必要がある。
+    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
+    //     when building an IAS.
+    cudau::Buffer hitGroupSBT;
+    size_t hitGroupSbtSize;
+    scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
+    hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    hitGroupSBT.setMappedMemoryPersistent(true);
 
     OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
@@ -455,20 +459,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    hitGroupSBT.finalize();
+
+    compactedASMem.finalize();
+
     asBuildScratchMem.finalize();
 
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
 
-    hitGroupSBT.finalize();
-
     for (int i = bunnyInsts.size() - 1; i >= 0; --i)
         bunnyInsts[i].destroy();
     areaLightInst.destroy();
     roomInst.destroy();
 
-    compactedASMem.finalize();
     bunnyGasMem.finalize();
     bunnyGas.destroy();
     areaLightGasMem.finalize();

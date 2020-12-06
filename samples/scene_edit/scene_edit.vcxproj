@@ -11,6 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\common\imgui_file_dialog.cpp" />
@@ -26,6 +27,7 @@
     <ClCompile Include="scene_edit_main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />

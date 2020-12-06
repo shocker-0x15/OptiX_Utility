@@ -323,9 +323,69 @@ int32_t main(int32_t argc, const char* argv[]) try {
     polygonGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+
+
+    // JP: GASを元にインスタンスを作成する。
+    // EN: Create instances based on GASs.
+    optixu::Instance roomInst = scene.createInstance();
+    roomInst.setChild(roomGas);
+
+    std::vector<optixu::Instance> polygonInsts;
+    const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
+    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
+    for (int i = 0; i < NumPolygonInstances; ++i) {
+        float t = static_cast<float>(i) / (NumPolygonInstances - 1);
+        float x = -0.9f + 1.8f * static_cast<float>(i % 10) / 9;
+        float y = 0.9f - 1.8f * static_cast<float>(i / 10) / 9;
+
+        for (int j = 0; j < Ngon; ++j) {
+            Shared::MaterialData matData;
+            matData.color = HSVtoRGB(static_cast<float>(j) / Ngon + (GoldenAngle * i) / (2 * M_PI),
+                                     1.0f, 1 - 0.9f * t);
+            polygonMaterials[i][j].setUserData(matData);
+        }
+
+        float scale = 0.08f;
+        float polygonInstXfm[] = {
+            scale, 0, 0, x,
+            0, scale, 0, y,
+            0, 0, scale, 0
+        };
+        optixu::Instance polygonInst = scene.createInstance();
+        // JP: インスタンスごとに異なるマテリアルセットを使用する。
+        // EN: Use different material set per instance.
+        polygonInst.setChild(polygonGas, i);
+        polygonInst.setTransform(polygonInstXfm);
+        polygonInsts.push_back(polygonInst);
+    }
+
+
+
+    // JP: Instance Acceleration Structureを生成する。
+    // EN: Create an instance acceleration structure.
+    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+    cudau::Buffer iasMem;
+    uint32_t numInstances;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
+    ias.addChild(roomInst);
+    for (int i = 0; i < polygonInsts.size(); ++i)
+        ias.addChild(polygonInsts[i]);
+    ias.prepareForBuild(&asMemReqs, &numInstances);
+    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+
+
+    // JP: ASビルド用のスクラッチメモリを確保する。
+    // EN: Allocate scratch memory for AS builds.
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+
+
+
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
     roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
     polygonGas.rebuild(cuStream, polygonGasMem, asBuildScratchMem);
 
@@ -365,71 +425,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: GASを元にインスタンスを作成する。
-    // EN: Create instances based on GASs.
-    optixu::Instance roomInst = scene.createInstance();
-    roomInst.setChild(roomGas);
-
-    std::vector<optixu::Instance> polygonInsts;
-    const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
-    for (int i = 0; i < NumPolygonInstances; ++i) {
-        float t = static_cast<float>(i) / (NumPolygonInstances - 1);
-        float x = -0.9f + 1.8f * static_cast<float>(i % 10) / 9;
-        float y = 0.9f - 1.8f * static_cast<float>(i / 10) / 9;
-
-        for (int j = 0; j < Ngon; ++j) {
-            Shared::MaterialData matData;
-            matData.color = HSVtoRGB(static_cast<float>(j) / Ngon + (GoldenAngle * i) / (2 * M_PI),
-                                     1.0f, 1 - 0.9f * t);
-            polygonMaterials[i][j].setUserData(matData);
-        }
-
-        float scale = 0.08f;
-        float polygonInstXfm[] = {
-            scale, 0, 0, x,
-            0, scale, 0, y,
-            0, 0, scale, 0
-        };
-        optixu::Instance polygonInst = scene.createInstance();
-        // JP: インスタンスごとに異なるマテリアルセットを使用する。
-        // EN: Use different material set per instance.
-        polygonInst.setChild(polygonGas, i);
-        polygonInst.setTransform(polygonInstXfm);
-        polygonInsts.push_back(polygonInst);
-    }
-
-
-
-    // JP: IAS作成時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
+    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
     //     確定している必要がある。
     // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     when creating an IAS.
+    //     when building an IAS.
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
-
-
-
-    // JP: Instance Acceleration Structureを生成する。
-    // EN: Create an instance acceleration structure.
-    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
-    cudau::Buffer iasMem;
-    uint32_t numInstances;
-    cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(roomInst);
-    for (int i = 0; i < polygonInsts.size(); ++i)
-        ias.addChild(polygonInsts[i]);
-    ias.prepareForBuild(&asMemReqs, &numInstances);
-    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
-        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
     OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
@@ -495,19 +499,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    hitGroupSBT.finalize();
+
+    compactedASMem.finalize();
+
     asBuildScratchMem.finalize();
 
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
 
-    hitGroupSBT.finalize();
-
     for (int i = polygonInsts.size() - 1; i >= 0; --i)
         polygonInsts[i].destroy();
     roomInst.destroy();
 
-    compactedASMem.finalize();
     polygonGasMem.finalize();
     polygonGas.destroy();
     roomGasMem.finalize();

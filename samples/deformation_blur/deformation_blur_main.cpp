@@ -112,6 +112,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t maxSizeOfScratchBuffer = 0;
     OptixAccelBufferSizes asMemReqs;
 
+    cudau::Buffer asBuildScratchMem;
+
     // JP: このサンプルではデフォーメーションブラーに焦点を当て、
     //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
     // EN: Use one GeometryInstance per GAS for simplicty and
@@ -305,11 +307,47 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    cudau::Buffer asBuildScratchMem;
+    // JP: インスタンスを作成する。
+    // EN: Create instances.
+    Matrix3x3 bunnyMatSR = rotateY3x3(M_PI / 4) * scale3x3(0.015f);
+    float bunnyInstXfm[] = {
+        bunnyMatSR.m00, bunnyMatSR.m01, bunnyMatSR.m02, 0,
+        bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.2f,
+        bunnyMatSR.m20, bunnyMatSR.m21, bunnyMatSR.m22, 0
+    };
+    optixu::Instance bunnyInst = scene.createInstance();
+    bunnyInst.setChild(bunny.optixGas);
+    bunnyInst.setTransform(bunnyInstXfm);
+
+    optixu::Instance spheresInst = scene.createInstance();
+    spheresInst.setChild(spheres.optixGas);
+
+
+
+    // JP: Instance Acceleration Structureを生成する。
+    // EN: Create an instance acceleration structure.
+    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+    cudau::Buffer iasMem;
+    uint32_t numInstances;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
+    ias.addChild(bunnyInst);
+    ias.addChild(spheresInst);
+    ias.prepareForBuild(&asMemReqs, &numInstances);
+    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+
+
+    // JP: ASビルド用のスクラッチメモリを確保する。
+    // EN: Allocate scratch memory for AS builds.
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+
+
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
     bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
     spheres.optixGas.rebuild(cuStream, spheres.gasMem, asBuildScratchMem);
 
@@ -352,51 +390,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: IAS作成前には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
+    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
     //     確定している必要がある。
     // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     before creating an IAS.
+    //     when building an IAS.
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
-
-
-
-    // JP: インスタンスを作成する。
-    // EN: Create instances.
-    Matrix3x3 bunnyMatSR = rotateY3x3(M_PI / 4) * scale3x3(0.015f);
-    float bunnyInstXfm[] = {
-        bunnyMatSR.m00, bunnyMatSR.m01, bunnyMatSR.m02, 0,
-        bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.2f,
-        bunnyMatSR.m20, bunnyMatSR.m21, bunnyMatSR.m22, 0
-    };
-    optixu::Instance bunnyInst = scene.createInstance();
-    bunnyInst.setChild(bunny.optixGas);
-    bunnyInst.setTransform(bunnyInstXfm);
-
-    optixu::Instance spheresInst = scene.createInstance();
-    spheresInst.setChild(spheres.optixGas);
-
-
-
-    // JP: Instance Acceleration Structureを生成する。
-    // EN: Create an instance acceleration structure.
-    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
-    cudau::Buffer iasMem;
-    uint32_t numInstances;
-    cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(bunnyInst);
-    ias.addChild(spheresInst);
-    ias.prepareForBuild(&asMemReqs, &numInstances);
-    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
-        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
     OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
@@ -482,15 +484,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    hitGroupSBT.finalize();
+
     compactedASMem.finalize();
-    
+
     asBuildScratchMem.finalize();
 
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
-
-    hitGroupSBT.finalize();
 
     spheresInst.destroy();
     bunnyInst.destroy();

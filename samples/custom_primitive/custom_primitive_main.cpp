@@ -279,9 +279,42 @@ int32_t main(int32_t argc, const char* argv[]) try {
     customPrimitivesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+
+
+    // JP: GASを元にインスタンスを作成する。
+    // EN: Create instances based on GASs.
+    optixu::Instance roomInst = scene.createInstance();
+    roomInst.setChild(roomGas);
+
+    optixu::Instance customPrimitivesInst = scene.createInstance();
+    customPrimitivesInst.setChild(customPrimitivesGas);
+
+
+
+    // JP: Instance Acceleration Structureを生成する。
+    // EN: Create an instance acceleration structure.
+    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+    cudau::Buffer iasMem;
+    uint32_t numInstances;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
+    ias.addChild(roomInst);
+    ias.addChild(customPrimitivesInst);
+    ias.prepareForBuild(&asMemReqs, &numInstances);
+    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+
+
+    // JP: ASビルド用のスクラッチメモリを確保する。
+    // EN: Allocate scratch memory for AS builds.
+    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+
+
+
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
     roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
     customPrimitivesGas.rebuild(cuStream, customPrimitivesGasMem, asBuildScratchMem);
 
@@ -321,40 +354,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
+    //     確定している必要がある。
+    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
+    //     when building an IAS.
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
-
-
-
-    // JP: GASを元にインスタンスを作成する。
-    // EN: Create instances based on GASs.
-    optixu::Instance roomInst = scene.createInstance();
-    roomInst.setChild(roomGas);
-
-    optixu::Instance customPrimitivesInst = scene.createInstance();
-    customPrimitivesInst.setChild(customPrimitivesGas);
-
-
-
-    // JP: Instance Acceleration Structureを生成する。
-    // EN: Create an instance acceleration structure.
-    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
-    cudau::Buffer iasMem;
-    uint32_t numInstances;
-    cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
-    ias.addChild(roomInst);
-    ias.addChild(customPrimitivesInst);
-    ias.prepareForBuild(&asMemReqs, &numInstances);
-    iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    if (maxSizeOfScratchBuffer > asBuildScratchMem.sizeInBytes())
-        asBuildScratchMem.resize(maxSizeOfScratchBuffer, 1);
 
     OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
@@ -420,6 +428,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    hitGroupSBT.finalize();
+
+    compactedASMem.finalize();
+
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
@@ -427,9 +439,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     customPrimitivesInst.destroy();
     roomInst.destroy();
 
-    hitGroupSBT.finalize();
-
-    compactedASMem.finalize();
     asBuildScratchMem.finalize();
     customPrimitivesGasMem.finalize();
     customPrimitivesGas.destroy();

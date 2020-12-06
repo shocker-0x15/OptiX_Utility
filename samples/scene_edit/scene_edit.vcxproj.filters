@@ -64,6 +64,9 @@
     <ClCompile Include="..\common\imgui_file_dialog.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
@@ -129,6 +132,9 @@
     </ClInclude>
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
