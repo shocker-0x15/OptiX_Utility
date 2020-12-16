@@ -141,27 +141,34 @@ TODO:
 
 
 
-inline OptixGeometryFlags operator|(OptixGeometryFlags a, OptixGeometryFlags b) {
-    return static_cast<OptixGeometryFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-inline OptixPrimitiveTypeFlags operator|(OptixPrimitiveTypeFlags a, OptixPrimitiveTypeFlags b) {
-    return static_cast<OptixPrimitiveTypeFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-inline OptixInstanceFlags operator|(OptixInstanceFlags a, OptixInstanceFlags b) {
-    return static_cast<OptixInstanceFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-inline OptixMotionFlags operator|(OptixMotionFlags a, OptixMotionFlags b) {
-    return static_cast<OptixMotionFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-inline OptixRayFlags operator|(OptixRayFlags a, OptixRayFlags b) {
-    return static_cast<OptixRayFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-inline OptixTraversableGraphFlags operator|(OptixTraversableGraphFlags a, OptixTraversableGraphFlags b) {
-    return static_cast<OptixTraversableGraphFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-inline OptixExceptionFlags operator|(OptixExceptionFlags a, OptixExceptionFlags b) {
-    return static_cast<OptixExceptionFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
+#define OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(Type) \
+    RT_DEVICE_FUNCTION inline Type operator~(Type a) { \
+        return static_cast<Type>(~static_cast<uint32_t>(a)); \
+    } \
+    RT_DEVICE_FUNCTION inline Type operator|(Type a, Type b) { \
+        return static_cast<Type>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b)); \
+    } \
+    RT_DEVICE_FUNCTION inline Type &operator|=(Type &a, Type b) { \
+        a = static_cast<Type>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b)); \
+        return a; \
+    } \
+    RT_DEVICE_FUNCTION inline Type operator&(Type a, Type b) { \
+        return static_cast<Type>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b)); \
+    } \
+    RT_DEVICE_FUNCTION inline Type &operator&=(Type &a, Type b) { \
+        a = static_cast<Type>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b)); \
+        return a; \
+    }
+
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixGeometryFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixPrimitiveTypeFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixInstanceFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixMotionFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixRayFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixTraversableGraphFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixExceptionFlags);
+
+#undef OPTIXU_DEFINE_OPERATORS_FOR_FLAGS
 
 
 
@@ -693,11 +700,13 @@ private: \
         OPTIXU_PIMPL();
 
     public:
-        static Context create(CUcontext cuContext, bool enableValidation = false);
+        static Context create(CUcontext cuContext, uint32_t logLevel = 4, bool enableValidation = false);
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(Context);
 
         CUcontext getCUcontext() const;
+
+        void setLogCallback(OptixLogCallback callback, void* callbackData, uint32_t logLevel) const;
 
         [[nodiscard]]
         Pipeline createPipeline() const;

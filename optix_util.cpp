@@ -50,13 +50,21 @@ namespace optixu {
 
 
 
-    Context Context::create(CUcontext cuContext, bool enableValidation) {
-        return (new _Context(cuContext, enableValidation))->getPublicType();
+    Context Context::create(CUcontext cuContext, uint32_t logLevel, bool enableValidation) {
+        return (new _Context(cuContext, logLevel, enableValidation))->getPublicType();
     }
 
     void Context::destroy() {
         delete m;
         m = nullptr;
+    }
+
+    void Context::setLogCallback(OptixLogCallback callback, void* callbackData, uint32_t logLevel) const {
+        m->throwRuntimeError(logLevel <= 4, "Valid range for logLevel is [0, 4].");
+        if (callback)
+            OPTIX_CHECK(optixDeviceContextSetLogCallback(m->rawContext, callback, callbackData, logLevel));
+        else
+            OPTIX_CHECK(optixDeviceContextSetLogCallback(m->rawContext, &logCallBack, nullptr, logLevel));
     }
 
 

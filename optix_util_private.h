@@ -197,13 +197,14 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(Context);
 
-        Priv(CUcontext _cuContext, bool enableValidation) : cuContext(_cuContext) {
+        Priv(CUcontext _cuContext, uint32_t logLevel, bool enableValidation) : cuContext(_cuContext) {
+            throwRuntimeError(logLevel <= 4, "Valid range for logLevel is [0, 4].");
             OPTIX_CHECK(optixInit());
 
             OptixDeviceContextOptions options = {};
             options.logCallbackFunction = &logCallBack;
             options.logCallbackData = nullptr;
-            options.logCallbackLevel = 4;
+            options.logCallbackLevel = logLevel;
             options.validationMode = enableValidation ?
                 OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL :
                 OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF;
