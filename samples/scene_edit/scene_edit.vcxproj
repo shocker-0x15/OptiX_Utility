@@ -14,6 +14,7 @@
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
+    <ClCompile Include="..\common\gl_util.cpp" />
     <ClCompile Include="..\common\imgui_file_dialog.cpp" />
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
@@ -27,11 +28,12 @@
     <ClCompile Include="scene_edit_main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h" />
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
-    <ClInclude Include="..\common\GLToolkit.h" />
+    <ClInclude Include="..\common\gl_util.h" />
     <ClInclude Include="..\common\imgui_file_dialog.h" />
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h" />

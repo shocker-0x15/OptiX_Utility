@@ -11,7 +11,7 @@ EN: This sample is a spaghetti test place for the author.
 #include "uber_shared.h"
 
 // Include glfw3.h after our OpenGL definitions
-#include "../common/GLToolkit.h"
+#include "../common/gl_util.h"
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
@@ -246,8 +246,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         return -1;
     }
 
-    glEnable(GL_FRAMEBUFFER_SRGB);
-    GLTK::errorCheck();
+    GL_CHECK(glEnable(GL_FRAMEBUFFER_SRGB));
 
     // END: Initialize OpenGL and GLFW.
     // ----------------------------------------------------------------
@@ -1055,38 +1054,42 @@ int32_t main(int32_t argc, const char* argv[]) try {
     
     // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
     // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
-    GLTK::Texture2D outputTexture;
+    glu::Texture2D outputTexture;
     cudau::Array outputArray;
-    outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F); GLTK::errorCheck();
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(),
+    outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
+    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
                                           cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
 
     
     // JP: Hi-DPIディスプレイで過剰なレンダリング負荷になってしまうため低解像度フレームバッファーを作成する。
     // EN: Create a low-resolution frame buffer to avoid too much rendering load caused by Hi-DPI display.
-    GLTK::FrameBuffer frameBuffer;
-    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
+    glu::FrameBuffer frameBuffer;
+    GLenum colorFormats[] = { GL_SRGB8 };
+    GLenum depthFormat = GL_DEPTH_COMPONENT32;
+    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, 1,
+                           colorFormats, 0b0, lengthof(colorFormats),
+                           &depthFormat, false);
     // sRGB8を指定しないとなぜか精度問題が発生したが、むしろRGB8が本来なら正しい気がする。
 
 
 
     // JP: フルスクリーンクアッド(or 三角形)用の空のVAO。
     // EN: Empty VAO for full screen qud (or triangle).
-    GLTK::VertexArray vertexArrayForFullScreen;
+    glu::VertexArray vertexArrayForFullScreen;
     vertexArrayForFullScreen.initialize();
 
     const std::filesystem::path exeDir = getExecutableDirectory();
 
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
-    GLTK::GraphicsShader drawOptiXResultShader;
+    glu::GraphicsProgram drawOptiXResultShader;
     drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "uber/shaders/drawOptiXResult.vert"),
                                          readTxtFile(exeDir / "uber/shaders/drawOptiXResult.frag"));
 
     // JP: アップスケール用のシェーダー。
     // EN: Shader for upscale.
-    GLTK::GraphicsShader scaleShader;
+    glu::GraphicsProgram scaleShader;
     scaleShader.initializeVSPS(readTxtFile(exeDir / "uber/shaders/scale.vert"),
                                readTxtFile(exeDir / "uber/shaders/scale.frag"));
 
@@ -1094,14 +1097,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     texelFetch()を使う場合には設定値は無関係。だがバインドは必要な様子。
     // EN: Sampler for upscaling.
     //     It seems to require to bind a sampler even when using texelFetch() which is independent from the sampler settings.
-    GLTK::Sampler scaleSampler;
-    scaleSampler.initialize(GLTK::Sampler::MinFilter::Nearest, GLTK::Sampler::MagFilter::Nearest, GLTK::Sampler::WrapMode::Repeat, GLTK::Sampler::WrapMode::Repeat);
+    glu::Sampler scaleSampler;
+    scaleSampler.initialize(glu::Sampler::MinFilter::Nearest,
+                            glu::Sampler::MagFilter::Nearest,
+                            glu::Sampler::WrapMode::Repeat,
+                            glu::Sampler::WrapMode::Repeat);
 
 
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
     rngBuffer.initialize(cuContext, g_bufferType, renderTargetSizeX, renderTargetSizeY);
-    const auto initializeRNGSeeds = [&renderTargetSizeX, &renderTargetSizeY](optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> &buffer) {
+    const auto initializeRNGSeeds = [&renderTargetSizeX, &renderTargetSizeY](
+        optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> &buffer) {
         std::mt19937_64 rng(591842031321323413);
 
         buffer.map();
@@ -1214,13 +1221,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             requestedSize[1] = renderTargetSizeY;
 
             outputTexture.finalize();
-            outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F);
+            outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(),
+            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
                                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             frameBuffer.finalize();
-            frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, GL_SRGB8, GL_DEPTH_COMPONENT32);
+            frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, 1,
+                                   colorFormats, 0b0, lengthof(colorFormats),
+                                   &depthFormat, false);
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
             arrayAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
@@ -1668,31 +1677,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // ----------------------------------------------------------------
             // JP: OptiXの出力とImGuiの描画。
 
-            frameBuffer.bind(GLTK::FrameBuffer::Target::ReadDraw);
+            GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer.getHandle(0)));
+            frameBuffer.setDrawBuffers();
 
-            glViewport(0, 0, frameBuffer.getWidth(), frameBuffer.getHeight());
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClearDepth(1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            GL_CHECK(glViewport(0, 0, frameBuffer.getWidth(), frameBuffer.getHeight()));
+            GL_CHECK(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
+            GL_CHECK(glClearDepth(1.0f));
+            GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
             {
-                drawOptiXResultShader.useProgram();
+                GL_CHECK(glUseProgram(drawOptiXResultShader.getHandle()));
 
-                glUniform1i(0, (int32_t)renderTargetSizeX); GLTK::errorCheck();
+                GL_CHECK(glUniform1i(0, (int32_t)renderTargetSizeX));
 
-                glActiveTexture(GL_TEXTURE0); GLTK::errorCheck();
-                outputTexture.bind();
+                GL_CHECK(glBindTextureUnit(0, outputTexture.getHandle()));
 
-                vertexArrayForFullScreen.bind();
-                glDrawArrays(GL_TRIANGLES, 0, 3); GLTK::errorCheck();
-                vertexArrayForFullScreen.unbind();
-
-                outputTexture.unbind();
+                GL_CHECK(glBindVertexArray(vertexArrayForFullScreen.getHandle()));
+                GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
             }
 
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-            frameBuffer.unbind();
+            frameBuffer.resetDrawBuffers();
+            GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
             // END: draw OptiX's output and ImGui.
             // ----------------------------------------------------------------
@@ -1701,25 +1708,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // ----------------------------------------------------------------
         // JP: スケーリング
 
-        glEnable(GL_FRAMEBUFFER_SRGB);
-        GLTK::errorCheck();
+        GL_CHECK(glEnable(GL_FRAMEBUFFER_SRGB));
 
-        glViewport(0, 0, curFBWidth, curFBHeight);
+        GL_CHECK(glViewport(0, 0, curFBWidth, curFBHeight));
 
-        scaleShader.useProgram();
+        GL_CHECK(glUseProgram(scaleShader.getHandle()));
 
-        glUniform1f(0, UIScaling);
+        GL_CHECK(glUniform1f(0, UIScaling));
 
-        glActiveTexture(GL_TEXTURE0);
-        GLTK::Texture2D& srcFBTex = frameBuffer.getRenderTargetTexture();
-        srcFBTex.bind();
-        scaleSampler.bindToTextureUnit(0);
+        const glu::Texture2D &srcFBTex = frameBuffer.getRenderTargetTexture(0, 0);
+        GL_CHECK(glBindTextureUnit(0, srcFBTex.getHandle()));
+        GL_CHECK(glBindSampler(0, scaleSampler.getHandle()));
 
-        vertexArrayForFullScreen.bind();
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        vertexArrayForFullScreen.unbind();
-
-        srcFBTex.unbind();
+        GL_CHECK(glBindVertexArray(vertexArrayForFullScreen.getHandle()));
+        GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
 
         // END: scaling
         // ----------------------------------------------------------------

@@ -13,7 +13,7 @@ EN: This sample shows how to update GAS and IAS.
 #include "as_update_shared.h"
 
 // Include glfw3.h after our OpenGL definitions
-#include "../common/GLToolkit.h"
+#include "../common/gl_util.h"
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
@@ -718,29 +718,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
     // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
-    GLTK::Texture2D outputTexture;
+    glu::Texture2D outputTexture;
     cudau::Array outputArray;
     cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
-    outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F);
-    GLTK::errorCheck();
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(),
+    outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
+    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
                                           cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
     outputBufferSurfaceHolder.initialize(&outputArray);
 
-    GLTK::Sampler outputSampler;
-    outputSampler.initialize(GLTK::Sampler::MinFilter::Nearest, GLTK::Sampler::MagFilter::Nearest,
-                             GLTK::Sampler::WrapMode::Repeat, GLTK::Sampler::WrapMode::Repeat);
+    glu::Sampler outputSampler;
+    outputSampler.initialize(glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
+                             glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
 
 
 
     // JP: フルスクリーンクアッド(or 三角形)用の空のVAO。
     // EN: Empty VAO for full screen qud (or triangle).
-    GLTK::VertexArray vertexArrayForFullScreen;
+    glu::VertexArray vertexArrayForFullScreen;
     vertexArrayForFullScreen.initialize();
 
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
-    GLTK::GraphicsShader drawOptiXResultShader;
+    glu::GraphicsProgram drawOptiXResultShader;
     drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "as_update/shaders/drawOptiXResult.vert"),
                                          readTxtFile(exeDir / "as_update/shaders/drawOptiXResult.frag"));
 
@@ -784,9 +783,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             requestedSize[1] = renderTargetSizeY;
 
             outputTexture.finalize();
-            outputTexture.initialize(renderTargetSizeX, renderTargetSizeY, GLTK::SizedInternalFormat::RGBA32F);
+            outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getRawHandle(),
+            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
                                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             outputArray.resize(renderTargetSizeX, renderTargetSizeY);
@@ -951,28 +950,25 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         // ----------------------------------------------------------------
-        // JP: 
+        // JP: OptiXによる描画結果を表示用レンダーターゲットにコピーする。
+        // EN: Copy the OptiX rendering results to the display render target.
 
-        glViewport(0, 0, curFBWidth, curFBHeight);
+        GL_CHECK(glViewport(0, 0, curFBWidth, curFBHeight));
 
-        drawOptiXResultShader.useProgram();
+        GL_CHECK(glUseProgram(drawOptiXResultShader.getHandle()));
 
-        glUniform2ui(0, curFBWidth, curFBHeight);
+        GL_CHECK(glUniform2ui(0, curFBWidth, curFBHeight));
 
-        glActiveTexture(GL_TEXTURE0);
-        outputTexture.bind();
-        outputSampler.bindToTextureUnit(0);
+        GL_CHECK(glBindTextureUnit(0, outputTexture.getHandle()));
+        GL_CHECK(glBindSampler(0, outputSampler.getHandle()));
 
-        vertexArrayForFullScreen.bind();
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        vertexArrayForFullScreen.unbind();
-
-        outputTexture.unbind();
+        GL_CHECK(glBindVertexArray(vertexArrayForFullScreen.getHandle()));
+        GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        // END: 
+        // END: Copy the OptiX rendering results to the display render target.
         // ----------------------------------------------------------------
 
         glfwSwapBuffers(window);

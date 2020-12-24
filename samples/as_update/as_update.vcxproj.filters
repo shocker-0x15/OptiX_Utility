@@ -61,6 +61,9 @@
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
       <Filter>non-essentials\ext</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\gl_util.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
@@ -112,14 +115,17 @@
     <ClInclude Include="..\common\common.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\GLToolkit.h">
-      <Filter>non-essentials</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\ext\tiny_obj_loader.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\gl_util.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h">
+      <Filter>non-essentials\ext\gl3w</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
