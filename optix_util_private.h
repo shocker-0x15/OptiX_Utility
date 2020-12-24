@@ -532,8 +532,7 @@ namespace optixu {
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
-        SizeAlign calcMaxRecordSizeAlign(uint32_t gasMatSetIdx) const;
-        uint32_t getNumSBTRecords() const;
+        void calcSBTRequirements(uint32_t gasMatSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
                                 const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                 uint32_t numRayTypes, uint8_t* records) const;
@@ -636,8 +635,7 @@ namespace optixu {
             return numRayTypesPerMaterialSet[matSetIdx];
         }
 
-        SizeAlign calcMaxRecordSizeAlign(uint32_t matSetIdx) const;
-        uint32_t calcNumSBTRecords(uint32_t matSetIdx) const;
+        void calcSBTRequirements(uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const;
         bool hasMotion() const {
             return buildOptions.motionOptions.numKeys >= 2;

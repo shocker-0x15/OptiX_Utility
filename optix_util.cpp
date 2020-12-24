@@ -217,24 +217,22 @@ namespace optixu {
 
         uint32_t sbtOffset = 0;
         m->sbtOffsets.clear();
-        m->singleRecordSize = OPTIX_SBT_RECORD_HEADER_SIZE;
-        for (_GeometryAccelerationStructure* gas : m->geomASs) {
-            uint32_t numMatSets = gas->getNumMaterialSets();
-            SizeAlign maxRecordSizeAlign;
-            for (uint32_t matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx)
-                maxRecordSizeAlign = max(maxRecordSizeAlign, gas->calcMaxRecordSizeAlign(matSetIdx));
-            maxRecordSizeAlign.alignUp();
-            m->singleRecordSize = std::max(m->singleRecordSize, maxRecordSizeAlign.size);
-        }
+        SizeAlign maxRecordSizeAlign;
+        maxRecordSizeAlign += SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
         for (_GeometryAccelerationStructure* gas : m->geomASs) {
             uint32_t numMatSets = gas->getNumMaterialSets();
             for (uint32_t matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
-                uint32_t gasNumSBTRecords = gas->calcNumSBTRecords(matSetIdx);
+                SizeAlign gasRecordSizeAlign;
+                uint32_t gasNumSBTRecords;
+                gas->calcSBTRequirements(matSetIdx, &gasRecordSizeAlign, &gasNumSBTRecords);
+                maxRecordSizeAlign = max(maxRecordSizeAlign, gasRecordSizeAlign);
                 _Scene::SBTOffsetKey key = { gas, matSetIdx };
                 m->sbtOffsets[key] = sbtOffset;
                 sbtOffset += gasNumSBTRecords;
             }
         }
+        maxRecordSizeAlign.alignUp();
+        m->singleRecordSize = maxRecordSizeAlign.size;
         m->numSBTRecords = sbtOffset;
         m->sbtLayoutIsUpToDate = true;
 
@@ -372,8 +370,8 @@ namespace optixu {
         }
     }
 
-    SizeAlign GeometryInstance::Priv::calcMaxRecordSizeAlign(uint32_t gasMatSetIdx) const {
-        SizeAlign maxRecordSizeAlign;
+    void GeometryInstance::Priv::calcSBTRequirements(uint32_t gasMatSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const {
+        *maxRecordSizeAlign = SizeAlign();
         for (int matIdx = 0; matIdx < materials.size(); ++matIdx) {
             throwRuntimeError(materials[matIdx][0], "Default material (== material set 0) is not set for the slot %u.", matIdx);
             uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
@@ -382,14 +380,10 @@ namespace optixu {
                 mat = materials[matIdx][0];
             SizeAlign recordSizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
             recordSizeAlign += mat->getUserDataSizeAlign();
-            maxRecordSizeAlign = max(maxRecordSizeAlign, recordSizeAlign);
+            *maxRecordSizeAlign = max(*maxRecordSizeAlign, recordSizeAlign);
         }
-        maxRecordSizeAlign += userDataSizeAlign;
-        return maxRecordSizeAlign;
-    }
-
-    uint32_t GeometryInstance::Priv::getNumSBTRecords() const {
-        return static_cast<uint32_t>(buildInputFlags.size());
+        *maxRecordSizeAlign += userDataSizeAlign;
+        *numSBTRecords = static_cast<uint32_t>(buildInputFlags.size());
     }
 
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
@@ -516,21 +510,18 @@ namespace optixu {
 
 
 
-    SizeAlign GeometryAccelerationStructure::Priv::calcMaxRecordSizeAlign(uint32_t matSetIdx) const {
-        SizeAlign maxRecordSizeAlign;
-        for (const Child &child : children)
-            maxRecordSizeAlign = max(maxRecordSizeAlign, child.geomInst->calcMaxRecordSizeAlign(matSetIdx));
-        maxRecordSizeAlign += userDataSizeAlign;
-        return maxRecordSizeAlign;
-    }
-
-    uint32_t GeometryAccelerationStructure::Priv::calcNumSBTRecords(uint32_t matSetIdx) const {
-        uint32_t numSBTRecords = 0;
-        for (const Child &child : children)
-            numSBTRecords += child.geomInst->getNumSBTRecords();
-        numSBTRecords *= numRayTypesPerMaterialSet[matSetIdx];
-
-        return numSBTRecords;
+    void GeometryAccelerationStructure::Priv::calcSBTRequirements(uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const {
+        *maxRecordSizeAlign = SizeAlign();
+        *numSBTRecords = 0;
+        for (const Child &child : children) {
+            SizeAlign geomInstRecordSizeAlign;
+            uint32_t geomInstNumSBTRecords;
+            child.geomInst->calcSBTRequirements(matSetIdx, &geomInstRecordSizeAlign, &geomInstNumSBTRecords);
+            *maxRecordSizeAlign = max(*maxRecordSizeAlign, geomInstRecordSizeAlign);
+            *numSBTRecords += geomInstNumSBTRecords;
+        }
+        *maxRecordSizeAlign += userDataSizeAlign;
+        *numSBTRecords *= numRayTypesPerMaterialSet[matSetIdx];
     }
 
     uint32_t GeometryAccelerationStructure::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const {
