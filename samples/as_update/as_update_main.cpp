@@ -707,6 +707,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(gasList); ++i)
         gasList[i].gas.removeUncompacted();
 
+    areaLightGasMem.finalize();
+    roomGasMem.finalize();
+
 
 
     // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
@@ -1034,9 +1037,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     bunnyGasMem.finalize();
     bunnyGas.destroy();
-    areaLightGasMem.finalize();
     areaLightGas.destroy();
-    roomGasMem.finalize();
     roomGas.destroy();
 
     deformedBunnyVertexBuffer.finalize();

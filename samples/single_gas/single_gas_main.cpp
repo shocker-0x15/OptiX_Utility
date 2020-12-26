@@ -342,6 +342,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     travHandle = gas.compact(cuStream, gasCompactedMem);
     gas.removeUncompacted();
+    gasMem.finalize();
 
 
 
@@ -405,7 +406,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     gasCompactedMem.finalize();
     asBuildScratchMem.finalize();
-    gasMem.finalize();
     gas.destroy();
 
     bunnyTriangleBuffer.finalize();

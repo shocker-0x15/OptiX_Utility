@@ -599,6 +599,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(gasList); ++i)
         gasList[i].gas.removeUncompacted();
 
+    cube.gasMem.finalize();
+    bunny.gasMem.finalize();
+    areaLight.gasMem.finalize();
+    room.gasMem.finalize();
+
 
 
     // JP: Transformビルド時には子のTraversable Handleが確定している必要がある。

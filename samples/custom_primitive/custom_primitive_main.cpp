@@ -348,6 +348,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(gasList); ++i)
         gasList[i].gas.removeUncompacted();
 
+    customPrimitivesGasMem.finalize();
+    roomGasMem.finalize();
+
 
 
     // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
@@ -422,9 +425,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomInst.destroy();
 
     asBuildScratchMem.finalize();
-    customPrimitivesGasMem.finalize();
     customPrimitivesGas.destroy();
-    roomGasMem.finalize();
     roomGas.destroy();
 
     spheresParamBuffer.finalize();
