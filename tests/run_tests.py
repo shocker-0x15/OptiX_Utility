@@ -11,8 +11,8 @@ def chdir(dst):
 
 def run():
     msbuild = R'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
-    sln = os.path.abspath(R'samples\OptiX_Utility.sln')
-    refImgDir = os.path.abspath(R'ref_images')
+    sln = os.path.abspath(R'..\samples\OptiX_Utility.sln')
+    refImgDir = os.path.abspath(R'..\ref_images')
 
     with open(R'tests.json') as f:
         tests = json.load(f)
@@ -29,13 +29,13 @@ def run():
         ret = subprocess.check_call(cmd)
 
         results = {}
-        outDir = os.path.abspath(os.path.join(R'samples\x64', config))
+        outDir = os.path.abspath(os.path.join(R'..\samples\x64', config))
         for test in tests:
             testName = test['sample']
             testDir = test['sample']
             exeName = test['sample'] + '.exe'
 
-            oldDir = chdir(os.path.join('samples', testDir))
+            oldDir = chdir(os.path.join(R'..\samples', testDir))
             exe = os.path.join(outDir, exeName)
             cmd = [exe]
             if 'options' in test:
