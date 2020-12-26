@@ -1,0 +1,43 @@
+[
+    {
+        "sample": "single_gas",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "single_level_instancing",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "material_sets",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "as_update",
+        "options": "--screen-shot",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "custom_primitive",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "multi_level_instancing",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "deformation_blur",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
+        "sample": "denoiser",
+        "image": "color_denoised.png",
+        "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"]
+    }
+]
