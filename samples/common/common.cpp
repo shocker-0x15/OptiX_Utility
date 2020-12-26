@@ -1,5 +1,8 @@
 #include "common.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../../ext/stb_image_write.h"
+
 #include "../../ext/tiny_obj_loader.h"
 
 void devPrintf(const char* fmt, ...) {
@@ -404,6 +407,67 @@ void SlotFinder::debugPrint() const {
         hpprintf("\n");
     }
 }
+
+
+
+void saveImage(const std::filesystem::path &filepath, uint32_t width, uint32_t height, const uint32_t* data) {
+    if (filepath.extension() == ".png")
+        stbi_write_png(filepath.string().c_str(), width, height, 4, data,
+                       width * sizeof(uint32_t));
+    else if (filepath.extension() == ".bmp")
+        stbi_write_bmp(filepath.string().c_str(), width, height, 4, data);
+    else
+        Assert_ShouldNotBeCalled();
+}
+
+void saveImage(const std::filesystem::path &filepath, uint32_t width, uint32_t height, const float4* data,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection) {
+    auto image = new uint32_t[width * height];
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float4 src = data[y * width + x];
+            if (applyToneMap) {
+                src.x = simpleToneMap_s(src.x);
+                src.y = simpleToneMap_s(src.y);
+                src.z = simpleToneMap_s(src.z);
+            }
+            if (apply_sRGB_gammaCorrection) {
+                src.x = sRGB_gamma_s(src.x);
+                src.y = sRGB_gamma_s(src.y);
+                src.z = sRGB_gamma_s(src.z);
+            }
+            uint32_t &dst = image[y * width + x];
+            dst = ((std::min<uint32_t>(src.x * 255, 255) << 0) |
+                   (std::min<uint32_t>(src.y * 255, 255) << 8) |
+                   (std::min<uint32_t>(src.z * 255, 255) << 16) |
+                   (std::min<uint32_t>(src.w * 255, 255) << 24));
+        }
+    }
+
+    saveImage(filepath, width, height, image);
+
+    delete[] image;
+}
+
+void saveImage(const std::filesystem::path &filepath,
+               uint32_t width, cudau::TypedBuffer<float4> &buffer,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection) {
+    Assert(buffer.numElements() % width == 0, "Buffer's length is not divisible by the width.");
+    uint32_t height = buffer.numElements() / width;
+    auto data = buffer.map();
+    saveImage(filepath, width, height, data, applyToneMap, apply_sRGB_gammaCorrection);
+    buffer.unmap();
+}
+
+void saveImage(const std::filesystem::path &filepath,
+               cudau::Array &array,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection) {
+    auto data = array.map<float4>();
+    saveImage(filepath, array.getWidth(), array.getHeight(), data, applyToneMap, apply_sRGB_gammaCorrection);
+    array.unmap();
+}
+
+
 
 namespace obj {
     void load(const std::filesystem::path &filepath,

@@ -12,9 +12,6 @@ EN: This sample shows how to handle custom primitives other than triangles.
 
 #include "custom_primitive_shared.h"
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../../ext/stb_image_write.h"
-
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
@@ -401,21 +398,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
-    accumBuffer.map();
-    std::vector<uint32_t> imageData(renderTargetSizeX * renderTargetSizeY);
-    for (int y = 0; y < renderTargetSizeY; ++y) {
-        for (int x = 0; x < renderTargetSizeX; ++x) {
-            const float4 &srcPix = accumBuffer(x, y);
-            uint32_t &dstPix = imageData[y * renderTargetSizeX + x];
-            dstPix = (std::min<uint32_t>(255, 255 * srcPix.x) <<  0) |
-                     (std::min<uint32_t>(255, 255 * srcPix.y) <<  8) |
-                     (std::min<uint32_t>(255, 255 * srcPix.z) << 16) |
-                     (std::min<uint32_t>(255, 255 * srcPix.w) << 24);
-        }
-    }
-    accumBuffer.unmap();
-
-    stbi_write_bmp("output.bmp", renderTargetSizeX, renderTargetSizeY, 4, imageData.data());
+    saveImage("output.png", accumBuffer, false, false);
 
 
 

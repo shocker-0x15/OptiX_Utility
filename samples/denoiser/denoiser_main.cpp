@@ -15,8 +15,6 @@ EN: This sample shows how to use the denoiser.
 #include "../common/dds_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../../ext/stb_image_write.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -713,34 +711,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: 結果とデノイズ用付随バッファーの画像出力。
     // EN: Output the result and buffers associated to the denoiser as images.
-    auto colorPixels = colorAccumBuffer.map<float4>();
-    auto albedoPixels = albedoAccumBuffer.map<float4>();
     auto normalPixels = normalAccumBuffer.map<float4>();
-    auto outputPixels = linearOutputBuffer.map();
-    std::vector<uint32_t> colorImageData(renderTargetSizeX * renderTargetSizeY);
-    std::vector<uint32_t> albedoImageData(renderTargetSizeX * renderTargetSizeY);
     std::vector<uint32_t> normalImageData(renderTargetSizeX * renderTargetSizeY);
-    std::vector<uint32_t> outputImageData(renderTargetSizeX * renderTargetSizeY);
     for (int y = 0; y < renderTargetSizeY; ++y) {
         for (int x = 0; x < renderTargetSizeX; ++x) {
             uint32_t linearIndex = renderTargetSizeX * y + x;
-
-            float4 color = colorPixels[linearIndex];
-            color.x = sRGB_gamma_s(1 - std::exp(-color.x));
-            color.y = sRGB_gamma_s(1 - std::exp(-color.y));
-            color.z = sRGB_gamma_s(1 - std::exp(-color.z));
-            uint32_t &dstColor = colorImageData[linearIndex];
-            dstColor = (std::min<uint32_t>(255, 255 * color.x) << 0) |
-                       (std::min<uint32_t>(255, 255 * color.y) << 8) |
-                       (std::min<uint32_t>(255, 255 * color.z) << 16) |
-                       (std::min<uint32_t>(255, 255 * color.w) << 24);
-
-            float4 albedo = albedoPixels[linearIndex];
-            uint32_t &dstAlbedo = albedoImageData[linearIndex];
-            dstAlbedo = (std::min<uint32_t>(255, 255 * albedo.x) << 0) |
-                        (std::min<uint32_t>(255, 255 * albedo.y) << 8) |
-                        (std::min<uint32_t>(255, 255 * albedo.z) << 16) |
-                        (std::min<uint32_t>(255, 255 * albedo.w) << 24);
 
             float4 normal = normalPixels[linearIndex];
             uint32_t &dstNormal = normalImageData[linearIndex];
@@ -748,27 +723,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.y)) << 8) |
                         (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.z)) << 16) |
                         (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.w)) << 24);
-
-            float4 output = outputPixels[linearIndex];
-            output.x = sRGB_gamma_s(1 - std::exp(-output.x));
-            output.y = sRGB_gamma_s(1 - std::exp(-output.y));
-            output.z = sRGB_gamma_s(1 - std::exp(-output.z));
-            uint32_t &dstOutput = outputImageData[linearIndex];
-            dstOutput = (std::min<uint32_t>(255, 255 * output.x) << 0) |
-                        (std::min<uint32_t>(255, 255 * output.y) << 8) |
-                        (std::min<uint32_t>(255, 255 * output.z) << 16) |
-                        (std::min<uint32_t>(255, 255 * output.w) << 24);
         }
     }
-    linearOutputBuffer.unmap();
     normalAccumBuffer.unmap();
-    albedoAccumBuffer.unmap();
-    colorAccumBuffer.unmap();
 
-    stbi_write_bmp("color.bmp", renderTargetSizeX, renderTargetSizeY, 4, colorImageData.data());
-    stbi_write_bmp("albedo.bmp", renderTargetSizeX, renderTargetSizeY, 4, albedoImageData.data());
-    stbi_write_bmp("normal.bmp", renderTargetSizeX, renderTargetSizeY, 4, normalImageData.data());
-    stbi_write_bmp("color_denoised.bmp", renderTargetSizeX, renderTargetSizeY, 4, outputImageData.data());
+    saveImage("color.png", colorAccumBuffer, true, true);
+    saveImage("albedo.png", albedoAccumBuffer, false, false);
+    saveImage("normal.png", renderTargetSizeX, renderTargetSizeY, normalImageData.data());
+    saveImage("color_denoised.png", renderTargetSizeX, linearOutputBuffer, true, true);
 
 
 

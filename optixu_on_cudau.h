@@ -200,6 +200,12 @@ namespace optixu {
             return m_rawBuffer.getBufferType();
         }
 
+        uint32_t getWidth() const {
+            return m_width;
+        }
+        uint32_t getHeight() const {
+            return m_height;
+        }
         CUdeviceptr getCUdeviceptr() const {
             return m_rawBuffer.getCUdeviceptr();
         }

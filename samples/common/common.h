@@ -436,6 +436,11 @@ CUDA_DEVICE_FUNCTION float3 HSVtoRGB(float h, float s, float v) {
     return make_float3(0, 0, 0);
 }
 
+CUDA_DEVICE_FUNCTION float simpleToneMap_s(float value) {
+    Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
+    return 1 - std::exp(-value);
+}
+
 CUDA_DEVICE_FUNCTION float sRGB_degamma_s(float value) {
     Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
     if (value <= 0.04045f)
@@ -1010,6 +1015,39 @@ public:
 
     void debugPrint() const;
 };
+
+
+
+void saveImage(const std::filesystem::path &filepath, uint32_t width, uint32_t height, const uint32_t* data);
+
+void saveImage(const std::filesystem::path &filepath, uint32_t width, uint32_t height, const float4* data,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection);
+
+void saveImage(const std::filesystem::path &filepath,
+               uint32_t width, cudau::TypedBuffer<float4> &buffer,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection);
+
+void saveImage(const std::filesystem::path &filepath,
+               cudau::Array &array,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection);
+
+template <uint32_t log2BlockWidth>
+void saveImage(const std::filesystem::path &filepath,
+               optixu::HostBlockBuffer2D<float4, log2BlockWidth> &buffer,
+               bool applyToneMap, bool apply_sRGB_gammaCorrection) {
+    uint32_t width = buffer.getWidth();
+    uint32_t height = buffer.getHeight();
+    auto data = new float4[width * height];
+    buffer.map();
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            data[y * width + x] = buffer(x, y);
+        }
+    }
+    buffer.unmap();
+    saveImage(filepath, width, height, data, applyToneMap, apply_sRGB_gammaCorrection);
+    delete[] data;
+}
 
 
 
