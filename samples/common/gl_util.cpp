@@ -684,4 +684,80 @@ namespace glu {
 
         m_initialized = false;
     }
+
+
+
+    ComputeProgram::ComputeProgram() :
+        m_handle(0),
+        m_initialized(false) {
+    }
+
+    ComputeProgram::~ComputeProgram() {
+        if (m_initialized)
+            finalize();
+    }
+
+    ComputeProgram::ComputeProgram(ComputeProgram &&b) {
+        m_handle = b.m_handle;
+        m_compute = std::move(b.m_compute);
+        m_initialized = b.m_initialized;
+
+        b.m_initialized = false;
+    }
+
+    ComputeProgram &ComputeProgram::operator=(ComputeProgram &&b) {
+        finalize();
+
+        m_handle = b.m_handle;
+        m_compute = std::move(b.m_compute);
+        m_initialized = b.m_initialized;
+
+        b.m_initialized = false;
+
+        return *this;
+    }
+
+    void ComputeProgram::initialize(const std::string &source) {
+        throwRuntimeError(!m_initialized, "ComputeProgram is already initialized.");
+
+        m_compute.initialize(Shader::Type::Compute, source);
+
+        GL_CHECK(m_handle = glCreateProgram());
+        GL_CHECK(glAttachShader(m_handle, m_compute.getHandle()));
+        GL_CHECK(glLinkProgram(m_handle));
+
+        GLint logLength;
+        GL_CHECK(glGetProgramiv(m_handle, GL_INFO_LOG_LENGTH, &logLength));
+        if (logLength > 0) {
+            GLchar* log = (GLchar*)malloc(logLength * sizeof(GLchar));
+            GL_CHECK(glGetProgramInfoLog(m_handle, logLength, &logLength, log));
+            devPrintf("%s\n", log);
+            free(log);
+        }
+
+        GLint status;
+        GL_CHECK(glGetProgramiv(m_handle, GL_LINK_STATUS, &status));
+        if (status == 0) {
+            finalize();
+            return;
+        }
+
+        validateProgram(m_handle);
+
+        m_initialized = true;
+    }
+
+    void ComputeProgram::finalize() {
+        if (!m_initialized)
+            return;
+
+        if (m_handle) {
+            GL_CHECK(glDeleteProgram(m_handle));
+            m_handle = 0;
+        }
+
+        m_compute.finalize();
+
+        m_initialized = false;
+    }
 }

@@ -591,4 +591,31 @@ namespace glu {
             return m_handle;
         }
     };
+
+
+
+    class ComputeProgram {
+        GLuint m_handle;
+        Shader m_compute;
+
+        struct {
+            unsigned int m_initialized;
+        };
+
+        ComputeProgram(const ComputeProgram &) = delete;
+        ComputeProgram &operator=(const ComputeProgram &) = delete;
+    public:
+        ComputeProgram();
+        ~ComputeProgram();
+
+        ComputeProgram(ComputeProgram &&b);
+        ComputeProgram &operator=(ComputeProgram &&b);
+
+        void initialize(const std::string &source);
+        void finalize();
+
+        GLuint getHandle() const {
+            return m_handle;
+        }
+    };
 }
