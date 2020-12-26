@@ -12,7 +12,7 @@ def chdir(dst):
 def run():
     msbuild = R'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
     sln = os.path.abspath(R'..\samples\OptiX_Utility.sln')
-    refImgDir = os.path.abspath(R'..\ref_images')
+    refImgDir = os.path.abspath(R'ref_images')
 
     with open(R'tests.json') as f:
         tests = json.load(f)
