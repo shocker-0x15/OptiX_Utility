@@ -56,8 +56,16 @@
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\drawOptiXResult.frag" />
-    <None Include="shaders\drawOptiXResult.vert" />
+    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+    </CopyFileToFolders>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -119,8 +127,8 @@
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <PostBuildEvent>
-      <Command>echo copy shaders
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -158,8 +166,8 @@ xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
       <AdditionalDependencies>cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>echo copy shaders
-xcopy /I /Y "$(ProjectDir)shaders" "$(OutDir)$(TargetName)\shaders"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
