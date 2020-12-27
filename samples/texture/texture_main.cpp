@@ -89,6 +89,37 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 #define USE_BLOCK_COMPRESSED_TEXTURE
 
+    const auto createTexture = [&cuContext](const std::filesystem::path &filepath) {
+        cudau::Array array;
+
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        int32_t width, height, mipCount;
+        size_t* sizes;
+        dds::Format format;
+        uint8_t** ddsData = dds::load(filepath.string().c_str(),
+                                      &width, &height, &mipCount, &sizes, &format);
+
+        array.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                           width, height, /*mipCount*/1); // CUDA's bug?
+        for (int i = 0; i < array.getNumMipmapLevels(); ++i)
+            array.transfer<uint8_t>(ddsData[i], sizes[i], i);
+
+        dds::free(ddsData, mipCount, sizes);
+#else
+        int32_t width, height, n;
+        uint8_t* linearImageData = stbi_load(filepath.string().c_str(),
+                                             &width, &height, &n, 4);
+        array.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                           width, height, 1);
+        array.transfer<uint8_t>(linearImageData, width * height * 4);
+        stbi_image_free(linearImageData);
+#endif
+
+        return array;
+    };
+
     optixu::Material ceilingMat = optixContext.createMaterial();
     ceilingMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
     Shared::MaterialData ceilingMatData = {};
@@ -118,7 +149,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material floorMat = optixContext.createMaterial();
     floorMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
     Shared::MaterialData floorMatData = {};
-    cudau::Array floorArray;
+    cudau::Array floorArray = createTexture(
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        "../../data/checkerboard_line.DDS"
+#else
+        "../../data/checkerboard_line.png"
+#endif
+    );
     {
         cudau::TextureSampler texSampler;
         texSampler.setXyFilterMode(cudau::TextureFilterMode::Point);
@@ -126,32 +163,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
-            int32_t width, height, mipCount;
-            size_t* sizes;
-            dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/checkerboard_line.DDS",
-                                          &width, &height, &mipCount, &sizes, &format);
-
-            floorArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1/*mipCount*/);
-            for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
-                floorArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
-
-            dds::free(ddsData, mipCount, sizes);
-#else
-            int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/checkerboard_line.png",
-                                                 &width, &height, &n, 4);
-            floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1);
-            floorArray.transfer<uint8_t>(linearImageData, width * height * 4);
-            stbi_image_free(linearImageData);
-#endif
-        }
         floorMatData.texture = texSampler.createTextureObject(floorArray);
     }
     floorMat.setUserData(floorMatData);
@@ -165,7 +176,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material bunnyMat = optixContext.createMaterial();
     bunnyMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
     Shared::MaterialData bunnyMatData = {};
-    cudau::Array bunnyArray;
+    cudau::Array bunnyArray = createTexture(
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        "../../data/wood_bunny.DDS"
+#else
+        "../../data/wood_bunny.png"
+#endif
+    );
     {
         cudau::TextureSampler texSampler;
         texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
@@ -173,32 +190,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
-            int32_t width, height, mipCount;
-            size_t* sizes;
-            dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/wood_bunny.DDS",
-                                          &width, &height, &mipCount, &sizes, &format);
-
-            bunnyArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1/*mipCount*/);
-            for (int i = 0; i < bunnyArray.getNumMipmapLevels(); ++i)
-                bunnyArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
-
-            dds::free(ddsData, mipCount, sizes);
-#else
-            int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/wood_bunny.png",
-                                                 &width, &height, &n, 4);
-            bunnyArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1);
-            bunnyArray.transfer<uint8_t>(linearImageData, width * height * 4);
-            stbi_image_free(linearImageData);
-#endif
-        }
         bunnyMatData.texture = texSampler.createTextureObject(bunnyArray);
     }
     bunnyMat.setUserData(bunnyMatData);
