@@ -35,7 +35,7 @@
     <ProjectGuid>{5C54C98D-919C-45A0-8BF1-B5D8349B15B2}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>06.deformation_blur</ProjectName>
+    <ProjectName>07.deformation_blur</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

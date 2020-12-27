@@ -149,19 +149,17 @@
     </Natvis>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\drawOptiXResult.vert">
-      <Filter>non-essentials\shaders</Filter>
-    </None>
-    <None Include="shaders\drawOptiXResult.frag">
-      <Filter>non-essentials\shaders</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\..\ext\assimp\assimp-vc142-mt.dll">
       <Filter>non-essentials</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+      <Filter>non-essentials\shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+      <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
   </ItemGroup>
 </Project>

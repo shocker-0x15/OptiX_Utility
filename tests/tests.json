@@ -10,6 +10,11 @@
         "outputs": ["output.png"]
     },
     {
+        "sample": "texture",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
         "sample": "material_sets",
         "image": "output.png",
         "outputs": ["output.png"]

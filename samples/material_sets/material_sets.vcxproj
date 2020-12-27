@@ -35,7 +35,7 @@
     <ProjectGuid>{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>02.material_sets</ProjectName>
+    <ProjectName>03.material_sets</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

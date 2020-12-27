@@ -185,6 +185,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomGeomInst.setNumMaterials(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, mat0);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        // JP: GeometryInstanceに設定したユーザーデータはGPUカーネル内で参照できる。
+        // EN: The user data set to GeometryInstance can be accessed in a GPU kernel.
         roomGeomInst.setUserData(geomData);
 
         preTransforms[geomInstIndex] = Shared::GeometryPreTransform(matSR, make_float3(0.0f, 0.0f, 0.0f));

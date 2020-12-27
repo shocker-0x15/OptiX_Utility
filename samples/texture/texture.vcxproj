@@ -16,7 +16,7 @@
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
-    <ClCompile Include="denoiser_main.cpp" />
+    <ClCompile Include="texture_main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h" />
@@ -27,18 +27,17 @@
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
-    <ClInclude Include="denoiser_shared.h" />
+    <ClInclude Include="texture_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="copy_buffers.cu" />
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{2D96E67E-8C6A-4B87-8B88-93E3921D874A}</ProjectGuid>
+    <ProjectGuid>{5B1FC17F-05C0-44C4-BC08-5D012C0D7241}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>08.denoiser</ProjectName>
+    <ProjectName>02.texture</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -70,12 +69,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include;$(IncludePath)</IncludePath>
-    <TargetName>denoiser</TargetName>
+    <TargetName>texture</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include;$(IncludePath)</IncludePath>
-    <TargetName>denoiser</TargetName>
+    <TargetName>texture</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

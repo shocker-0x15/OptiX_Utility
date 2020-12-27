@@ -1,21 +1,20 @@
 ﻿/*
 
-JP: このサンプルはGASを参照する複数のインスタンスからInstance Acceleration Structure (IAS)
-    を構築する方法を示します。それぞれのインスタンスにはトランスフォームを設定することが可能で、
-    複数のインスタンスから同一のGASを参照することができるため、
-    シーン中にジオメトリを省メモリかつ大量に複製することができます。
-    また、インスタンスのトランスフォームを更新した場合もIASの再構築またはアップデートだけ行えば良いので
-    動的なシーンを低負荷に扱うことができます。
+JP: このサンプルはテクスチャーを使用する方法を示します。
+    テクスチャーの使用はOptiX, OptiX Utilityとは直接関係せず純粋なCUDAにのみ関係しますが、
+    CUDAおよびまたはOptiXに触れるのが初めてなユーザーにとっては早めに知っておきたい部分だと思います。
 
-EN: This sample shows how to build an instance acceleration structure (IAS) from multiple instances where
-    each of them refers a GAS. Each instance can set a transform and it is possible to refer the same GAS from
-    multiple instances, allowing to replicate a lot of geometry in a scene without much memory.
-    Additionally, only rebuilding or updating an IAS is required when updating an instance's transform so
-    you can handle dynamic scene with low cost.
+EN: This sample shows how to use textures.
+    Texturing is not directly related to OptiX, OptiX Utility, it relates only to pure CUDA but
+    the user who is new to CUDA and/or OptiX may want to know this part quickly.
 
 */
 
-#include "single_level_instancing_shared.h"
+#include "texture_shared.h"
+
+#include "../common/dds_loader.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "../../ext/stb_image.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -43,7 +42,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 OPTIX_EXCEPTION_FLAG_DEBUG,
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "single_level_instancing/ptxes/optix_kernels.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "texture/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
@@ -88,8 +87,121 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-    optixu::Material mat0 = optixContext.createMaterial();
-    mat0.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+#define USE_BLOCK_COMPRESSED_TEXTURE
+
+    optixu::Material ceilingMat = optixContext.createMaterial();
+    ceilingMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData ceilingMatData = {};
+    ceilingMatData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    // JP: Materialに設定したユーザーデータはGPUカーネル内で参照できる。
+    // EN: The user data set to Material can be accessed in a GPU kernel.
+    ceilingMat.setUserData(ceilingMatData);
+
+    optixu::Material farSideWallMat = optixContext.createMaterial();
+    farSideWallMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData farSideWallMatData = {};
+    farSideWallMatData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
+    farSideWallMat.setUserData(farSideWallMatData);
+
+    optixu::Material leftWallMat = optixContext.createMaterial();
+    leftWallMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData leftWallMatData = {};
+    leftWallMatData.albedo = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
+    leftWallMat.setUserData(leftWallMatData);
+
+    optixu::Material rightWallMat = optixContext.createMaterial();
+    rightWallMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData rightWallMatData = {};
+    rightWallMatData.albedo = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
+    rightWallMat.setUserData(rightWallMatData);
+
+    optixu::Material floorMat = optixContext.createMaterial();
+    floorMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData floorMatData = {};
+    cudau::Array floorArray;
+    {
+        cudau::TextureSampler texSampler;
+        texSampler.setXyFilterMode(cudau::TextureFilterMode::Point);
+        texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Point);
+        texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+        texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
+
+        {
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load("../../data/checkerboard_line.DDS",
+                                          &width, &height, &mipCount, &sizes, &format);
+
+            floorArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1/*mipCount*/);
+            for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
+                floorArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
+
+            dds::free(ddsData, mipCount, sizes);
+#else
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load("../../data/checkerboard_line.png",
+                                                 &width, &height, &n, 4);
+            floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1);
+            floorArray.transfer<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+#endif
+        }
+        floorMatData.texture = texSampler.createTextureObject(floorArray);
+    }
+    floorMat.setUserData(floorMatData);
+
+    optixu::Material areaLightMat = optixContext.createMaterial();
+    areaLightMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData areaLightMatData = {};
+    areaLightMatData.albedo = make_float3(sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f));
+    areaLightMat.setUserData(areaLightMatData);
+
+    optixu::Material bunnyMat = optixContext.createMaterial();
+    bunnyMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    Shared::MaterialData bunnyMatData = {};
+    cudau::Array bunnyArray;
+    {
+        cudau::TextureSampler texSampler;
+        texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
+        texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Linear);
+        texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
+        texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
+
+        {
+#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load("../../data/wood_bunny.DDS",
+                                          &width, &height, &mipCount, &sizes, &format);
+
+            bunnyArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1/*mipCount*/);
+            for (int i = 0; i < bunnyArray.getNumMipmapLevels(); ++i)
+                bunnyArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
+
+            dds::free(ddsData, mipCount, sizes);
+#else
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load("../../data/wood_bunny.png",
+                                                 &width, &height, &n, 4);
+            bunnyArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                                    width, height, 1);
+            bunnyArray.transfer<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+#endif
+        }
+        bunnyMatData.texture = texSampler.createTextureObject(bunnyArray);
+    }
+    bunnyMat.setUserData(bunnyMatData);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -105,6 +217,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryInstance roomGeomInst = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> roomVertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> roomTriangleBuffer;
+    cudau::TypedBuffer<uint8_t> roomMatIndexBuffer;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -112,11 +225,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { make_float3(-1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
             { make_float3(1.0f, -1.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
             { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
-            // back wall
-            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
-            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 1) },
-            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 1) },
-            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(1, 0) },
+            // far side wall
+            { make_float3(-1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 2) },
+            { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(0, 0) },
+            { make_float3(1.0f, 1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 0) },
+            { make_float3(1.0f, -1.0f, -1.0f), make_float3(0, 0, 1), make_float2(2, 2) },
             // ceiling
             { make_float3(-1.0f, 1.0f, -1.0f), make_float3(0, -1, 0), make_float2(0, 0) },
             { make_float3(-1.0f, 1.0f, 1.0f), make_float3(0, -1, 0), make_float2(0, 1) },
@@ -137,7 +250,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::Triangle triangles[] = {
             // floor
             { 0, 1, 2 }, { 0, 2, 3 },
-            // back wall
+            // far side wall
             { 4, 7, 6 }, { 4, 6, 5 },
             // ceiling
             { 8, 11, 10 }, { 8, 10, 9 },
@@ -147,8 +260,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             { 16, 19, 18 }, { 16, 18, 17 }
         };
 
+        uint8_t matIndices[] = {
+            0, 0, // floor
+            1, 1, // far side wall
+            2, 2, // ceiling
+            3, 3, // left wall
+            4, 4, // right wall
+        };
+
         roomVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        roomMatIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
@@ -156,11 +278,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, optixu::BufferView());
-        roomGeomInst.setMaterial(0, 0, mat0);
+        // JP: ひとつのGeometryInstanceに複数のマテリアルを設定する。
+        //     この場合はプリミティブごとのマテリアルインデックスバッファーが必要となる。
+        // EN: Set multiple materials to single GeometryInstance.
+        //     Per-primitive material index buffer is required in this case.
+        roomGeomInst.setNumMaterials(5, roomMatIndexBuffer, sizeof(uint8_t));
+        roomGeomInst.setMaterial(0, 0, floorMat);
+        roomGeomInst.setMaterial(0, 1, farSideWallMat);
+        roomGeomInst.setMaterial(0, 2, ceilingMat);
+        roomGeomInst.setMaterial(0, 3, leftWallMat);
+        roomGeomInst.setMaterial(0, 4, rightWallMat);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        // JP: GeometryInstanceに設定したユーザーデータはGPUカーネル内で参照できる。
-        // EN: The user data set to GeometryInstance can be accessed in a GPU kernel.
+        roomGeomInst.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(3, OPTIX_GEOMETRY_FLAG_NONE);
+        roomGeomInst.setGeometryFlags(4, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
     }
 
@@ -189,7 +321,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
         areaLightGeomInst.setTriangleBuffer(areaLightTriangleBuffer);
         areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
-        areaLightGeomInst.setMaterial(0, 0, mat0);
+        areaLightGeomInst.setMaterial(0, 0, areaLightMat);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLightGeomInst.setUserData(geomData);
     }
@@ -232,7 +364,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyGeomInst.setVertexBuffer(bunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(bunnyTriangleBuffer);
         bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
-        bunnyGeomInst.setMaterial(0, 0, mat0);
+        bunnyGeomInst.setMaterial(0, 0, bunnyMat);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunnyGeomInst.setUserData(geomData);
     }
@@ -292,28 +424,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLightInst.setChild(areaLightGas);
     areaLightInst.setTransform(areaLightInstXfm);
 
-    constexpr uint32_t NumBunnies = 100;
-    std::vector<optixu::Instance> bunnyInsts(NumBunnies);
-    const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
-    for (int i = 0; i < NumBunnies; ++i) {
-        float t = static_cast<float>(i) / (NumBunnies - 1);
-        float r = 0.9f * std::pow(t, 0.5f);
-        float x = r * std::cos(GoldenAngle * i);
-        float z = r * std::sin(GoldenAngle * i);
-
-        float tt = std::pow(t, 0.25f);
-        float scale = (1 - tt) * 0.003f + tt * 0.0006f;
-        float bunnyInstXfm[] = {
-            scale, 0, 0, x,
-            0, scale, 0, -0.999f + (1 - tt),
-            0, 0, scale, z
-        };
-        optixu::Instance bunnyInst = scene.createInstance();
-        bunnyInst.setChild(bunnyGas);
-        bunnyInst.setTransform(bunnyInstXfm);
-        bunnyInsts[i] = bunnyInst;
-    }
+    Matrix3x3 matSR = rotateY3x3(M_PI / 4) * scale3x3(0.012f);
+    float bunnyInstXfm[] = {
+        matSR.m00, matSR.m01, matSR.m02, 0,
+        matSR.m10, matSR.m11, matSR.m12, -1.0f,
+        matSR.m20, matSR.m21, matSR.m22, 0
+    };
+    optixu::Instance bunnyInst = scene.createInstance();
+    bunnyInst.setChild(bunnyGas);
+    bunnyInst.setTransform(bunnyInstXfm);
 
 
 
@@ -325,8 +444,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
-    for (int i = 0; i < bunnyInsts.size(); ++i)
-        ias.addChild(bunnyInsts[i]);
+    ias.addChild(bunnyInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -457,8 +575,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
-    for (int i = bunnyInsts.size() - 1; i >= 0; --i)
-        bunnyInsts[i].destroy();
+    bunnyInst.destroy();
     areaLightInst.destroy();
     roomInst.destroy();
 
@@ -474,13 +591,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLightVertexBuffer.finalize();
     areaLightGeomInst.destroy();
 
+    roomMatIndexBuffer.finalize();
     roomTriangleBuffer.finalize();
     roomVertexBuffer.finalize();
     roomGeomInst.destroy();
 
     scene.destroy();
 
-    mat0.destroy();
+    CUDADRV_CHECK(cuTexObjectDestroy(bunnyMatData.texture));
+    bunnyArray.finalize();
+    bunnyMat.destroy();
+    areaLightMat.destroy();
+    CUDADRV_CHECK(cuTexObjectDestroy(floorMatData.texture));
+    floorArray.finalize();
+    floorMat.destroy();
+    rightWallMat.destroy();
+    leftWallMat.destroy();
+    farSideWallMat.destroy();
+    ceilingMat.destroy();
 
 
 

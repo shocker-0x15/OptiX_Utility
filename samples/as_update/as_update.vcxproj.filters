@@ -134,15 +134,15 @@
     </Natvis>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\drawOptiXResult.vert">
-      <Filter>non-essentials\shaders</Filter>
-    </None>
-    <None Include="shaders\drawOptiXResult.frag">
-      <Filter>non-essentials\shaders</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
     <CudaCompile Include="deform.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+      <Filter>non-essentials\shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+      <Filter>non-essentials\shaders</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>
