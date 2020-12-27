@@ -18,11 +18,13 @@ def run():
         tests = json.load(f)
 
     for config in ['Debug', 'Release']:
+        # Clean
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
         cmd += [sln]
         print(' '.join(cmd))
         ret = subprocess.check_call(cmd)
 
+        # Build
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
         cmd += [sln]
         print(' '.join(cmd))
@@ -34,6 +36,8 @@ def run():
             testName = test['sample']
             testDir = test['sample']
             exeName = test['sample'] + '.exe'
+
+            print('Run ' + testName + ':')
 
             oldDir = chdir(os.path.join(R'..\samples', testDir))
             exe = os.path.join(outDir, exeName)
@@ -63,8 +67,13 @@ def run():
             chdir(oldDir)
         
         print('Test Results for ' + config + ':')
+        numSuccesses = 0
         for test, result in results.items():
             print(test, result)
+            if result['success']:
+                numSuccesses += 1
+        print('Successes: {}/{}, All Success: {}'.format(
+            numSuccesses, len(results), numSuccesses == len(results)))
         print()
 
     return 0
