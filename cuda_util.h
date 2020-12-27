@@ -320,12 +320,8 @@ namespace cudau {
         }
         void initializeFromGLBuffer(CUcontext context, uint32_t stride, uint32_t glBufferID) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
-            GLint currentBuffer;
-            glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &currentBuffer);
-            glBindBuffer(GL_ARRAY_BUFFER, glBufferID);
             GLint size;
-            glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
-            glBindBuffer(GL_ARRAY_BUFFER, currentBuffer);
+            glGetNamedBufferParameteriv(glBufferID, GL_BUFFER_SIZE, &size);
             if (size % stride != 0)
                 throw std::runtime_error("Given buffer's size is not a multiple of the given stride.");
             initialize(context, BufferType::GL_Interop, size / stride, stride, glBufferID);
@@ -627,18 +623,14 @@ namespace cudau {
         void initializeFromGLTexture2D(CUcontext context, uint32_t glTexID,
                                        ArraySurface surfaceLoadStore, ArrayTextureGather useTextureGather) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
-            GLint currentTexture;
-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &currentTexture);
-            glBindTexture(GL_TEXTURE_2D, glTexID);
             GLint width, height;
             GLint numMipmapLevels;
             GLint format;
-            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
-            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
-            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &format);
-            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_VIEW_NUM_LEVELS, &numMipmapLevels);
+            glGetTextureLevelParameteriv(glTexID, 0, GL_TEXTURE_WIDTH, &width);
+            glGetTextureLevelParameteriv(glTexID, 0, GL_TEXTURE_HEIGHT, &height);
+            glGetTextureLevelParameteriv(glTexID, 0, GL_TEXTURE_INTERNAL_FORMAT, &format);
+            glGetTextureParameteriv(glTexID, GL_TEXTURE_VIEW_NUM_LEVELS, &numMipmapLevels);
             numMipmapLevels = std::max(numMipmapLevels, 1);
-            glBindTexture(GL_TEXTURE_2D, currentTexture);
             ArrayElementType elemType;
             uint32_t numChannels;
             getArrayElementFormat((GLenum)format, &elemType, &numChannels);
