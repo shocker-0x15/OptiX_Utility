@@ -198,6 +198,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 
+    constexpr bool enableGLDebugCallback = DEBUG_SELECT(true, false);
+
     // JP: OpenGL 4.6 Core Profileのコンテキストを作成する。
     // EN: Create an OpenGL 4.6 core profile context.
     const uint32_t OpenGLMajorVersion = 4;
@@ -206,6 +208,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OpenGLMajorVersion);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OpenGLMinorVersion);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if constexpr (enableGLDebugCallback)
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
@@ -246,7 +250,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         return -1;
     }
 
-    GL_CHECK(glEnable(GL_FRAMEBUFFER_SRGB));
+    if constexpr (enableGLDebugCallback) {
+        glu::enableDebugCallback(true);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, false);
+    }
+
+    glEnable(GL_FRAMEBUFFER_SRGB);
 
     // END: Initialize OpenGL and GLFW.
     // ----------------------------------------------------------------
@@ -1677,29 +1686,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // ----------------------------------------------------------------
             // JP: OptiXの出力とImGuiの描画。
 
-            GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer.getHandle(0)));
+            glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer.getHandle(0));
             frameBuffer.setDrawBuffers();
 
-            GL_CHECK(glViewport(0, 0, frameBuffer.getWidth(), frameBuffer.getHeight()));
-            GL_CHECK(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
-            GL_CHECK(glClearDepth(1.0f));
-            GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+            glViewport(0, 0, frameBuffer.getWidth(), frameBuffer.getHeight());
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClearDepth(1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             {
-                GL_CHECK(glUseProgram(drawOptiXResultShader.getHandle()));
+                glUseProgram(drawOptiXResultShader.getHandle());
 
-                GL_CHECK(glUniform1i(0, (int32_t)renderTargetSizeX));
+                glUniform1i(0, (int32_t)renderTargetSizeX);
 
-                GL_CHECK(glBindTextureUnit(0, outputTexture.getHandle()));
+                glBindTextureUnit(0, outputTexture.getHandle());
 
-                GL_CHECK(glBindVertexArray(vertexArrayForFullScreen.getHandle()));
-                GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
+                glBindVertexArray(vertexArrayForFullScreen.getHandle());
+                glDrawArrays(GL_TRIANGLES, 0, 3);
             }
 
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
             frameBuffer.resetDrawBuffers();
-            GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             // END: draw OptiX's output and ImGui.
             // ----------------------------------------------------------------
@@ -1708,20 +1717,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // ----------------------------------------------------------------
         // JP: スケーリング
 
-        GL_CHECK(glEnable(GL_FRAMEBUFFER_SRGB));
+        glEnable(GL_FRAMEBUFFER_SRGB);
 
-        GL_CHECK(glViewport(0, 0, curFBWidth, curFBHeight));
+        glViewport(0, 0, curFBWidth, curFBHeight);
 
-        GL_CHECK(glUseProgram(scaleShader.getHandle()));
+        glUseProgram(scaleShader.getHandle());
 
-        GL_CHECK(glUniform1f(0, UIScaling));
+        glUniform1f(0, UIScaling);
 
         const glu::Texture2D &srcFBTex = frameBuffer.getRenderTargetTexture(0, 0);
-        GL_CHECK(glBindTextureUnit(0, srcFBTex.getHandle()));
-        GL_CHECK(glBindSampler(0, scaleSampler.getHandle()));
+        glBindTextureUnit(0, srcFBTex.getHandle());
+        glBindSampler(0, scaleSampler.getHandle());
 
-        GL_CHECK(glBindVertexArray(vertexArrayForFullScreen.getHandle()));
-        GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
+        glBindVertexArray(vertexArrayForFullScreen.getHandle());
+        glDrawArrays(GL_TRIANGLES, 0, 3);
 
         // END: scaling
         // ----------------------------------------------------------------

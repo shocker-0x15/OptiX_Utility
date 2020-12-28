@@ -130,6 +130,8 @@ namespace glu {
         }
     }
 
+    void enableDebugCallback(bool synchronous);
+
 
 
     class Buffer {
@@ -247,7 +249,7 @@ namespace glu {
             const size_t bufferSize = static_cast<size_t>(m_stride) * m_numElements;
             if (transferSize > bufferSize)
                 throw std::runtime_error("Too large transfer");
-            GL_CHECK(glNamedBufferSubData(m_handle, 0, transferSize, srcValues));
+            glNamedBufferSubData(m_handle, 0, transferSize, srcValues);
         }
         template <typename T>
         void transfer(const std::vector<T> &values) const {
@@ -462,10 +464,10 @@ namespace glu {
         void finalize();
 
         void setDrawBuffers() const {
-            GL_CHECK(glDrawBuffers(m_numColorAttachments, m_renderTargetIDs));
+            glDrawBuffers(m_numColorAttachments, m_renderTargetIDs);
         }
         void resetDrawBuffers() const {
-            GL_CHECK(glDrawBuffer(GL_COLOR_ATTACHMENT0));
+            glDrawBuffer(GL_COLOR_ATTACHMENT0);
         }
 
         GLuint getHandle(uint32_t frameBufferIndex) const {
@@ -503,12 +505,12 @@ namespace glu {
         VertexArray() : m_handle(0) {}
 
         void initialize() {
-            GL_CHECK(glCreateVertexArrays(1, &m_handle));
+            glCreateVertexArrays(1, &m_handle);
         }
 
         void finalize() {
             if (m_handle)
-                GL_CHECK(glDeleteVertexArrays(1, &m_handle));
+                glDeleteVertexArrays(1, &m_handle);
             m_handle = 0;
         }
 

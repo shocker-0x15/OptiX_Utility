@@ -59,6 +59,100 @@ namespace glu {
 
 
 
+    static void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
+                              GLsizei length, const GLchar* message,
+                              const GLvoid* userParam) {
+        char sourceStr[32];
+        switch (source) {
+        case GL_DEBUG_SOURCE_API:
+            snprintf(sourceStr, sizeof(sourceStr), "API");
+            break;
+        case GL_DEBUG_SOURCE_APPLICATION:
+            snprintf(sourceStr, sizeof(sourceStr), "App");
+            break;
+        case GL_DEBUG_SOURCE_OTHER:
+            snprintf(sourceStr, sizeof(sourceStr), "Other");
+            break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER:
+            snprintf(sourceStr, sizeof(sourceStr), "ShaderCompiler");
+            break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY:
+            snprintf(sourceStr, sizeof(sourceStr), "ThirdParty");
+            break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+            snprintf(sourceStr, sizeof(sourceStr), "WindowSystem");
+            break;
+        default:
+            snprintf(sourceStr, sizeof(sourceStr), "Unknown");
+            break;
+        }
+
+        char typeStr[32];
+        switch (type) {
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+            snprintf(typeStr, sizeof(typeStr), "Deprecated");
+            break;
+        case GL_DEBUG_TYPE_ERROR:
+            snprintf(typeStr, sizeof(typeStr), "Error");
+            break;
+        case GL_DEBUG_TYPE_MARKER:
+            snprintf(typeStr, sizeof(typeStr), "Marker");
+            break;
+        case GL_DEBUG_TYPE_OTHER:
+            snprintf(typeStr, sizeof(typeStr), "Other");
+            break;
+        case GL_DEBUG_TYPE_PERFORMANCE:
+            snprintf(typeStr, sizeof(typeStr), "Performance");
+            break;
+        case GL_DEBUG_TYPE_POP_GROUP:
+            snprintf(typeStr, sizeof(typeStr), "PopGroup");
+            break;
+        case GL_DEBUG_TYPE_PORTABILITY:
+            snprintf(typeStr, sizeof(typeStr), "Portability");
+            break;
+        case GL_DEBUG_TYPE_PUSH_GROUP:
+            snprintf(typeStr, sizeof(typeStr), "PushGroup");
+            break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+            snprintf(typeStr, sizeof(typeStr), "UndefinedBehavior");
+            break;
+        default:
+            snprintf(typeStr, sizeof(typeStr), "Unknown");
+            break;
+        }
+
+        char severityStr[32];
+        switch (severity) {
+        case GL_DEBUG_SEVERITY_HIGH:
+            snprintf(severityStr, sizeof(severityStr), "High");
+            break;
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            snprintf(severityStr, sizeof(severityStr), "Medium");
+            break;
+        case GL_DEBUG_SEVERITY_LOW:
+            snprintf(severityStr, sizeof(severityStr), "Low");
+            break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            snprintf(severityStr, sizeof(severityStr), "Notification");
+            break;
+        default:
+            snprintf(severityStr, sizeof(severityStr), "Unknown");
+            break;
+        }
+
+        devPrintf("OpenGL [%s][%s][%u][%s]: %s\n",
+                  sourceStr, typeStr, id, severityStr, message);
+    }
+
+    void enableDebugCallback(bool synchronous) {
+        GL_CHECK(glEnable(GL_DEBUG_OUTPUT));
+        if (synchronous)
+            GL_CHECK(glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS));
+        glDebugMessageCallback(debugCallback, nullptr);
+    }
+
+
+
     Buffer::Buffer() :
         m_handle(0),
         m_stride(0), m_numElements(0),
@@ -109,8 +203,8 @@ namespace glu {
 
         size_t size = static_cast<size_t>(m_numElements) * m_stride;
 
-        GL_CHECK(glCreateBuffers(1, &m_handle));
-        GL_CHECK(glNamedBufferData(m_handle, size, nullptr, m_usage));
+        glCreateBuffers(1, &m_handle);
+        glNamedBufferData(m_handle, size, nullptr, m_usage);
 
         m_initialized = true;
     }
@@ -124,7 +218,7 @@ namespace glu {
 
         m_mappedPointer = nullptr;
 
-        GL_CHECK(glDeleteBuffers(1, &m_handle));
+        glDeleteBuffers(1, &m_handle);
         m_handle = 0;
 
         m_stride = 0;
@@ -171,7 +265,7 @@ namespace glu {
         size_t size = static_cast<size_t>(m_numElements) * m_stride;
 
         uint32_t flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT;
-        GL_CHECK(m_mappedPointer = glMapNamedBufferRange(m_handle, 0, size, flags));
+        m_mappedPointer = glMapNamedBufferRange(m_handle, 0, size, flags);
 
         return m_mappedPointer;
     }
@@ -181,7 +275,7 @@ namespace glu {
 
         m_mapped = false;
 
-        GL_CHECK(glUnmapNamedBuffer(m_handle));
+        glUnmapNamedBuffer(m_handle);
         m_mappedPointer = nullptr;
     }
 
@@ -233,10 +327,10 @@ namespace glu {
         m_height = height;
         m_numMipLevels = numMipLevels;
 
-        GL_CHECK(glCreateTextures(GL_TEXTURE_2D, 1, &m_handle));
-        GL_CHECK(glTextureStorage2D(m_handle, m_numMipLevels, m_format, m_width, m_height));
-        GL_CHECK(glTextureParameteri(m_handle, GL_TEXTURE_BASE_LEVEL, 0));
-        GL_CHECK(glTextureParameteri(m_handle, GL_TEXTURE_MAX_LEVEL, m_numMipLevels - 1));
+        glCreateTextures(GL_TEXTURE_2D, 1, &m_handle);
+        glTextureStorage2D(m_handle, m_numMipLevels, m_format, m_width, m_height);
+        glTextureParameteri(m_handle, GL_TEXTURE_BASE_LEVEL, 0);
+        glTextureParameteri(m_handle, GL_TEXTURE_MAX_LEVEL, m_numMipLevels - 1);
 
         m_initialized = true;
     }
@@ -245,7 +339,7 @@ namespace glu {
         if (!m_initialized)
             return;
 
-        GL_CHECK(glDeleteTextures(1, &m_handle));
+        glDeleteTextures(1, &m_handle);
         m_handle = 0;
 
         m_width = 0;
@@ -300,11 +394,11 @@ namespace glu {
     void Sampler::initialize(MinFilter minFilter, MagFilter magFilter, WrapMode wrapModeS, WrapMode wrapModeT) {
         throwRuntimeError(!m_initialized, "Sampler is already initialized.");
 
-        GL_CHECK(glCreateSamplers(1, &m_handle));
-        GL_CHECK(glSamplerParameteri(m_handle, GL_TEXTURE_MIN_FILTER, minFilter));
-        GL_CHECK(glSamplerParameteri(m_handle, GL_TEXTURE_MAG_FILTER, magFilter));
-        GL_CHECK(glSamplerParameteri(m_handle, GL_TEXTURE_WRAP_S, wrapModeS));
-        GL_CHECK(glSamplerParameteri(m_handle, GL_TEXTURE_WRAP_T, wrapModeT));
+        glCreateSamplers(1, &m_handle);
+        glSamplerParameteri(m_handle, GL_TEXTURE_MIN_FILTER, minFilter);
+        glSamplerParameteri(m_handle, GL_TEXTURE_MAG_FILTER, magFilter);
+        glSamplerParameteri(m_handle, GL_TEXTURE_WRAP_S, wrapModeS);
+        glSamplerParameteri(m_handle, GL_TEXTURE_WRAP_T, wrapModeT);
     }
 
     void Sampler::finalize() {
@@ -312,7 +406,7 @@ namespace glu {
             return;
 
         if (m_handle)
-            GL_CHECK(glDeleteSamplers(1, &m_handle));
+            glDeleteSamplers(1, &m_handle);
         m_handle = 0;
 
         m_initialized = false;
@@ -323,7 +417,7 @@ namespace glu {
     // static
     void FrameBuffer::checkStatus(GLuint handle, Target target) {
         Status status;
-        GL_CHECK(status = static_cast<Status>(glCheckNamedFramebufferStatus(handle, target)));
+        status = static_cast<Status>(glCheckNamedFramebufferStatus(handle, target));
         switch (status) {
         case Status::Complete:
             break;
@@ -427,7 +521,7 @@ namespace glu {
 
         m_handles = new uint32_t[m_multiBufferingFactor];
 
-        GL_CHECK(glCreateFramebuffers(m_multiBufferingFactor, m_handles));
+        glCreateFramebuffers(m_multiBufferingFactor, m_handles);
         if (depthInternalFormat)
             m_depthRenderTargetTextures = new Texture2D[m_multiBufferingFactor];
 
@@ -436,14 +530,14 @@ namespace glu {
             m_renderTargetIDs[i] = GL_COLOR_ATTACHMENT0 + i;
             Texture2D &rt = m_renderTargetTextures[m_multiBufferingFactor * i + 0];
             rt.initialize(internalFormats[i], m_width, m_height, 1);
-            GL_CHECK(glNamedFramebufferTexture(m_handles[0], m_renderTargetIDs[i], rt.getHandle(), 0));
+            glNamedFramebufferTexture(m_handles[0], m_renderTargetIDs[i], rt.getHandle(), 0);
         }
 
         // JP: デプスレンダーターゲットの初期化。
         if (depthInternalFormat) {
             Texture2D &rt = m_depthRenderTargetTextures[0];
             rt.initialize(*depthInternalFormat, m_width, m_height, 1);
-            GL_CHECK(glNamedFramebufferTexture(m_handles[0], GL_DEPTH_ATTACHMENT, rt.getHandle(), 0));
+            glNamedFramebufferTexture(m_handles[0], GL_DEPTH_ATTACHMENT, rt.getHandle(), 0);
         }
 
         checkStatus(m_handles[0], Target::ReadDraw);
@@ -455,7 +549,7 @@ namespace glu {
                 Texture2D &rt = m_renderTargetTextures[m_multiBufferingFactor * i + (multiBuffered ? fbIdx : 0)];
                 if (multiBuffered)
                     rt.initialize(internalFormats[i], m_width, m_height, 1);
-                GL_CHECK(glNamedFramebufferTexture(m_handles[fbIdx], m_renderTargetIDs[i], rt.getHandle(), 0));
+                glNamedFramebufferTexture(m_handles[fbIdx], m_renderTargetIDs[i], rt.getHandle(), 0);
             }
 
             // JP: デプスレンダーターゲットの初期化。
@@ -463,7 +557,7 @@ namespace glu {
                 Texture2D &rt = m_depthRenderTargetTextures[m_depthIsMultiBuffered ? fbIdx : 0];
                 if (m_depthIsMultiBuffered)
                     rt.initialize(*depthInternalFormat, m_width, m_height, 1);
-                GL_CHECK(glNamedFramebufferTexture(m_handles[fbIdx], GL_DEPTH_ATTACHMENT, rt.getHandle(), 0));
+                glNamedFramebufferTexture(m_handles[fbIdx], GL_DEPTH_ATTACHMENT, rt.getHandle(), 0);
             }
 
             checkStatus(m_handles[fbIdx], Target::ReadDraw);
@@ -501,7 +595,7 @@ namespace glu {
         m_renderTargetTextures = nullptr;
 
         if (m_handles) {
-            GL_CHECK(glDeleteFramebuffers(m_multiBufferingFactor, m_handles));
+            glDeleteFramebuffers(m_multiBufferingFactor, m_handles);
             delete[] m_handles;
             m_handles = nullptr;
         }
@@ -513,25 +607,25 @@ namespace glu {
 
     static GLuint compileShader(Shader::Type type, const std::string &source) {
         GLuint handle;
-        GL_CHECK(handle = glCreateShader(type));
+        handle = glCreateShader(type);
 
         auto glStrSource = reinterpret_cast<const GLchar*>(source.c_str());
-        GL_CHECK(glShaderSource(handle, 1, &glStrSource, NULL));
-        GL_CHECK(glCompileShader(handle));
+        glShaderSource(handle, 1, &glStrSource, NULL);
+        glCompileShader(handle);
 
         GLint logLength;
-        GL_CHECK(glGetShaderiv(handle, GL_INFO_LOG_LENGTH, &logLength));
+        glGetShaderiv(handle, GL_INFO_LOG_LENGTH, &logLength);
         if (logLength > 0) {
             GLchar* log = (GLchar*)malloc(logLength * sizeof(GLchar));
-            GL_CHECK(glGetShaderInfoLog(handle, logLength, &logLength, log));
+            glGetShaderInfoLog(handle, logLength, &logLength, log);
             devPrintf("Shader Compile Error:\n%s\n", log);
             free(log);
         }
 
         GLint status;
-        GL_CHECK(glGetShaderiv(handle, GL_COMPILE_STATUS, &status));
+        glGetShaderiv(handle, GL_COMPILE_STATUS, &status);
         if (status == 0) {
-            GL_CHECK(glDeleteShader(handle));
+            glDeleteShader(handle);
             return 0;
         }
 
@@ -541,15 +635,15 @@ namespace glu {
     static void validateProgram(GLuint handle) {
         GLint status;
         GLint logLength;
-        GL_CHECK(glValidateProgram(handle));
-        GL_CHECK(glGetProgramiv(handle, GL_INFO_LOG_LENGTH, &logLength));
+        glValidateProgram(handle);
+        glGetProgramiv(handle, GL_INFO_LOG_LENGTH, &logLength);
         if (logLength > 0) {
             GLchar* log = (GLchar*)malloc(logLength * sizeof(GLchar));
-            GL_CHECK(glGetProgramInfoLog(handle, logLength, &logLength, log));
+            glGetProgramInfoLog(handle, logLength, &logLength, log);
             devPrintf("%s", log);
             free(log);
         }
-        GL_CHECK(glGetProgramiv(handle, GL_VALIDATE_STATUS, &status));
+        glGetProgramiv(handle, GL_VALIDATE_STATUS, &status);
         if (status == 0)
             devPrintf("Program Status : GL_FALSE\n");
     }
@@ -597,7 +691,7 @@ namespace glu {
             return;
 
         if (m_handle) {
-            GL_CHECK(glDeleteShader(m_handle));
+            glDeleteShader(m_handle);
             m_handle = 0;
         }
 
@@ -644,22 +738,22 @@ namespace glu {
         m_vertex.initialize(Shader::Type::Vertex, vertexSource);
         m_fragment.initialize(Shader::Type::Fragment, fragmentSource);
 
-        GL_CHECK(m_handle = glCreateProgram());
-        GL_CHECK(glAttachShader(m_handle, m_vertex.getHandle()));
-        GL_CHECK(glAttachShader(m_handle, m_fragment.getHandle()));
-        GL_CHECK(glLinkProgram(m_handle));
+        m_handle = glCreateProgram();
+        glAttachShader(m_handle, m_vertex.getHandle());
+        glAttachShader(m_handle, m_fragment.getHandle());
+        glLinkProgram(m_handle);
 
         GLint logLength;
-        GL_CHECK(glGetProgramiv(m_handle, GL_INFO_LOG_LENGTH, &logLength));
+        glGetProgramiv(m_handle, GL_INFO_LOG_LENGTH, &logLength);
         if (logLength > 0) {
             GLchar* log = (GLchar*)malloc(logLength * sizeof(GLchar));
-            GL_CHECK(glGetProgramInfoLog(m_handle, logLength, &logLength, log));
+            glGetProgramInfoLog(m_handle, logLength, &logLength, log);
             devPrintf("%s\n", log);
             free(log);
         }
 
         GLint status;
-        GL_CHECK(glGetProgramiv(m_handle, GL_LINK_STATUS, &status));
+        glGetProgramiv(m_handle, GL_LINK_STATUS, &status);
         if (status == 0) {
             finalize();
             return;
@@ -675,7 +769,7 @@ namespace glu {
             return;
 
         if (m_handle) {
-            GL_CHECK(glDeleteProgram(m_handle));
+            glDeleteProgram(m_handle);
             m_handle = 0;
         }
 
@@ -722,21 +816,21 @@ namespace glu {
 
         m_compute.initialize(Shader::Type::Compute, source);
 
-        GL_CHECK(m_handle = glCreateProgram());
-        GL_CHECK(glAttachShader(m_handle, m_compute.getHandle()));
-        GL_CHECK(glLinkProgram(m_handle));
+        m_handle = glCreateProgram();
+        glAttachShader(m_handle, m_compute.getHandle());
+        glLinkProgram(m_handle);
 
         GLint logLength;
-        GL_CHECK(glGetProgramiv(m_handle, GL_INFO_LOG_LENGTH, &logLength));
+        glGetProgramiv(m_handle, GL_INFO_LOG_LENGTH, &logLength);
         if (logLength > 0) {
             GLchar* log = (GLchar*)malloc(logLength * sizeof(GLchar));
-            GL_CHECK(glGetProgramInfoLog(m_handle, logLength, &logLength, log));
+            glGetProgramInfoLog(m_handle, logLength, &logLength, log);
             devPrintf("%s\n", log);
             free(log);
         }
 
         GLint status;
-        GL_CHECK(glGetProgramiv(m_handle, GL_LINK_STATUS, &status));
+        glGetProgramiv(m_handle, GL_LINK_STATUS, &status);
         if (status == 0) {
             finalize();
             return;
@@ -752,7 +846,7 @@ namespace glu {
             return;
 
         if (m_handle) {
-            GL_CHECK(glDeleteProgram(m_handle));
+            glDeleteProgram(m_handle);
             m_handle = 0;
         }
 

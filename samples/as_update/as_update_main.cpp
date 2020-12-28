@@ -111,6 +111,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 
+    constexpr bool enableGLDebugCallback = DEBUG_SELECT(true, false);
+
     // JP: OpenGL 4.6 Core Profileのコンテキストを作成する。
     // EN: Create an OpenGL 4.6 core profile context.
     const uint32_t OpenGLMajorVersion = 4;
@@ -119,6 +121,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OpenGLMajorVersion);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OpenGLMinorVersion);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if constexpr (enableGLDebugCallback)
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
@@ -159,6 +163,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         hpprintf("gl3w doesn't support OpenGL %u.%u\n", OpenGLMajorVersion, OpenGLMinorVersion);
         glfwTerminate();
         return -1;
+    }
+
+    if constexpr (enableGLDebugCallback) {
+        glu::enableDebugCallback(true);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, false);
     }
 
     // END: Initialize OpenGL and GLFW.
@@ -981,17 +990,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: OptiXによる描画結果を表示用レンダーターゲットにコピーする。
         // EN: Copy the OptiX rendering results to the display render target.
 
-        GL_CHECK(glViewport(0, 0, curFBWidth, curFBHeight));
+        glViewport(0, 0, curFBWidth, curFBHeight);
 
-        GL_CHECK(glUseProgram(drawOptiXResultShader.getHandle()));
+        glUseProgram(drawOptiXResultShader.getHandle());
 
-        GL_CHECK(glUniform2ui(0, curFBWidth, curFBHeight));
+        glUniform2ui(0, curFBWidth, curFBHeight);
 
-        GL_CHECK(glBindTextureUnit(0, outputTexture.getHandle()));
-        GL_CHECK(glBindSampler(0, outputSampler.getHandle()));
+        glBindTextureUnit(0, outputTexture.getHandle());
+        glBindSampler(0, outputSampler.getHandle());
 
-        GL_CHECK(glBindVertexArray(vertexArrayForFullScreen.getHandle()));
-        GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
+        glBindVertexArray(vertexArrayForFullScreen.getHandle());
+        glDrawArrays(GL_TRIANGLES, 0, 3);
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
