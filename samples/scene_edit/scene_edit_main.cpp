@@ -1739,6 +1739,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         activeGroup->optixGAS.markDirty();
                         activeGroup->propagateMarkDirty();
 
+                        // TODO: GeomInstの変換の更新はSBTレイアウトを無効化する必要がないが、
+                        //       現状GASのリビルドが必ずSBTレイアウトの無効化も実行するようになっているため
+                        //       ここではSBTレイアウトの更新が必要であるとする。
+                        //       => ここではリフィッティングの代わりとしてのリビルドになるのでmarkDirty()を
+                        //          そもそも呼ばなくてよいのでは？
+                        //          ただしこのサンプルではリフィッティングを使っていないので上位階層にはdirty()を
+                        //          伝える必要がある。
                         hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                     }
@@ -1960,7 +1967,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     return true;
                                 });
                         }
-                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                         groupList.clearSelection();
                         onSelectionChange();

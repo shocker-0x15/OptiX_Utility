@@ -543,13 +543,14 @@ namespace optixu {
         return sumRecords;
     }
 
-    void GeometryAccelerationStructure::Priv::markDirty() {
+    void GeometryAccelerationStructure::Priv::markDirty(bool invalidateSBTLayout) {
         readyToBuild = false;
         available = false;
         readyToCompact = false;
         compactedAvailable = false;
 
-        scene->markSBTLayoutDirty();
+        if (invalidateSBTLayout)
+            scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::destroy() {
@@ -574,7 +575,7 @@ namespace optixu {
         m->allowRandomVertexAccess = allowRandomVertexAccess;
 
         if (changed)
-            m->markDirty();
+            m->markDirty(false);
     }
 
     void GeometryAccelerationStructure::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
@@ -583,7 +584,7 @@ namespace optixu {
         m->buildOptions.motionOptions.timeEnd = timeEnd;
         m->buildOptions.motionOptions.flags = flags;
 
-        markDirty();
+        m->markDirty(false);
     }
 
     void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
@@ -602,7 +603,7 @@ namespace optixu {
 
         m->children.push_back(child);
 
-        m->markDirty();
+        m->markDirty(true);
     }
 
     void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
@@ -619,11 +620,11 @@ namespace optixu {
 
         m->children.erase(idx);
 
-        m->markDirty();
+        m->markDirty(true);
     }
 
     void GeometryAccelerationStructure::markDirty() const {
-        m->markDirty();
+        m->markDirty(true);
     }
 
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {

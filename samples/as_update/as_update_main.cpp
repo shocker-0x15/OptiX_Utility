@@ -974,10 +974,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         if (takeScreenShot && frameIndex + 1 == 60) {
             CUDADRV_CHECK(cuStreamSynchronize(cuStream));
             auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
-            GL_CHECK(glGetTextureSubImage(
+            glGetTextureSubImage(
                 outputTexture.getHandle(), 0,
                 0, 0, 0, renderTargetSizeX, renderTargetSizeY, 1,
-                GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage));
+                GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage);
             saveImage("output.png", renderTargetSizeX, renderTargetSizeY, rawImage,
                       false, false);
             delete[] rawImage;

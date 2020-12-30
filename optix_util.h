@@ -42,6 +42,7 @@ EN:
 
 ----------------------------------------------------------------
 TODO:
+- setUserData()でデータサイズが変わってしまう場合にはSBTレイアウトを無効化する必要がある旨を記述 or 内部的に対処。
 - Linux環境でのテスト。
 - CMake整備。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
@@ -54,6 +55,7 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
+- GeometryInstanceのGASをdirtyにする処理のうち、いくつかは内部的にSBTレイアウトの無効化をスキップできるはず。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
   名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
@@ -815,7 +817,7 @@ private: \
         void markDirty() const;
 
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが無効化される。
-        // EN: Calling the following APIs invalidate the shader binding table layout of hit group.
+        // EN: Calling the following APIs invalidates the shader binding table layout of hit group.
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
@@ -999,7 +1001,7 @@ private: \
         void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
 
         // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが無効化される。
-        // EN: Calling the following APIs invalidate the (non-hit group) shader binding table layout.
+        // EN: Calling the following APIs invalidates the (non-hit group) shader binding table layout.
         void setNumMissRayTypes(uint32_t numMissRayTypes) const;
         void setNumCallablePrograms(uint32_t numCallablePrograms) const;
 

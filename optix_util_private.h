@@ -641,7 +641,7 @@ namespace optixu {
             return buildOptions.motionOptions.numKeys >= 2;
         }
 
-        void markDirty();
+        void markDirty(bool invalidateSBTLayout);
         bool isReady() const {
             return available || compactedAvailable;
         }
