@@ -30,7 +30,13 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
-破壊的変更履歴 (直近5件) / Breaking Change History (recent 5 changes):
+破壊的もしくは特筆すべき変更履歴 (直近5件) / Breaking or Notable Change History (recent 5 changes):
+- JP: マテリアルのユーザーデータのサイズやアラインメントを、シェーダーバインディングテーブルレイアウト生成後に
+      変更した場合にレイアウトを手動で無効化するためのScene::markShaderBindingTableLayoutDirty()を追加。
+      併せてScene::shaderBindingTableLayoutIsReady()も追加。
+  EN: Added Scene::markShaderBindingTableLayoutDirty() to manually invalidate the layout of shader binding table
+      for the case changing the size and/or alignment of a material's user data after generating the layout.
+      Added Scene::shaderBindingTableLayoutIsReady() as well.
 - JP: InstanceAccelerationStructure::prepareForBuild()が引数でインスタンス数を返さないように変更。
       InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
   EN: Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
@@ -38,11 +44,9 @@ EN:
 -
 -
 -
--
 
 ----------------------------------------------------------------
 TODO:
-- setUserData()でデータサイズが変わってしまう場合にはSBTレイアウトを無効化する必要がある旨を記述 or 内部的に対処。
 - Linux環境でのテスト。
 - CMake整備。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
@@ -731,8 +735,14 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+        //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+        //     アラインメントを変更する場合には、レイアウトをシーンのmarkShaderBindingTableLayoutDirty()を
+        //     呼んで無効化する必要もある。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+        //     In the case where user data size and/or alignment changes again after generating the layout of
+        //     a shader binding table, the invalidation of the layout is required as well by calling
+        //     scene's markHitGroupShaderBindingTableDirty().
         void setHitGroup(uint32_t rayType, ProgramGroup hitGroup) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -761,7 +771,13 @@ private: \
         [[nodiscard]]
         InstanceAccelerationStructure createInstanceAccelerationStructure() const;
 
+        // JP: シェーダーバインディングテーブルレイアウトをdirty状態にする。
+        // EN: Mark the layout of shader binding table dirty.
+        void markShaderBindingTableLayoutDirty() const;
+
         void generateShaderBindingTableLayout(size_t* memorySize) const;
+
+        bool shaderBindingTableLayoutIsReady() const;
     };
 
 
@@ -789,8 +805,12 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+        //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+        //     アラインメントを変更する場合レイアウトが無効化される。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+        //     In the case where user data size and/or alignment changes again after generating the layout of
+        //     a shader binding table, the layout is invalidated.
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -843,8 +863,12 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+        //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+        //     アラインメントを変更する場合レイアウトが無効化される。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+        //     In the case where user data size and/or alignment changes again after generating the layout of
+        //     a shader binding table, the layout is invalidated.
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
         void setUserData(const T &data) const {

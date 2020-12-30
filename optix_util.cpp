@@ -132,7 +132,7 @@ namespace optixu {
         sbtLayoutIsUpToDate = false;
 
         for (_InstanceAccelerationStructure* _ias : instASs)
-            _ias->markDirty();
+            _ias->markDirty(true);
     }
 
     uint32_t Scene::Priv::getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
@@ -194,6 +194,8 @@ namespace optixu {
     }
 
     GeometryAccelerationStructure Scene::createGeometryAccelerationStructure(bool forCustomPrimitives) const {
+        // JP: GASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
+        // EN: Only generating a GAS doesn't affect a SBT layout, no need to invalidate it.
         return (new _GeometryAccelerationStructure(m, forCustomPrimitives))->getPublicType();
     }
 
@@ -207,6 +209,10 @@ namespace optixu {
 
     InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
         return (new _InstanceAccelerationStructure(m))->getPublicType();
+    }
+
+    void Scene::markShaderBindingTableLayoutDirty() const {
+        m->markSBTLayoutDirty();
     }
 
     void Scene::generateShaderBindingTableLayout(size_t* memorySize) const {
@@ -237,6 +243,10 @@ namespace optixu {
         m->sbtLayoutIsUpToDate = true;
 
         *memorySize = m->singleRecordSize * std::max(m->numSBTRecords, 1u);
+    }
+
+    bool Scene::shaderBindingTableLayoutIsReady() const {
+        return m->sbtLayoutIsUpToDate;
     }
 
 
@@ -503,6 +513,9 @@ namespace optixu {
                              "Maximum user data size for Material is %u bytes.", s_maxGeometryInstanceUserDataSize);
         m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
                              "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        if (m->userDataSizeAlign.size != size ||
+            m->userDataSizeAlign.alignment != alignment)
+            m->scene->markSBTLayoutDirty();
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
@@ -543,17 +556,15 @@ namespace optixu {
         return sumRecords;
     }
 
-    void GeometryAccelerationStructure::Priv::markDirty(bool invalidateSBTLayout) {
+    void GeometryAccelerationStructure::Priv::markDirty() {
         readyToBuild = false;
         available = false;
         readyToCompact = false;
         compactedAvailable = false;
-
-        if (invalidateSBTLayout)
-            scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::destroy() {
+        m->scene->markSBTLayoutDirty();
         delete m;
         m = nullptr;
     }
@@ -575,7 +586,7 @@ namespace optixu {
         m->allowRandomVertexAccess = allowRandomVertexAccess;
 
         if (changed)
-            m->markDirty(false);
+            m->markDirty();
     }
 
     void GeometryAccelerationStructure::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
@@ -584,7 +595,7 @@ namespace optixu {
         m->buildOptions.motionOptions.timeEnd = timeEnd;
         m->buildOptions.motionOptions.flags = flags;
 
-        m->markDirty(false);
+        m->markDirty();
     }
 
     void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
@@ -603,7 +614,8 @@ namespace optixu {
 
         m->children.push_back(child);
 
-        m->markDirty(true);
+        m->markDirty();
+        m->scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
@@ -620,11 +632,13 @@ namespace optixu {
 
         m->children.erase(idx);
 
-        m->markDirty(true);
+        m->markDirty();
+        m->scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::markDirty() const {
-        m->markDirty(true);
+        m->markDirty();
+        m->scene->markSBTLayoutDirty();
     }
 
     void GeometryAccelerationStructure::setNumMaterialSets(uint32_t numMatSets) const {
@@ -792,6 +806,9 @@ namespace optixu {
                              "Maximum user data size for Material is %u bytes.", s_maxGASUserDataSize);
         m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
                              "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        if (m->userDataSizeAlign.size != size ||
+            m->userDataSizeAlign.alignment != alignment)
+            m->scene->markSBTLayoutDirty();
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
@@ -1163,8 +1180,8 @@ namespace optixu {
 
 
 
-    void InstanceAccelerationStructure::Priv::markDirty() {
-        readyToBuild = false;
+    void InstanceAccelerationStructure::Priv::markDirty(bool readyToBuild) {
+        readyToBuild = readyToBuild;
         available = false;
         readyToCompact = false;
         compactedAvailable = false;
@@ -1185,7 +1202,7 @@ namespace optixu {
         m->allowCompaction = allowCompaction;
 
         if (changed)
-            m->markDirty();
+            m->markDirty(false);
     }
 
     void InstanceAccelerationStructure::setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const {
@@ -1194,7 +1211,7 @@ namespace optixu {
         m->buildOptions.motionOptions.timeEnd = timeEnd;
         m->buildOptions.motionOptions.flags = flags;
 
-        markDirty();
+        m->markDirty(false);
     }
 
     void InstanceAccelerationStructure::addChild(Instance instance) const {
@@ -1208,7 +1225,7 @@ namespace optixu {
 
         m->children.push_back(_inst);
 
-        m->markDirty();
+        m->markDirty(false);
     }
 
     void InstanceAccelerationStructure::removeChild(Instance instance) const {
@@ -1222,11 +1239,11 @@ namespace optixu {
 
         m->children.erase(idx);
 
-        m->markDirty();
+        m->markDirty(false);
     }
 
     void InstanceAccelerationStructure::markDirty() const {
-        m->markDirty();
+        m->markDirty(false);
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {

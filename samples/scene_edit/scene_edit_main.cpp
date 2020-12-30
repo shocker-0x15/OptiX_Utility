@@ -1310,7 +1310,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint64_t frameIndex = 0;
     glfwSetWindowUserPointer(window, &frameIndex);
     int32_t requestedSize[2];
-    bool hitGroupSbtLayoutUpdated = true;
     uint32_t sbtIndex = -1;
     cudau::Buffer* curHitGroupSBT;
     OptixTraversableHandle curTravHandle = 0;
@@ -1547,7 +1546,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                                         geomGroup->preTransformBuffer.sizeInBytes(),
                                                         cuStream));
 
-                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
 
                         optixEnv.geomGroups[serialID] = geomGroup;
@@ -1669,15 +1667,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 geomGroup->optixGAS.addChild(geomGroup->geomInsts[i]->optixGeomInst,
                                                              geomGroup->preTransformBuffer.getCUdeviceptrAt(i));
                             geomGroup->propagateMarkDirty();
+                            std::vector<Shared::GeometryInstancePreTransform> preTransforms(geomGroup->geomInsts.size());
+                            for (int i = 0; i < geomGroup->geomInsts.size(); ++i) {
+                                const GeometryInstancePreTransform &srcPreTransform = geomGroup->preTransforms[i];
+                                Shared::GeometryInstancePreTransform &dstPreTransform = preTransforms[i];
+                                dstPreTransform.setSRT(srcPreTransform.scale,
+                                                       srcPreTransform.rollPitchYaw,
+                                                       srcPreTransform.position);
+                            }
                             CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
-                                                            geomGroup->preTransforms.data(),
-                                                            geomGroup->preTransformBuffer.sizeInBytes(),
+                                                            preTransforms.data(),
+                                                            preTransforms.size() * sizeof(Shared::GeometryInstancePreTransform),
                                                             cuStream));
                         }
                         geomGroupList.clearSelection();
                         onSelectionChange();
 
-                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                     }
 
@@ -1740,13 +1745,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         activeGroup->propagateMarkDirty();
 
                         // TODO: GeomInstの変換の更新はSBTレイアウトを無効化する必要がないが、
-                        //       現状GASのリビルドが必ずSBTレイアウトの無効化も実行するようになっているため
+                        //       現状GASのmarkDirty()が必ずSBTレイアウトの無効化も実行するようになっているため
                         //       ここではSBTレイアウトの更新が必要であるとする。
                         //       => ここではリフィッティングの代わりとしてのリビルドになるのでmarkDirty()を
                         //          そもそも呼ばなくてよいのでは？
                         //          ただしこのサンプルではリフィッティングを使っていないので上位階層にはdirty()を
                         //          伝える必要がある。
-                        hitGroupSbtLayoutUpdated = true;
                         traversablesUpdated = true;
                     }
 
@@ -2017,7 +2021,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             geomGroup->optixGAS.rebuild(cuStream, geomGroup->optixGasMem, optixEnv.asScratchBuffer);
         }
 
-        if (hitGroupSbtLayoutUpdated) {
+        if (!optixEnv.scene.shaderBindingTableLayoutIsReady()) {
             sbtIndex = (sbtIndex + 1) % 2;
             curHitGroupSBT = &optixEnv.hitGroupSBT[sbtIndex];
 
@@ -2031,7 +2035,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 curHitGroupSBT->setMappedMemoryPersistent(true);
             }
             pipeline.setHitGroupShaderBindingTable(*curHitGroupSBT, curHitGroupSBT->getMappedPointer());
-            hitGroupSbtLayoutUpdated = false;
         }
 
         for (const auto &kv : optixEnv.groups) {

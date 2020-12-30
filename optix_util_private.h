@@ -641,7 +641,7 @@ namespace optixu {
             return buildOptions.motionOptions.numKeys >= 2;
         }
 
-        void markDirty(bool invalidateSBTLayout);
+        void markDirty();
         bool isReady() const {
             return available || compactedAvailable;
         }
@@ -870,7 +870,7 @@ namespace optixu {
 
 
 
-        void markDirty();
+        void markDirty(bool readyToBuild);
         bool isReady() const {
             return available || compactedAvailable;
         }
