@@ -186,6 +186,18 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 int32_t main(int32_t argc, const char* argv[]) try {
+    bool takeScreenShot = false;
+
+    uint32_t argIdx = 1;
+    while (argIdx < argc) {
+        std::string_view arg = argv[argIdx];
+        if (arg == "--screen-shot")
+            takeScreenShot = true;
+        else
+            throw std::runtime_error("Unknown command line argument.");
+        ++argIdx;
+    }
+
     // ----------------------------------------------------------------
     // JP: OpenGL, GLFWの初期化。
     // EN: Initialize OpenGL and GLFW.
@@ -1675,6 +1687,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ++plp.numAccumFrames;
 
         curGPUTimer.frame.stop(cuStream);
+
+        if (takeScreenShot && frameIndex + 1 == 60) {
+            CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+            auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
+            glGetTextureSubImage(
+                outputTexture.getHandle(), 0,
+                0, 0, 0, renderTargetSizeX, renderTargetSizeY, 1,
+                GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage);
+            saveImage("output.png", renderTargetSizeX, renderTargetSizeY, rawImage,
+                      true, true);
+            delete[] rawImage;
+            break;
+        }
 
 
 

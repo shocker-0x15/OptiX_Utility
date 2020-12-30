@@ -44,5 +44,11 @@
         "sample": "denoiser",
         "image": "color_denoised.png",
         "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"]
+    },
+    {
+        "sample": "uber",
+        "options": "--screen-shot",
+        "image": "output.png",
+        "outputs": ["output.png"]
     }
 ]
