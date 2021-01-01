@@ -17,20 +17,26 @@ def run():
     with open(R'tests.json') as f:
         tests = json.load(f)
 
-    for config in ['Debug', 'Release']:
+    configs = ['Debug', 'Release']
+
+    # Build
+    for config in configs:
         # Clean
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
         cmd += [sln]
         print(' '.join(cmd))
-        ret = subprocess.check_call(cmd)
+        ret = subprocess.run(cmd, check=True)
 
         # Build
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
         cmd += [sln]
         print(' '.join(cmd))
-        ret = subprocess.check_call(cmd)
+        ret = subprocess.run(cmd, check=True)
 
-        results = {}
+    # Run tests
+    results = {}
+    for config in configs:
+        resultsPerConfig = {}
         outDir = os.path.abspath(os.path.join(R'..\samples\x64', config))
         for test in tests:
             testName = test['sample']
@@ -44,7 +50,7 @@ def run():
             cmd = [exe]
             if 'options' in test:
                 cmd.append(test['options'])
-            ret = subprocess.check_call(cmd)
+            ret = subprocess.run(cmd, check=True)
 
             # RGBAでdiffをとると差が無いことになってしまう。
             img = Image.open(test['image']).convert('RGB')
@@ -56,7 +62,7 @@ def run():
             else:
                 numDiffPixels = sum(x != (0, 0, 0) for x in diffImg.crop(diffBBox).getdata())
 
-            results[testName] = {
+            resultsPerConfig[testName] = {
                 "success": numDiffPixels == 0,
                 "numDiffPixels": numDiffPixels
             }
@@ -66,14 +72,19 @@ def run():
 
             chdir(oldDir)
         
+        results[config] = resultsPerConfig
+    
+    # Show results
+    for config in configs:
         print('Test Results for ' + config + ':')
+        resultsPerConfig = results[config]
         numSuccesses = 0
-        for test, result in results.items():
+        for test, result in resultsPerConfig.items():
             print(test, result)
             if result['success']:
                 numSuccesses += 1
         print('Successes: {}/{}, All Success: {}'.format(
-            numSuccesses, len(results), numSuccesses == len(results)))
+            numSuccesses, len(resultsPerConfig), numSuccesses == len(resultsPerConfig)))
         print()
 
     return 0
