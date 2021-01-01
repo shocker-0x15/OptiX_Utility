@@ -240,8 +240,8 @@ namespace glu {
         uint32_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
             size_t numBytesToCopy = static_cast<size_t>(numElementsToCopy) * m_stride;
-            GL_CHECK(glCopyNamedBufferSubData(m_handle, newBuffer.m_handle,
-                                              0, 0, numBytesToCopy));
+            glCopyNamedBufferSubData(m_handle, newBuffer.m_handle,
+                                     0, 0, numBytesToCopy);
         }
         else {
             auto src = map<const uint8_t>();
@@ -350,15 +350,15 @@ namespace glu {
     }
 
     void Texture2D::transferImage(GLenum format, GLenum type, const void* data, uint32_t mipLevel) const {
-        GL_CHECK(glTextureSubImage2D(m_handle, mipLevel,
-                                     0, 0, std::max(m_width >> mipLevel, 1u), std::max(m_height >> mipLevel, 1u),
-                                     format, type, data));
+        glTextureSubImage2D(m_handle, mipLevel,
+                            0, 0, std::max(m_width >> mipLevel, 1u), std::max(m_height >> mipLevel, 1u),
+                            format, type, data);
     }
 
     void Texture2D::transferCompressedImage(const void* data, size_t size, uint32_t mipLevel) const {
-        GL_CHECK(glCompressedTextureSubImage2D(m_handle, mipLevel,
-                                               0, 0, std::max(m_width >> mipLevel, 1u), std::max(m_height >> mipLevel, 1u),
-                                               m_format, size, data));
+        glCompressedTextureSubImage2D(m_handle, mipLevel,
+                                      0, 0, std::max(m_width >> mipLevel, 1u), std::max(m_height >> mipLevel, 1u),
+                                      m_format, static_cast<GLsizei>(size), data);
     }
 
 
@@ -526,7 +526,7 @@ namespace glu {
             m_depthRenderTargetTextures = new Texture2D[m_multiBufferingFactor];
 
         // JP: テクスチャー経由でレンダーターゲットを初期化する。
-        for (int i = 0; i < m_numColorAttachments; ++i) {
+        for (uint32_t i = 0; i < m_numColorAttachments; ++i) {
             m_renderTargetIDs[i] = GL_COLOR_ATTACHMENT0 + i;
             Texture2D &rt = m_renderTargetTextures[m_multiBufferingFactor * i + 0];
             rt.initialize(internalFormats[i], m_width, m_height, 1);
@@ -542,9 +542,9 @@ namespace glu {
 
         checkStatus(m_handles[0], Target::ReadDraw);
 
-        for (int fbIdx = 1; fbIdx < m_multiBufferingFactor; ++fbIdx) {
+        for (uint32_t fbIdx = 1; fbIdx < m_multiBufferingFactor; ++fbIdx) {
             // JP: テクスチャー経由でレンダーターゲットを初期化する。
-            for (int i = 0; i < m_numColorAttachments; ++i) {
+            for (uint32_t i = 0; i < m_numColorAttachments; ++i) {
                 bool multiBuffered = (m_colorIsMultiBuffered >> i) & 0b1;
                 Texture2D &rt = m_renderTargetTextures[m_multiBufferingFactor * i + (multiBuffered ? fbIdx : 0)];
                 if (multiBuffered)
