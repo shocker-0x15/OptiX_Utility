@@ -126,6 +126,25 @@ namespace optixu {
         std::memcpy(m->userData.data(), data, size);
     }
 
+    ProgramGroup Material::getHitGroup(Pipeline pipeline, uint32_t rayType) const {
+        auto _pipeline = extract(pipeline);
+        m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
+
+        _Material::Key key{ _pipeline, rayType };
+        m->throwRuntimeError(m->programs.count(key), "Hit group is not set for the pipeline %s, rayType %u",
+                             _pipeline->getName().c_str(), rayType);
+        return m->programs.at(key)->getPublicType();
+    }
+
+    void Material::getUserData(void* data, uint32_t* size, uint32_t* alignment) const {
+        if (data)
+            std::memcpy(data, m->userData.data(), m->userDataSizeAlign.size);
+        if (size)
+            *size = m->userDataSizeAlign.size;
+        if (alignment)
+            *alignment = m->userDataSizeAlign.alignment;
+    }
+
 
 
     void Scene::Priv::markSBTLayoutDirty() {
@@ -284,7 +303,7 @@ namespace optixu {
                 customPrimArray.sbtIndexOffsetStrideInBytes = 0; // No effect
             }
 
-            customPrimArray.flags = buildInputFlags.data();
+            customPrimArray.flags = reinterpret_cast<const uint32_t*>(buildInputFlags.data());
         }
         else {
             throwRuntimeError((indexFormat != OPTIX_INDICES_FORMAT_NONE) == triangleBuffer.isValid(),
@@ -335,7 +354,7 @@ namespace optixu {
             triArray.preTransform = preTransform;
             triArray.transformFormat = preTransform ? OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 : OPTIX_TRANSFORM_FORMAT_NONE;
 
-            triArray.flags = buildInputFlags.data();
+            triArray.flags = reinterpret_cast<const uint32_t*>(buildInputFlags.data());
         }
     }
 
@@ -521,6 +540,42 @@ namespace optixu {
         std::memcpy(m->userData.data(), data, size);
     }
 
+    uint32_t GeometryInstance::getNumMotionSteps() const {
+        return m->numMotionSteps;
+    }
+
+    uint32_t GeometryInstance::getPrimitiveIndexOffset() const {
+        return m->primitiveIndexOffset;
+    }
+
+    uint32_t GeometryInstance::getNumMaterials() const {
+        return static_cast<uint32_t>(m->materials.size());
+    }
+
+    OptixGeometryFlags GeometryInstance::getGeometryFlags(uint32_t matIdx) const {
+        return m->buildInputFlags[matIdx];
+    }
+
+    Material GeometryInstance::getMaterial(uint32_t matSetIdx, uint32_t matIdx) const {
+        size_t numMaterials = m->materials.size();
+        m->throwRuntimeError(matIdx < numMaterials, "Out of material bounds [0, %u).",
+                             static_cast<uint32_t>(numMaterials));
+        size_t numMatSets = m->materials[matIdx].size();
+        m->throwRuntimeError(matSetIdx < numMatSets, "Out of material set bounds [0, %u).",
+                             static_cast<uint32_t>(numMatSets));
+
+        return m->materials[matIdx][matSetIdx]->getPublicType();
+    }
+
+    void GeometryInstance::getUserData(void* data, uint32_t* size, uint32_t* alignment) const {
+        if (data)
+            std::memcpy(data, m->userData.data(), m->userDataSizeAlign.size);
+        if (size)
+            *size = m->userDataSizeAlign.size;
+        if (alignment)
+            *alignment = m->userDataSizeAlign.alignment;
+    }
+
 
 
     void GeometryAccelerationStructure::Priv::calcSBTRequirements(uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const {
@@ -648,9 +703,10 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
-        m->throwRuntimeError(matSetIdx < m->numRayTypesPerMaterialSet.size(),
+        uint32_t numMatSets = static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
+        m->throwRuntimeError(matSetIdx < numMatSets,
                              "Material set index %u is out of bounds [0, %u).",
-                             matSetIdx, static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size()));
+                             matSetIdx, numMatSets);
         m->numRayTypesPerMaterialSet[matSetIdx] = numRayTypes;
 
         m->scene->markSBTLayoutDirty();
@@ -814,22 +870,68 @@ namespace optixu {
         std::memcpy(m->userData.data(), data, size);
     }
 
-    GeometryInstance GeometryAccelerationStructure::getChild(uint32_t index, CUdeviceptr* preTransform) const {
-        if (preTransform)
-            *preTransform = m->children[index].preTransform;
-        return m->children[index].geomInst->getPublicType();
-    }
-
-    uint32_t GeometryAccelerationStructure::getNumChildren() const {
-        return static_cast<uint32_t>(m->children.size());
-    }
-
     bool GeometryAccelerationStructure::isReady() const {
         return m->isReady();
     }
 
     OptixTraversableHandle GeometryAccelerationStructure::getHandle() const {
         return m->getHandle();
+    }
+
+    void GeometryAccelerationStructure::getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction, bool* allowRandomVertexAccess) const {
+        if (tradeOff)
+            *tradeOff = m->tradeoff;
+        if (allowUpdate)
+            *allowUpdate = m->allowUpdate;
+        if (allowCompaction)
+            *allowCompaction = m->allowCompaction;
+        if (allowRandomVertexAccess)
+            *allowRandomVertexAccess = m->allowRandomVertexAccess;
+    }
+
+    void GeometryAccelerationStructure::getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const {
+        if (numKeys)
+            *numKeys = m->buildOptions.motionOptions.numKeys;
+        if (timeBegin)
+            *timeBegin = m->buildOptions.motionOptions.timeBegin;
+        if (timeEnd)
+            *timeEnd = m->buildOptions.motionOptions.timeEnd;
+        if (flags)
+            *flags = static_cast<OptixMotionFlags>(m->buildOptions.motionOptions.flags);
+    }
+
+    uint32_t GeometryAccelerationStructure::getNumChildren() const {
+        return static_cast<uint32_t>(m->children.size());
+    }
+
+    GeometryInstance GeometryAccelerationStructure::getChild(uint32_t index, CUdeviceptr* preTransform) const {
+        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
+                             numChildren);
+        if (preTransform)
+            *preTransform = m->children[index].preTransform;
+        return m->children[index].geomInst->getPublicType();
+    }
+
+    uint32_t GeometryAccelerationStructure::getNumMaterialSets() const {
+        return static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
+    }
+
+    uint32_t GeometryAccelerationStructure::getNumRayTypes(uint32_t matSetIdx) const {
+        uint32_t numMatSets = static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
+        m->throwRuntimeError(matSetIdx < numMatSets,
+                             "Material set index %u is out of bounds [0, %u).",
+                             matSetIdx, numMatSets);
+        return m->numRayTypesPerMaterialSet[matSetIdx];
+    }
+
+    void GeometryAccelerationStructure::getUserData(void* data, uint32_t* size, uint32_t* alignment) const {
+        if (data)
+            std::memcpy(data, m->userData.data(), m->userDataSizeAlign.size);
+        if (size)
+            *size = m->userDataSizeAlign.size;
+        if (alignment)
+            *alignment = m->userDataSizeAlign.alignment;
     }
 
 
@@ -1055,6 +1157,82 @@ namespace optixu {
         return m->getHandle();
     }
 
+    void Transform::getConfiguration(TransformType* type, uint32_t* numKeys) const {
+        if (type)
+            *type = m->type;
+        if (numKeys)
+            *numKeys = m->options.numKeys;
+    }
+
+    void Transform::getMotionOptions(float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const {
+        if (timeBegin)
+            *timeBegin = m->options.timeBegin;
+        if (timeEnd)
+            *timeEnd = m->options.timeEnd;
+        if (flags)
+            *flags = static_cast<OptixMotionFlags>(m->options.flags);
+    }
+
+    void Transform::getMatrixMotionKey(uint32_t keyIdx, float matrix[12]) const {
+        m->throwRuntimeError(m->type == TransformType::MatrixMotion,
+                             "This transform has been configured as matrix motion transform.");
+        m->throwRuntimeError(keyIdx <= m->options.numKeys,
+                             "Number of motion keys was set to %u", m->options.numKeys);
+        auto motionData = reinterpret_cast<const float*>(m->data + offsetof(OptixMatrixMotionTransform, transform));
+        const float* dataPerKey = motionData + 12 * keyIdx;
+
+        std::copy_n(dataPerKey, 12, matrix);
+    }
+
+    void Transform::getSRTMotionKey(uint32_t keyIdx, float scale[3], float orientation[4], float translation[3]) const {
+        m->throwRuntimeError(m->type == TransformType::SRTMotion,
+                             "This transform has been configured as SRT motion transform.");
+        m->throwRuntimeError(keyIdx <= m->options.numKeys,
+                             "Number of motion keys was set to %u", m->options.numKeys);
+        auto motionData = reinterpret_cast<const OptixSRTData*>(m->data + offsetof(OptixSRTMotionTransform, srtData));
+        const OptixSRTData* dataPerKey = motionData + keyIdx;
+
+        scale[0] = dataPerKey->sx;
+        scale[1] = dataPerKey->sy;
+        scale[2] = dataPerKey->sz;
+        std::copy_n(&dataPerKey->qx, 4, orientation);
+        std::copy_n(&dataPerKey->tx, 3, translation);
+    }
+
+    void Transform::getStaticTransform(float matrix[12]) const {
+        m->throwRuntimeError(m->type == TransformType::Static,
+                             "This transform has been configured as static transform.");
+
+        auto xfm = reinterpret_cast<const OptixStaticTransform*>(m->data);
+
+        std::copy_n(xfm->transform, 12, matrix);
+    }
+
+    ChildType Transform::getChildType() const {
+        return m->childType;
+    }
+
+    template <typename T>
+    T Transform::getChild() const {
+        if constexpr (std::is_same<T, GeometryAccelerationStructure>::value) {
+            if (m->childType == ChildType::GAS)
+                return m->childGas->getPublicType();
+        }
+        if constexpr (std::is_same<T, InstanceAccelerationStructure>::value) {
+            if (m->childType == ChildType::IAS)
+                return m->childIas->getPublicType();
+        }
+        if constexpr (std::is_same<T, Transform>::value) {
+            if (m->childType == ChildType::Transform)
+                return m->childXfm->getPublicType();
+        }
+        m->throwRuntimeError(false, "Given type is inconsistent with the stored type.");
+        return T();
+    }
+    template GeometryAccelerationStructure Transform::getChild<GeometryAccelerationStructure>() const;
+    template InstanceAccelerationStructure Transform::getChild<InstanceAccelerationStructure>() const;
+    template Transform Transform::getChild<Transform>() const;
+
 
 
     void Instance::Priv::fillInstance(OptixInstance* instance) const {
@@ -1176,6 +1354,51 @@ namespace optixu {
 
     void Instance::setMaterialSetIndex(uint32_t matSetIdx) const {
         m->matSetIndex = matSetIdx;
+    }
+
+    ChildType Instance::getChildType() const {
+        return m->type;
+    }
+
+    template <typename T>
+    T Instance::getChild() const {
+        if constexpr (std::is_same<T, GeometryAccelerationStructure>::value) {
+            if (m->type == ChildType::GAS)
+                return m->childGas->getPublicType();
+        }
+        if constexpr (std::is_same<T, InstanceAccelerationStructure>::value) {
+            if (m->type == ChildType::IAS)
+                return m->childIas->getPublicType();
+        }
+        if constexpr (std::is_same<T, Transform>::value) {
+            if (m->type == ChildType::Transform)
+                return m->childXfm->getPublicType();
+        }
+        m->throwRuntimeError(false, "Given type is inconsistent with the stored type.");
+        return T();
+    }
+    template GeometryAccelerationStructure Instance::getChild<GeometryAccelerationStructure>() const;
+    template InstanceAccelerationStructure Instance::getChild<InstanceAccelerationStructure>() const;
+    template Transform Instance::getChild<Transform>() const;
+
+    uint32_t Instance::getID() const {
+        return m->id;
+    }
+
+    uint32_t Instance::getVisibilityMask() const {
+        return m->visibilityMask;
+    }
+
+    OptixInstanceFlags Instance::getFlags() const {
+        return m->flags;
+    }
+
+    void Instance::getTransform(float transform[12]) const {
+        std::copy_n(m->instTransform, 12, transform);
+    }
+
+    uint32_t Instance::getMaterialSetIndex() const {
+        return m->matSetIndex;
     }
 
 
@@ -1395,12 +1618,35 @@ namespace optixu {
         optixuAssert(tempHandle == handle, "IAS %s: Update should not change the handle itself, what's going on?", getName());
     }
 
-    Instance InstanceAccelerationStructure::getChild(uint32_t index) const {
-        return m->children[index]->getPublicType();
+    void InstanceAccelerationStructure::getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction) const {
+        if (tradeOff)
+            *tradeOff = m->tradeoff;
+        if (allowUpdate)
+            *allowUpdate = m->allowUpdate;
+        if (allowCompaction)
+            *allowCompaction = m->allowCompaction;
+    }
+
+    void InstanceAccelerationStructure::getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const {
+        if (numKeys)
+            *numKeys = m->buildOptions.motionOptions.numKeys;
+        if (timeBegin)
+            *timeBegin = m->buildOptions.motionOptions.timeBegin;
+        if (timeEnd)
+            *timeEnd = m->buildOptions.motionOptions.timeEnd;
+        if (flags)
+            *flags = static_cast<OptixMotionFlags>(m->buildOptions.motionOptions.flags);
     }
 
     uint32_t InstanceAccelerationStructure::getNumChildren() const {
         return static_cast<uint32_t>(m->children.size());
+    }
+
+    Instance InstanceAccelerationStructure::getChild(uint32_t index) const {
+        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
+                             numChildren);
+        return m->children[index]->getPublicType();
     }
 
     bool InstanceAccelerationStructure::isReady() const {

@@ -30,23 +30,29 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
-破壊的もしくは特筆すべき変更履歴 (直近5件) / Breaking or Notable Change History (recent 5 changes):
+変更履歴 (直近5件) / Update History (recent 5 changes):
+- JP: 各種パラメターを取得するためのAPIを追加。
+  EN: Added APIs to get parameters.
 - JP: マテリアルのユーザーデータのサイズやアラインメントを、シェーダーバインディングテーブルレイアウト生成後に
       変更した場合にレイアウトを手動で無効化するためのScene::markShaderBindingTableLayoutDirty()を追加。
       併せてScene::shaderBindingTableLayoutIsReady()も追加。
   EN: Added Scene::markShaderBindingTableLayoutDirty() to manually invalidate the layout of shader binding table
       for the case changing the size and/or alignment of a material's user data after generating the layout.
       Added Scene::shaderBindingTableLayoutIsReady() as well.
-- JP: InstanceAccelerationStructure::prepareForBuild()が引数でインスタンス数を返さないように変更。
+- !!BREAKING
+  JP: InstanceAccelerationStructure::prepareForBuild()が引数でインスタンス数を返さないように変更。
       InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
   EN: Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
       Use InstanceAccelerationStructure::getNumChildren() instead.
 -
 -
--
 
 ----------------------------------------------------------------
 TODO:
+- Pickingサンプル。(scene_editに実装されるべき？サンプルとして複雑化しすぎるか)
+  インスタンス、GAS、ジオメトリ、マテリアル、プリミティブを特定する情報を表示、レンダリングもハイライト。
+  非パースペクティブカメラもデモ。
+- ユニットテスト。
 - Linux環境でのテスト。
 - CMake整備。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
@@ -656,6 +662,13 @@ namespace optixu {
         Invalid
     };
 
+    enum class ChildType {
+        GAS = 0,
+        IAS,
+        Transform,
+        Invalid
+    };
+
     class BufferView {
         CUdeviceptr m_devicePtr;
         size_t m_numElements;
@@ -706,6 +719,7 @@ private: \
         OPTIXU_PIMPL();
 
     public:
+        [[nodiscard]]
         static Context create(CUcontext cuContext, uint32_t logLevel = 4, bool enableValidation = false);
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(Context);
@@ -748,6 +762,13 @@ private: \
         template <typename T>
         void setUserData(const T &data) const {
             setUserData(&data, sizeof(T), alignof(T));
+        }
+
+        ProgramGroup getHitGroup(Pipeline pipeline, uint32_t rayType) const;
+        void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
+        template <typename T>
+        void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+            getUserData(reinterpret_cast<void*>(data), size, alignment);
         }
     };
 
@@ -817,6 +838,17 @@ private: \
         void setUserData(const T &data) const {
             setUserData(&data, sizeof(T), alignof(T));
         }
+
+        uint32_t getNumMotionSteps() const;
+        uint32_t getPrimitiveIndexOffset() const;
+        uint32_t getNumMaterials() const;
+        OptixGeometryFlags getGeometryFlags(uint32_t matIdx) const;
+        Material getMaterial(uint32_t matSetIdx, uint32_t matIdx) const;
+        void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
+        template <typename T>
+        void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+            getUserData(reinterpret_cast<void*>(data), size, alignment);
+        }
     };
 
 
@@ -875,10 +907,20 @@ private: \
             setUserData(&data, sizeof(T), alignof(T));
         }
 
-        GeometryInstance getChild(uint32_t index, CUdeviceptr* preTransform = nullptr) const;
-        uint32_t getNumChildren() const;
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
+
+        void getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction, bool* allowRandomVertexAccess) const;
+        void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
+        uint32_t getNumChildren() const;
+        GeometryInstance getChild(uint32_t index, CUdeviceptr* preTransform = nullptr) const;
+        uint32_t getNumMaterialSets() const;
+        uint32_t getNumRayTypes(uint32_t matSetIdx) const;
+        void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
+        template <typename T>
+        void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+            getUserData(reinterpret_cast<void*>(data), size, alignment);
+        }
     };
 
 
@@ -910,6 +952,15 @@ private: \
 
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
+
+        void getConfiguration(TransformType* type, uint32_t* numKeys) const;
+        void getMotionOptions(float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
+        void getMatrixMotionKey(uint32_t keyIdx, float matrix[12]) const;
+        void getSRTMotionKey(uint32_t keyIdx, float scale[3], float orientation[4], float translation[3]) const;
+        void getStaticTransform(float matrix[12]) const;
+        ChildType getChildType() const;
+        template <typename T>
+        T getChild() const;
     };
 
 
@@ -934,6 +985,15 @@ private: \
         void setFlags(OptixInstanceFlags flags) const;
         void setTransform(const float transform[12]) const;
         void setMaterialSetIndex(uint32_t matSetIdx) const;
+
+        ChildType getChildType() const;
+        template <typename T>
+        T getChild() const;
+        uint32_t getID() const;
+        uint32_t getVisibilityMask() const;
+        OptixInstanceFlags getFlags() const;
+        void getTransform(float transform[12]) const;
+        uint32_t getMaterialSetIndex() const;
     };
 
 
@@ -981,8 +1041,10 @@ private: \
         //     is required when performing update.
         void update(CUstream stream, const BufferView &scratchBuffer) const;
 
-        Instance getChild(uint32_t index) const;
+        void getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction) const;
+        void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
+        Instance getChild(uint32_t index) const;
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
     };

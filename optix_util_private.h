@@ -318,7 +318,7 @@ namespace optixu {
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
 
-        std::unordered_map<Key, const _ProgramGroup*, Key::Hash> programs;
+        std::unordered_map<Key, _ProgramGroup*, Key::Hash> programs;
 
     public:
         OPTIXU_OPAQUE_BRIDGE(Material);
@@ -464,9 +464,9 @@ namespace optixu {
         uint32_t primitiveIndexOffset;
         uint32_t materialIndexOffsetSize;
         BufferView materialIndexOffsetBuffer;
-        std::vector<uint32_t> buildInputFlags; // per SBT record
+        std::vector<OptixGeometryFlags> buildInputFlags; // per SBT record
 
-        std::vector<std::vector<const _Material*>> materials;
+        std::vector<std::vector<_Material*>> materials;
 
         struct {
             const unsigned int forCustomPrimitives : 1;
@@ -654,15 +654,6 @@ namespace optixu {
                 return handle;
             return 0;
         }
-    };
-
-
-
-    enum class ChildType {
-        GAS = 0,
-        IAS,
-        Transform,
-        Invalid
     };
 
 
