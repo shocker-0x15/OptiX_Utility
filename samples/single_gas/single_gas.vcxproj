@@ -28,7 +28,9 @@
     <ClInclude Include="single_gas_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="optix_kernels.cu">
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
+    </CudaCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

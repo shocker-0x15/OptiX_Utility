@@ -53,7 +53,9 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="deform.cu" />
-    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="optix_kernels.cu">
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\drawOptiXResult.frag">

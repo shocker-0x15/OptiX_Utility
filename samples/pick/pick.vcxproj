@@ -52,8 +52,12 @@
     <Natvis Include="..\..\ext\imgui\natvis\imgui.natvis" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="render_kernels.cu" />
-    <CudaCompile Include="pick_kernels.cu" />
+    <CudaCompile Include="render_kernels.cu">
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
+    </CudaCompile>
+    <CudaCompile Include="pick_kernels.cu">
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
