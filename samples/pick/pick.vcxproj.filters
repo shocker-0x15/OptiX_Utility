@@ -4,9 +4,6 @@
     <Filter Include="util">
       <UniqueIdentifier>{4b27c78f-aa9b-4702-a1f9-06ffbecb9072}</UniqueIdentifier>
     </Filter>
-    <Filter Include="GPU kernels">
-      <UniqueIdentifier>{5af041ea-60c3-43fd-a968-f655372e94a3}</UniqueIdentifier>
-    </Filter>
     <Filter Include="non-essentials">
       <UniqueIdentifier>{204572b1-033d-45c2-891c-f73eabeb563e}</UniqueIdentifier>
     </Filter>
@@ -51,21 +48,18 @@
     <ClCompile Include="..\..\ext\imgui\imgui.cpp">
       <Filter>non-essentials\ext\imgui\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
-      <Filter>non-essentials\ext</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\cuda_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="..\..\optix_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="uber_main.cpp" />
-    <ClCompile Include="..\common\dds_loader.cpp">
-      <Filter>non-essentials</Filter>
-    </ClCompile>
+    <ClCompile Include="pick_main.cpp" />
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
     </ClCompile>
     <ClCompile Include="..\common\gl_util.cpp">
       <Filter>non-essentials</Filter>
@@ -108,12 +102,6 @@
     <ClInclude Include="..\..\ext\imgui\imconfig.h">
       <Filter>non-essentials\ext\imgui\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\ext\stb_image.h">
-      <Filter>non-essentials\ext</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
-      <Filter>non-essentials\ext</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\optix_util.h">
       <Filter>util</Filter>
     </ClInclude>
@@ -123,15 +111,12 @@
     <ClInclude Include="..\..\cuda_util.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="uber_shared.h" />
-    <ClInclude Include="..\common\dds_loader.h">
-      <Filter>non-essentials</Filter>
-    </ClInclude>
+    <ClInclude Include="pick_shared.h" />
     <ClInclude Include="..\common\common.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\stopwatch.h">
-      <Filter>non-essentials</Filter>
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
@@ -149,23 +134,15 @@
     </Natvis>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="deform.cu">
-      <Filter>GPU kernels</Filter>
-    </CudaCompile>
-    <CudaCompile Include="optix_kernels.cu">
-      <Filter>GPU kernels</Filter>
-    </CudaCompile>
-    <CudaCompile Include="sphere_bounding_box.cu">
-      <Filter>GPU kernels</Filter>
-    </CudaCompile>
-    <CudaCompile Include="post_process.cu">
-      <Filter>GPU kernels</Filter>
-    </CudaCompile>
+    <CudaCompile Include="pick_kernels.cu" />
+    <CudaCompile Include="render_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.frag" />
-    <CopyFileToFolders Include="shaders\drawOptiXResult.vert" />
-    <CopyFileToFolders Include="shaders\scale.frag" />
-    <CopyFileToFolders Include="shaders\scale.vert" />
+    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+      <Filter>non-essentials\shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+      <Filter>non-essentials\shaders</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

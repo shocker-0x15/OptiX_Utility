@@ -229,7 +229,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::Buffer asBuildScratchMem;
 
-    // JP: このサンプルではデのイザーに焦点を当て、
+    // JP: このサンプルではデノイザーに焦点を当て、
     //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
     // EN: Use one GeometryInstance per GAS for simplicty and
     //     to focus on denoiser in this sample.
