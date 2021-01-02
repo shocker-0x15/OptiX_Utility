@@ -1132,7 +1132,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         pickPlp.pickInfo = curPickInfo.getDevicePointer();
 
         CUDADRV_CHECK(cuMemcpyHtoDAsync(pickPlpOnDevice, &pickPlp, sizeof(pickPlp), cuStream));
-        pickPipeline.pipeline.launch(cuStream, pickPlpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        pickPipeline.pipeline.launch(cuStream, pickPlpOnDevice, 1, 1, 1);
 
         
         // Render
