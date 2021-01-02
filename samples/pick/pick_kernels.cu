@@ -59,7 +59,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
         *plp.pickInfo = info;
     if (launchIndex.x == 0 && launchIndex.y == 0 &&
         (plp.mousePosition.x < 0 || plp.mousePosition.x >= plp.imageSize.x ||
-         plp.mousePosition.y < 0 || plp.mousePosition.y >= plp.imageSize.x))
+         plp.mousePosition.y < 0 || plp.mousePosition.y >= plp.imageSize.y))
         plp.pickInfo->hit = false;
 }
 
@@ -89,7 +89,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
         *plp.pickInfo = info;
     if (launchIndex.x == 0 && launchIndex.y == 0 &&
         (plp.mousePosition.x < 0 || plp.mousePosition.x >= plp.imageSize.x ||
-         plp.mousePosition.y < 0 || plp.mousePosition.y >= plp.imageSize.x))
+         plp.mousePosition.y < 0 || plp.mousePosition.y >= plp.imageSize.y))
         plp.pickInfo->hit = false;
 }
 

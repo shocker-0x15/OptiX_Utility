@@ -416,6 +416,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixPipeline.setShaderBindingTable(p.shaderBindingTable, p.shaderBindingTable.getMappedPointer());
     }
 
+    uint32_t maxNumRayTypes = std::max<uint32_t>(Shared::NumPickRayTypes, Shared::NumRayTypes);
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -512,10 +514,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::Buffer asBuildScratchMem;
 
-    // JP: このサンプルではデのイザーに焦点を当て、
-    //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
-    // EN: Use one GeometryInstance per GAS for simplicty and
-    //     to focus on denoiser in this sample.
     struct Geometry {
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
         cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
@@ -617,7 +615,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.optixGas = scene.createGeometryAccelerationStructure();
         room.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         room.optixGas.setNumMaterialSets(1);
-        room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        room.optixGas.setNumRayTypes(0, maxNumRayTypes);
         room.optixGas.addChild(room.optixGeomInst);
         room.optixGas.prepareForBuild(&asMemReqs);
         room.optixGas.setUserData(gasData);
@@ -660,7 +658,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.optixGas = scene.createGeometryAccelerationStructure();
         areaLight.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         areaLight.optixGas.setNumMaterialSets(1);
-        areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        areaLight.optixGas.setNumRayTypes(0, maxNumRayTypes);
         areaLight.optixGas.addChild(areaLight.optixGeomInst);
         areaLight.optixGas.prepareForBuild(&asMemReqs);
         areaLight.optixGas.setUserData(gasData);
@@ -718,7 +716,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         bunny.optixGas.setNumMaterialSets(NumBunnies);
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
-            bunny.optixGas.setNumRayTypes(matSetIdx, Shared::NumRayTypes);
+            bunny.optixGas.setNumRayTypes(matSetIdx, maxNumRayTypes);
         bunny.optixGas.addChild(bunny.optixGeomInst);
         bunny.optixGas.prepareForBuild(&asMemReqs);
         bunny.optixGas.setUserData(gasData);
