@@ -1041,12 +1041,13 @@ private: \
         //     is required when performing update.
         void update(CUstream stream, const BufferView &scratchBuffer) const;
 
+        bool isReady() const;
+        OptixTraversableHandle getHandle() const;
+
         void getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction) const;
         void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
         Instance getChild(uint32_t index) const;
-        bool isReady() const;
-        OptixTraversableHandle getHandle() const;
     };
 
 

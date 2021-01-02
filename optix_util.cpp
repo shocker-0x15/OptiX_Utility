@@ -131,7 +131,7 @@ namespace optixu {
         m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
 
         _Material::Key key{ _pipeline, rayType };
-        m->throwRuntimeError(m->programs.count(key), "Hit group is not set for the pipeline %s, rayType %u",
+        m->throwRuntimeError(m->programs.count(key), "Hit group is not set for the pipeline %s, rayType %u.",
                              _pipeline->getName().c_str(), rayType);
         return m->programs.at(key)->getPublicType();
     }
@@ -553,6 +553,9 @@ namespace optixu {
     }
 
     OptixGeometryFlags GeometryInstance::getGeometryFlags(uint32_t matIdx) const {
+        size_t numMaterials = m->materials.size();
+        m->throwRuntimeError(matIdx < numMaterials, "Out of material bounds [0, %u).",
+                             static_cast<uint32_t>(numMaterials));
         return m->buildInputFlags[matIdx];
     }
 
@@ -1618,6 +1621,14 @@ namespace optixu {
         optixuAssert(tempHandle == handle, "IAS %s: Update should not change the handle itself, what's going on?", getName());
     }
 
+    bool InstanceAccelerationStructure::isReady() const {
+        return m->isReady();
+    }
+
+    OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {
+        return m->getHandle();
+    }
+
     void InstanceAccelerationStructure::getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction) const {
         if (tradeOff)
             *tradeOff = m->tradeoff;
@@ -1647,14 +1658,6 @@ namespace optixu {
         m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
                              numChildren);
         return m->children[index]->getPublicType();
-    }
-
-    bool InstanceAccelerationStructure::isReady() const {
-        return m->isReady();
-    }
-
-    OptixTraversableHandle InstanceAccelerationStructure::getHandle() const {
-        return m->getHandle();
     }
 
 
