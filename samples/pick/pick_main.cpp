@@ -131,8 +131,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
-    int32_t renderTargetSizeX = 640;
-    int32_t renderTargetSizeY = 640;
+    int32_t renderTargetSizeX = 800;
+    int32_t renderTargetSizeY = 800;
 
     // JP: ウインドウの初期化。
     //     HiDPIディスプレイに対応する。
@@ -428,10 +428,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Setup materials.
 
     uint32_t matID = 0;
+    std::vector<std::string> matInfos;
 
     optixu::Material ceilingMat = optixContext.createMaterial();
     ceilingMat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
     ceilingMat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+    matInfos.push_back("Ceiling");
     Shared::MaterialData ceilingMatData = {};
     ceilingMatData.matID = matID++;
     ceilingMatData.color = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
@@ -440,6 +442,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material farSideWallMat = optixContext.createMaterial();
     farSideWallMat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
     farSideWallMat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+    matInfos.push_back("Far side Wall");
     Shared::MaterialData farSideWallMatData = {};
     farSideWallMatData.matID = matID++;
     farSideWallMatData.color = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
@@ -448,6 +451,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material leftWallMat = optixContext.createMaterial();
     leftWallMat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
     leftWallMat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+    matInfos.push_back("Left Wall");
     Shared::MaterialData leftWallMatData = {};
     leftWallMatData.matID = matID++;
     leftWallMatData.color = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.25), sRGB_degamma_s(0.25));
@@ -456,6 +460,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material rightWallMat = optixContext.createMaterial();
     rightWallMat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
     rightWallMat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+    matInfos.push_back("Right Wall");
     Shared::MaterialData rightWallMatData = {};
     rightWallMatData.matID = matID++;
     rightWallMatData.color = make_float3(sRGB_degamma_s(0.25), sRGB_degamma_s(0.25), sRGB_degamma_s(0.75));
@@ -464,6 +469,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material floorMat = optixContext.createMaterial();
     floorMat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
     floorMat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+    matInfos.push_back("Floor");
     Shared::MaterialData floorMatData = {};
     floorMatData.matID = matID++;
     floorMatData.color = make_float3(sRGB_degamma_s(0.75), sRGB_degamma_s(0.75), sRGB_degamma_s(0.75));
@@ -472,6 +478,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Material areaLightMat = optixContext.createMaterial();
     areaLightMat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
     areaLightMat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+    matInfos.push_back("Area Light");
     Shared::MaterialData areaLightMatData = {};
     areaLightMatData.matID = matID++;
     areaLightMatData.color = make_float3(sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f), sRGB_degamma_s(0.9f));
@@ -480,13 +487,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     std::mt19937 rngColor(2493572);
     std::uniform_real_distribution<float> uColor;
 
-    constexpr uint32_t NumBunnies = 100;
+    constexpr uint32_t NumBunnies = 10;
     std::vector<optixu::Material> bunnyMats(NumBunnies);
     for (int i = 0; i < NumBunnies; ++i) {
         optixu::Material &mat = bunnyMats[i];
         mat = optixContext.createMaterial();
         mat.setHitGroup(Shared::PickRayType_Primary, pickPipeline.hitProgramGroup);
         mat.setHitGroup(Shared::RayType_Primary, renderPipeline.hitProgramGroup);
+        char str[256];
+        snprintf(str, sizeof(str), "Bunny %u", i);
+        matInfos.push_back(str);
         Shared::MaterialData matData = {};
         matData.matID = matID++;
         matData.color = HSVtoRGB(uColor(rngColor),
@@ -508,17 +518,35 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     uint32_t geomID = 0;
     uint32_t gasID = 0;
+    std::vector<std::string> geomInfos;
+    std::vector<std::string> gasInfos;
 
     size_t maxSizeOfScratchBuffer = 0;
     OptixAccelBufferSizes asMemReqs;
 
     cudau::Buffer asBuildScratchMem;
 
-    struct Geometry {
+    struct Mesh {
+        struct Group {
+            cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
+            cudau::TypedBuffer<uint8_t> matIndexBuffer;
+            optixu::GeometryInstance optixGeomInst;
+        };
+
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
-        cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
-        cudau::TypedBuffer<uint8_t> matIndexBuffer;
-        optixu::GeometryInstance optixGeomInst;
+        std::vector<Group> groups;
+
+        void finalize() {
+            for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
+                it->optixGeomInst.destroy();
+                it->matIndexBuffer.finalize();
+                it->triangleBuffer.finalize();
+            }
+            vertexBuffer.finalize();
+        }
+    };
+
+    struct GeometryGroup {
         optixu::GeometryAccelerationStructure optixGas;
         cudau::Buffer gasMem;
         size_t compactedSize;
@@ -526,14 +554,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         void finalize() {
             gasMem.finalize();
             optixGas.destroy();
-            matIndexBuffer.finalize();
-            triangleBuffer.finalize();
-            vertexBuffer.finalize();
-            optixGeomInst.destroy();
         }
     };
 
-    Geometry room;
+    Mesh room;
     {
         Shared::Vertex vertices[] = {
             // floor
@@ -585,51 +609,43 @@ int32_t main(int32_t argc, const char* argv[]) try {
         };
 
         room.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        room.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-        room.matIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
+        Mesh::Group group;
+        group.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+        group.matIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
+
+        geomInfos.push_back("Room");
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = room.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = room.triangleBuffer.getDevicePointer();
+        geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
         geomData.geomID = geomID++;
 
-        room.optixGeomInst = scene.createGeometryInstance();
-        room.optixGeomInst.setVertexBuffer(room.vertexBuffer);
-        room.optixGeomInst.setTriangleBuffer(room.triangleBuffer);
-        room.optixGeomInst.setNumMaterials(5, room.matIndexBuffer, sizeof(uint8_t));
-        room.optixGeomInst.setMaterial(0, 0, floorMat);
-        room.optixGeomInst.setMaterial(0, 1, farSideWallMat);
-        room.optixGeomInst.setMaterial(0, 2, ceilingMat);
-        room.optixGeomInst.setMaterial(0, 3, leftWallMat);
-        room.optixGeomInst.setMaterial(0, 4, rightWallMat);
-        room.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setGeometryFlags(3, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setGeometryFlags(4, OPTIX_GEOMETRY_FLAG_NONE);
-        room.optixGeomInst.setUserData(geomData);
+        group.optixGeomInst = scene.createGeometryInstance();
+        group.optixGeomInst.setVertexBuffer(room.vertexBuffer);
+        group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
+        group.optixGeomInst.setNumMaterials(5, group.matIndexBuffer, sizeof(uint8_t));
+        group.optixGeomInst.setMaterial(0, 0, floorMat);
+        group.optixGeomInst.setMaterial(0, 1, farSideWallMat);
+        group.optixGeomInst.setMaterial(0, 2, ceilingMat);
+        group.optixGeomInst.setMaterial(0, 3, leftWallMat);
+        group.optixGeomInst.setMaterial(0, 4, rightWallMat);
+        group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setGeometryFlags(1, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setGeometryFlags(2, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setGeometryFlags(3, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setGeometryFlags(4, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setUserData(geomData);
 
-        Shared::GASData gasData = {};
-        gasData.gasID = gasID++;
-
-        room.optixGas = scene.createGeometryAccelerationStructure();
-        room.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-        room.optixGas.setNumMaterialSets(1);
-        room.optixGas.setNumRayTypes(0, maxNumRayTypes);
-        room.optixGas.addChild(room.optixGeomInst);
-        room.optixGas.prepareForBuild(&asMemReqs);
-        room.optixGas.setUserData(gasData);
-        room.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+        room.groups.push_back(std::move(group));
     }
 
-    Geometry areaLight;
+    Mesh areaLight;
     {
         Shared::Vertex vertices[] = {
-            { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(0.25f, 0.0f, 0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
+            { make_float3(-0.25f, 0.9f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
+            { make_float3(-0.25f, 0.9f, 0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
+            { make_float3(0.25f, 0.9f, 0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
+            { make_float3(0.25f, 0.9f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
         };
 
         Shared::Triangle triangles[] = {
@@ -637,36 +653,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
         };
 
         areaLight.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        areaLight.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        Mesh::Group group;
+        group.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+
+        geomInfos.push_back("Area Light");
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = areaLight.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = areaLight.triangleBuffer.getDevicePointer();
+        geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
         geomData.geomID = geomID++;
 
-        areaLight.optixGeomInst = scene.createGeometryInstance();
-        areaLight.optixGeomInst.setVertexBuffer(areaLight.vertexBuffer);
-        areaLight.optixGeomInst.setTriangleBuffer(areaLight.triangleBuffer);
-        areaLight.optixGeomInst.setNumMaterials(1, optixu::BufferView());
-        areaLight.optixGeomInst.setMaterial(0, 0, areaLightMat);
-        areaLight.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        areaLight.optixGeomInst.setUserData(geomData);
+        group.optixGeomInst = scene.createGeometryInstance();
+        group.optixGeomInst.setVertexBuffer(areaLight.vertexBuffer);
+        group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
+        group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        group.optixGeomInst.setMaterial(0, 0, areaLightMat);
+        group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setUserData(geomData);
 
-        Shared::GASData gasData = {};
-        gasData.gasID = gasID++;
-
-        areaLight.optixGas = scene.createGeometryAccelerationStructure();
-        areaLight.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-        areaLight.optixGas.setNumMaterialSets(1);
-        areaLight.optixGas.setNumRayTypes(0, maxNumRayTypes);
-        areaLight.optixGas.addChild(areaLight.optixGeomInst);
-        areaLight.optixGas.prepareForBuild(&asMemReqs);
-        areaLight.optixGas.setUserData(gasData);
-        areaLight.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+        areaLight.groups.push_back(std::move(group));
     }
 
-    Geometry bunny;
+    Mesh bunny;
     {
         std::vector<obj::Vertex> objVertices;
         std::vector<obj::MaterialGroup> objMatGroups;
@@ -693,56 +701,80 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
-        bunny.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
+        Mesh::Group group;
+        group.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
+
+        geomInfos.push_back("Bunny");
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = bunny.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = bunny.triangleBuffer.getDevicePointer();
+        geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
         geomData.geomID = geomID++;
 
-        bunny.optixGeomInst = scene.createGeometryInstance();
-        bunny.optixGeomInst.setVertexBuffer(bunny.vertexBuffer);
-        bunny.optixGeomInst.setTriangleBuffer(bunny.triangleBuffer);
-        bunny.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        group.optixGeomInst = scene.createGeometryInstance();
+        group.optixGeomInst.setVertexBuffer(bunny.vertexBuffer);
+        group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
+        group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
-            bunny.optixGeomInst.setMaterial(matSetIdx, 0, bunnyMats[matSetIdx]);
-        bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        bunny.optixGeomInst.setUserData(geomData);
+            group.optixGeomInst.setMaterial(matSetIdx, 0, bunnyMats[matSetIdx]);
+        group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        group.optixGeomInst.setUserData(geomData);
 
+        bunny.groups.push_back(std::move(group));
+    }
+
+
+
+    GeometryGroup roomGroup;
+    {
+        gasInfos.push_back("Room");
         Shared::GASData gasData = {};
         gasData.gasID = gasID++;
 
-        bunny.optixGas = scene.createGeometryAccelerationStructure();
-        bunny.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-        bunny.optixGas.setNumMaterialSets(NumBunnies);
+        roomGroup.optixGas = scene.createGeometryAccelerationStructure();
+        roomGroup.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        roomGroup.optixGas.setNumMaterialSets(1);
+        roomGroup.optixGas.setNumRayTypes(0, maxNumRayTypes);
+        for (auto it = room.groups.cbegin(); it != room.groups.cend(); ++it)
+            roomGroup.optixGas.addChild(it->optixGeomInst);
+        for (auto it = areaLight.groups.cbegin(); it != areaLight.groups.cend(); ++it)
+            roomGroup.optixGas.addChild(it->optixGeomInst);
+        roomGroup.optixGas.prepareForBuild(&asMemReqs);
+        roomGroup.optixGas.setUserData(gasData);
+        roomGroup.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    }
+
+    GeometryGroup bunnyGroup;
+    {
+        gasInfos.push_back("Bunny");
+        Shared::GASData gasData = {};
+        gasData.gasID = gasID++;
+
+        bunnyGroup.optixGas = scene.createGeometryAccelerationStructure();
+        bunnyGroup.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        bunnyGroup.optixGas.setNumMaterialSets(NumBunnies);
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
-            bunny.optixGas.setNumRayTypes(matSetIdx, maxNumRayTypes);
-        bunny.optixGas.addChild(bunny.optixGeomInst);
-        bunny.optixGas.prepareForBuild(&asMemReqs);
-        bunny.optixGas.setUserData(gasData);
-        bunny.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+            bunnyGroup.optixGas.setNumRayTypes(matSetIdx, maxNumRayTypes);
+        for (auto it = bunny.groups.cbegin(); it != bunny.groups.cend(); ++it)
+            bunnyGroup.optixGas.addChild(it->optixGeomInst);
+        bunnyGroup.optixGas.prepareForBuild(&asMemReqs);
+        bunnyGroup.optixGas.setUserData(gasData);
+        bunnyGroup.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
 
 
+    std::vector<std::string> instInfos;
     uint32_t instID = 0;
     
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
+    instInfos.push_back("Room");
     optixu::Instance roomInst = scene.createInstance();
-    roomInst.setChild(room.optixGas);
+    roomInst.setChild(roomGroup.optixGas);
     roomInst.setID(instID++);
-
-    float areaLightInstXfm[] = {
-        1, 0, 0, 0,
-        0, 1, 0, 0.9f,
-        0, 0, 1, 0
-    };
-    optixu::Instance areaLightInst = scene.createInstance();
-    areaLightInst.setChild(areaLight.optixGas);
-    areaLightInst.setTransform(areaLightInstXfm);
-    areaLightInst.setID(instID++);
 
     std::vector<optixu::Instance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
@@ -753,15 +785,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float x = r * std::cos(GoldenAngle * i);
         float z = r * std::sin(GoldenAngle * i);
 
+        char str[256];
+        snprintf(str, sizeof(str), "Bunny %u", i);
+        instInfos.push_back(str);
         float tt = std::pow(t, 0.25f);
-        float scale = (1 - tt) * 0.003f + tt * 0.0006f;
+        float scale = (1 - tt) * 0.006f + tt * 0.003f;
         float bunnyInstXfm[] = {
             scale, 0, 0, x,
             0, scale, 0, -1 + (1 - tt),
             0, 0, scale, z
         };
         optixu::Instance bunnyInst = scene.createInstance();
-        bunnyInst.setChild(bunny.optixGas, i);
+        bunnyInst.setChild(bunnyGroup.optixGas, i);
         bunnyInst.setTransform(bunnyInstXfm);
         bunnyInst.setID(instID++);
         bunnyInsts.push_back(bunnyInst);
@@ -776,7 +811,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     ias.addChild(roomInst);
-    ias.addChild(areaLightInst);
     for (int i = 0; i < bunnyInsts.size(); ++i)
         ias.addChild(bunnyInsts[i]);
     ias.prepareForBuild(&asMemReqs);
@@ -792,11 +826,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: Geometry Acceleration Structureをビルドする。
+    // JP: Mesh Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    room.optixGas.rebuild(cuStream, room.gasMem, asBuildScratchMem);
-    areaLight.optixGas.rebuild(cuStream, areaLight.gasMem, asBuildScratchMem);
-    bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
+    roomGroup.optixGas.rebuild(cuStream, roomGroup.gasMem, asBuildScratchMem);
+    bunnyGroup.optixGas.rebuild(cuStream, bunnyGroup.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -808,9 +841,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         size_t size;
     };
     CompactedASInfo gasList[] = {
-        { room.optixGas, 0, 0 },
-        { areaLight.optixGas, 0, 0 },
-        { bunny.optixGas, 0, 0 }
+        { roomGroup.optixGas, 0, 0 },
+        { bunnyGroup.optixGas, 0, 0 }
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -833,9 +865,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(gasList); ++i)
         gasList[i].gas.removeUncompacted();
 
-    bunny.gasMem.finalize();
-    areaLight.gasMem.finalize();
-    room.gasMem.finalize();
+    bunnyGroup.gasMem.finalize();
+    roomGroup.gasMem.finalize();
 
 
 
@@ -910,6 +941,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     renderPlp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
     renderPlp.perspCamera = perspCamera;
     renderPlp.equirecCamera = equirecCamera;
+    renderPlp.colorInterp = 0.1f;
 
     cudau::TypedBuffer<Shared::PickInfo> pickInfos[2];
     for (int i = 0; i < lengthof(pickInfos); ++i) {
@@ -1071,7 +1103,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         {
-            ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::Begin("Camera & Rendering", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&g_cameraPosition));
             static float rollPitchYaw[3];
@@ -1094,6 +1126,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 renderPipeline.pipeline.setRayGenerationProgram(renderPipeline.rayGenPrograms.at("equirectangular"));
             }
 
+            ImGui::Separator();
+
+            ImGui::SliderFloat("Material <-> Normal", &renderPlp.colorInterp, 0.0f, 1.0f);
+
             ImGui::End();
         }
 
@@ -1102,20 +1138,45 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             ImGui::Text("Mouse: %d, %d", static_cast<int32_t>(g_mouseX), static_cast<int32_t>(g_mouseY));
 
+            const auto helpMarker = [](const char* desc) {
+                ImGui::TextDisabled("(?)");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                    ImGui::TextUnformatted(desc);
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndTooltip();
+                }
+            };
+
             Shared::PickInfo pickInfo = curPickInfo.map()[0];
             curPickInfo.unmap();
-            if (pickInfo.hit) {
-                ImGui::Text("Instance Index: %u", pickInfo.instanceIndex);
-                ImGui::Text("Material Index: %u", pickInfo.matIndex);
-                ImGui::Text("Primitive Index: %u", pickInfo.primIndex);
-                ImGui::Text("Instance ID: %u", pickInfo.instanceID);
-                ImGui::Text("GAS ID: %u", pickInfo.gasID);
-                ImGui::Text("Geometry ID: %u", pickInfo.geomID);
-                ImGui::Text("Material ID: %u", pickInfo.matID);
-            }
-            else {
-                ImGui::Text("No Hit");
-            }
+            char str[256];
+            ImGui::Separator();
+            ImGui::Text("System Values:");
+            helpMarker("Instance index in an IAS"); ImGui::SameLine();
+            snprintf(str, sizeof(str), " Instance Index: %3u", pickInfo.instanceIndex);
+            ImGui::Text("%s", pickInfo.hit ? str : " Instance Index: N/A");
+            helpMarker("Material index in a GAS"); ImGui::SameLine();
+            snprintf(str, sizeof(str), " Material Index: %3u", pickInfo.matIndex);
+            ImGui::Text("%s", pickInfo.hit ? str : " Material Index: N/A");
+            helpMarker("Primitive index in a geometry"); ImGui::SameLine();
+            snprintf(str, sizeof(str), "Primitive Index: %3u", pickInfo.primIndex);
+            ImGui::Text("%s", pickInfo.hit ? str : "Primitive Index: N/A");
+            ImGui::Separator();
+            ImGui::Text("User Values:");
+            helpMarker("via Instance::setID()"); ImGui::SameLine();
+            snprintf(str, sizeof(str), "Instance ID: %3u, Name: %s", pickInfo.instanceID, instInfos[pickInfo.instanceID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str : "Instance ID: N/A, Name: N/A");
+            helpMarker("via GeometryAccelerationStructure::setUserData()"); ImGui::SameLine();
+            snprintf(str, sizeof(str), "     GAS ID: %3u, Name: %s", pickInfo.gasID, gasInfos[pickInfo.gasID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str : "     GAS ID: N/A, Name: N/A");
+            helpMarker("via GeometryInstance::setUserData()"); ImGui::SameLine();
+            snprintf(str, sizeof(str), "Geometry ID: %3u, Name: %s", pickInfo.geomID, geomInfos[pickInfo.geomID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str : "Geometry ID: N/A, Name: N/A");
+            helpMarker("via Material::setUserData()"); ImGui::SameLine();
+            snprintf(str, sizeof(str), "Material ID: %3u, Name: %s", pickInfo.matID, matInfos[pickInfo.matID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str : "Material ID: N/A, Name: N/A");
 
             ImGui::End();
         }
@@ -1223,8 +1284,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     for (int i = bunnyInsts.size() - 1; i >= 0; --i)
         bunnyInsts[i].destroy();
-    areaLightInst.destroy();
     roomInst.destroy();
+
+    bunnyGroup.finalize();
+    roomGroup.finalize();
 
     bunny.finalize();
     areaLight.finalize();

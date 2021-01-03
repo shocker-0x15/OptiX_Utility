@@ -103,7 +103,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
 
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
-    float3 color = 0.5f * mat.color + 0.5f * (0.5f * sn + make_float3(0.5f));
+    float3 snColor = 0.5f * sn + make_float3(0.5f);
+    float3 color = (1 - plp.colorInterp) * mat.color + plp.colorInterp * snColor;
     const PickInfo &pickInfo = *plp.pickInfo;
     if (pickInfo.hit &&
         optixGetInstanceIndex() == pickInfo.instanceIndex &&

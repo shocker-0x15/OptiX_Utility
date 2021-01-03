@@ -91,6 +91,7 @@ namespace Shared {
         EquirectangularCamera equirecCamera;
         float3 position;
         Matrix3x3 orientation;
+        float colorInterp;
         const PickInfo* pickInfo;
         optixu::NativeBlockBuffer2D<float4> resultBuffer;
     };
