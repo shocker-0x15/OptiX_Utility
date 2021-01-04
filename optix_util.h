@@ -31,6 +31,8 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 (直近5件) / Update History (recent 5 changes):
+- JP: GASの子ごとのユーザーデータを設定するAPIを追加。
+  EN: Added APIs to set per-GAS child user data.
 - JP: 各種パラメターを取得するためのAPIを追加。
   EN: Added APIs to get parameters.
 - JP: マテリアルのユーザーデータのサイズやアラインメントを、シェーダーバインディングテーブルレイアウト生成後に
@@ -44,7 +46,6 @@ EN:
       InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
   EN: Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
       Use InstanceAccelerationStructure::getNumChildren() instead.
--
 -
 
 ----------------------------------------------------------------
@@ -69,8 +70,6 @@ TODO:
   しかしビルドやアップデートを明示的にしているため結局ASであるということをユーザーが意識する必要がある。
 - ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
   => オフセット値を読み取った後にデータを読み取るというindirectionになるため、そもそもあまり好ましくない気も。
-- GAS中のGeometryInstanceのインデックスを取得できるようにする。
-  各GeometryInstanceが1つのSBTレコードしか使っていない場合はoptixGetSbtGASIndex()で代用できる。
 - Material::setHitGroup()はレイタイプの数値が同じでもヒットグループのパイプラインが違っていれば別個に登録できるが、
   これがAPI上からは読み取りづらい。冗長だが敢えてパイプラインの識別情報も引数として受け取るべき？
 - Scene::generateShaderBindingTableLayout()はPipelineに依存すべき？
@@ -898,6 +897,11 @@ private: \
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         //     In the case where user data size and/or alignment changes again after generating the layout of
         //     a shader binding table, the layout is invalidated.
+        void setChildUserData(uint32_t index, const void* data, uint32_t size, uint32_t alignment) const;
+        template <typename T>
+        void setChildUserData(uint32_t index, const T &data) const {
+            setChildUserData(index, &data, sizeof(T), alignof(T));
+        }
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
         void setUserData(const T &data) const {
@@ -913,6 +917,11 @@ private: \
         GeometryInstance getChild(uint32_t index, CUdeviceptr* preTransform = nullptr) const;
         uint32_t getNumMaterialSets() const;
         uint32_t getNumRayTypes(uint32_t matSetIdx) const;
+        void getChildUserData(uint32_t index, void* data, uint32_t* size, uint32_t* alignment) const;
+        template <typename T>
+        void getChildUserData(uint32_t index, T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+            getChildUserData(index, reinterpret_cast<void*>(data), size, alignment);
+        }
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
         template <typename T>
         void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {

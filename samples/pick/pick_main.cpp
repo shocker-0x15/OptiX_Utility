@@ -739,6 +739,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             roomGroup.optixGas.addChild(it->optixGeomInst);
         for (auto it = areaLight.groups.cbegin(); it != areaLight.groups.cend(); ++it)
             roomGroup.optixGas.addChild(it->optixGeomInst);
+        Shared::GASChildData childData = {};
+        childData.gasChildID = 0;
+        for (int i = 0; i < roomGroup.optixGas.getNumChildren(); ++i) {
+            roomGroup.optixGas.setChildUserData(childData.gasChildID, childData);
+            ++childData.gasChildID;
+        }
         roomGroup.optixGas.prepareForBuild(&asMemReqs);
         roomGroup.optixGas.setUserData(gasData);
         roomGroup.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -758,6 +764,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             bunnyGroup.optixGas.setNumRayTypes(matSetIdx, maxNumRayTypes);
         for (auto it = bunny.groups.cbegin(); it != bunny.groups.cend(); ++it)
             bunnyGroup.optixGas.addChild(it->optixGeomInst);
+        Shared::GASChildData childData = {};
+        childData.gasChildID = 0;
+        for (int i = 0; i < bunnyGroup.optixGas.getNumChildren(); ++i) {
+            bunnyGroup.optixGas.setChildUserData(childData.gasChildID, childData);
+            ++childData.gasChildID;
+        }
         bunnyGroup.optixGas.prepareForBuild(&asMemReqs);
         bunnyGroup.optixGas.setUserData(gasData);
         bunnyGroup.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -1164,19 +1176,27 @@ int32_t main(int32_t argc, const char* argv[]) try {
             snprintf(str, sizeof(str), "Primitive Index: %3u", pickInfo.primIndex);
             ImGui::Text("%s", pickInfo.hit ? str : "Primitive Index: N/A");
             ImGui::Separator();
-            ImGui::Text("User Values:");
+            ImGui::Text("User Data:");
             helpMarker("via Instance::setID()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "Instance ID: %3u, Name: %s", pickInfo.instanceID, instInfos[pickInfo.instanceID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str : "Instance ID: N/A, Name: N/A");
+            snprintf(str, sizeof(str), " Instance: %3u, Name: %s", pickInfo.instanceID, instInfos[pickInfo.instanceID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str :
+                        " Instance: N/A, Name: N/A");
             helpMarker("via GeometryAccelerationStructure::setUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "     GAS ID: %3u, Name: %s", pickInfo.gasID, gasInfos[pickInfo.gasID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str : "     GAS ID: N/A, Name: N/A");
+            snprintf(str, sizeof(str), "      GAS: %3u, Name: %s", pickInfo.gasID, gasInfos[pickInfo.gasID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str :
+                        "      GAS: N/A, Name: N/A");
+            helpMarker("via GeometryAccelerationStructure::setChildUserData()"); ImGui::SameLine();
+            snprintf(str, sizeof(str), "GAS Child: %3u", pickInfo.gasChildID);
+            ImGui::Text("%s", pickInfo.hit ? str :
+                        "GAS Child: N/A");
             helpMarker("via GeometryInstance::setUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "Geometry ID: %3u, Name: %s", pickInfo.geomID, geomInfos[pickInfo.geomID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str : "Geometry ID: N/A, Name: N/A");
+            snprintf(str, sizeof(str), " Geometry: %3u, Name: %s", pickInfo.geomID, geomInfos[pickInfo.geomID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str :
+                        " Geometry: N/A, Name: N/A");
             helpMarker("via Material::setUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "Material ID: %3u, Name: %s", pickInfo.matID, matInfos[pickInfo.matID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str : "Material ID: N/A, Name: N/A");
+            snprintf(str, sizeof(str), " Material: %3u, Name: %s", pickInfo.matID, matInfos[pickInfo.matID].c_str());
+            ImGui::Text("%s", pickInfo.hit ? str :
+                        " Material: N/A, Name: N/A");
 
             ImGui::End();
         }

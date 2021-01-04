@@ -416,6 +416,7 @@ namespace optixu {
     }
 
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
+                                                    const void* gasChildUserData, const SizeAlign gasChildUserDataSizeAlign,
                                                     const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                                     uint32_t numRayTypes, uint8_t* records) const {
         uint32_t numMaterials = static_cast<uint32_t>(materials.size());
@@ -431,6 +432,8 @@ namespace optixu {
                 uint32_t offset;
                 curSizeAlign.add(userDataSizeAlign, &offset);
                 std::memcpy(records + offset, userData.data(), userDataSizeAlign.size);
+                curSizeAlign.add(gasChildUserDataSizeAlign, &offset);
+                std::memcpy(records + offset, gasChildUserData, gasChildUserDataSizeAlign.size);
                 curSizeAlign.add(gasUserDataSizeAlign, &offset);
                 std::memcpy(records + offset, gasUserData, gasUserDataSizeAlign.size);
                 records += scene->getSingleRecordSize();
@@ -529,7 +532,7 @@ namespace optixu {
 
     void GeometryInstance::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
         m->throwRuntimeError(size <= s_maxGeometryInstanceUserDataSize,
-                             "Maximum user data size for Material is %u bytes.", s_maxGeometryInstanceUserDataSize);
+                             "Maximum user data size for GeometryInstance is %u bytes.", s_maxGeometryInstanceUserDataSize);
         m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
                              "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
         if (m->userDataSizeAlign.size != size ||
@@ -588,6 +591,7 @@ namespace optixu {
             SizeAlign geomInstRecordSizeAlign;
             uint32_t geomInstNumSBTRecords;
             child.geomInst->calcSBTRequirements(matSetIdx, &geomInstRecordSizeAlign, &geomInstNumSBTRecords);
+            geomInstRecordSizeAlign += child.userDataSizeAlign;
             *maxRecordSizeAlign = max(*maxRecordSizeAlign, geomInstRecordSizeAlign);
             *numSBTRecords += geomInstNumSBTRecords;
         }
@@ -605,6 +609,7 @@ namespace optixu {
         for (uint32_t sbtGasIdx = 0; sbtGasIdx < children.size(); ++sbtGasIdx) {
             const Child &child = children[sbtGasIdx];
             uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx,
+                                                                 child.userData.data(), child.userDataSizeAlign,
                                                                  userData.data(), userDataSizeAlign,
                                                                  numRayTypes, records);
             records += numRecords * scene->getSingleRecordSize();
@@ -670,7 +675,7 @@ namespace optixu {
         m->throwRuntimeError(idx == m->children.cend(), "Geometry instance %s with transform %p has been already added.",
                              _geomInst->getName().c_str(), preTransform);
 
-        m->children.push_back(child);
+        m->children.push_back(std::move(child));
 
         m->markDirty();
         m->scene->markSBTLayoutDirty();
@@ -860,9 +865,26 @@ namespace optixu {
         optixuAssert(tempHandle == handle, "GAS %s: Update should not change the handle itself, what's going on?", getName());
     }
 
+    void GeometryAccelerationStructure::setChildUserData(uint32_t index, const void* data, uint32_t size, uint32_t alignment) const {
+        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
+                             numChildren);
+        m->throwRuntimeError(size <= s_maxGASChildUserDataSize,
+                             "Maximum user data size for GAS child is %u bytes.", s_maxGASChildUserDataSize);
+        m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+                             "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
+        Priv::Child &child = m->children[index];
+        if (child.userDataSizeAlign.size != size ||
+            child.userDataSizeAlign.alignment != alignment)
+            m->scene->markSBTLayoutDirty();
+        child.userDataSizeAlign = SizeAlign(size, alignment);
+        child.userData.resize(size);
+        std::memcpy(child.userData.data(), data, size);
+    }
+
     void GeometryAccelerationStructure::setUserData(const void* data, uint32_t size, uint32_t alignment) const {
         m->throwRuntimeError(size <= s_maxGASUserDataSize,
-                             "Maximum user data size for Material is %u bytes.", s_maxGASUserDataSize);
+                             "Maximum user data size for GAS is %u bytes.", s_maxGASUserDataSize);
         m->throwRuntimeError(alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
                              "Valid alignment range is [1, %u].", OPTIX_SBT_RECORD_ALIGNMENT);
         if (m->userDataSizeAlign.size != size ||
@@ -926,6 +948,19 @@ namespace optixu {
                              "Material set index %u is out of bounds [0, %u).",
                              matSetIdx, numMatSets);
         return m->numRayTypesPerMaterialSet[matSetIdx];
+    }
+
+    void GeometryAccelerationStructure::getChildUserData(uint32_t index, void* data, uint32_t* size, uint32_t* alignment) const {
+        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
+                             numChildren);
+        const Priv::Child &child = m->children[index];
+        if (data)
+            std::memcpy(data, child.userData.data(), child.userDataSizeAlign.size);
+        if (size)
+            *size = child.userDataSizeAlign.size;
+        if (alignment)
+            *alignment = child.userDataSizeAlign.alignment;
     }
 
     void GeometryAccelerationStructure::getUserData(void* data, uint32_t* size, uint32_t* alignment) const {

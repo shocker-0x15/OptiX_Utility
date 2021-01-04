@@ -97,6 +97,7 @@ namespace optixu {
 
     static constexpr size_t s_maxMaterialUserDataSize = 512;
     static constexpr size_t s_maxGeometryInstanceUserDataSize = 512;
+    static constexpr size_t s_maxGASChildUserDataSize = 512;
     static constexpr size_t s_maxGASUserDataSize = 512;
 
 
@@ -534,6 +535,7 @@ namespace optixu {
 
         void calcSBTRequirements(uint32_t gasMatSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
+                                const void* gasChildUserData, const SizeAlign gasChildUserDataSizeAlign,
                                 const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
                                 uint32_t numRayTypes, uint8_t* records) const;
     };
@@ -544,6 +546,8 @@ namespace optixu {
         struct Child {
             _GeometryInstance* geomInst;
             CUdeviceptr preTransform;
+            SizeAlign userDataSizeAlign;
+            std::vector<uint8_t> userData;
 
             bool operator==(const Child &rChild) const {
                 return geomInst == rChild.geomInst && preTransform == rChild.preTransform;

@@ -54,6 +54,10 @@ namespace Shared {
         uint32_t geomID;
     };
 
+    struct GASChildData {
+        uint32_t gasChildID;
+    };
+
     struct GASData {
         uint32_t gasID;
     };
@@ -65,9 +69,10 @@ namespace Shared {
         uint32_t matIndex;
         uint32_t primIndex;
         uint32_t instanceID;
-        uint32_t gasID;
-        uint32_t geomID;
-        uint32_t matID;
+        unsigned int gasID : 16;
+        unsigned int gasChildID : 16;
+        unsigned int geomID : 16;
+        unsigned int matID : 16;
         unsigned int hit : 1;
     };
 

@@ -23,18 +23,20 @@ struct HitPointParameter {
 };
 
 // JP: optixGetSbtDataPointer()で取得できるポインターの位置に
-//     Material, GeometryInstance, GeometryInstanceAccelerationStructureのsetUserData()
+//     Material, GeometryInstanceのsetUserData(),
+//     GeometryInstanceAccelerationStructureのsetChildUserData(), setUserData()
 //     で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
 //     各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGeometryInstanceに属していても
 //     マテリアルが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
-//     このサンプルではGASにはユーザーデータは設定していない。
-// EN: Data set by each of Material, GeometryInstance, GeometryInstanceAccelerationStructure's setUserData()
+//     このサンプルではGASの子達、GASにはユーザーデータは設定していない。
+// EN: Data set by each of Material, GeometryInstance's setUserData(),
+//     GeometryInstanceAccelerationStructure's setChildUserData() and setUserData()
 //     line up in the order (Each relative offset follows the specified alignment)
 //     at the position pointed by optixGetSbtDataPointer().
 //     Note that the start position of each data changes depending on the sizes of forward data.
 //     Therefore for example, the start positions of GeometryInstance's data are possibly different
 //     if materials are different even if those belong to the same GeometryInstance.
-//     This sample did not set user data to GAS.
+//     This sample did not set user data to GAS's child and GAS.
 struct HitGroupSBTRecordData {
     MaterialData matData;
     GeometryData geomData;

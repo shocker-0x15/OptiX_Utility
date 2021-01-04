@@ -25,6 +25,7 @@ struct HitPointParameter {
 struct HitGroupSBTRecordData {
     MaterialData matData;
     GeometryData geomData;
+    GASChildData gasChildData;
     GASData gasData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
@@ -90,7 +91,6 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const MaterialData &mat = sbtr.matData;
     const GeometryData &geom = sbtr.geomData;
-    const GASData &gas = sbtr.gasData;
     auto hp = HitPointParameter::get();
 
     const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
