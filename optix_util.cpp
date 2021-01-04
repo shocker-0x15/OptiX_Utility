@@ -681,19 +681,19 @@ namespace optixu {
         m->scene->markSBTLayoutDirty();
     }
 
-    void GeometryAccelerationStructure::removeChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
-        auto _geomInst = extract(geomInst);
-        m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
-        m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
-                             _geomInst->getName().c_str());
-        Priv::Child child;
-        child.geomInst = _geomInst;
-        child.preTransform = preTransform;
-        auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
-        m->throwRuntimeError(idx != m->children.cend(), "Geometry instance %s with transform %p has not been added.",
-                             _geomInst->getName().c_str(), preTransform);
+    void GeometryAccelerationStructure::removeChildAt(uint32_t index) const {
+        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
+                             numChildren);
 
-        m->children.erase(idx);
+        m->children.erase(m->children.cbegin() + index);
+
+        m->markDirty();
+        m->scene->markSBTLayoutDirty();
+    }
+
+    void GeometryAccelerationStructure::clearChildren() const {
+        m->children.clear();
 
         m->markDirty();
         m->scene->markSBTLayoutDirty();
@@ -927,6 +927,21 @@ namespace optixu {
 
     uint32_t GeometryAccelerationStructure::getNumChildren() const {
         return static_cast<uint32_t>(m->children.size());
+    }
+
+    uint32_t GeometryAccelerationStructure::findChildIndex(GeometryInstance geomInst, CUdeviceptr preTransform) const {
+        auto _geomInst = extract(geomInst);
+        m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
+        m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
+                             _geomInst->getName().c_str());
+        Priv::Child child;
+        child.geomInst = _geomInst;
+        child.preTransform = preTransform;
+        auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
+        m->throwRuntimeError(idx != m->children.cend(), "Geometry instance %s with transform %p has not been added.",
+                             _geomInst->getName().c_str(), preTransform);
+
+        return static_cast<uint32_t>(std::distance(m->children.cbegin(), idx));
     }
 
     GeometryInstance GeometryAccelerationStructure::getChild(uint32_t index, CUdeviceptr* preTransform) const {
@@ -1489,16 +1504,18 @@ namespace optixu {
         m->markDirty(false);
     }
 
-    void InstanceAccelerationStructure::removeChild(Instance instance) const {
-        _Instance* _inst = extract(instance);
-        m->throwRuntimeError(_inst, "Invalid instance %p.", _inst);
-        m->throwRuntimeError(_inst->getScene() == m->scene, "Scene mismatch for the given instance %s.",
-                             _inst->getName().c_str());
-        auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
-        m->throwRuntimeError(idx != m->children.cend(), "Instance %s has not been added.",
-                             _inst->getName().c_str());
+    void InstanceAccelerationStructure::removeChildAt(uint32_t index) const {
+        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        m->throwRuntimeError(index < numChildren, "Index is out of bounds [0, %u).]",
+                             numChildren);
 
-        m->children.erase(idx);
+        m->children.erase(m->children.cbegin() + index);
+
+        m->markDirty(false);
+    }
+
+    void InstanceAccelerationStructure::clearChildren() const {
+        m->children.clear();
 
         m->markDirty(false);
     }
@@ -1686,6 +1703,18 @@ namespace optixu {
 
     uint32_t InstanceAccelerationStructure::getNumChildren() const {
         return static_cast<uint32_t>(m->children.size());
+    }
+
+    uint32_t InstanceAccelerationStructure::findChildIndex(Instance instance) const {
+        _Instance* _inst = extract(instance);
+        m->throwRuntimeError(_inst, "Invalid instance %p.", _inst);
+        m->throwRuntimeError(_inst->getScene() == m->scene, "Scene mismatch for the given instance %s.",
+                             _inst->getName().c_str());
+        auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
+        m->throwRuntimeError(idx != m->children.cend(), "Instance %s has not been added.",
+                             _inst->getName().c_str());
+
+        return static_cast<uint32_t>(std::distance(m->children.cbegin(), idx));
     }
 
     Instance InstanceAccelerationStructure::getChild(uint32_t index) const {

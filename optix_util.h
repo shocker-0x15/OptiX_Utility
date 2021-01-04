@@ -31,6 +31,13 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 (直近5件) / Update History (recent 5 changes):
+- !!BREAKING
+  JP: GAS/IASのremoveChild()を削除。代わりにremoveChildAt()を定義。
+      GAS/IAS::findChildIndex()を使用すれば目的の子のインデックスを特定できる。
+      また、GAS/IAS::clearChildren()を定義。
+  EN: Removed GAS/IAS's removeChild(), instead defined removeChildAt().
+      Use GAS/IAS::findChildIndex() to identify the index of the target child.
+      Also, defined GAS/IAS::clearChildren().
 - JP: GASの子ごとのユーザーデータを設定するAPIを追加。
   EN: Added APIs to set per-GAS child user data.
 - JP: 各種パラメターを取得するためのAPIを追加。
@@ -46,7 +53,6 @@ EN:
       InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
   EN: Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
       Use InstanceAccelerationStructure::getNumChildren() instead.
--
 
 ----------------------------------------------------------------
 TODO:
@@ -861,7 +867,8 @@ private: \
         void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
-        void removeChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
+        void removeChildAt(uint32_t index) const;
+        void clearChildren() const;
         void markDirty() const;
 
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが無効化される。
@@ -914,6 +921,7 @@ private: \
         void getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction, bool* allowRandomVertexAccess) const;
         void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
+        uint32_t findChildIndex(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         GeometryInstance getChild(uint32_t index, CUdeviceptr* preTransform = nullptr) const;
         uint32_t getNumMaterialSets() const;
         uint32_t getNumRayTypes(uint32_t matSetIdx) const;
@@ -1023,7 +1031,8 @@ private: \
         void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
-        void removeChild(Instance instance) const;
+        void removeChildAt(uint32_t index) const;
+        void clearChildren() const;
         void markDirty() const;
 
         // JP: リビルド・コンパクトを行った場合はこのIASが(間接的に)所属するTraversable (例: IAS)
@@ -1053,6 +1062,7 @@ private: \
         void getConfiguration(ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction) const;
         void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
+        uint32_t findChildIndex(Instance instance) const;
         Instance getChild(uint32_t index) const;
     };
 

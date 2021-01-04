@@ -1650,9 +1650,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         }
                         else if (geomInstsSelected) {
                             const GeometryGroupRef &geomGroup = geomGroupList.getActiveGeometryGroup();
-                            for (int i = geomGroup->geomInsts.size() - 1; i >= 0; --i)
-                                geomGroup->optixGAS.removeChild(geomGroup->geomInsts[i]->optixGeomInst,
-                                                                geomGroup->preTransformBuffer.getCUdeviceptrAt(i));
+                            geomGroup->optixGAS.clearChildren();
                             geomGroupList.callForActiveGeomGroup(
                                 [&optixEnv](const GeometryGroupRef &geomGroup, const std::set<uint32_t> &selectedIndices) {
                                     // JP: serialIDに基づいているためまず安全。
@@ -1963,8 +1961,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     // JP: serialIDに基づいているためまず安全。
                                     for (auto it = selectedIndices.crbegin(); it != selectedIndices.crend(); ++it) {
                                         uint32_t instIdx = *it;
-                                        const InstanceRef &inst = group->insts[instIdx];
-                                        group->optixIAS.removeChild(inst->optixInst);
+                                        group->optixIAS.removeChildAt(instIdx);
                                         group->insts.erase(group->insts.cbegin() + instIdx);
                                         group->propagateMarkDirty();
                                     }
