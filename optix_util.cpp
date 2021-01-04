@@ -1569,8 +1569,9 @@ namespace optixu {
         uint32_t childIdx = 0;
         for (const _Instance* child : m->children)
             child->fillInstance(&m->instances[childIdx++]);
+        auto temp = m->instances.data();
         CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
-                                        instanceBuffer.sizeInBytes(),
+                                        m->instances.size() * sizeof(OptixInstance),
                                         stream));
         m->buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
 
@@ -1656,7 +1657,7 @@ namespace optixu {
         for (const _Instance* child : m->children)
             child->updateInstance(&m->instances[childIdx++]);
         CUDADRV_CHECK(cuMemcpyHtoDAsync(m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
-                                        m->instanceBuffer.sizeInBytes(),
+                                        m->instances.size() * sizeof(OptixInstance),
                                         stream));
 
         const BufferView &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
