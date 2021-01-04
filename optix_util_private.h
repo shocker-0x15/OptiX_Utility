@@ -38,6 +38,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <algorithm>
+#include <variant>
 
 #include <intrin.h>
 
@@ -448,19 +449,21 @@ namespace optixu {
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
 
-        union {
-            struct {
-                CUdeviceptr* vertexBufferArray;
-                BufferView* vertexBuffers;
-                BufferView triangleBuffer;
-                OptixVertexFormat vertexFormat;
-                OptixIndicesFormat indexFormat;
-            };
-            struct {
-                CUdeviceptr* primitiveAabbBufferArray;
-                BufferView* primitiveAabbBuffers;
-            };
+        struct TriangleGeometry {
+            CUdeviceptr* vertexBufferArray;
+            BufferView* vertexBuffers;
+            BufferView triangleBuffer;
+            OptixVertexFormat vertexFormat;
+            OptixIndicesFormat indexFormat;
         };
+        struct CustomPrimitiveGeometry {
+            CUdeviceptr* primitiveAabbBufferArray;
+            BufferView* primitiveAabbBuffers;
+        };
+        std::variant<
+            TriangleGeometry,
+            CustomPrimitiveGeometry
+        > geometry;
         uint32_t numMotionSteps;
         uint32_t primitiveIndexOffset;
         uint32_t materialIndexOffsetSize;
@@ -469,44 +472,51 @@ namespace optixu {
 
         std::vector<std::vector<_Material*>> materials;
 
-        struct {
-            const unsigned int forCustomPrimitives : 1;
-        };
-
     public:
         OPTIXU_OPAQUE_BRIDGE(GeometryInstance);
 
-        Priv(_Scene* _scene, bool _forCustomPrimitives) :
+        Priv(_Scene* _scene, GeometryType geomType) :
             scene(_scene),
             userData(sizeof(uint32_t)),
             primitiveIndexOffset(0),
-            materialIndexOffsetSize(0),
-            forCustomPrimitives(_forCustomPrimitives) {
+            materialIndexOffsetSize(0) {
             numMotionSteps = 1;
-            if (forCustomPrimitives) {
-                primitiveAabbBufferArray = new CUdeviceptr[numMotionSteps];
-                primitiveAabbBufferArray[0] = 0;
-                primitiveAabbBuffers = new BufferView[numMotionSteps];
-                primitiveAabbBuffers[0] = BufferView();
+            if (geomType == GeometryType::Triangles) {
+                geometry = TriangleGeometry{};
+                auto &geom = std::get<TriangleGeometry>(geometry);
+                geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
+                geom.vertexBufferArray[0] = 0;
+                geom.vertexBuffers = new BufferView[numMotionSteps];
+                geom.vertexBuffers[0] = BufferView();
+                geom.triangleBuffer = BufferView();
+                geom.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+                geom.indexFormat = OPTIX_INDICES_FORMAT_NONE;
+            }
+            else if (geomType == GeometryType::CustomPrimitives) {
+                geometry = CustomPrimitiveGeometry{};
+                auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
+                geom.primitiveAabbBufferArray = new CUdeviceptr[numMotionSteps];
+                geom.primitiveAabbBufferArray[0] = 0;
+                geom.primitiveAabbBuffers = new BufferView[numMotionSteps];
+                geom.primitiveAabbBuffers[0] = BufferView();
             }
             else {
-                vertexBufferArray = new CUdeviceptr[numMotionSteps];
-                vertexBufferArray[0] = 0;
-                vertexBuffers = new BufferView[numMotionSteps];
-                vertexBuffers[0] = BufferView();
-                triangleBuffer = BufferView();
-                vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-                indexFormat = OPTIX_INDICES_FORMAT_NONE;
+                optixuAssert_NotImplemented();
             }
         }
         ~Priv() {
-            if (forCustomPrimitives) {
-                delete[] primitiveAabbBuffers;
-                delete[] primitiveAabbBufferArray;
+            if (std::holds_alternative<TriangleGeometry>(geometry)) {
+                auto &geom = std::get<TriangleGeometry>(geometry);
+                delete[] geom.vertexBuffers;
+                delete[] geom.vertexBufferArray;
+            }
+            else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
+                auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
+                delete[] geom.primitiveAabbBuffers;
+                delete[] geom.primitiveAabbBufferArray;
             }
             else {
-                delete[] vertexBuffers;
-                delete[] vertexBufferArray;
+                optixuAssert_NotImplemented();
             }
         }
 
@@ -524,8 +534,13 @@ namespace optixu {
 
 
 
-        bool isCustomPrimitiveInstance() const {
-            return forCustomPrimitives;
+        GeometryType getGeometryType() const {
+            if (std::holds_alternative<TriangleGeometry>(geometry))
+                return GeometryType::Triangles;
+            else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry))
+                return GeometryType::CustomPrimitives;
+            optixuAssert_NotImplemented();
+            return GeometryType::Triangles;
         }
         uint32_t getNumMotionSteps() const {
             return numMotionSteps;
@@ -555,6 +570,7 @@ namespace optixu {
         };
 
         _Scene* scene;
+        GeometryType geomType;
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
 
@@ -577,7 +593,6 @@ namespace optixu {
         BufferView compactedAccelBuffer;
         ASTradeoff tradeoff;
         struct {
-            unsigned int forCustomPrimitives : 1;
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
             unsigned int allowRandomVertexAccess : 1;
@@ -590,12 +605,12 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
-        Priv(_Scene* _scene, bool _forCustomPrimitives) :
+        Priv(_Scene* _scene, GeometryType _geomType) :
             scene(_scene),
+            geomType(_geomType),
             userData(sizeof(uint32_t)),
             handle(0), compactedHandle(0),
             tradeoff(ASTradeoff::Default),
-            forCustomPrimitives(_forCustomPrimitives),
             allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
             readyToBuild(false), available(false), 
             readyToCompact(false), compactedAvailable(false) {
@@ -664,12 +679,12 @@ namespace optixu {
 
     class Transform::Priv {
         _Scene* scene;
-        union {
-            _GeometryAccelerationStructure* childGas;
-            _InstanceAccelerationStructure* childIas;
-            _Transform* childXfm;
-        };
-        ChildType childType;
+        std::variant<
+            void*,
+            _GeometryAccelerationStructure*,
+            _InstanceAccelerationStructure*,
+            _Transform*
+        > child;
         uint8_t* data;
         size_t dataSize;
         TransformType type;
@@ -684,9 +699,7 @@ namespace optixu {
         OPTIXU_OPAQUE_BRIDGE(Transform);
 
         Priv(_Scene* _scene) :
-            scene(_scene), type(TransformType::Invalid),
-            childGas(nullptr),
-            childType(ChildType::Invalid),
+            scene(_scene),
             data(nullptr), dataSize(0),
             handle(0),
             available(false) {
@@ -735,12 +748,12 @@ namespace optixu {
 
     class Instance::Priv {
         _Scene* scene;
-        ChildType type;
-        union {
-            _GeometryAccelerationStructure* childGas;
-            _InstanceAccelerationStructure* childIas;
-            _Transform* childXfm;
-        };
+        std::variant<
+            void*,
+            _GeometryAccelerationStructure*,
+            _InstanceAccelerationStructure*,
+            _Transform*
+        > child;
         uint32_t matSetIndex;
         uint32_t id;
         uint32_t visibilityMask;
@@ -751,9 +764,7 @@ namespace optixu {
         OPTIXU_OPAQUE_BRIDGE(Instance);
 
         Priv(_Scene* _scene) :
-            scene(_scene),
-            type(ChildType::Invalid) {
-            childGas = nullptr;
+            scene(_scene) {
             matSetIndex = 0xFFFFFFFF;
             id = 0;
             visibilityMask = 0xFF;

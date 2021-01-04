@@ -30,7 +30,10 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
-変更履歴 (直近5件) / Update History (recent 5 changes):
+変更履歴 / Update History:
+- !!BREAKING
+  JP: GeometryInstanceとGASをContextから生成する関数の引数の型をenumに変更。
+  EN: Changed the type of argument of the functions to create a GeometryInstance or a GAS from a Context to enum.
 - !!BREAKING
   JP: GAS/IASのremoveChild()を削除。代わりにremoveChildAt()を定義。
       GAS/IAS::findChildIndex()を使用すれば目的の子のインデックスを特定できる。
@@ -651,6 +654,11 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECTS();
 #undef OPTIXU_PREPROCESS_OBJECT
 
+    enum class GeometryType {
+        Triangles = 0,
+        CustomPrimitives,
+    };
+
     enum class ASTradeoff {
         Default = 0,
         PreferFastTrace,
@@ -784,9 +792,9 @@ private: \
         OPTIXU_COMMON_FUNCTIONS(Scene);
 
         [[nodiscard]]
-        GeometryInstance createGeometryInstance(bool forCustomPrimitives = false) const;
+        GeometryInstance createGeometryInstance(GeometryType geomType = GeometryType::Triangles) const;
         [[nodiscard]]
-        GeometryAccelerationStructure createGeometryAccelerationStructure(bool forCustomPrimitives = false) const;
+        GeometryAccelerationStructure createGeometryAccelerationStructure(GeometryType geomType = GeometryType::Triangles) const;
         [[nodiscard]]
         Transform createTransform() const;
         [[nodiscard]]

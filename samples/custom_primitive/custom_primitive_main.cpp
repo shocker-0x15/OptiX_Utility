@@ -198,7 +198,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブ用GeometryInstanceは生成時に指定する必要がある。
     // EN: GeometryInstance for custom primitives requires to be specified at the creation.
-    optixu::GeometryInstance spheresGeomInst = scene.createGeometryInstance(true);
+    optixu::GeometryInstance spheresGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
     cudau::TypedBuffer<AABB> spheresAabbBuffer;
     cudau::TypedBuffer<Shared::SphereParameter> spheresParamBuffer;
     {
@@ -266,7 +266,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     GAS生成時にカスタムプリミティブ用であることを指定する。
     // EN: GAS for custom primitives must be created separately with GAS for triangles.
     //     Specify that the GAS is for custom primitives at the creation.
-    optixu::GeometryAccelerationStructure customPrimitivesGas = scene.createGeometryAccelerationStructure(true);
+    optixu::GeometryAccelerationStructure customPrimitivesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
     cudau::Buffer customPrimitivesGasMem;
     customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     customPrimitivesGas.setNumMaterialSets(1);

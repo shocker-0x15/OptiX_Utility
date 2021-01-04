@@ -862,7 +862,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブによるGeometryInstanceのセットアップ。
     // EN: Setup a geometry instance with custom primitives.
-    optixu::GeometryInstance customPrimInstance = scene.createGeometryInstance(true);
+    optixu::GeometryInstance customPrimInstance = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
     cudau::TypedBuffer<AABB> customPrimAABBs;
     cudau::TypedBuffer<Shared::SphereParameter> customPrimParameters;
     {
@@ -956,7 +956,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: カスタムプリミティブ用のGASを作成する。
     // EN: Create a GAS for custom primitives.
     uint32_t gasCustomPrimObjectIndex = travID++;
-    optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(true);
+    optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
     cudau::Buffer gasCustomPrimObjectMem;
     gasCustomPrimObject.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
     gasCustomPrimObject.setNumMaterialSets(1);

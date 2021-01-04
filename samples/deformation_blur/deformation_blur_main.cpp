@@ -278,7 +278,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             geomData.paramBuffers[i] = shape.paramBuffers[i].getDevicePointer();
         }
 
-        spheres.optixGeomInst = scene.createGeometryInstance(true);
+        spheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
         spheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
@@ -289,7 +289,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         spheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         spheres.optixGeomInst.setUserData(geomData);
 
-        spheres.optixGas = scene.createGeometryAccelerationStructure(true);
+        spheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
         spheres.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.

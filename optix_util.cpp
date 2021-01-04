@@ -208,14 +208,14 @@ namespace optixu {
         m = nullptr;
     }
 
-    GeometryInstance Scene::createGeometryInstance(bool forCustomPrimitives) const {
-        return (new _GeometryInstance(m, forCustomPrimitives))->getPublicType();
+    GeometryInstance Scene::createGeometryInstance(GeometryType geomType) const {
+        return (new _GeometryInstance(m, geomType))->getPublicType();
     }
 
-    GeometryAccelerationStructure Scene::createGeometryAccelerationStructure(bool forCustomPrimitives) const {
+    GeometryAccelerationStructure Scene::createGeometryAccelerationStructure(GeometryType geomType) const {
         // JP: GASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
         // EN: Only generating a GAS doesn't affect a SBT layout, no need to invalidate it.
-        return (new _GeometryAccelerationStructure(m, forCustomPrimitives))->getPublicType();
+        return (new _GeometryAccelerationStructure(m, geomType))->getPublicType();
     }
 
     Transform Scene::createTransform() const {
@@ -273,70 +273,39 @@ namespace optixu {
     void GeometryInstance::Priv::fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const {
         *input = OptixBuildInput{};
 
-        if (forCustomPrimitives) {
-            input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
-            OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
-
-            uint32_t stride = primitiveAabbBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(primitiveAabbBuffers[0].numElements());
-            for (uint32_t i = 0; i < numMotionSteps; ++i) {
-                primitiveAabbBufferArray[i] = primitiveAabbBuffers[i].getCUdeviceptr();
-                throwRuntimeError(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
-                throwRuntimeError(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                throwRuntimeError(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
-            }
-
-            customPrimArray.aabbBuffers = primitiveAabbBufferArray;
-            customPrimArray.numPrimitives = numElements;
-            customPrimArray.strideInBytes = stride;
-            customPrimArray.primitiveIndexOffset = primitiveIndexOffset;
-
-            customPrimArray.numSbtRecords = static_cast<uint32_t>(buildInputFlags.size());
-            if (customPrimArray.numSbtRecords > 1) {
-                customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer.getCUdeviceptr();
-                customPrimArray.sbtIndexOffsetSizeInBytes = materialIndexOffsetSize;
-                customPrimArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer.stride();
-            }
-            else {
-                customPrimArray.sbtIndexOffsetBuffer = 0; // No per-primitive record
-                customPrimArray.sbtIndexOffsetSizeInBytes = 0; // No effect
-                customPrimArray.sbtIndexOffsetStrideInBytes = 0; // No effect
-            }
-
-            customPrimArray.flags = reinterpret_cast<const uint32_t*>(buildInputFlags.data());
-        }
-        else {
-            throwRuntimeError((indexFormat != OPTIX_INDICES_FORMAT_NONE) == triangleBuffer.isValid(),
+        if (std::holds_alternative<TriangleGeometry>(geometry)) {
+            auto &geom = std::get<TriangleGeometry>(geometry);
+            throwRuntimeError((geom.indexFormat != OPTIX_INDICES_FORMAT_NONE) == geom.triangleBuffer.isValid(),
                               "Triangle buffer must be provided if using a index format other than None, otherwise must not be provided.");
 
             input->type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
-            uint32_t vertexStride = vertexBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
+            uint32_t vertexStride = geom.vertexBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
-                vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
-                throwRuntimeError(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
-                throwRuntimeError(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                throwRuntimeError(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
+                geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
+                throwRuntimeError(geom.vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
             }
 
-            triArray.vertexBuffers = vertexBufferArray;
+            triArray.vertexBuffers = geom.vertexBufferArray;
             triArray.numVertices = numElements;
-            triArray.vertexFormat = vertexFormat;
+            triArray.vertexFormat = geom.vertexFormat;
             triArray.vertexStrideInBytes = vertexStride;
 
-            if (indexFormat != OPTIX_INDICES_FORMAT_NONE) {
-                triArray.indexBuffer = triangleBuffer.getCUdeviceptr();
-                triArray.indexStrideInBytes = triangleBuffer.stride();
-                triArray.numIndexTriplets = static_cast<uint32_t>(triangleBuffer.numElements());
+            if (geom.indexFormat != OPTIX_INDICES_FORMAT_NONE) {
+                triArray.indexBuffer = geom.triangleBuffer.getCUdeviceptr();
+                triArray.indexStrideInBytes = geom.triangleBuffer.stride();
+                triArray.numIndexTriplets = static_cast<uint32_t>(geom.triangleBuffer.numElements());
             }
             else {
                 triArray.indexBuffer = 0;
                 triArray.indexStrideInBytes = 0;
                 triArray.numIndexTriplets = 0;
             }
-            triArray.indexFormat = indexFormat;
+            triArray.indexFormat = geom.indexFormat;
             triArray.primitiveIndexOffset = primitiveIndexOffset;
 
             triArray.numSbtRecords = static_cast<uint32_t>(buildInputFlags.size());
@@ -356,46 +325,87 @@ namespace optixu {
 
             triArray.flags = reinterpret_cast<const uint32_t*>(buildInputFlags.data());
         }
+        else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
+            auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
+            input->type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
+            OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
+
+            uint32_t stride = geom.primitiveAabbBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                geom.primitiveAabbBufferArray[i] = geom.primitiveAabbBuffers[i].getCUdeviceptr();
+                throwRuntimeError(geom.primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
+            }
+
+            customPrimArray.aabbBuffers = geom.primitiveAabbBufferArray;
+            customPrimArray.numPrimitives = numElements;
+            customPrimArray.strideInBytes = stride;
+            customPrimArray.primitiveIndexOffset = primitiveIndexOffset;
+
+            customPrimArray.numSbtRecords = static_cast<uint32_t>(buildInputFlags.size());
+            if (customPrimArray.numSbtRecords > 1) {
+                customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer.getCUdeviceptr();
+                customPrimArray.sbtIndexOffsetSizeInBytes = materialIndexOffsetSize;
+                customPrimArray.sbtIndexOffsetStrideInBytes = materialIndexOffsetBuffer.stride();
+            }
+            else {
+                customPrimArray.sbtIndexOffsetBuffer = 0; // No per-primitive record
+                customPrimArray.sbtIndexOffsetSizeInBytes = 0; // No effect
+                customPrimArray.sbtIndexOffsetStrideInBytes = 0; // No effect
+            }
+
+            customPrimArray.flags = reinterpret_cast<const uint32_t*>(buildInputFlags.data());
+        }
+        else {
+            optixuAssert_NotImplemented();
+        }
     }
 
     void GeometryInstance::Priv::updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const {
-        if (forCustomPrimitives) {
-            OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
-
-            uint32_t stride = primitiveAabbBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(primitiveAabbBuffers[0].numElements());
-            for (uint32_t i = 0; i < numMotionSteps; ++i) {
-                primitiveAabbBufferArray[i] = primitiveAabbBuffers[i].getCUdeviceptr();
-                throwRuntimeError(primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
-                throwRuntimeError(primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                throwRuntimeError(primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
-            }
-            customPrimArray.aabbBuffers = primitiveAabbBufferArray;
-
-            if (customPrimArray.numSbtRecords > 1)
-                customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer.getCUdeviceptr();
-        }
-        else {
+        if (std::holds_alternative<TriangleGeometry>(geometry)) {
+            auto &geom = std::get<TriangleGeometry>(geometry);
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
-            uint32_t vertexStride = vertexBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(vertexBuffers[0].numElements());
+            uint32_t vertexStride = geom.vertexBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
-                vertexBufferArray[i] = vertexBuffers[i].getCUdeviceptr();
-                throwRuntimeError(vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
-                throwRuntimeError(vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
-                throwRuntimeError(vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
+                geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
+                throwRuntimeError(geom.vertexBuffers[i].isValid(), "Vertex buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.vertexBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.vertexBuffers[i].stride() == vertexStride, "Vertex stride for motion step %u doesn't match that of 0.", i);
             }
-            triArray.vertexBuffers = vertexBufferArray;
+            triArray.vertexBuffers = geom.vertexBufferArray;
 
-            if (indexFormat != OPTIX_INDICES_FORMAT_NONE)
-                triArray.indexBuffer = triangleBuffer.getCUdeviceptr();
+            if (geom.indexFormat != OPTIX_INDICES_FORMAT_NONE)
+                triArray.indexBuffer = geom.triangleBuffer.getCUdeviceptr();
 
             if (triArray.numSbtRecords > 1)
                 triArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer.getCUdeviceptr();
 
             triArray.preTransform = preTransform;
             triArray.transformFormat = preTransform ? OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 : OPTIX_TRANSFORM_FORMAT_NONE;
+        }
+        else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
+            auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
+            OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
+
+            uint32_t stride = geom.primitiveAabbBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                geom.primitiveAabbBufferArray[i] = geom.primitiveAabbBuffers[i].getCUdeviceptr();
+                throwRuntimeError(geom.primitiveAabbBuffers[i].isValid(), "AABB buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.primitiveAabbBuffers[i].numElements() == numElements, "Num elements for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.primitiveAabbBuffers[i].stride() == stride, "Stride for motion step %u doesn't match that of 0.", i);
+            }
+            customPrimArray.aabbBuffers = geom.primitiveAabbBufferArray;
+
+            if (customPrimArray.numSbtRecords > 1)
+                customPrimArray.sbtIndexOffsetBuffer = materialIndexOffsetBuffer.getCUdeviceptr();
+        }
+        else {
+            optixuAssert_NotImplemented();
         }
     }
 
@@ -450,43 +460,57 @@ namespace optixu {
 
     void GeometryInstance::setNumMotionSteps(uint32_t n) const {
         n = std::max(n, 1u);
-        if (m->forCustomPrimitives) {
-            delete[] m->primitiveAabbBuffers;
-            delete[] m->primitiveAabbBufferArray;
-            m->primitiveAabbBufferArray = new CUdeviceptr[n];
-            m->primitiveAabbBuffers = new BufferView[n];
+        if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
+            auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+            delete[] geom.vertexBuffers;
+            delete[] geom.vertexBufferArray;
+            geom.vertexBufferArray = new CUdeviceptr[n];
+            geom.vertexBuffers = new BufferView[n];
+        }
+        else if (std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry)) {
+            auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
+            delete[] geom.primitiveAabbBuffers;
+            delete[] geom.primitiveAabbBufferArray;
+            geom.primitiveAabbBufferArray = new CUdeviceptr[n];
+            geom.primitiveAabbBuffers = new BufferView[n];
         }
         else {
-            delete[] m->vertexBuffers;
-            delete[] m->vertexBufferArray;
-            m->vertexBufferArray = new CUdeviceptr[n];
-            m->vertexBuffers = new BufferView[n];
+            optixuAssert_NotImplemented();
         }
         m->numMotionSteps = n;
     }
 
     void GeometryInstance::setVertexFormat(OptixVertexFormat format) const {
-        m->vertexFormat = format;
+        m->throwRuntimeError(std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+                             "This geometry instance was created not for triangles.");
+        auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        geom.vertexFormat = format;
     }
 
     void GeometryInstance::setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep) const {
-        m->throwRuntimeError(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
+        m->throwRuntimeError(std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+                             "This geometry instance was created not for triangles.");
         m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
                              motionStep, m->numMotionSteps);
-        m->vertexBuffers[motionStep] = vertexBuffer;
+        auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        geom.vertexBuffers[motionStep] = vertexBuffer;
     }
 
     void GeometryInstance::setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format) const {
-        m->throwRuntimeError(!m->forCustomPrimitives, "This geometry instance was created for custom primitives.");
-        m->triangleBuffer = triangleBuffer;
-        m->indexFormat = format;
+        m->throwRuntimeError(std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+                             "This geometry instance was created not for triangles.");
+        auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        geom.triangleBuffer = triangleBuffer;
+        geom.indexFormat = format;
     }
 
     void GeometryInstance::setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep) const {
-        m->throwRuntimeError(m->forCustomPrimitives, "This geometry instance was created for triangles.");
+        m->throwRuntimeError(std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry),
+                             "This geometry instance was created not for custom primitives.");
         m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
                              motionStep, m->numMotionSteps);
-        m->primitiveAabbBuffers[motionStep] = primitiveAABBBuffer;
+        auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
+        geom.primitiveAabbBuffers[motionStep] = primitiveAABBBuffer;
     }
 
     void GeometryInstance::setPrimitiveIndexOffset(uint32_t offset) const {
@@ -636,7 +660,7 @@ namespace optixu {
                                                          bool allowUpdate,
                                                          bool allowCompaction,
                                                          bool allowRandomVertexAccess) const {
-        m->throwRuntimeError(!(m->forCustomPrimitives && allowRandomVertexAccess),
+        m->throwRuntimeError(!(m->geomType != GeometryType::Triangles && allowRandomVertexAccess),
                              "Random vertex access is the feature only for triangle GAS.");
         bool changed = false;
         changed |= m->tradeoff != tradeoff;
@@ -666,8 +690,9 @@ namespace optixu {
         m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
         m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
                              _geomInst->getName().c_str());
-        m->throwRuntimeError(_geomInst->isCustomPrimitiveInstance() == m->forCustomPrimitives,
-                             "This GAS was created for %s.", m->forCustomPrimitives ? "custom primitives" : "triangles");
+        const char* geomTypeStrs[] = { "triangles", "custom primitives" };
+        m->throwRuntimeError(_geomInst->getGeometryType() == m->geomType,
+                             "This GAS was created for %s.", geomTypeStrs[static_cast<uint32_t>(m->geomType)]);
         Priv::Child child;
         child.geomInst = _geomInst;
         child.preTransform = preTransform;
@@ -990,12 +1015,12 @@ namespace optixu {
 
 
     _GeometryAccelerationStructure* Transform::Priv::getDescendantGAS() const {
-        if (childType == ChildType::GAS)
-            return childGas;
-        if (childType == ChildType::IAS)
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(child))
+            return std::get<_GeometryAccelerationStructure*>(child);
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(child))
             return nullptr;
-        else if (childType == ChildType::Transform)
-            return childXfm->getDescendantGAS();
+        else if (std::holds_alternative<_Transform*>(child))
+            return std::get<_Transform*>(child)->getDescendantGAS();
         optixuAssert_ShouldNotBeCalled();
         return nullptr;
     }
@@ -1136,22 +1161,19 @@ namespace optixu {
     }
 
     void Transform::setChild(GeometryAccelerationStructure child) const {
-        m->childType = ChildType::GAS;
-        m->childGas = extract(child);
+        m->child = extract(child);
 
         markDirty();
     }
 
     void Transform::setChild(InstanceAccelerationStructure child) const {
-        m->childType = ChildType::IAS;
-        m->childIas = extract(child);
+        m->child = extract(child);
 
         markDirty();
     }
 
     void Transform::setChild(Transform child) const {
-        m->childType = ChildType::Transform;
-        m->childXfm = extract(child);
+        m->child = extract(child);
 
         markDirty();
     }
@@ -1164,15 +1186,15 @@ namespace optixu {
         m->throwRuntimeError(m->type != TransformType::Invalid, "Transform type is invalid.");
         m->throwRuntimeError(trDeviceMem.sizeInBytes() >= m->dataSize,
                              "Size of the given buffer is not enough.");
-        m->throwRuntimeError(m->childType != ChildType::Invalid, "Child is invalid.");
+        m->throwRuntimeError(!std::holds_alternative<void*>(m->child), "Child is invalid.");
 
         OptixTraversableHandle childHandle = 0;
-        if (m->childType == ChildType::GAS)
-            childHandle = m->childGas->getHandle();
-        else if (m->childType == ChildType::IAS)
-            childHandle = m->childIas->getHandle();
-        else if (m->childType == ChildType::Transform)
-            childHandle = m->childXfm->getHandle();
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
+            childHandle = std::get<_GeometryAccelerationStructure*>(m->child)->getHandle();
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
+            childHandle = std::get<_InstanceAccelerationStructure*>(m->child)->getHandle();
+        else if (std::holds_alternative<_Transform*>(m->child))
+            childHandle = std::get<_Transform*>(m->child)->getHandle();
 
         OptixTraversableType travType;
         if (m->type == TransformType::MatrixMotion) {
@@ -1262,22 +1284,28 @@ namespace optixu {
     }
 
     ChildType Transform::getChildType() const {
-        return m->childType;
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
+            return ChildType::GAS;
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
+            return ChildType::IAS;
+        else if (std::holds_alternative<_Transform*>(m->child))
+            return ChildType::Transform;
+        return ChildType::Invalid;
     }
 
     template <typename T>
     T Transform::getChild() const {
         if constexpr (std::is_same<T, GeometryAccelerationStructure>::value) {
-            if (m->childType == ChildType::GAS)
-                return m->childGas->getPublicType();
+            if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
+                return std::get<_GeometryAccelerationStructure*>(m->child)->getPublicType();
         }
         if constexpr (std::is_same<T, InstanceAccelerationStructure>::value) {
-            if (m->childType == ChildType::IAS)
-                return m->childIas->getPublicType();
+            if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
+                return std::get<_InstanceAccelerationStructure*>(m->child)->getPublicType();
         }
         if constexpr (std::is_same<T, Transform>::value) {
-            if (m->childType == ChildType::Transform)
-                return m->childXfm->getPublicType();
+            if (std::holds_alternative<_Transform*>(m->child))
+                return std::get<_Transform*>(m->child)->getPublicType();
         }
         m->throwRuntimeError(false, "Given type is inconsistent with the stored type.");
         return T();
@@ -1293,20 +1321,23 @@ namespace optixu {
         std::copy_n(instTransform, 12, instance->transform);
         instance->instanceId = id;
 
-        if (type == ChildType::GAS) {
-            throwRuntimeError(childGas->isReady(), "GAS %s is not ready.", childGas->getName().c_str());
-            instance->traversableHandle = childGas->getHandle();
-            instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(child)) {
+            auto gas = std::get<_GeometryAccelerationStructure*>(child);
+            throwRuntimeError(gas->isReady(), "GAS %s is not ready.", gas->getName().c_str());
+            instance->traversableHandle = gas->getHandle();
+            instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
-        else if (type == ChildType::IAS) {
-            throwRuntimeError(childIas->isReady(), "IAS %s is not ready.", childGas->getName().c_str());
-            instance->traversableHandle = childIas->getHandle();
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
+            auto ias = std::get<_InstanceAccelerationStructure*>(child);
+            throwRuntimeError(ias->isReady(), "IAS %s is not ready.", ias->getName().c_str());
+            instance->traversableHandle = ias->getHandle();
             instance->sbtOffset = 0;
         }
-        else if (type == ChildType::Transform) {
-            throwRuntimeError(childXfm->isReady(), "Transform %s is not ready.", childXfm->getName().c_str());
-            instance->traversableHandle = childXfm->getHandle();
-            _GeometryAccelerationStructure* desGas = childXfm->getDescendantGAS();
+        else if (std::holds_alternative<_Transform*>(child)) {
+            auto xfm = std::get<_Transform*>(child);
+            throwRuntimeError(xfm->isReady(), "Transform %s is not ready.", xfm->getName().c_str());
+            instance->traversableHandle = xfm->getHandle();
+            _GeometryAccelerationStructure* desGas = xfm->getDescendantGAS();
             if (desGas)
                 instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
             else
@@ -1324,17 +1355,20 @@ namespace optixu {
         std::copy_n(instTransform, 12, instance->transform);
         instance->instanceId = id;
 
-        if (type == ChildType::GAS) {
-            throwRuntimeError(childGas->isReady(), "GAS %s is not ready.", childGas->getName().c_str());
-            instance->sbtOffset = scene->getSBTOffset(childGas, matSetIndex);
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(child)) {
+            auto gas = std::get<_GeometryAccelerationStructure*>(child);
+            throwRuntimeError(gas->isReady(), "GAS %s is not ready.", gas->getName().c_str());
+            instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
-        else if (type == ChildType::IAS) {
-            throwRuntimeError(childIas->isReady(), "IAS %s is not ready.", childGas->getName().c_str());
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
+            auto ias = std::get<_InstanceAccelerationStructure*>(child);
+            throwRuntimeError(ias->isReady(), "IAS %s is not ready.", ias->getName().c_str());
             instance->sbtOffset = 0;
         }
-        else if (type == ChildType::Transform) {
-            throwRuntimeError(childXfm->isReady(), "Transform %s is not ready.", childXfm->getName().c_str());
-            _GeometryAccelerationStructure* desGas = childXfm->getDescendantGAS();
+        else if (std::holds_alternative<_Transform*>(child)) {
+            auto xfm = std::get<_Transform*>(child);
+            throwRuntimeError(xfm->isReady(), "Transform %s is not ready.", xfm->getName().c_str());
+            _GeometryAccelerationStructure* desGas = xfm->getDescendantGAS();
             if (desGas)
                 instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
             else
@@ -1349,15 +1383,15 @@ namespace optixu {
     }
 
     bool Instance::Priv::isMotionAS() const {
-        if (type == ChildType::GAS)
-            childGas->hasMotion();
-        else if (type == ChildType::IAS)
-            childIas->hasMotion();
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(child))
+            std::get<_GeometryAccelerationStructure*>(child)->hasMotion();
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(child))
+            std::get<_InstanceAccelerationStructure*>(child)->hasMotion();
         return false;
     }
 
     bool Instance::Priv::isTransform() const {
-        return type == ChildType::Transform;
+        return std::holds_alternative<_Transform*>(child);
     }
 
     void Instance::destroy() {
@@ -1366,20 +1400,17 @@ namespace optixu {
     }
 
     void Instance::setChild(GeometryAccelerationStructure child, uint32_t matSetIdx) const {
-        m->type = ChildType::GAS;
-        m->childGas = extract(child);
+        m->child = extract(child);
         m->matSetIndex = matSetIdx;
     }
 
     void Instance::setChild(InstanceAccelerationStructure child) const {
-        m->type = ChildType::IAS;
-        m->childIas = extract(child);
+        m->child = extract(child);
         m->matSetIndex = 0;
     }
 
     void Instance::setChild(Transform child, uint32_t matSetIdx) const {
-        m->type = ChildType::Transform;
-        m->childXfm = extract(child);
+        m->child = extract(child);
         m->matSetIndex = matSetIdx;
     }
 
@@ -1410,22 +1441,28 @@ namespace optixu {
     }
 
     ChildType Instance::getChildType() const {
-        return m->type;
+        if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
+            return ChildType::GAS;
+        else if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
+            return ChildType::IAS;
+        else if (std::holds_alternative<_Transform*>(m->child))
+            return ChildType::Transform;
+        return ChildType::Invalid;
     }
 
     template <typename T>
     T Instance::getChild() const {
         if constexpr (std::is_same<T, GeometryAccelerationStructure>::value) {
-            if (m->type == ChildType::GAS)
-                return m->childGas->getPublicType();
+            if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
+                return std::get<_GeometryAccelerationStructure*>(m->child)->getPublicType();
         }
         if constexpr (std::is_same<T, InstanceAccelerationStructure>::value) {
-            if (m->type == ChildType::IAS)
-                return m->childIas->getPublicType();
+            if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
+                return std::get<_InstanceAccelerationStructure*>(m->child)->getPublicType();
         }
         if constexpr (std::is_same<T, Transform>::value) {
-            if (m->type == ChildType::Transform)
-                return m->childXfm->getPublicType();
+            if (std::holds_alternative<_Transform*>(m->child))
+                return std::get<_Transform*>(m->child)->getPublicType();
         }
         m->throwRuntimeError(false, "Given type is inconsistent with the stored type.");
         return T();
