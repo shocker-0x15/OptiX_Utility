@@ -32,8 +32,8 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
-  JP: GeometryInstanceとGASをContextから生成する関数の引数の型をenumに変更。
-  EN: Changed the type of argument of the functions to create a GeometryInstance or a GAS from a Context to enum.
+  JP: GeometryInstanceとGASをSceneから生成する関数の引数の型をenumに変更。
+  EN: Changed the type of argument of the functions to create a GeometryInstance or a GAS from a Scene to enum.
 - !!BREAKING
   JP: GAS/IASのremoveChild()を削除。代わりにremoveChildAt()を定義。
       GAS/IAS::findChildIndex()を使用すれば目的の子のインデックスを特定できる。
@@ -766,7 +766,7 @@ private: \
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         //     In the case where user data size and/or alignment changes again after generating the layout of
         //     a shader binding table, the invalidation of the layout is required as well by calling
-        //     scene's markHitGroupShaderBindingTableDirty().
+        //     scene's markShaderBindingTableLayoutDirty().
         void setHitGroup(uint32_t rayType, ProgramGroup hitGroup) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -837,11 +837,11 @@ private: \
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
         //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
-        //     アラインメントを変更する場合レイアウトが無効化される。
+        //     アラインメントを変更する場合レイアウトが自動で無効化される。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         //     In the case where user data size and/or alignment changes again after generating the layout of
-        //     a shader binding table, the layout is invalidated.
+        //     a shader binding table, the layout is automatically invalidated.
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -870,17 +870,24 @@ private: \
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(GeometryAccelerationStructure);
 
-        // JP: 以下のAPIを呼んだ場合はGASがdirty状態になる。
-        // EN: Calling the following APIs marks the GAS dirty.
+        // JP: 以下のAPIを呼んだ場合はGASが自動でdirty状態になる。
+        //     子の数が変更される場合はヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。
+        // EN: Calling the following APIs automatically marks the GAS dirty.
+        //     Changing the number of children invalidates the shader binding table layout of hit group.
         void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         void removeChildAt(uint32_t index) const;
         void clearChildren() const;
+
+        // JP: GASをdirty状態にする。
+        //     ヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。
+        // EN: Mark the GAS dirty.
+        //     Invalidate the shader binding table layout of hit group as well.
         void markDirty() const;
 
-        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが無効化される。
-        // EN: Calling the following APIs invalidates the shader binding table layout of hit group.
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが自動で無効化される。
+        // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
 
@@ -907,11 +914,11 @@ private: \
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
         //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
-        //     アラインメントを変更する場合レイアウトが無効化される。
+        //     アラインメントを変更する場合レイアウトが自動で無効化される。
         // EN: Updating a shader binding table is required when calling the following APIs.
         //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
         //     In the case where user data size and/or alignment changes again after generating the layout of
-        //     a shader binding table, the layout is invalidated.
+        //     a shader binding table, the layout is automatically invalidated.
         void setChildUserData(uint32_t index, const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
         void setChildUserData(uint32_t index, const T &data) const {
@@ -954,8 +961,8 @@ private: \
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(Transform);
 
-        // JP: 以下のAPIを呼んだ場合はTransformがdirty状態になる。
-        // EN: Calling the following APIs marks the transform dirty.
+        // JP: 以下のAPIを呼んだ場合はTransformが自動でdirty状態になる。
+        // EN: Calling the following APIs automatically marks the transform dirty.
         void setConfiguration(TransformType type, uint32_t numKeys,
                               size_t* transformSize) const;
         void setMotionOptions(float timeBegin, float timeEnd, OptixMotionFlags flags) const;
@@ -965,6 +972,9 @@ private: \
         void setChild(GeometryAccelerationStructure child) const;
         void setChild(InstanceAccelerationStructure child) const;
         void setChild(Transform child) const;
+
+        // JP: Transformをdirty状態にする。
+        // EN: Mark the transform dirty.
         void markDirty() const;
 
         // JP: (間接的に)所属するTraversable (例: IAS)のmarkDirty()を呼ぶ必要がある。
@@ -1034,13 +1044,16 @@ private: \
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(InstanceAccelerationStructure);
 
-        // JP: 以下のAPIを呼んだ場合はIASがdirty状態になる。
-        // EN: Calling the following APIs marks the IAS dirty.
+        // JP: 以下のAPIを呼んだ場合はIASが自動でdirty状態になる。
+        // EN: Calling the following APIs automatically marks the IAS dirty.
         void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChildAt(uint32_t index) const;
         void clearChildren() const;
+
+        // JP: IASをdirty状態にする。
+        // EN: Mark the IAS dirty.
         void markDirty() const;
 
         // JP: リビルド・コンパクトを行った場合はこのIASが(間接的に)所属するTraversable (例: IAS)
@@ -1111,18 +1124,18 @@ private: \
 
         void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
 
-        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが無効化される。
-        // EN: Calling the following APIs invalidates the (non-hit group) shader binding table layout.
+        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが自動で無効化される。
+        // EN: Calling the following APIs automatically invalidates the (non-hit group) shader binding table layout.
         void setNumMissRayTypes(uint32_t numMissRayTypes) const;
         void setNumCallablePrograms(uint32_t numCallablePrograms) const;
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
-        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルがdirty状態になり
+        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルが自動でdirty状態になり
         //     ローンチ時に再セットアップされる。
         //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
         //     非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
-        // EN: Calling the following API marks the (non-hit group) shader binding table dirty
+        // EN: Calling the following API automatically marks the (non-hit group) shader binding table dirty
         //     then triggers re-setup of the table at launch.
         //     However note that the setup in the launch involves the change of the SBT buffer's contents
         //     and transfer, so double buffered SBT is required for safety
@@ -1133,17 +1146,20 @@ private: \
         void setCallableProgram(uint32_t index, ProgramGroup program) const;
         void setShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const;
 
-        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルがdirty状態になり
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルが自動でdirty状態になり
         //     ローンチ時に再セットアップされる。
         //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
         //     非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
-        // EN: Calling the following APIs marks the hit group's shader binding table dirty,
+        // EN: Calling the following APIs automatically marks the hit group's shader binding table dirty,
         //     then triggers re-setup of the table at launch.
         //     However note that the setup in the launch involves the change of the SBT buffer's contents
         //     and transfer, so double buffered SBT is required for safety
         //     in the case performing asynchronous update.
         void setScene(const Scene &scene) const;
         void setHitGroupShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const;
+
+        // JP: ヒットグループのシェーダーバインディングテーブルをdirty状態にする。
+        // EN: Mark the hit group's shader binding table dirty.
         void markHitGroupShaderBindingTableDirty() const;
 
         void setStackSize(uint32_t directCallableStackSizeFromTraversal,
