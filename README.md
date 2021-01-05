@@ -6,9 +6,9 @@
 -->細かいところに制御が効く一方で、何をするにも煩雑なセットアップコードを書く必要が出てきました。<!--
 -->このOptiX Utilityは細かい制御性はできる限り保持したまま定形処理になりがちな部分を隠蔽したクラス・関数を提供することを目的としています。
 
-[OptiX](https://developer.nvidia.com/optix) changes its form since OptiX 7 into low-level oriented API similar to [Direct X Raytracing (DXR)](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html).
+[OptiX](https://developer.nvidia.com/optix) changes its form since OptiX 7 into a low-level oriented API similar to [Direct X Raytracing (DXR)](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html).
 It provides fine-level controllability but requires the user to write troublesome setup code to do anything.
-The purpose of this OptiX Utility is to provide classes and functions which encapsulates parts which tend to be boilerplate code while keeping fine controllability.
+The purpose of this OptiX Utility is to provide classes and functions which encapsulate parts that tend to be boilerplate code while keeping fine controllability.
 
 ## 機能 / Features
 Currently based on OptiX 7.2.0
@@ -48,7 +48,7 @@ Currently based on OptiX 7.2.0
   このCUDAユーティリティはCUDAのbufferやarrayの生成、そしてカーネルの実行のためのクラス・関数を提供しています。\
   現在のOptiXはCUDAに基づいたAPIになっているため、ユーザーはOptiXのコードと併せて頻繁に純粋なCUDAのコードも扱う必要があります。\
   これにはOptiX関連のコードは含まれず、OptiX Utilityとも直接関係しません。\
-  This CUDA Utility provides classes and functions for CUDA buffer, array creation and kernel execution.
+  This CUDA Utility provides classes and functions for CUDA buffer, array creation, and kernel execution.
   OptiX is now CUDA-centric API, so the user often needs to manage pure CUDA code along with OptiX code.\
   This doesn't contain any OptiX-related code and is not directly related to the OptiX Utility.
 - **optixu_on_cudau.h**\
@@ -69,7 +69,9 @@ optixu::Context optixContext = optixu::Context::create(cuContext);
 
 // Create a pipeline and associated programs (groups) then link the pipeline.
 optixu::Pipeline pipeline = optixContext.createPipeline();
-pipeline.setPipelineOptions(6, 2, "plp", sizeof(PipelineLaunchParameters),
+pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+                            optixu::calcSumDwords<AttributeSignature>(),
+                            "plp", sizeof(PipelineLaunchParameters),
                             false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                             OPTIX_EXCEPTION_FLAG_DEBUG,
@@ -183,7 +185,7 @@ pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 ### デバイス側 / Device-side
 OptiX Utilityはペイロードのパッキングを簡単にしたりカーネル間通信における型の不一致を回避するため、デバイス側の組み込み関数のラッパーを提供しています。
 
-OptiX utility provides template wrapper for device-side builtin functions to ease packing of payloads and to avoid type incosistency for inter-kernel communications.
+OptiX utility provides template wrapper for device-side built-in functions to ease packing of payloads and to avoid type inconsistency for inter-kernel communications.
 ```cpp
 #define SearchRayPayloadSignature PCG32RNG, SearchRayPayload*
 #define VisibilityRayPayloadSignature float
@@ -234,7 +236,7 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 
 ## 動作環境 / Confirmed Environment
 現状以下の環境で動作を確認しています。\
-I've confirmed that the program runs correctly on the following environment.
+I've confirmed that the program runs correctly in the following environment.
 
 * Windows 10 (20H2) & Visual Studio Community 2019 (16.8.3)
 * Core i9-9900K, 32GB, RTX 3080 10GB

@@ -768,9 +768,12 @@ namespace optixu {
                                        (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0));
 
         uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
-        OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
-                                                 m->buildInputs.data(), numBuildInputs,
-                                                 &m->memoryRequirement));
+        if (numBuildInputs > 0)
+            OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
+                                                     m->buildInputs.data(), numBuildInputs,
+                                                     &m->memoryRequirement));
+        else
+            m->memoryRequirement = {};
 
         *memoryRequirement = m->memoryRequirement;
 
@@ -796,13 +799,16 @@ namespace optixu {
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
-        OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
-                                    &m->buildOptions, m->buildInputs.data(), numBuildInputs,
-                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
-                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
-                                    &m->handle,
-                                    compactionEnabled ? &m->propertyCompactedSize : nullptr,
-                                    compactionEnabled ? 1 : 0));
+        if (numBuildInputs > 0)
+            OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
+                                        &m->buildOptions, m->buildInputs.data(), numBuildInputs,
+                                        scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                        accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
+                                        &m->handle,
+                                        compactionEnabled ? &m->propertyCompactedSize : nullptr,
+                                        compactionEnabled ? 1 : 0));
+        else
+            m->handle = 0;
         CUDADRV_CHECK(cuEventRecord(m->finishEvent, stream));
 
         m->accelBuffer = accelBuffer;
@@ -826,7 +832,11 @@ namespace optixu {
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         // TODO: ? stream
         CUDADRV_CHECK(cuEventSynchronize(m->finishEvent));
-        CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
+        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        if (numBuildInputs > 0)
+            CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
+        else
+            m->compactedSize = 0;
 
         *compactedAccelBufferSize = m->compactedSize;
 
@@ -841,9 +851,13 @@ namespace optixu {
         m->throwRuntimeError(compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
                              "Size of the given buffer is not enough.");
 
-        OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
-                                      m->handle, compactedAccelBuffer.getCUdeviceptr(), compactedAccelBuffer.sizeInBytes(),
-                                      &m->compactedHandle));
+        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        if (numBuildInputs > 0)
+            OPTIX_CHECK(optixAccelCompact(m->getRawContext(), stream,
+                                          m->handle, compactedAccelBuffer.getCUdeviceptr(), compactedAccelBuffer.sizeInBytes(),
+                                          &m->compactedHandle));
+        else
+            m->compactedHandle = 0;
         CUDADRV_CHECK(cuEventRecord(m->finishEvent, stream));
 
         m->compactedAccelBuffer = compactedAccelBuffer;
@@ -881,12 +895,15 @@ namespace optixu {
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OptixTraversableHandle tempHandle = handle;
         uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
-        OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
-                                    &m->buildOptions, m->buildInputs.data(), numBuildInputs,
-                                    scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
-                                    accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
-                                    &tempHandle,
-                                    nullptr, 0));
+        if (numBuildInputs > 0)
+            OPTIX_CHECK(optixAccelBuild(m->getRawContext(), stream,
+                                        &m->buildOptions, m->buildInputs.data(), numBuildInputs,
+                                        scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes(),
+                                        accelBuffer.getCUdeviceptr(), accelBuffer.sizeInBytes(),
+                                        &tempHandle,
+                                        nullptr, 0));
+        else
+            tempHandle = 0;
         optixuAssert(tempHandle == handle, "GAS %s: Update should not change the handle itself, what's going on?", getName());
     }
 
@@ -1588,7 +1605,7 @@ namespace optixu {
         CUDADRV_CHECK(cuMemcpyHtoDAsync(instanceBuffer.getCUdeviceptr(), m->instances.data(),
                                         m->instances.size() * sizeof(OptixInstance),
                                         stream));
-        m->buildInput.instanceArray.instances = instanceBuffer.getCUdeviceptr();
+        m->buildInput.instanceArray.instances = m->children.size() > 0 ? instanceBuffer.getCUdeviceptr() : 0;
 
         bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
