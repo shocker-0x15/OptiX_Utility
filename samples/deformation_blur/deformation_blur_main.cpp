@@ -32,7 +32,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: This sample uses two-level AS (single-level instancing).
     //     Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
-    pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
+    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+                                std::max(optixu::calcSumDwords<float2>(),
+                                         optixu::calcSumDwords<SphereAttributeSignature>()),
+                                "plp", sizeof(Shared::PipelineLaunchParameters),
                                 true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG,

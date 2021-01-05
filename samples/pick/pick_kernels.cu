@@ -48,8 +48,6 @@ struct HitGroupSBTRecordData {
 
 
 
-#define PayloadSignature PickInfo
-
 CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
     float x = static_cast<float>(plp.mousePosition.x + 0.5f) / plp.imageSize.x;
     float y = static_cast<float>(plp.imageSize.y - plp.mousePosition.y - 0.5f) / plp.imageSize.y;
@@ -60,7 +58,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
     float3 direction = normalize(plp.orientation * make_float3(vw * (0.5f - x), vh * (y - 0.5f), 1));
 
     PickInfo info;
-    optixu::trace<PayloadSignature>(
+    optixu::trace<PickPayloadSignature>(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         PickRayType_Primary, NumPickRayTypes, PickRayType_Primary,
@@ -85,7 +83,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
                                              std::sin(phi) * std::sin(theta)));
 
     PickInfo info;
-    optixu::trace<PayloadSignature>(
+    optixu::trace<PickPayloadSignature>(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         PickRayType_Primary, NumPickRayTypes, PickRayType_Primary,
@@ -100,7 +98,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     PickInfo info;
     info.hit = false;
-    optixu::setPayloads<PayloadSignature>(&info);
+    optixu::setPayloads<PickPayloadSignature>(&info);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -121,5 +119,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     info.gasChildID = gasChild.gasChildID;
     info.geomID = geom.geomID;
     info.matID = mat.matID;
-    optixu::setPayloads<PayloadSignature>(&info);
+    optixu::setPayloads<PickPayloadSignature>(&info);
 }

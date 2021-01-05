@@ -101,3 +101,6 @@ namespace Shared {
         optixu::NativeBlockBuffer2D<float4> resultBuffer;
     };
 }
+
+#define RenderPayloadSignature float3
+#define PickPayloadSignature Shared::PickInfo

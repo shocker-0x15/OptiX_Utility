@@ -229,6 +229,18 @@ namespace optixu {
 #define optixuAssert_ShouldNotBeCalled() optixuAssert(false, "Should not be called!")
 #define optixuAssert_NotImplemented() optixuAssert(false, "Not implemented yet!")
 
+    namespace detail {
+        template <typename T>
+        RT_DEVICE_FUNCTION constexpr size_t getNumDwords() {
+            return (sizeof(T) + 3) / 4;
+        }
+
+        template <typename... Types>
+        RT_DEVICE_FUNCTION constexpr size_t calcSumDwords() {
+            return (0 + ... + getNumDwords<Types>());
+        }
+    }
+
 
 
     // ----------------------------------------------------------------
@@ -285,16 +297,6 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
-        template <typename T>
-        RT_DEVICE_FUNCTION constexpr size_t getNumDwords() {
-            return (sizeof(T) + 3) / 4;
-        }
-
-        template <typename... Types>
-        RT_DEVICE_FUNCTION constexpr size_t calcSumDwords() {
-            return (0 + ... + getNumDwords<Types>());
-        }
-
         template <uint32_t start, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION void packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
             static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
@@ -701,6 +703,11 @@ namespace optixu {
             return m_devicePtr != 0;
         }
     };
+
+    template <typename... Types>
+    constexpr size_t calcSumDwords() {
+        return detail::calcSumDwords<Types...>();
+    }
 
 
 

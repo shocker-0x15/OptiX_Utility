@@ -77,19 +77,7 @@ namespace Shared {
         int32_t primIndex;
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION static HitPointParameter get() {
-            HitPointParameter ret;
-            if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
-                float2 bc = optixGetTriangleBarycentrics();
-                ret.b0 = 1 - bc.x - bc.y;
-                ret.b1 = bc.x;
-            }
-            else {
-                optixu::getAttributes(&ret.b0, &ret.b1);
-            }
-            ret.primIndex = optixGetPrimitiveIndex();
-            return ret;
-        }
+        CUDA_DEVICE_FUNCTION static HitPointParameter get();
 #endif
     };
 
@@ -156,4 +144,22 @@ namespace Shared {
         uint32_t matLightIndex;
         CUtexObject* textures;
     };
+
+
+
+    struct SearchRayPayload {
+        float3 alpha;
+        float3 contribution;
+        float3 origin;
+        float3 direction;
+        struct {
+            unsigned int pathLength : 30;
+            unsigned int specularBounce : 1;
+            unsigned int terminate : 1;
+        };
+    };
 }
+
+#define SphereAttributeSignature float, float
+#define SearchRayPayloadSignature OptixTraversableHandle, Shared::PCG32RNG, Shared::SearchRayPayload*
+#define VisibilityRayPayloadSignature float

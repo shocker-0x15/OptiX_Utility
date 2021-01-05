@@ -33,27 +33,6 @@ struct HitGroupSBTRecordData {
 
 
 
-struct SearchRayPayload {
-    float3 alpha;
-    float3 contribution;
-    float3 origin;
-    float3 direction;
-    struct {
-        unsigned int pathLength : 30;
-        bool terminate : 1;
-    };
-};
-
-struct VisibilityRayPayload {
-    float visibility;
-};
-
-
-
-#define SearchRayPayloadSignature PCG32RNG, SearchRayPayload*, float3*, float3*
-
-#define VisibilityRayPayloadSignature float
-
 CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 

@@ -8,8 +8,6 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 
-#define SphereAttributeSignature float, float
-
 struct HitPointParameter {
     float b1, b2;
     int32_t primIndex;
@@ -43,8 +41,6 @@ struct HitGroupSBTRecordData {
 };
 
 
-
-#define PayloadSignature float3
 
 CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
     auto sbtr = HitGroupSBTRecordData::get();

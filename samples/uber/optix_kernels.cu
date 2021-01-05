@@ -10,6 +10,22 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
+    HitPointParameter ret;
+    if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
+        float2 bc = optixGetTriangleBarycentrics();
+        ret.b0 = 1 - bc.x - bc.y;
+        ret.b1 = bc.x;
+    }
+    else {
+        optixu::getAttributes<SphereAttributeSignature>(&ret.b0, &ret.b1);
+    }
+    ret.primIndex = optixGetPrimitiveIndex();
+    return ret;
+}
+#endif
+
 struct HitGroupSBTRecordData {
     uint32_t materialIndex;
     uint32_t geomInstIndex;
@@ -18,28 +34,6 @@ struct HitGroupSBTRecordData {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
 };
-
-
-
-struct SearchRayPayload {
-    float3 alpha;
-    float3 contribution;
-    float3 origin;
-    float3 direction;
-    struct {
-        unsigned int pathLength : 30;
-        bool specularBounce : 1;
-        bool terminate : 1;
-    };
-};
-
-#define SearchRayPayloadSignature OptixTraversableHandle, PCG32RNG, SearchRayPayload*
-
-struct VisibilityRayPayload {
-    float visibility;
-};
-
-#define VisibilityRayPayloadSignature float
 
 
 
@@ -344,7 +338,7 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(custom_primitive)() {
     float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
     float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
 
-    optixu::reportIntersection(t, isFront ? 0 : 1, theta, phi);
+    optixu::reportIntersection<SphereAttributeSignature>(t, isFront ? 0 : 1, theta, phi);
 }
 
 RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParameter &hitPointParam, const GeometryData &geom,

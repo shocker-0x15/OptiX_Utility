@@ -48,8 +48,6 @@ struct HitGroupSBTRecordData {
 
 
 
-#define PayloadSignature float3
-
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 

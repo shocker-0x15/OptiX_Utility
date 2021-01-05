@@ -8,8 +8,6 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 
-#define SphereAttributeSignature float, float
-
 struct HitPointParameter {
     float b1, b2;
     int32_t primIndex;
@@ -43,8 +41,6 @@ struct HitGroupSBTRecordData {
 };
 
 
-
-#define PayloadSignature float3
 
 // JP: レイとカスタムプリミティブとの衝突判定はIntersection Programで記述する。
 // EN: Intersection program is used to describe the intersection between a ray vs a custom primitive.

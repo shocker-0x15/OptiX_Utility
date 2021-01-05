@@ -35,8 +35,6 @@ struct HitGroupSBTRecordData {
 
 
 
-#define PayloadSignature float3
-
 CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
@@ -49,7 +47,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
     float3 direction = normalize(plp.orientation * make_float3(vw * (0.5f - x), vh * (y - 0.5f), 1));
 
     float3 color;
-    optixu::trace<PayloadSignature>(
+    optixu::trace<RenderPayloadSignature>(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
@@ -73,7 +71,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
                                              std::sin(phi) * std::sin(theta)));
 
     float3 color;
-    optixu::trace<PayloadSignature>(
+    optixu::trace<RenderPayloadSignature>(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
@@ -84,7 +82,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
-    optixu::setPayloads<PayloadSignature>(&color);
+    optixu::setPayloads<RenderPayloadSignature>(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -111,5 +109,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         optixGetSbtGASIndex() == pickInfo.matIndex &&
         optixGetPrimitiveIndex() == pickInfo.primIndex)
         color = 0.5f * color;
-    optixu::setPayloads<PayloadSignature>(&color);
+    optixu::setPayloads<RenderPayloadSignature>(&color);
 }

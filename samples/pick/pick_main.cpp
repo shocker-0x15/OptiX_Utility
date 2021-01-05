@@ -341,7 +341,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixPipeline = optixContext.createPipeline();
         optixPipeline.setPipelineOptions(
-            sizeof(Shared::PickInfo) / sizeof(uint32_t), 2, "plp", sizeof(Shared::PickPipelineLaunchParameters),
+            optixu::calcSumDwords<PickPayloadSignature>(),
+            optixu::calcSumDwords<float2>(),
+            "plp", sizeof(Shared::PickPipelineLaunchParameters),
             false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
             OPTIX_EXCEPTION_FLAG_DEBUG,
@@ -382,7 +384,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixPipeline = optixContext.createPipeline();
         optixPipeline.setPipelineOptions(
-            3, 2, "plp", sizeof(Shared::RenderPipelineLaunchParameters),
+            optixu::calcSumDwords<RenderPayloadSignature>(),
+            optixu::calcSumDwords<float2>(),
+            "plp", sizeof(Shared::RenderPipelineLaunchParameters),
             false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
             OPTIX_EXCEPTION_FLAG_DEBUG,

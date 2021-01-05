@@ -90,4 +90,20 @@ namespace Shared {
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         PerspectiveCamera camera;
     };
+
+
+
+    struct SearchRayPayload {
+        float3 alpha;
+        float3 contribution;
+        float3 origin;
+        float3 direction;
+        struct {
+            unsigned int pathLength : 30;
+            unsigned int terminate : 1;
+        };
+    };
 }
+
+#define SearchRayPayloadSignature Shared::PCG32RNG, Shared::SearchRayPayload*, float3*, float3*
+#define VisibilityRayPayloadSignature float

@@ -64,3 +64,6 @@ namespace Shared {
         PerspectiveCamera camera;
     };
 }
+
+#define SphereAttributeSignature float, float
+#define PayloadSignature float3

@@ -31,11 +31,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     // JP: このサンプルでは単一のGASのみを使用する。
-    //     カーネル中で使用しているペイロードサイズは最大で3Dwords、アトリビュートサイズは2Dwords(三角形の重心座標)。
+    //     カーネル中で使用しているアトリビュートサイズは2Dwords(三角形の重心座標 float2)。
     // EN: This sample uses only a single GAS.
-    //     The payload size and attribute size used by the kernel are
-    //     3 Dwords and 2 Dwords (triangle barycentrics) at most.
-    pipeline.setPipelineOptions(3, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
+    //     The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2) at most.
+    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+                                optixu::calcSumDwords<float2>(),
+                                "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG,

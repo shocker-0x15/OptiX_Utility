@@ -440,7 +440,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    pipeline.setPipelineOptions(6, 2, "plp", sizeof(Shared::PipelineLaunchParameters),
+    pipeline.setPipelineOptions(std::max(optixu::calcSumDwords<SearchRayPayloadSignature>(),
+                                         optixu::calcSumDwords<VisibilityRayPayloadSignature>()),
+                                std::max(optixu::calcSumDwords<float2>(),
+                                         optixu::calcSumDwords<SphereAttributeSignature>()),
+                                "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
                                 DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
                                               OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
