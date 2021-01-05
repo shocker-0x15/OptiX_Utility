@@ -1295,20 +1295,9 @@ namespace optixu {
 
     template <typename T>
     T Transform::getChild() const {
-        if constexpr (std::is_same<T, GeometryAccelerationStructure>::value) {
-            if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
-                return std::get<_GeometryAccelerationStructure*>(m->child)->getPublicType();
-        }
-        if constexpr (std::is_same<T, InstanceAccelerationStructure>::value) {
-            if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
-                return std::get<_InstanceAccelerationStructure*>(m->child)->getPublicType();
-        }
-        if constexpr (std::is_same<T, Transform>::value) {
-            if (std::holds_alternative<_Transform*>(m->child))
-                return std::get<_Transform*>(m->child)->getPublicType();
-        }
-        m->throwRuntimeError(false, "Given type is inconsistent with the stored type.");
-        return T();
+        m->throwRuntimeError(std::holds_alternative<typename T::Priv*>(m->child),
+                             "Given type is inconsistent with the stored type.");
+        return std::get<typename T::Priv*>(m->child)->getPublicType();
     }
     template GeometryAccelerationStructure Transform::getChild<GeometryAccelerationStructure>() const;
     template InstanceAccelerationStructure Transform::getChild<InstanceAccelerationStructure>() const;
@@ -1452,20 +1441,9 @@ namespace optixu {
 
     template <typename T>
     T Instance::getChild() const {
-        if constexpr (std::is_same<T, GeometryAccelerationStructure>::value) {
-            if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
-                return std::get<_GeometryAccelerationStructure*>(m->child)->getPublicType();
-        }
-        if constexpr (std::is_same<T, InstanceAccelerationStructure>::value) {
-            if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
-                return std::get<_InstanceAccelerationStructure*>(m->child)->getPublicType();
-        }
-        if constexpr (std::is_same<T, Transform>::value) {
-            if (std::holds_alternative<_Transform*>(m->child))
-                return std::get<_Transform*>(m->child)->getPublicType();
-        }
-        m->throwRuntimeError(false, "Given type is inconsistent with the stored type.");
-        return T();
+        m->throwRuntimeError(std::holds_alternative<typename T::Priv*>(m->child),
+                             "Given type is inconsistent with the stored type.");
+        return std::get<typename T::Priv*>(m->child)->getPublicType();
     }
     template GeometryAccelerationStructure Instance::getChild<GeometryAccelerationStructure>() const;
     template InstanceAccelerationStructure Instance::getChild<InstanceAccelerationStructure>() const;
