@@ -1436,6 +1436,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         {
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
+            ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
+            ImGui::Text("Mouse Middle Drag: Rotate");
+
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
             static float rollPitchYaw[3];
             g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);

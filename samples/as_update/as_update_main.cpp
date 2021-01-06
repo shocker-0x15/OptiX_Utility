@@ -138,7 +138,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     float UIScaling = contentScaleX;
     GLFWwindow* window = glfwCreateWindow(static_cast<int32_t>(renderTargetSizeX * UIScaling),
                                           static_cast<int32_t>(renderTargetSizeY * UIScaling),
-                                          "OptiX Utility - Scene Edit", NULL, NULL);
+                                          "OptiX Utility - AS Update", NULL, NULL);
     glfwSetWindowUserPointer(window, nullptr);
     if (!window) {
         hpprintf("Failed to create a GLFW window.\n");
@@ -908,6 +908,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         {
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
+            ImGui::Text("Mouse Middle Drag: Rotate");
 
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
             static float rollPitchYaw[3];
