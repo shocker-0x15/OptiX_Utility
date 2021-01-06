@@ -96,7 +96,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
-    PickInfo info;
+    PickInfo info = {};
     info.hit = false;
     optixu::setPayloads<PickPayloadSignature>(&info);
 }

@@ -1150,10 +1150,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
 
         {
-            ImGui::Begin("Pick Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-
-            ImGui::Text("Mouse: %d, %d", static_cast<int32_t>(g_mouseX), static_cast<int32_t>(g_mouseY));
-
             const auto helpMarker = [](const char* desc) {
                 ImGui::TextDisabled("(?)");
                 if (ImGui::IsItemHovered()) {
@@ -1167,40 +1163,65 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             Shared::PickInfo pickInfo = curPickInfo.map()[0];
             curPickInfo.unmap();
-            char str[256];
+            char instIndexStr[32], matIndexStr[32], primIndexStr[32];
+            char instIDStr[32], gasIDStr[32], gasChildIDStr[32], geomIDStr[32], matIDStr[32];
+            char instNameStr[64], gasNameStr[64], geomNameStr[64], matNameStr[64];
+            if (pickInfo.hit) {
+                snprintf(instIndexStr, sizeof(instIndexStr), "%3u", pickInfo.instanceIndex);
+                snprintf(matIndexStr, sizeof(matIndexStr), "%3u", pickInfo.matIndex);
+                snprintf(primIndexStr, sizeof(primIndexStr), "%3u", pickInfo.primIndex);
+                snprintf(instIDStr, sizeof(instIDStr), "%3u", pickInfo.instanceID);
+                snprintf(gasIDStr, sizeof(gasIDStr), "%3u", pickInfo.gasID);
+                snprintf(gasChildIDStr, sizeof(gasChildIDStr), "%3u", pickInfo.gasChildID);
+                snprintf(geomIDStr, sizeof(geomIDStr), "%3u", pickInfo.geomID);
+                snprintf(matIDStr, sizeof(matIDStr), "%3u", pickInfo.matID);
+
+                snprintf(instNameStr, sizeof(instNameStr), "%s", instInfos[pickInfo.instanceID].c_str());
+                snprintf(gasNameStr, sizeof(gasNameStr), "%s", gasInfos[pickInfo.gasID].c_str());
+                snprintf(geomNameStr, sizeof(geomNameStr), "%s", geomInfos[pickInfo.geomID].c_str());
+                snprintf(matNameStr, sizeof(matNameStr), "%s", matInfos[pickInfo.matID].c_str());
+            }
+            else {
+                snprintf(instIndexStr, sizeof(instIndexStr), "N/A");
+                snprintf(matIndexStr, sizeof(matIndexStr), "N/A");
+                snprintf(primIndexStr, sizeof(primIndexStr), "N/A");
+                snprintf(instIDStr, sizeof(instIDStr), "N/A");
+                snprintf(gasIDStr, sizeof(gasIDStr), "N/A");
+                snprintf(gasChildIDStr, sizeof(gasChildIDStr), "N/A");
+                snprintf(geomIDStr, sizeof(geomIDStr), "N/A");
+                snprintf(matIDStr, sizeof(matIDStr), "N/A");
+
+                snprintf(instNameStr, sizeof(instNameStr), "N/A");
+                snprintf(gasNameStr, sizeof(gasNameStr), "N/A");
+                snprintf(geomNameStr, sizeof(geomNameStr), "N/A");
+                snprintf(matNameStr, sizeof(matNameStr), "N/A");
+            }
+
+            ImGui::Begin("Pick Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("Mouse: %d, %d", static_cast<int32_t>(g_mouseX), static_cast<int32_t>(g_mouseY));
+
             ImGui::Separator();
             ImGui::Text("System Values:");
             helpMarker("Instance index in an IAS"); ImGui::SameLine();
-            snprintf(str, sizeof(str), " Instance Index: %3u", pickInfo.instanceIndex);
-            ImGui::Text("%s", pickInfo.hit ? str : " Instance Index: N/A");
+            ImGui::Text(" Instance Index: %s", instIndexStr);
             helpMarker("Material index in a GAS"); ImGui::SameLine();
-            snprintf(str, sizeof(str), " Material Index: %3u", pickInfo.matIndex);
-            ImGui::Text("%s", pickInfo.hit ? str : " Material Index: N/A");
+            ImGui::Text(" Material Index: %s", matIndexStr);
             helpMarker("Primitive index in a geometry"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "Primitive Index: %3u", pickInfo.primIndex);
-            ImGui::Text("%s", pickInfo.hit ? str : "Primitive Index: N/A");
+            ImGui::Text("Primitive Index: %s", primIndexStr);
+
             ImGui::Separator();
             ImGui::Text("User Data:");
             helpMarker("via Instance::setID()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), " Instance: %3u, Name: %s", pickInfo.instanceID, instInfos[pickInfo.instanceID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str :
-                        " Instance: N/A, Name: N/A");
+            ImGui::Text(" Instance: %s, Name: %s", instIDStr, instNameStr);
             helpMarker("via GeometryAccelerationStructure::setUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "      GAS: %3u, Name: %s", pickInfo.gasID, gasInfos[pickInfo.gasID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str :
-                        "      GAS: N/A, Name: N/A");
+            ImGui::Text("      GAS: %s, Name: %s", gasIDStr, gasNameStr);
             helpMarker("via GeometryAccelerationStructure::setChildUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), "GAS Child: %3u", pickInfo.gasChildID);
-            ImGui::Text("%s", pickInfo.hit ? str :
-                        "GAS Child: N/A");
+            ImGui::Text("GAS Child: %s", gasChildIDStr);
             helpMarker("via GeometryInstance::setUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), " Geometry: %3u, Name: %s", pickInfo.geomID, geomInfos[pickInfo.geomID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str :
-                        " Geometry: N/A, Name: N/A");
+            ImGui::Text(" Geometry: %s, Name: %s", geomIDStr, geomNameStr);
             helpMarker("via Material::setUserData()"); ImGui::SameLine();
-            snprintf(str, sizeof(str), " Material: %3u, Name: %s", pickInfo.matID, matInfos[pickInfo.matID].c_str());
-            ImGui::Text("%s", pickInfo.hit ? str :
-                        " Material: N/A, Name: N/A");
+            ImGui::Text(" Material: %s, Name: %s", matIDStr, matNameStr);
 
             ImGui::End();
         }
