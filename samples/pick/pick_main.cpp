@@ -360,9 +360,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         p.missProgram = optixPipeline.createMissProgram(p.module, RT_MS_NAME_STR("miss"));
 
-        p.hitProgramGroup = optixPipeline.createHitProgramGroup(
+        p.hitProgramGroup = optixPipeline.createHitProgramGroupForBuiltinIS(
+            OPTIX_PRIMITIVE_TYPE_TRIANGLE,
             p.module, RT_CH_NAME_STR("closesthit"),
-            emptyModule, nullptr,
             emptyModule, nullptr);
 
         optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
@@ -403,9 +403,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         p.missProgram = optixPipeline.createMissProgram(p.module, RT_MS_NAME_STR("miss"));
 
-        p.hitProgramGroup = optixPipeline.createHitProgramGroup(
+        p.hitProgramGroup = optixPipeline.createHitProgramGroupForBuiltinIS(
+            OPTIX_PRIMITIVE_TYPE_TRIANGLE,
             p.module, RT_CH_NAME_STR("closesthit"),
-            emptyModule, nullptr,
             emptyModule, nullptr);
 
         optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));

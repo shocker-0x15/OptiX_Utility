@@ -465,20 +465,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("searchRay"));
     optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    // JP: これらのグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
-    // EN: These are for ray-triangle hit groups, so we don't need custom intersection program.
-    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr, emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr, emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"), emptyModule, nullptr);
+    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE, moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE, moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
-    optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("shading_diffuse"),
-                                                                                                emptyModule, nullptr,
-                                                                                                moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
-    optixu::ProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroup(emptyModule, nullptr,
-                                                                                             moduleOptiX, RT_AH_NAME_STR("visibility"),
-                                                                                             moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
+    optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"),
+        emptyModule, nullptr,
+        moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
+    optixu::ProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
+        emptyModule, nullptr,
+        moduleOptiX, RT_AH_NAME_STR("visibility"),
+        moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
 
     uint32_t nextCallableProgramIndex = 0;
     uint32_t callableProgramSampleTextureIndex = nextCallableProgramIndex++;

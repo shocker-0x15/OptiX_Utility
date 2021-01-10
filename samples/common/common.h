@@ -320,6 +320,9 @@ CUDA_DEVICE_FUNCTION float2 operator/(const float2 &v, float s) {
 CUDA_DEVICE_FUNCTION float3 make_float3(float v) {
     return make_float3(v, v, v);
 }
+CUDA_DEVICE_FUNCTION float3 make_float3(const float4 &v) {
+    return make_float3(v.x, v.y, v.z);
+}
 CUDA_DEVICE_FUNCTION float3 operator-(const float3 &v) {
     return make_float3(-v.x, -v.y, -v.z);
 }
@@ -379,6 +382,62 @@ CUDA_DEVICE_FUNCTION float4 make_float4(float v) {
 }
 CUDA_DEVICE_FUNCTION float4 make_float4(const float3 &v, float w) {
     return make_float4(v.x, v.y, v.z, w);
+}
+CUDA_DEVICE_FUNCTION float4 operator-(const float4 &v) {
+    return make_float4(-v.x, -v.y, -v.z, -v.w);
+}
+CUDA_DEVICE_FUNCTION float4 operator+(const float4 &v0, const float4 &v1) {
+    return make_float4(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z, v0.w + v1.w);
+}
+CUDA_DEVICE_FUNCTION float4 &operator+=(float4 &v0, const float4 &v1) {
+    v0.x += v1.x;
+    v0.y += v1.y;
+    v0.z += v1.z;
+    v0.w += v1.w;
+    return v0;
+}
+CUDA_DEVICE_FUNCTION float4 operator-(const float4 &v0, const float4 &v1) {
+    return make_float4(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z, v0.w - v1.w);
+}
+CUDA_DEVICE_FUNCTION float4 &operator-=(float4 &v0, const float4 &v1) {
+    v0.x -= v1.x;
+    v0.y -= v1.y;
+    v0.z -= v1.z;
+    v0.w -= v1.w;
+    return v0;
+}
+CUDA_DEVICE_FUNCTION float4 operator*(const float4 &v0, const float4 &v1) {
+    return make_float4(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z, v0.w * v1.w);
+}
+CUDA_DEVICE_FUNCTION float4 operator*(float s, const float4 &v) {
+    return make_float4(s * v.x, s * v.y, s * v.z, s * v.w);
+}
+CUDA_DEVICE_FUNCTION float4 operator*(const float4 &v, float s) {
+    return make_float4(s * v.x, s * v.y, s * v.z, s * v.w);
+}
+CUDA_DEVICE_FUNCTION float4 &operator*=(float4 &v, float s) {
+    v.x *= s;
+    v.y *= s;
+    v.z *= s;
+    v.w *= s;
+    return v;
+}
+CUDA_DEVICE_FUNCTION float4 operator/(const float4 &v0, const float4 &v1) {
+    return make_float4(v0.x / v1.x, v0.y / v1.y, v0.z / v1.z, v0.w / v1.w);
+}
+CUDA_DEVICE_FUNCTION float4 operator/(const float4 &v, float s) {
+    float r = 1 / s;
+    return r * v;
+}
+CUDA_DEVICE_FUNCTION float4 &operator/=(float4 &v, float s) {
+    float r = 1 / s;
+    return v *= r;
+}
+CUDA_DEVICE_FUNCTION bool allFinite(const float4 &v) {
+#if !defined(__CUDA_ARCH__)
+    using std::isfinite;
+#endif
+    return isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w);
 }
 
 CUDA_DEVICE_FUNCTION float3 min(const float3 &v0, const float3 &v1) {

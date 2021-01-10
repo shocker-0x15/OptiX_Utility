@@ -455,19 +455,30 @@ namespace optixu {
             BufferView triangleBuffer;
             OptixVertexFormat vertexFormat;
             OptixIndicesFormat indexFormat;
+            BufferView materialIndexOffsetBuffer;
+            uint32_t materialIndexOffsetSize;
+        };
+        struct CurveGeometry {
+            CUdeviceptr* vertexBufferArray;
+            CUdeviceptr* widthBufferArray;
+            BufferView* vertexBuffers;
+            BufferView* widthBuffers;
+            BufferView segmentIndexBuffer;
         };
         struct CustomPrimitiveGeometry {
             CUdeviceptr* primitiveAabbBufferArray;
             BufferView* primitiveAabbBuffers;
+            BufferView materialIndexOffsetBuffer;
+            uint32_t materialIndexOffsetSize;
         };
         std::variant<
             TriangleGeometry,
+            CurveGeometry,
             CustomPrimitiveGeometry
         > geometry;
+        GeometryType geomType;
         uint32_t numMotionSteps;
         uint32_t primitiveIndexOffset;
-        uint32_t materialIndexOffsetSize;
-        BufferView materialIndexOffsetBuffer;
         std::vector<OptixGeometryFlags> buildInputFlags; // per SBT record
 
         std::vector<std::vector<_Material*>> materials;
@@ -475,11 +486,15 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(GeometryInstance);
 
-        Priv(_Scene* _scene, GeometryType geomType) :
+        Priv(_Scene* _scene, GeometryType _geomType) :
             scene(_scene),
-            userData(sizeof(uint32_t)),
-            primitiveIndexOffset(0),
-            materialIndexOffsetSize(0) {
+            userData(),
+            geomType(_geomType),
+            primitiveIndexOffset(0) {
+            buildInputFlags.resize(1, OPTIX_GEOMETRY_FLAG_NONE);
+            materials.resize(1);
+            materials[0].resize(1, nullptr);
+
             numMotionSteps = 1;
             if (geomType == GeometryType::Triangles) {
                 geometry = TriangleGeometry{};
@@ -491,6 +506,22 @@ namespace optixu {
                 geom.triangleBuffer = BufferView();
                 geom.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
                 geom.indexFormat = OPTIX_INDICES_FORMAT_NONE;
+                geom.materialIndexOffsetSize = 0;
+            }
+            else if (geomType == GeometryType::LinearSegments ||
+                     geomType == GeometryType::QuadraticBSplines ||
+                     geomType == GeometryType::CubicBSplines) {
+                geometry = CurveGeometry{};
+                auto &geom = std::get<CurveGeometry>(geometry);
+                geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
+                geom.vertexBufferArray[0] = 0;
+                geom.vertexBuffers = new BufferView[numMotionSteps];
+                geom.vertexBuffers[0] = BufferView();
+                geom.widthBufferArray = new CUdeviceptr[numMotionSteps];
+                geom.widthBufferArray[0] = 0;
+                geom.widthBuffers = new BufferView[numMotionSteps];
+                geom.widthBuffers[0] = BufferView();
+                geom.segmentIndexBuffer = BufferView();
             }
             else if (geomType == GeometryType::CustomPrimitives) {
                 geometry = CustomPrimitiveGeometry{};
@@ -499,14 +530,22 @@ namespace optixu {
                 geom.primitiveAabbBufferArray[0] = 0;
                 geom.primitiveAabbBuffers = new BufferView[numMotionSteps];
                 geom.primitiveAabbBuffers[0] = BufferView();
+                geom.materialIndexOffsetSize = 0;
             }
             else {
-                optixuAssert_NotImplemented();
+                optixuAssert_ShouldNotBeCalled();
             }
         }
         ~Priv() {
             if (std::holds_alternative<TriangleGeometry>(geometry)) {
                 auto &geom = std::get<TriangleGeometry>(geometry);
+                delete[] geom.vertexBuffers;
+                delete[] geom.vertexBufferArray;
+            }
+            else if (std::holds_alternative<CurveGeometry>(geometry)) {
+                auto &geom = std::get<CurveGeometry>(geometry);
+                delete[] geom.widthBuffers;
+                delete[] geom.widthBufferArray;
                 delete[] geom.vertexBuffers;
                 delete[] geom.vertexBufferArray;
             }
@@ -516,7 +555,7 @@ namespace optixu {
                 delete[] geom.primitiveAabbBufferArray;
             }
             else {
-                optixuAssert_NotImplemented();
+                optixuAssert_ShouldNotBeCalled();
             }
         }
 
@@ -535,12 +574,7 @@ namespace optixu {
 
 
         GeometryType getGeometryType() const {
-            if (std::holds_alternative<TriangleGeometry>(geometry))
-                return GeometryType::Triangles;
-            else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry))
-                return GeometryType::CustomPrimitives;
-            optixuAssert_NotImplemented();
-            return GeometryType::Triangles;
+            return geomType;
         }
         uint32_t getNumMotionSteps() const {
             return numMotionSteps;
@@ -615,6 +649,8 @@ namespace optixu {
             readyToBuild(false), available(false), 
             readyToCompact(false), compactedAvailable(false) {
             scene->addGAS(this);
+
+            numRayTypesPerMaterialSet.resize(1, 0);
 
             buildOptions = {};
 
@@ -907,6 +943,7 @@ namespace optixu {
         uint32_t numCallablePrograms;
         size_t sbtSize;
 
+        std::unordered_map<OptixPrimitiveType, _Module*> modulesForBuiltin;
         _ProgramGroup* rayGenProgram;
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
@@ -937,10 +974,7 @@ namespace optixu {
             pipelineLinked(false), sbtLayoutIsUpToDate(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
             sbtParams = {};
         }
-        ~Priv() {
-            if (pipelineLinked)
-                optixPipelineDestroy(rawPipeline);
-        }
+        ~Priv();
 
         _Context* getContext() const {
             return context;
@@ -953,6 +987,8 @@ namespace optixu {
 
 
 
+        void markDirty();
+        OptixModule getModuleForBuiltin(OptixPrimitiveType primType);
         void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
         void destroyProgram(OptixProgramGroup group);
     };

@@ -19,7 +19,7 @@ Currently based on OptiX 7.2.0
 - Primitive types
   - [x] Triangles
   - [x] User-defined custom primitives
-  - [ ] Curves
+  - [x] Curves
 - Motion blur types
   - [x] Instance motion blur
   - [x] Deformation blur

@@ -32,6 +32,13 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+  JP: カーブプリミティブをサポート。
+      ヒットグループを生成する関数を変更。三角形とカーブに関してはcreateHitProgramGroupForBuiltinIS()を、
+      カスタムプリミティブに関してはcreateHitProgramGroupForCustomIS()を使用してください。
+  EN: Added support for curve primitives.
+      Changed the function to create a hit group. Use createHitProgramGroupForBuiltinIS() for triangles and
+      curves and createHitProgramGroupForCustomIS() for custom primitives.
+- !!BREAKING
   JP: GeometryInstanceとGASをSceneから生成する関数の引数の型をenumに変更。
   EN: Changed the type of argument of the functions to create a GeometryInstance or a GAS from a Scene to enum.
 - !!BREAKING
@@ -64,14 +71,16 @@ TODO:
 - CMake整備。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - ASのRelocationサポート。
-- Curve Primitiveサポート。
+- Instance Pointersサポート。
 - AOV Denoiserサポート。
+- removeUncompacted再考。(compaction終了待ちとしてとらえる？)
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
 - Multi GPUs?
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
+- MaterialのヒットグループのISとGeometryInstanceの一致確認。
 - GeometryInstanceのGASをdirtyにする処理のうち、いくつかは内部的にSBTレイアウトの無効化をスキップできるはず。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
 - GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
@@ -658,6 +667,9 @@ namespace optixu {
 
     enum class GeometryType {
         Triangles = 0,
+        LinearSegments,
+        QuadraticBSplines,
+        CubicBSplines,
         CustomPrimitives,
     };
 
@@ -828,14 +840,16 @@ private: \
         OPTIXU_COMMON_FUNCTIONS(GeometryInstance);
 
         // JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
-        //     (頂点/AABBバッファーの変更のみの場合は、markDirty()を呼ばずにGASのアップデートだけでも良い。)
+        //     (頂点/Width/AABBバッファーの変更のみの場合は、markDirty()を呼ばずにGASのアップデートだけでも良い。)
         // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
         //     required when calling the following APIs.
-        //     (It is okay to use update instead of calling markDirty() when changing only vertex/AABB buffer.)
+        //     (It is okay to use update instead of calling markDirty() when changing only vertex/width/AABB buffer.)
         void setNumMotionSteps(uint32_t n) const;
         void setVertexFormat(OptixVertexFormat format) const;
         void setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep = 0) const;
+        void setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep = 0) const;
         void setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
+        void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, const BufferView &matIndexOffsetBuffer, uint32_t indexOffsetSize = sizeof(uint32_t)) const;
@@ -1122,9 +1136,13 @@ private: \
         [[nodiscard]]
         ProgramGroup createMissProgram(Module module, const char* entryFunctionName) const;
         [[nodiscard]]
-        ProgramGroup createHitProgramGroup(Module module_CH, const char* entryFunctionNameCH,
-                                           Module module_AH, const char* entryFunctionNameAH,
-                                           Module module_IS, const char* entryFunctionNameIS) const;
+        ProgramGroup createHitProgramGroupForBuiltinIS(OptixPrimitiveType primType,
+                                                       Module module_CH, const char* entryFunctionNameCH,
+                                                       Module module_AH, const char* entryFunctionNameAH) const;
+        [[nodiscard]]
+        ProgramGroup createHitProgramGroupForCustomIS(Module module_CH, const char* entryFunctionNameCH,
+                                                      Module module_AH, const char* entryFunctionNameAH,
+                                                      Module module_IS, const char* entryFunctionNameIS) const;
         [[nodiscard]]
         ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
                                                 Module module_CC, const char* entryFunctionNameCC) const;

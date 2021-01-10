@@ -33,7 +33,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: このサンプルでは単一のGASのみを使用する。
     //     カーネル中で使用しているアトリビュートサイズは2Dwords(三角形の重心座標 float2)。
     // EN: This sample uses only a single GAS.
-    //     The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2) at most.
+    //     The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2).
     pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
@@ -54,11 +54,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
 
-    // JP: このヒットグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
-    // EN: This hit group is for ray-triangle intersection, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
         moduleOptiX, RT_CH_NAME_STR("closesthit0"),
-        emptyModule, nullptr,
         emptyModule, nullptr);
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。

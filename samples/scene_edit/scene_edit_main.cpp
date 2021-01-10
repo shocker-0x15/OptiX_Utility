@@ -1180,9 +1180,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
     // EN: This group is for ray-triangle intersection, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroup(moduleOptiX, RT_CH_NAME_STR("closesthit"),
-                                                                           emptyModule, nullptr,
-                                                                           emptyModule, nullptr);
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr);
 
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
