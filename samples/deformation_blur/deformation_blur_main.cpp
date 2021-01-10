@@ -356,37 +356,36 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     Call things as "dynamic" for which we often need to rebuild the AS otherwise call them as "static".
     //     Record ASs of multiple meshes into single buffer back to back.
     struct CompactedASInfo {
-        optixu::GeometryAccelerationStructure gas;
+        Geometry* geom;
         size_t offset;
         size_t size;
     };
     CompactedASInfo gasList[] = {
-        { bunny.optixGas, 0, 0 },
-        { spheres.optixGas, 0, 0 },
+        { &bunny, 0, 0 },
+        { &spheres, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
         CompactedASInfo &info = gasList[i];
         compactedASMemOffset = alignUp(compactedASMemOffset, OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
         info.offset = compactedASMemOffset;
-        info.gas.prepareForCompact(&info.size);
+        info.geom->optixGas.prepareForCompact(&info.size);
         compactedASMemOffset += info.size;
     }
     cudau::Buffer compactedASMem;
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
+        info.geom->optixGas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
                                                       info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
     //     so separating calls is recommended.
-    for (int i = 0; i < lengthof(gasList); ++i)
-        gasList[i].gas.removeUncompacted();
-
-    spheres.gasMem.finalize();
-    bunny.gasMem.finalize();
+    for (int i = 0; i < lengthof(gasList); ++i) {
+        gasList[i].geom->optixGas.removeUncompacted();
+        gasList[i].geom->gasMem.finalize();
+    }
 
 
 

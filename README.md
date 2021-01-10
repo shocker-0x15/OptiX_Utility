@@ -81,13 +81,13 @@ optixu::Module mainModule = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPIL
 optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
 optixu::ProgramGroup searchRayHitProgramGroup =
-    pipeline.createHitProgramGroup(mainModule, RT_CH_NAME_STR("shading"),
-                                   emptyModule, nullptr,
-                                   emptyModule, nullptr);
+    pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        mainModule, RT_CH_NAME_STR("shading"), emptyModule, nullptr);
 optixu::ProgramGroup visibilityRayHitProgramGroup =
-    pipeline.createHitProgramGroup(emptyModule, nullptr,
-                                   mainModule, RT_AH_NAME_STR("visibility"),
-                                   emptyModule, nullptr);
+    pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        emptyModule, nullptr, mainModule, RT_AH_NAME_STR("visibility"));
 // ...
 pipeline.link(2, OPTIX_COMPILE_DEBUG_LEVEL_FULL);
 

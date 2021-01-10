@@ -390,12 +390,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     Record ASs of multiple meshes into single buffer back to back.
     struct CompactedASInfo {
         optixu::GeometryAccelerationStructure gas;
+        cudau::Buffer* mem;
         size_t offset;
         size_t size;
     };
     CompactedASInfo gasList[] = {
-        { roomGas, 0, 0 },
-        { polygonGas, 0, 0 },
+        { roomGas, &roomGasMem, 0, 0 },
+        { polygonGas, &polygonGasMem, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -415,11 +416,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
     //     so separating calls is recommended.
-    for (int i = 0; i < lengthof(gasList); ++i)
+    for (int i = 0; i < lengthof(gasList); ++i) {
         gasList[i].gas.removeUncompacted();
-
-    polygonGasMem.finalize();
-    roomGasMem.finalize();
+        gasList[i].mem->finalize();
+    }
 
 
 
