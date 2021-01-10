@@ -199,60 +199,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 }
 
                 // Ending phantom points
-                if (curveDegree == 2) {
-                    // TODO: Is this preferred??
-                    vertices->push_back(vertices->back());
-                }
-                else if (curveDegree == 3) {
+                if (curveDegree > 1) {
                     float width = 0.0f;
                     float3 pm1 = (*vertices)[vertices->size() - 1].position;
                     float3 pm2 = (*vertices)[vertices->size() - 2].position;
-                    float3 pos = 2 * pm1 - pm2;
+                    float3 d = pm1 - pm2;
+                    if (curveDegree == 2)
+                        d *= 1e-3f;
+                    float3 pos = pm1 + d;
                     vertices->push_back(Shared::CurveVertex{ pos, width });
                 }
 
                 // Modify the beginning phantom points
-                if (curveDegree == 2) {
-                    // TODO: Is this preferred??
-                    (*vertices)[indexStart].position = (*vertices)[indexStart + 1].position;
-                }
-                else if (curveDegree == 3) {
+                if (curveDegree > 1) {
                     float3 p1 = (*vertices)[indexStart + 1].position;
                     float3 p2 = (*vertices)[indexStart + 2].position;
-                    (*vertices)[indexStart].position = 2 * p1 - p2;
+                    float3 d = p1 - p2;
+                    if (curveDegree == 2)
+                        d *= 1e-3f;
+                    (*vertices)[indexStart].position = p1 + d;
                 }
 
                 for (int s = 0; s < vertices->size() - indexStart - curveDegree; ++s)
                     indices->push_back(indexStart + s);
             }
         }
-
-        //if (curveDegree > 1)
-        //    vertices->push_back(Shared::CurveVertex{ float3(0.0f, 0.0f, 0.0f), baseWidth });
-        //vertices->push_back(Shared::CurveVertex{ float3(0.2f, 0.2f, 0.0f), baseWidth });
-        //vertices->push_back(Shared::CurveVertex{ float3(0.0f, 0.1f, 0.0f), baseWidth });
-        //vertices->push_back(Shared::CurveVertex{ float3(-0.3f, 0.4f, 0.0f), baseWidth });
-        //vertices->push_back(Shared::CurveVertex{ float3(0.0f, 0.7f, 0.0f), baseWidth });
-        //vertices->push_back(Shared::CurveVertex{ float3(0.2f, 0.6f, 0.0f), baseWidth });
-        //if (curveDegree > 1)
-        //    vertices->push_back(Shared::CurveVertex{ float3(0.0f, 0.0f, 0.0f), baseWidth });
-
-        //if (curveDegree == 2) {
-        //    ((*vertices)[0]).position = ((*vertices)[1]).position;
-        //    ((*vertices)[6]).position = ((*vertices)[5]).position;
-        //}
-        //else if (curveDegree == 3) {
-        //    float3 p1 = ((*vertices)[1]).position;
-        //    float3 p2 = ((*vertices)[2]).position;
-        //    ((*vertices)[0]).position = p1 + (p1 - p2);
-
-        //    float3 pn = ((*vertices)[5]).position;
-        //    float3 pn_m1 = ((*vertices)[4]).position;
-        //    ((*vertices)[6]).position = pn + (pn - pn_m1);
-        //}
-
-        //for (int i = 0; i < vertices->size() - curveDegree; ++i)
-        //    indices->push_back(i);
     };
 
     uint32_t numX = 5;
@@ -392,7 +363,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     linearCurvesGas.addChild(linearCurveGeomInst);
     linearCurvesGas.prepareForBuild(&asMemReqs);
-    linearCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, std::max(asMemReqs.outputSizeInBytes, 4llu), 1);
+    linearCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     optixu::GeometryAccelerationStructure quadraticCurvesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
@@ -402,7 +373,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     quadraticCurvesGas.addChild(quadraticCurveGeomInst);
     quadraticCurvesGas.prepareForBuild(&asMemReqs);
-    quadraticCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, std::max(asMemReqs.outputSizeInBytes, 4llu), 1);
+    quadraticCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     optixu::GeometryAccelerationStructure cubicCurvesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
@@ -412,7 +383,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     cubicCurvesGas.addChild(cubicCurveGeomInst);
     cubicCurvesGas.prepareForBuild(&asMemReqs);
-    cubicCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, std::max(asMemReqs.outputSizeInBytes, 4llu), 1);
+    cubicCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

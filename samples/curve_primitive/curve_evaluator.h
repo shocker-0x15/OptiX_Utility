@@ -251,13 +251,13 @@ namespace curve {
 
             float3 normal;
             if (u == 0.0f) {
-                if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR)
+                if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
                     normal = hp - make_float3(m_interpolator.m_p[0]); // special handling for round endcaps
                 else
                     normal = -m_interpolator.dPosition(0); // special handling for flat endcaps
             }
             else if (u >= 1.0f) {
-                if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR) {
+                if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR) {
                     // reconstruct second control point (Note: the interpolator pre-transforms
                     // the control-points to speed up repeated evaluation.
                     float3 p1 = make_float3(m_interpolator.m_p[1]) + make_float3(m_interpolator.m_p[0]);

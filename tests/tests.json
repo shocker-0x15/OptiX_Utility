@@ -31,6 +31,11 @@
         "outputs": ["output.png"]
     },
     {
+        "sample": "curve_primitive",
+        "image": "output.png",
+        "outputs": ["output.png"]
+    },
+    {
         "sample": "multi_level_instancing",
         "image": "output.png",
         "outputs": ["output.png"]
