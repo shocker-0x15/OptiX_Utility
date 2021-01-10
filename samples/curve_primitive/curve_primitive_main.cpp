@@ -2,9 +2,13 @@
 
 JP: このサンプルはカーブを扱う方法を示します。
     カーブとレイの交叉判定はOptiXによって内部的に扱われます。
+    OptiXがサポートするカーブにはリニア、二次、三次のBスプライン曲線があります。
+    カーブは頂点バッファーと頂点ごとの幅を表すバッファー、そしてインデックスバッファーから構成されます。
 
 EN: This sample shows how to handle curves.
     Intersection test between a ray and a curve is handled internally by OptiX.
+    OptiX supports three types of curves, linear, quadratic, and cubic B-splines.
+    Curves consist of a vertex buffer and a buffer for the width at each vertex and an index buffer.
 
 */
 

@@ -2,9 +2,11 @@
 
 JP: このサンプルはインタラクティブなアプリケーション上におけるオブジェクトピック実装の一例を示します。
     APIの使い方として新しいものを示すサンプルではありません。
+    例として透視投影と正距円筒図法による投影を使ったカメラを示します。
 
 EN: This sample demonstrates an example of implementing object picking in an interactive application.
     This sample has nothing new for API usage.
+    As examples, cameras using perspective projection and equirectangular projection are provided.
 
 */
 

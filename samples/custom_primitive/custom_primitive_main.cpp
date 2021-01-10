@@ -3,10 +3,12 @@
 JP: このサンプルは三角形とカーブ以外のカスタムプリミティブを扱う方法を示します。
     三角形とレイの交叉判定はOptiXによって内部的に扱われますが、カスタムプリミティブの場合は
     ユーザーが独自の交叉判定プログラムを記述します。
+    Geometry Acceleration Structureは各プリミティブを囲むAABBの配列に対して構築します。
 
 EN: This sample shows how to handle custom primitives other than triangles or curves.
     Intersection test between a ray and a triangle is handled internally by OptiX
     but in the case of custom primitives the user writes own program to test intersection.
+    A geometry acceleration structure is built over an array of AABBs, where each encloses a primitive.
 
 */
 
