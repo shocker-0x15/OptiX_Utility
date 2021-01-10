@@ -27,6 +27,12 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
+    struct CurveVertex {
+        float3 position;
+        float width;
+        float2 texCoord;
+    };
+
 
 
     class PCG32RNG {
@@ -94,6 +100,10 @@ namespace Shared {
                 const Triangle* triangleBuffer;
             };
             struct {
+                const CurveVertex* curveVertexBuffer;
+                const uint32_t* segmentIndexBuffer;
+            };
+            struct {
                 const AABB* aabbBuffer;
                 const SphereParameter* paramBuffer;
             };
@@ -102,7 +112,11 @@ namespace Shared {
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         CUDA_DEVICE_FUNCTION void decodeHitPoint(const HitPointParameter &hitPointParam,
-                                        float3* p, float3* sn, float2* texCoord) const {
+                                                 float3* p, float3* sn, float2* texCoord) const {
+            if (isnan(hitPointParam.b1)) { // curves
+                *p = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
+                *p = optixTransformPointFromWorldToObjectSpace(*p);
+            }
             decodeHitPointFunc(hitPointParam, *this, p, sn, texCoord);
             *p = optixTransformPointFromObjectToWorldSpace(*p);
             *sn = normalize(optixTransformNormalFromObjectToWorldSpace(*sn));

@@ -25,7 +25,7 @@
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\common.h" />
-    <ClInclude Include="curve_evaluator.h" />
+    <ClInclude Include="..\common\curve_evaluator.h" />
     <ClInclude Include="curve_primitive_shared.h" />
   </ItemGroup>
   <ItemGroup>

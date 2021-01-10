@@ -450,7 +450,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                               OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                               OPTIX_EXCEPTION_FLAG_DEBUG),
                                              OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
@@ -472,15 +474,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
         OPTIX_PRIMITIVE_TYPE_TRIANGLE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
+    optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
+
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
     optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
-        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"),
-        emptyModule, nullptr,
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr,
+        moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
+    optixu::ProgramGroup searchRaySpecularCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
+        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr,
         moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
     optixu::ProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
-        emptyModule, nullptr,
-        moduleOptiX, RT_AH_NAME_STR("visibility"),
+        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"),
         moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
 
     uint32_t nextCallableProgramIndex = 0;
@@ -488,6 +498,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointTriangleIndex = nextCallableProgramIndex++;
     optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
+    uint32_t callableProgramDecodeHitPointCurveIndex = nextCallableProgramIndex++;
+    optixu::ProgramGroup callableProgramDecodeHitPointCurve = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointCurve"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointSphereIndex = nextCallableProgramIndex++;
     optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
@@ -503,6 +515,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumCallablePrograms(nextCallableProgramIndex);
     pipeline.setCallableProgram(callableProgramSampleTextureIndex, callableProgramSampleTexture);
     pipeline.setCallableProgram(callableProgramDecodeHitPointTriangleIndex, callableProgramDecodeHitPointTriangle);
+    pipeline.setCallableProgram(callableProgramDecodeHitPointCurveIndex, callableProgramDecodeHitPointCurve);
     pipeline.setCallableProgram(callableProgramDecodeHitPointSphereIndex, callableProgramDecodeHitPointSphere);
 
     cudau::Buffer shaderBindingTable;
@@ -654,6 +667,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::TypedBuffer<Shared::MaterialData> materialDataBuffer;
     materialDataBuffer.initialize(cuContext, g_bufferType, 128);
+    materialDataBuffer.setMappedMemoryPersistent(true);
     uint32_t materialID = 0;
 
     Shared::MaterialData* matData = materialDataBuffer.map();
@@ -673,9 +687,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     matFloor.setHitGroup(Shared::RayType_Visibility, visibilityRayHitProgramGroup);
     matFloor.setUserData(matFloorIndex);
     Shared::MaterialData matFloorData;
-    matFloorData.albedo = make_float3(0, 0, 0);
-    matFloorData.program = callableProgramSampleTextureIndex;
-    matFloorData.texID = texCheckerBoardIndex;
+    matFloorData.albedo = make_float3(0.01f, 0.01f, 0.01f);
+    //matFloorData.program = callableProgramSampleTextureIndex;
+    //matFloorData.texID = texCheckerBoardIndex;
     matData[matFloorIndex] = matFloorData;
 
     uint32_t matLeftWallIndex = materialID++;
@@ -704,6 +718,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     Shared::MaterialData matLightData;
     matLightData.albedo = make_float3(1, 1, 1);
     matData[matLightIndex] = matLightData;
+
+    uint32_t matFloorFiberIndex = materialID++;
+    optixu::Material matFloorFiber = optixContext.createMaterial();
+    matFloorFiber.setHitGroup(Shared::RayType_Search, searchRayDiffuseCurveHitProgramGroup);
+    matFloorFiber.setHitGroup(Shared::RayType_Visibility, visibilityRayCurveHitProgramGroup);
+    matFloorFiber.setUserData(matFloorFiberIndex);
+    Shared::MaterialData matFloorFiberData;
+    matFloorFiberData.albedo = make_float3(0, 0, 0);
+    matFloorFiberData.program = callableProgramSampleTextureIndex;
+    matFloorFiberData.texID = texCheckerBoardIndex;
+    matData[matFloorFiberIndex] = matFloorFiberData;
 
     uint32_t matObject0Index = materialID++;
     optixu::Material matObject0 = optixContext.createMaterial();
@@ -752,6 +777,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     sceneContext.optixScene = scene;
     sceneContext.decodeHitPointTriangle = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointTriangleIndex);
     sceneContext.geometryDataBuffer.initialize(cuContext, g_bufferType, 128);
+    sceneContext.geometryDataBuffer.setMappedMemoryPersistent(true);
     sceneContext.geometryID = 0;
     
     TriangleMesh meshCornellBox(cuContext, &sceneContext);
@@ -831,6 +857,128 @@ int32_t main(int32_t argc, const char* argv[]) try {
         meshAreaLight.setVertexBuffer(vertices, lengthof(vertices));
 
         meshAreaLight.addMaterialGroup(triangles + 0, 2, matLight);
+    }
+
+    const auto generateCurves = [](std::vector<Shared::CurveVertex>* vertices,
+                                   std::vector<uint32_t>* indices,
+                                   float xStart, float xEnd, uint32_t numX,
+                                   float zStart, float zEnd, uint32_t numZ,
+                                   float baseWidth, float tipWidth, float height, uint32_t curveDegree)
+    {
+        std::mt19937 rng(390318410);
+        std::uniform_int_distribution<uint32_t> uSeg(3, 5);
+        std::uniform_real_distribution<float> u01;
+
+        vertices->clear();
+        indices->clear();
+
+        const float deltaX = (xEnd - xStart) / numX;
+        const float deltaZ = (zEnd - zStart) / numZ;
+        for (int iz = 0; iz < numZ; ++iz) {
+            float pz = (iz + 0.5f) / numZ;
+            float z = (1 - pz) * zStart + pz * zEnd;
+            for (int ix = 0; ix < numX; ++ix) {
+                float px = (ix + 0.5f) / numX;
+                float x = (1 - px) * xStart + px * xEnd;
+
+                uint32_t numSegments = uSeg(rng);
+                uint32_t indexStart = vertices->size();
+
+                float2 texCoord = float2(5 * px, 5 * pz);
+
+                // Beginning phantom points
+                if (curveDegree > 1) {
+                    float3 pos = float3(0.0f, 0.0f, 0.0f);
+                    float width = baseWidth;
+                    vertices->push_back(Shared::CurveVertex{ pos, width, texCoord });
+                }
+
+                float xOffset = 0.5f * deltaX * (u01(rng) - 0.5f);
+                float zOffset = 0.5f * deltaZ * (u01(rng) - 0.5f);
+                float strandHeight = height * (1 + 0.25f * (u01(rng) - 0.5f));
+
+                // Base
+                {
+                    float3 pos = float3(xOffset + x, 0.0f, zOffset + z);
+                    float width = baseWidth;
+                    vertices->push_back(Shared::CurveVertex{ pos, width, texCoord });
+                }
+                for (int s = 0; s < numSegments; ++s) {
+                    float p = (float)(s + 1) / numSegments;
+                    float3 pos = float3(xOffset + x + 0.3f * deltaX * (u01(rng) - 0.5f),
+                                        p * strandHeight,
+                                        zOffset + z + 0.3f * deltaZ * (u01(rng) - 0.5f));
+                    float width = baseWidth * (1 - p) + tipWidth * p;
+                    vertices->push_back(Shared::CurveVertex{ pos, width, texCoord });
+                }
+
+                // Ending phantom points
+                if (curveDegree > 1) {
+                    float width = tipWidth;
+                    float3 pm1 = (*vertices)[vertices->size() - 1].position;
+                    float3 pm2 = (*vertices)[vertices->size() - 2].position;
+                    float3 d = pm1 - pm2;
+                    if (curveDegree == 2)
+                        d *= 1e-3f;
+                    float3 pos = pm1 + d;
+                    vertices->push_back(Shared::CurveVertex{ pos, width, texCoord });
+                }
+
+                // Modify the beginning phantom points
+                if (curveDegree > 1) {
+                    float3 p1 = (*vertices)[indexStart + 1].position;
+                    float3 p2 = (*vertices)[indexStart + 2].position;
+                    float3 d = p1 - p2;
+                    if (curveDegree == 2)
+                        d *= 1e-3f;
+                    (*vertices)[indexStart].position = p1 + d;
+                }
+
+                for (int s = 0; s < vertices->size() - indexStart - curveDegree; ++s)
+                    indices->push_back(indexStart + s);
+            }
+        }
+    };
+
+    optixu::GeometryInstance floorFiberGeomInst = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
+    cudau::TypedBuffer<Shared::CurveVertex> floorFiberVertexBuffer;
+    cudau::TypedBuffer<uint32_t> floorFiberSegmentIndexBuffer;
+    {
+        uint32_t numX = 500;
+        uint32_t numZ = 500;
+        float baseWidth = 0.0015f;
+        float tipWidth = 0.0005f;
+        float height = 0.01f;
+
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateCurves(&vertices, &indices,
+                       -1.0f + 0.005f, 1.0f - 0.005f, numX,
+                       -1.0f + 0.005f, 1.0f - 0.005f, numZ,
+                       baseWidth, tipWidth, height, 3);
+
+        floorFiberVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        floorFiberSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        floorFiberGeomInst.setVertexBuffer(optixu::BufferView(
+            floorFiberVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            floorFiberVertexBuffer.numElements(), floorFiberVertexBuffer.stride()));
+        floorFiberGeomInst.setWidthBuffer(optixu::BufferView(
+            floorFiberVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            floorFiberVertexBuffer.numElements(), floorFiberVertexBuffer.stride()));
+        floorFiberGeomInst.setSegmentIndexBuffer(floorFiberSegmentIndexBuffer);
+        floorFiberGeomInst.setMaterial(0, 0, matFloorFiber);
+        floorFiberGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        floorFiberGeomInst.setUserData(sceneContext.geometryID);
+
+        Shared::GeometryData* geomDataPtr = sceneContext.geometryDataBuffer.map();
+        Shared::GeometryData &recordData = geomDataPtr[sceneContext.geometryID];
+        recordData.curveVertexBuffer = floorFiberVertexBuffer.getDevicePointer();
+        recordData.segmentIndexBuffer = floorFiberSegmentIndexBuffer.getDevicePointer();
+        recordData.decodeHitPointFunc = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointCurveIndex);
+        sceneContext.geometryDataBuffer.unmap();
+
+        ++sceneContext.geometryID;
     }
 
     TriangleMesh meshObject(cuContext, &sceneContext);
@@ -947,6 +1095,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+    uint32_t gasFloorFiberIndex = travID++;
+    optixu::GeometryAccelerationStructure gasFloorFiber = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
+    cudau::Buffer gasFloorFiberMem;
+    cudau::Buffer gasFloorFiberCompactedMem;
+    gasFloorFiber.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    gasFloorFiber.setNumMaterialSets(1);
+    gasFloorFiber.setNumRayTypes(0, Shared::NumRayTypes);
+    gasFloorFiber.addChild(floorFiberGeomInst);
+    gasFloorFiber.prepareForBuild(&asMemReqs);
+    gasFloorFiberMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
     uint32_t gasObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasObjectMem;
@@ -987,6 +1147,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     asBuildScratchMem.initialize(cuContext, g_bufferType, maxSizeOfScratchBuffer, 1);
     travHandles[gasCornellBoxIndex] = gasCornellBox.rebuild(cuStream, gasCornellBoxMem, asBuildScratchMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.rebuild(cuStream, gasAreaLightMem, asBuildScratchMem);
+    travHandles[gasFloorFiberIndex] = gasFloorFiber.rebuild(cuStream, gasFloorFiberMem, asBuildScratchMem);
     travHandles[gasObjectIndex] = gasObject.rebuild(cuStream, gasObjectMem, asBuildScratchMem);
     travHandles[gasCustomPrimObjectIndex] = gasCustomPrimObject.rebuild(cuStream, gasCustomPrimObjectMem, asBuildScratchMem);
 
@@ -997,10 +1158,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCornellBoxCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     gasAreaLight.prepareForCompact(&compactedASSize);
     gasAreaLightCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
+    gasFloorFiber.prepareForCompact(&compactedASSize);
+    gasFloorFiberCompactedMem.initialize(cuContext, cudau::BufferType::Device, compactedASSize, 1);
     travHandles[gasCornellBoxIndex] = gasCornellBox.compact(cuStream, gasCornellBoxCompactedMem);
     travHandles[gasAreaLightIndex] = gasAreaLight.compact(cuStream, gasAreaLightCompactedMem);
+    travHandles[gasFloorFiberIndex] = gasFloorFiber.compact(cuStream, gasFloorFiberCompactedMem);
     gasCornellBox.removeUncompacted();
     gasAreaLight.removeUncompacted();
+    gasFloorFiber.removeUncompacted();
 
 
 
@@ -1024,6 +1189,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
     instAreaLight.setChild(gasAreaLight);
     instAreaLight.setTransform(tfAreaLight);
+
+    optixu::Instance instFloorFiber = scene.createInstance();
+    float tfFloorFiber[] = {
+    1, 0, 0, 0,
+    0, 1, 0, -1.0f,
+    0, 0, 1, 0
+    };
+    instFloorFiber.setChild(gasFloorFiber);
+    instFloorFiber.setTransform(tfFloorFiber);
 
     // JP: オブジェクトのインスタンスを2つ作成するが、
     //     ひとつはマテリアルセット0、もうひとつは1にする。
@@ -1054,6 +1228,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasScene.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
+    iasScene.addChild(instFloorFiber);
     iasScene.addChild(instObject0);
     iasScene.addChild(instObject1);
     iasScene.addChild(instCustomPrimObject);
@@ -1812,6 +1987,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     instCustomPrimObject.destroy();
     instObject1.destroy();
     instObject0.destroy();
+    instFloorFiber.destroy();
     instAreaLight.destroy();
     instCornellBox.destroy();
 
@@ -1823,6 +1999,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCustomPrimObject.destroy();
     gasObjectMem.finalize();
     gasObject.destroy();
+    gasFloorFiberCompactedMem.finalize();
+    gasFloorFiberMem.finalize();
+    gasFloorFiber.destroy();
     gasAreaLightCompactedMem.finalize();
     gasAreaLightMem.finalize();
     gasAreaLight.destroy();
@@ -1839,6 +2018,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     orgObjectVertexBuffer.finalize();
 
     meshObject.destroy();
+
+    floorFiberSegmentIndexBuffer.finalize();
+    floorFiberVertexBuffer.finalize();
+    floorFiberGeomInst.destroy();
+
     meshAreaLight.destroy();
     meshCornellBox.destroy();
 
@@ -1848,6 +2032,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     matObject0.destroy();
     matObject1.destroy();
+    matFloorFiber.destroy();
     matLight.destroy();
     matRight.destroy();
     matLeft.destroy();
@@ -1876,7 +2061,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     callableProgramSampleTexture.destroy();
 
     visibilityRayCustomHitProgramGroup.destroy();
+    searchRaySpecularCustomHitProgramGroup.destroy();
     searchRayDiffuseCustomHitProgramGroup.destroy();
+
+    visibilityRayCurveHitProgramGroup.destroy();
+    searchRaySpecularCurveHitProgramGroup.destroy();
+    searchRayDiffuseCurveHitProgramGroup.destroy();
 
     visibilityRayHitProgramGroup.destroy();
     searchRaySpecularHitProgramGroup.destroy();

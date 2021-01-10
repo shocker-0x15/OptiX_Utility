@@ -30,6 +30,7 @@
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
+    <ClInclude Include="..\common\curve_evaluator.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\gl_util.h" />
     <ClInclude Include="..\common\stopwatch.h" />

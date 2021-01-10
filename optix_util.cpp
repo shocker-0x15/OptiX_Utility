@@ -803,6 +803,8 @@ namespace optixu {
         const char* geomTypeStrs[] = { "triangles", "curves", "custom primitives" };
         m->throwRuntimeError(_geomInst->getGeometryType() == m->geomType,
                              "This GAS was created for %s.", geomTypeStrs[static_cast<uint32_t>(m->geomType)]);
+        m->throwRuntimeError(m->geomType == GeometryType::Triangles || preTransform == 0,
+                             "Pre-transform is valid only for triangles.");
         Priv::Child child;
         child.geomInst = _geomInst;
         child.preTransform = preTransform;

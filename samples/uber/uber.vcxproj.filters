@@ -142,6 +142,9 @@
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h">
       <Filter>non-essentials\ext\gl3w</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\curve_evaluator.h">
+      <Filter>GPU kernels</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\..\ext\imgui\natvis\imgui.natvis">

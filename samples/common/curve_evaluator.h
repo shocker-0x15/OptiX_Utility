@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../common/common.h"
+#include "common.h"
 
 // Based on OptiX SDK/cuda/curve.h
 

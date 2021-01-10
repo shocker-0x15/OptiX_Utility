@@ -18,8 +18,8 @@ Currently based on OptiX 7.2.0
   - [x] Multi-level instancing
 - Primitive types
   - [x] Triangles
+  - [x] Curves (Linear, Quadratic, Cubic B-Splines)
   - [x] User-defined custom primitives
-  - [x] Curves
 - Motion blur types
   - [x] Instance motion blur
   - [x] Deformation blur
@@ -240,7 +240,7 @@ I've confirmed that the program runs correctly in the following environment.
 
 * Windows 10 (20H2) & Visual Studio Community 2019 (16.8.3)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 460.97
+* NVIDIA Driver 461.09
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.

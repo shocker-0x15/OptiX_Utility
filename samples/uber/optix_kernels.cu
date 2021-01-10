@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "uber_shared.h"
+#include "../common/curve_evaluator.h"
 
 #define M_PI 3.14159265
 
@@ -13,10 +14,17 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
     HitPointParameter ret;
-    if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
+    uint32_t primType = optixGetPrimitiveType();
+    if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
         float2 bc = optixGetTriangleBarycentrics();
         ret.b0 = 1 - bc.x - bc.y;
         ret.b1 = bc.x;
+    }
+    else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
+             primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
+             primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
+        ret.b0 = optixGetCurveParameter();
+        ret.b1 = __uint_as_float(0x7F800000 | primType); // not safe.
     }
     else {
         optixu::getAttributes<SphereAttributeSignature>(&ret.b0, &ret.b1);
@@ -118,6 +126,54 @@ RT_CALLABLE_PROGRAM float3 RT_DC_NAME(sampleTexture)(uint32_t texID, float2 texC
     return make_float3(texValue.x, texValue.y, texValue.z);
 }
 
+CUDA_DEVICE_KERNEL void RT_IS_NAME(custom_primitive)() {
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
+    uint32_t primIndex = optixGetPrimitiveIndex();
+    const SphereParameter &param = geom.paramBuffer[primIndex];
+    const float3 rayOrg = optixGetObjectRayOrigin();
+    const float3 rayDir = optixGetObjectRayDirection();
+
+    float3 nDir = normalize(rayDir);
+
+    float3 co = rayOrg - param.center;
+    float b = dot(nDir, co);
+
+    float D = b * b - (sqLength(co) - param.radius * param.radius);
+    if (D < 0)
+        return;
+
+    float sqrtD = std::sqrt(D);
+    float t0 = -b - sqrtD;
+    float t1 = -b + sqrtD;
+    bool isFront = t0 >= 0;
+    float t = isFront ? t0 : t1;
+    if (t < 0)
+        return;
+
+    float3 np = normalize(co + t * nDir);
+    float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
+    float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
+
+    optixu::reportIntersection<SphereAttributeSignature>(t, isFront ? 0 : 1, theta, phi);
+}
+
+template <OptixPrimitiveType curveType>
+CUDA_DEVICE_FUNCTION void calcCurveAttribute(const GeometryData &geom, uint32_t primIndex, float curveParam, const float3 &hp,
+                                             float3* sn, float2* texCoord) {
+    constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
+    float4 controlPoints[numControlPoints];
+    uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
+    for (int i = 0; i < numControlPoints; ++i) {
+        const CurveVertex &v = geom.curveVertexBuffer[baseIndex + i];
+        controlPoints[i] = make_float4(v.position, v.width);
+    }
+    *texCoord = geom.curveVertexBuffer[baseIndex].texCoord;
+
+    curve::Evaluator<curveType> ce(controlPoints);
+    *sn = ce.calcNormal(curveParam, hp);
+}
+
 RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParameter &hitPointParam, const GeometryData &geom,
                                                             float3* p, float3* sn, float2* texCoord) {
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
@@ -130,6 +186,36 @@ RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParame
     *p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
     *sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
     *texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+}
+
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointCurve)(const HitPointParameter &hitPointParam, const GeometryData &geom,
+                                                         float3* p, float3* sn, float2* texCoord) {
+    uint32_t primIndex = hitPointParam.primIndex;
+    float curveParam = hitPointParam.b0;
+    float3 hp = *p;
+
+    OptixPrimitiveType primType = static_cast<OptixPrimitiveType>(~0x7F800000 & __float_as_uint(hitPointParam.b1));
+    if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(geom, primIndex, curveParam, hp,
+                                                              sn, texCoord);
+    else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(geom, primIndex, curveParam, hp,
+                                                                         sn, texCoord);
+    else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp,
+                                                                     sn, texCoord);
+}
+
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParameter &hitPointParam, const GeometryData &geom,
+                                                          float3* p, float3* sn, float2* texCoord) {
+    const SphereParameter &param = geom.paramBuffer[hitPointParam.primIndex];
+    float theta = hitPointParam.b0;
+    float phi = hitPointParam.b1;
+    float sinTheta = std::sin(theta);
+    float3 np = make_float3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, std::cos(theta));
+    *p = param.center + np * param.radius;
+    *sn = np;
+    *texCoord = make_float2(theta / Pi, phi / (2 * Pi)) * param.texCoordMultiplier;
 }
 
 
@@ -305,52 +391,6 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
     optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
 
     optixTerminateRay();
-}
-
-
-
-CUDA_DEVICE_KERNEL void RT_IS_NAME(custom_primitive)() {
-    auto sbtr = HitGroupSBTRecordData::get();
-    const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
-    uint32_t primIndex = optixGetPrimitiveIndex();
-    const SphereParameter &param = geom.paramBuffer[primIndex];
-    const float3 rayOrg = optixGetObjectRayOrigin();
-    const float3 rayDir = optixGetObjectRayDirection();
-
-    float3 nDir = normalize(rayDir);
-
-    float3 co = rayOrg - param.center;
-    float b = dot(nDir, co);
-
-    float D = b * b - (sqLength(co) - param.radius * param.radius);
-    if (D < 0)
-        return;
-
-    float sqrtD = std::sqrt(D);
-    float t0 = -b - sqrtD;
-    float t1 = -b + sqrtD;
-    bool isFront = t0 >= 0;
-    float t = isFront ? t0 : t1;
-    if (t < 0)
-        return;
-
-    float3 np = normalize(co + t * nDir);
-    float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
-    float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
-
-    optixu::reportIntersection<SphereAttributeSignature>(t, isFront ? 0 : 1, theta, phi);
-}
-
-RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParameter &hitPointParam, const GeometryData &geom,
-                                                          float3* p, float3* sn, float2* texCoord) {
-    const SphereParameter &param = geom.paramBuffer[hitPointParam.primIndex];
-    float theta = hitPointParam.b0;
-    float phi = hitPointParam.b1;
-    float sinTheta = std::sin(theta);
-    float3 np = make_float3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, std::cos(theta));
-    *p = param.center + np * param.radius;
-    *sn = np;
-    *texCoord = make_float2(theta / Pi, phi / (2 * Pi)) * param.texCoordMultiplier;
 }
 
 

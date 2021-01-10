@@ -49,7 +49,7 @@
     <ClInclude Include="..\..\ext\tiny_obj_loader.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
-    <ClInclude Include="curve_evaluator.h" />
+    <ClInclude Include="..\common\curve_evaluator.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
