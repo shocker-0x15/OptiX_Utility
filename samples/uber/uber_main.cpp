@@ -235,7 +235,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     float contentScaleX, contentScaleY;
     glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
     float UIScaling = contentScaleX;
-    GLFWwindow* window = glfwCreateWindow((int32_t)(renderTargetSizeX * UIScaling), (int32_t)(renderTargetSizeY * UIScaling), "OptiX 7 + GLFW + ImGui", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow((int32_t)(renderTargetSizeX * UIScaling),
+                                          (int32_t)(renderTargetSizeY * UIScaling),
+                                          "uber", NULL, NULL);
     glfwSetWindowUserPointer(window, nullptr);
     if (!window) {
         hpprintf("Failed to create a GLFW window.\n");

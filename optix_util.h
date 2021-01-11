@@ -71,8 +71,8 @@ TODO:
 - CMake整備。
 - setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - ASのRelocationサポート。
-- Instance Pointersサポート。
 - AOV Denoiserサポート。
+- Instance Pointersサポート。
 - removeUncompacted再考。(compaction終了待ちとしてとらえる？)
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
@@ -80,6 +80,9 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
+- InstanceのsetChildはTraversal Graph Depthに影響しないので名前を変えるべき？setTraversable()?
+- optixuのenumかOptiXのenum、使い分ける基準について考える。
+  OptiX側のenumが余計なものを含んでいる場合はoptixu側でenumを定義したほうがミスが少ない。
 - MaterialのヒットグループのISとGeometryInstanceの一致確認。
 - GeometryInstanceのGASをdirtyにする処理のうち、いくつかは内部的にSBTレイアウトの無効化をスキップできるはず。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
@@ -607,6 +610,56 @@ namespace optixu {
         static_assert(numDwords > 0, "Calling this function without exception details has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::ExceptionDetailFunc, 0>(details...);
+    }
+
+
+
+    template <typename T>
+    RT_DEVICE_FUNCTION T undefinedValue();
+    template <> RT_DEVICE_FUNCTION int32_t undefinedValue<int32_t>() {
+        return static_cast<int32_t>(optixUndefinedValue());
+    }
+    template <> RT_DEVICE_FUNCTION uint32_t undefinedValue<uint32_t>() {
+        return optixUndefinedValue();
+    }
+    template <> RT_DEVICE_FUNCTION float undefinedValue<float>() {
+        return __uint_as_float(optixUndefinedValue());
+    }
+    template <> RT_DEVICE_FUNCTION int2 undefinedValue<int2>() {
+        auto v = undefinedValue<int32_t>();
+        return make_int2(v, v);
+    }
+    template <> RT_DEVICE_FUNCTION uint2 undefinedValue<uint2>() {
+        auto v = undefinedValue<uint32_t>();
+        return make_uint2(v, v);
+    }
+    template <> RT_DEVICE_FUNCTION float2 undefinedValue<float2>() {
+        auto v = undefinedValue<float>();
+        return make_float2(v, v);
+    }
+    template <> RT_DEVICE_FUNCTION int3 undefinedValue<int3>() {
+        auto v = undefinedValue<int32_t>();
+        return make_int3(v, v, v);
+    }
+    template <> RT_DEVICE_FUNCTION uint3 undefinedValue<uint3>() {
+        auto v = undefinedValue<uint32_t>();
+        return make_uint3(v, v, v);
+    }
+    template <> RT_DEVICE_FUNCTION float3 undefinedValue<float3>() {
+        auto v = undefinedValue<float>();
+        return make_float3(v, v, v);
+    }
+    template <> RT_DEVICE_FUNCTION int4 undefinedValue<int4>() {
+        auto v = undefinedValue<int32_t>();
+        return make_int4(v, v, v, v);
+    }
+    template <> RT_DEVICE_FUNCTION uint4 undefinedValue<uint4>() {
+        auto v = undefinedValue<uint32_t>();
+        return make_uint4(v, v, v, v);
+    }
+    template <> RT_DEVICE_FUNCTION float4 undefinedValue<float4>() {
+        auto v = undefinedValue<float>();
+        return make_float4(v, v, v, v);
     }
 
 #endif // #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
