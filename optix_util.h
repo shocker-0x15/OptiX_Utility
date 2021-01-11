@@ -612,56 +612,6 @@ namespace optixu {
             detail::getValues<detail::ExceptionDetailFunc, 0>(details...);
     }
 
-
-
-    template <typename T>
-    RT_DEVICE_FUNCTION T undefinedValue();
-    template <> RT_DEVICE_FUNCTION int32_t undefinedValue<int32_t>() {
-        return static_cast<int32_t>(optixUndefinedValue());
-    }
-    template <> RT_DEVICE_FUNCTION uint32_t undefinedValue<uint32_t>() {
-        return optixUndefinedValue();
-    }
-    template <> RT_DEVICE_FUNCTION float undefinedValue<float>() {
-        return __uint_as_float(optixUndefinedValue());
-    }
-    template <> RT_DEVICE_FUNCTION int2 undefinedValue<int2>() {
-        auto v = undefinedValue<int32_t>();
-        return make_int2(v, v);
-    }
-    template <> RT_DEVICE_FUNCTION uint2 undefinedValue<uint2>() {
-        auto v = undefinedValue<uint32_t>();
-        return make_uint2(v, v);
-    }
-    template <> RT_DEVICE_FUNCTION float2 undefinedValue<float2>() {
-        auto v = undefinedValue<float>();
-        return make_float2(v, v);
-    }
-    template <> RT_DEVICE_FUNCTION int3 undefinedValue<int3>() {
-        auto v = undefinedValue<int32_t>();
-        return make_int3(v, v, v);
-    }
-    template <> RT_DEVICE_FUNCTION uint3 undefinedValue<uint3>() {
-        auto v = undefinedValue<uint32_t>();
-        return make_uint3(v, v, v);
-    }
-    template <> RT_DEVICE_FUNCTION float3 undefinedValue<float3>() {
-        auto v = undefinedValue<float>();
-        return make_float3(v, v, v);
-    }
-    template <> RT_DEVICE_FUNCTION int4 undefinedValue<int4>() {
-        auto v = undefinedValue<int32_t>();
-        return make_int4(v, v, v, v);
-    }
-    template <> RT_DEVICE_FUNCTION uint4 undefinedValue<uint4>() {
-        auto v = undefinedValue<uint32_t>();
-        return make_uint4(v, v, v, v);
-    }
-    template <> RT_DEVICE_FUNCTION float4 undefinedValue<float4>() {
-        auto v = undefinedValue<float>();
-        return make_float4(v, v, v, v);
-    }
-
 #endif // #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
     // END: Device-side function wrappers
     // ----------------------------------------------------------------
