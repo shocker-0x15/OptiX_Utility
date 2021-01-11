@@ -620,7 +620,7 @@ namespace optixu {
 
     // ----------------------------------------------------------------
     // JP: ホスト側API
-    // EN: Host-side API.
+    // EN: Host-side API
 #if !defined(__CUDA_ARCH__)
     /*
 
@@ -1260,6 +1260,6 @@ private: \
 #undef OPTIXU_PIMPL
 
 #endif // #if !defined(__CUDA_ARCH__)
-    // END: Host-side API.
+    // END: Host-side API
     // ----------------------------------------------------------------
 } // namespace optixu
