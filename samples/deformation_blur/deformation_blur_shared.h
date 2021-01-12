@@ -24,6 +24,16 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
+    struct CurveVertex {
+        float3 position;
+        float width;
+    };
+
+    struct SphereParameter {
+        float3 center;
+        float radius;
+    };
+
 
 
     class PCG32RNG {
@@ -61,16 +71,15 @@ namespace Shared {
 
 
 
-    struct SphereParameter {
-        float3 center;
-        float radius;
-    };
-
     struct GeometryData {
         union {
             struct {
                 const Vertex* vertexBuffers[2];
                 const Triangle* triangleBuffer;
+            };
+            struct {
+                const CurveVertex* curveVertexBuffers[8];
+                const uint32_t* segmentIndexBuffer;
             };
             struct {
                 const AABB* aabbBuffers[2];

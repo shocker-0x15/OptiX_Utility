@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "deformation_blur_shared.h"
+#include "../common/curve_evaluator.h"
 
 using namespace Shared;
 
@@ -22,10 +23,17 @@ struct HitPointParameter {
             ret.b1 = bc.x;
             ret.b2 = bc.y;
         }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
+            ret.b1 = optixGetCurveParameter();
+            ret.b2 = NAN;
+        }
         else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
             // JP: Intersection Programで設定したアトリビュート変数は optixu::getAttributes() で取得できる。
             // EN: Attribute variables set in the intersection program can be obtained using optixu::getAttributes().
             optixu::getAttributes<SphereAttributeSignature>(&ret.b1, &ret.b2);
+        }
+        else {
+            optixuAssert_ShouldNotBeCalled();
         }
         ret.primIndex = optixGetPrimitiveIndex();
         return ret;
@@ -39,6 +47,46 @@ struct HitGroupSBTRecordData {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
 };
+
+
+
+template <OptixPrimitiveType curveType>
+CUDA_DEVICE_FUNCTION float3 calcCurveSurfaceNormal(const GeometryData &geom, const HitPointParameter &hpParam, float rayTime, const float3 &hp) {
+    constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
+    float4 controlPoints[numControlPoints];
+#if defined(USE_EMBEDDED_DATA)
+    OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+    uint32_t sbtGasIndex = optixGetSbtGASIndex();
+    if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+        optixGetLinearCurveVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+    else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
+        optixGetQuadraticBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+    else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
+        optixGetCubicBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+#else
+    OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+    float timeBegin = optixGetGASMotionTimeBegin(gasHandle);
+    float timeEnd = optixGetGASMotionTimeEnd(gasHandle);
+    float normTime = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
+
+    uint32_t baseIndex = geom.segmentIndexBuffer[hpParam.primIndex];
+    const uint32_t numMotionSteps = lengthof(geom.curveVertexBuffers);
+    float stepF = (numMotionSteps - 1) * normTime;
+    uint32_t step = static_cast<uint32_t>(stepF);
+    const float stepWidth = 1.0f / (numMotionSteps - 1);
+    float p = stepF - step;
+    for (int i = 0; i < numControlPoints; ++i) {
+        const CurveVertex &vA = geom.curveVertexBuffers[step][baseIndex + i];
+        const CurveVertex &vB = geom.curveVertexBuffers[step + 1][baseIndex + i];
+        controlPoints[i] = (1 - p) * make_float4(vA.position, vA.width) + p * make_float4(vB.position, vB.width);
+    }
+#endif
+
+    curve::Evaluator<curveType> ce(controlPoints);
+    float3 sn = ce.calcNormal(hpParam.b1, hp);
+
+    return sn;
+}
 
 
 
@@ -128,6 +176,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     const GeometryData &geom = sbtr.geomData;
     auto hp = HitPointParameter::get();
 
+    float rayTime = optixGetRayTime();
+
     float3 sn;
     OptixPrimitiveType primType = optixGetPrimitiveType();
     if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
@@ -138,14 +188,27 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
 
         float b0 = 1 - (hp.b1 + hp.b2);
         sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
-        sn = normalize(sn);
+    }
+    else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
+        float3 pos = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
+        pos = optixTransformPointFromWorldToObjectSpace(pos);
+
+        sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(
+            geom, hp, rayTime, pos);
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
         float theta = hp.b1;
         float phi = hp.b2;
         float sinTheta = std::sin(theta);
-        sn = make_float3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, std::cos(theta));
+        sn = make_float3(std::cos(phi) * sinTheta,
+                         std::sin(phi) * sinTheta,
+                         std::cos(theta));
     }
+    else {
+        optixuAssert_ShouldNotBeCalled();
+    }
+
+    sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
     // JP: 法線を可視化。
     // EN: Visualize the normal.

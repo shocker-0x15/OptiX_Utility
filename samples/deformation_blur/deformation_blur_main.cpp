@@ -29,17 +29,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
-    //     カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
+    //     カーブ・カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: This sample uses two-level AS (single-level instancing).
-    //     Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
+    //     Appropriately setting primitive type flags is required since this sample uses curve and
+    //     custom primitive intersection.
     pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
-                                std::max(optixu::calcSumDwords<float2>(),
-                                         optixu::calcSumDwords<SphereAttributeSignature>()),
+                                std::max({
+                                    optixu::calcSumDwords<float2>(),
+                                    optixu::calcSumDwords<float>(),
+                                    optixu::calcSumDwords<SphereAttributeSignature>() }),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 OPTIX_EXCEPTION_FLAG_DEBUG,
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
@@ -55,6 +60,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForBuiltinIS(
         OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr);
+
+    optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForBuiltinIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
@@ -93,6 +103,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Material matForTriangles = optixContext.createMaterial();
     matForTriangles.setHitGroup(Shared::RayType_Primary, hitProgramGroupForTriangles);
+    optixu::Material matForCurves = optixContext.createMaterial();
+    matForCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCurves);
     optixu::Material matForSpheres = optixContext.createMaterial();
     matForSpheres.setHitGroup(Shared::RayType_Primary, hitProgramGroupForSpheres);
 
@@ -121,11 +133,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             std::vector<cudau::TypedBuffer<Shared::Vertex>> vertexBuffers;
             cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
         };
+        struct Curves {
+            std::vector<cudau::TypedBuffer<Shared::CurveVertex>> vertexBuffers;
+            cudau::TypedBuffer<uint32_t> segmentIndexBuffer;
+        };
         struct CustomPrimitives {
             std::vector<cudau::TypedBuffer<AABB>> aabbBuffers;
             std::vector<cudau::TypedBuffer<Shared::SphereParameter>> paramBuffers;
         };
-        std::variant<TriangleMesh, CustomPrimitives> shape;
+        std::variant<TriangleMesh, Curves, CustomPrimitives> shape;
         optixu::GeometryInstance optixGeomInst;
         optixu::GeometryAccelerationStructure optixGas;
         cudau::Buffer gasMem;
@@ -135,16 +151,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
             gasMem.finalize();
             optixGas.destroy();
             if (std::holds_alternative<TriangleMesh>(shape)) {
-                auto &triMesh = std::get<TriangleMesh>(shape);
-                triMesh.triangleBuffer.finalize();
-                for (int i = triMesh.vertexBuffers.size() - 1; i >= 0; --i)
-                    triMesh.vertexBuffers[i].finalize();
+                auto &geom = std::get<TriangleMesh>(shape);
+                geom.triangleBuffer.finalize();
+                for (int i = geom.vertexBuffers.size() - 1; i >= 0; --i)
+                    geom.vertexBuffers[i].finalize();
+            }
+            else if (std::holds_alternative<Curves>(shape)) {
+                auto &geom = std::get<Curves>(shape);
+                geom.segmentIndexBuffer.finalize();
+                for (int i = geom.vertexBuffers.size() - 1; i >= 0; --i)
+                    geom.vertexBuffers[i].finalize();
             }
             else {
-                auto &customPrims = std::get<CustomPrimitives>(shape);
-                for (int i = customPrims.aabbBuffers.size() - 1; i >= 0; --i) {
-                    customPrims.aabbBuffers[i].finalize();
-                    customPrims.paramBuffers[i].finalize();
+                auto &geom = std::get<CustomPrimitives>(shape);
+                for (int i = geom.aabbBuffers.size() - 1; i >= 0; --i) {
+                    geom.aabbBuffers[i].finalize();
+                    geom.paramBuffers[i].finalize();
                 }
             }
             optixGeomInst.destroy();
@@ -221,6 +243,91 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGas.addChild(bunny.optixGeomInst);
         bunny.optixGas.prepareForBuild(&asMemReqs);
         bunny.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    }
+
+    Geometry curves;
+    {
+        uint32_t numMotionSteps = 8;
+        std::vector<std::vector<Shared::CurveVertex>> vertices(numMotionSteps);
+        std::vector<uint32_t> indices;
+        {
+            const auto calcPosition = [](float p) {
+                float r = (1 - p) * 0.1f + p * 0.2f;
+                float y = p * 1.0f;
+                float angle = 10 * M_PI * p;
+                Shared::CurveVertex v;
+                v.position = float3(r * std::cos(angle),
+                                    y,
+                                    r * std::sin(angle));
+                return v;
+            };
+
+            constexpr uint32_t numSegments = 100;
+            constexpr float begin0 = 0.0f;
+            constexpr float end0 = 0.7f;
+            constexpr float begin1 = 0.3f;
+            constexpr float end1 = 1.0f;
+            for (int i = 0; i < numSegments; ++i) {
+                float posp = (float)i / (numSegments - 1);
+                float width = 0.025f * std::sin(M_PI * posp);
+                for (int j = 0; j < numMotionSteps; ++j) {
+                    float tp = (float)j / (numMotionSteps - 1);
+                    float begin = (1 - tp) * begin0 + tp * begin1;
+                    float end = (1 - tp) * end0 + tp * end1;
+                    Shared::CurveVertex v = calcPosition((1 - posp) * begin + posp * end);
+                    v.width = width;
+                    vertices[j].push_back(v);
+                }
+            }
+
+            for (int i = 0; i < numSegments - 3; ++i)
+                indices.push_back(i);
+        }
+
+        curves.shape = Geometry::Curves();
+        auto &shape = std::get<Geometry::Curves>(curves.shape);
+
+        // JP: 頂点バッファーをモーションステップ分作る。
+        // EN: Create vertex buffer for each motion step.
+        shape.vertexBuffers.resize(numMotionSteps);
+        for (int i = 0; i < numMotionSteps; ++i)
+            shape.vertexBuffers[i].initialize(cuContext, cudau::BufferType::Device, vertices[i]);
+        shape.segmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        for (int i = 0; i < numMotionSteps; ++i)
+            geomData.curveVertexBuffers[i] = shape.vertexBuffers[i].getDevicePointer();
+        geomData.segmentIndexBuffer = shape.segmentIndexBuffer.getDevicePointer();
+
+        curves.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
+        // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
+        // EN: Set the number of motion steps then set the vertex buffer for each step.
+        curves.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        for (int i = 0; i < numMotionSteps; ++i) {
+            cudau::TypedBuffer<Shared::CurveVertex> &buffer = shape.vertexBuffers[i];
+            curves.optixGeomInst.setVertexBuffer(
+                optixu::BufferView(buffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+                                   buffer.numElements(), sizeof(Shared::CurveVertex)), i);
+            curves.optixGeomInst.setWidthBuffer(
+                optixu::BufferView(buffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+                                   buffer.numElements(), sizeof(Shared::CurveVertex)), i);
+        }
+        curves.optixGeomInst.setSegmentIndexBuffer(shape.segmentIndexBuffer);
+        curves.optixGeomInst.setMaterial(0, 0, matForCurves);
+        curves.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        curves.optixGeomInst.setUserData(geomData);
+
+        curves.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
+        curves.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        // JP: GASのモーション設定を行う。
+        // EN: Set the GAS's motion configuration.
+        curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+        curves.optixGas.setNumMaterialSets(1);
+        curves.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        curves.optixGas.addChild(curves.optixGeomInst);
+        curves.optixGas.prepareForBuild(&asMemReqs);
+        curves.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
@@ -317,6 +424,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunnyInst.setChild(bunny.optixGas);
     bunnyInst.setTransform(bunnyInstXfm);
 
+    float curveInstAXfm[] = {
+        1, 0, 0, -1.0f,
+        0, 1, 0, 0.0f,
+        0, 0, 1, 0.0f
+    };
+    optixu::Instance curveInstA = scene.createInstance();
+    curveInstA.setChild(curves.optixGas);
+    curveInstA.setTransform(curveInstAXfm);
+
+    float curveInstBXfm[] = {
+        1, 0, 0, 1.0f,
+        0, 1, 0, 0.0f,
+        0, 0, 1, 0.0f
+    };
+    optixu::Instance curveInstB = scene.createInstance();
+    curveInstB.setChild(curves.optixGas);
+    curveInstB.setTransform(curveInstBXfm);
+
     optixu::Instance spheresInst = scene.createInstance();
     spheresInst.setChild(spheres.optixGas);
 
@@ -329,6 +454,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     ias.addChild(bunnyInst);
+    ias.addChild(curveInstA);
+    ias.addChild(curveInstB);
     ias.addChild(spheresInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -346,6 +473,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
+    curves.optixGas.rebuild(cuStream, curves.gasMem, asBuildScratchMem);
     spheres.optixGas.rebuild(cuStream, spheres.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
@@ -362,6 +490,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
     CompactedASInfo gasList[] = {
         { &bunny, 0, 0 },
+        { &curves, 0, 0 },
         { &spheres, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
@@ -480,14 +609,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.destroy();
 
     spheresInst.destroy();
+    curveInstB.destroy();
+    curveInstA.destroy();
     bunnyInst.destroy();
 
     spheres.finalize();
+    curves.finalize();
     bunny.finalize();
 
     scene.destroy();
 
     matForSpheres.destroy();
+    matForCurves.destroy();
     matForTriangles.destroy();
 
 
@@ -495,6 +628,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.finalize();
 
     hitProgramGroupForSpheres.destroy();
+    hitProgramGroupForCurves.destroy();
     hitProgramGroupForTriangles.destroy();
 
     missProgram.destroy();

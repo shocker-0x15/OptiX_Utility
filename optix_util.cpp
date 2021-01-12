@@ -542,6 +542,17 @@ namespace optixu {
             geom.vertexBufferArray = new CUdeviceptr[n];
             geom.vertexBuffers = new BufferView[n];
         }
+        else if (std::holds_alternative<Priv::CurveGeometry>(m->geometry)) {
+            auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+            delete[] geom.widthBuffers;
+            delete[] geom.widthBufferArray;
+            delete[] geom.vertexBuffers;
+            delete[] geom.vertexBufferArray;
+            geom.vertexBufferArray = new CUdeviceptr[n];
+            geom.vertexBuffers = new BufferView[n];
+            geom.widthBufferArray = new CUdeviceptr[n];
+            geom.widthBuffers = new BufferView[n];
+        }
         else if (std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
             delete[] geom.primitiveAabbBuffers;
@@ -550,7 +561,7 @@ namespace optixu {
             geom.primitiveAabbBuffers = new BufferView[n];
         }
         else {
-            optixuAssert_NotImplemented();
+            optixuAssert_ShouldNotBeCalled();
         }
         m->numMotionSteps = n;
     }

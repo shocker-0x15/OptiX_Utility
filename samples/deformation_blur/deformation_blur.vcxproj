@@ -25,6 +25,7 @@
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
+    <ClInclude Include="..\common\curve_evaluator.h" />
     <ClInclude Include="deformation_blur_shared.h" />
   </ItemGroup>
   <ItemGroup>

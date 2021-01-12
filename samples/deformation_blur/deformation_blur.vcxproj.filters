@@ -49,6 +49,7 @@
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\curve_evaluator.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />

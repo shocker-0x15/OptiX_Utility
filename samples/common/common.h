@@ -88,7 +88,7 @@ void devPrintf(const char* fmt, ...);
 
 
 template <typename T, size_t size>
-constexpr size_t lengthof(const T (&array)[size]) {
+CUDA_DEVICE_FUNCTION constexpr size_t lengthof(const T (&array)[size]) {
     return size;
 }
 

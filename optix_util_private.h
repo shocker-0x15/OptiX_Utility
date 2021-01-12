@@ -707,6 +707,7 @@ namespace optixu {
                 return compactedHandle;
             if (available)
                 return handle;
+            optixuAssert_ShouldNotBeCalled();
             return 0;
         }
     };

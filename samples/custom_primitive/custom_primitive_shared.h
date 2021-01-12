@@ -24,6 +24,12 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
+    struct SphereParameter {
+        float3 center;
+        float radius;
+        float texCoordMultiplier;
+    };
+
 
 
     struct PerspectiveCamera {
@@ -34,12 +40,6 @@ namespace Shared {
     };
 
 
-
-    struct SphereParameter {
-        float3 center;
-        float radius;
-        float texCoordMultiplier;
-    };
 
     struct GeometryData {
         union {
