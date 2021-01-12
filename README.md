@@ -108,7 +108,7 @@ defaultMat.setUserData(...);
 // Create a scene.
 optixu::Scene scene = optixContext.createScene();
 
-// Create geometry instances (triangle mesh or user-defined custom primitives).
+// Create geometry instances (triangles or curves or user-defined custom primitives).
 optixu::GeometryInstance geomInst0 = scene.createGeometryInstance();
 cudau::TypedBuffer<Vertex> vertexBuffer;
 cudau::TypedBuffer<Triangle> triangleBuffer;

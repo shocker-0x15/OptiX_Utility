@@ -900,7 +900,12 @@ private: \
         //     Changing the number of children invalidates the shader binding table layout of hit group.
         void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
-        void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
+        void addChild(GeometryInstance geomInst, CUdeviceptr preTransform = 0,
+                      const void* data = nullptr, uint32_t size = 0, uint32_t alignment = 1) const;
+        template <typename T>
+        void addChild(GeometryInstance geomInst, CUdeviceptr preTransform, const T &data) const {
+            addChild(geomInst, preTransform, &data, sizeof(T), alignof(T));
+        }
         void removeChildAt(uint32_t index) const;
         void clearChildren() const;
 

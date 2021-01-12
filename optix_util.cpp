@@ -806,7 +806,8 @@ namespace optixu {
         m->markDirty();
     }
 
-    void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform) const {
+    void GeometryAccelerationStructure::addChild(GeometryInstance geomInst, CUdeviceptr preTransform,
+                                                 const void* data, uint32_t size, uint32_t alignment) const {
         auto _geomInst = extract(geomInst);
         m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
         m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
@@ -822,6 +823,9 @@ namespace optixu {
         auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
         m->throwRuntimeError(idx == m->children.cend(), "Geometry instance %s with transform %p has been already added.",
                              _geomInst->getName().c_str(), preTransform);
+        child.userDataSizeAlign = SizeAlign(size, alignment);
+        child.userData.resize(size);
+        std::memcpy(child.userData.data(), data, size);
 
         m->children.push_back(std::move(child));
 

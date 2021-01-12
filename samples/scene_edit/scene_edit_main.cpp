@@ -135,7 +135,7 @@ struct GeometryGroup {
     optixu::GeometryAccelerationStructure optixGAS;
     std::vector<GeometryInstanceRef> geomInsts;
     std::vector<GeometryInstancePreTransform> preTransforms;
-    cudau::TypedBuffer<Shared::GeometryInstancePreTransform> preTransformBuffer;
+    cudau::TypedBuffer<std::array<float, 12>> preTransformBuffer;
     std::set<InstanceWRef, std::owner_less<InstanceWRef>> parentInsts;
     cudau::Buffer optixGasMem;
 
@@ -1517,40 +1517,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
                         geomGroup->preTransforms.resize(numSelectedGeomInsts);
                         geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, numSelectedGeomInsts);
-                        Shared::GASData gasData = {};
-                        gasData.preTransforms = geomGroup->preTransformBuffer.getDevicePointer();
-                        geomGroup->optixGAS.setUserData(gasData);
 
+                        std::array<float, 12>* preTransforms = geomGroup->preTransformBuffer.map(cuStream);
                         geomInstList.loopForSelected(
-                            [&optixEnv, &geomGroup, &cuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                            [&optixEnv, &geomGroup, &preTransforms, &cuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
                                 const GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
                                 for (uint32_t index : indices) {
                                     const GeometryInstanceRef &geomInst = fileGroup.geomInsts[index];
                                     geomGroup->geomInsts.push_back(geomInst);
                                     uint32_t indexInGAS = geomGroup->geomInsts.size() - 1;
+
                                     GeometryInstancePreTransform &preTransform = geomGroup->preTransforms[indexInGAS];
                                     preTransform.scale = float3(1.0f, 1.0f, 1.0f);
                                     preTransform.rollPitchYaw[0] = 0.0f;
                                     preTransform.rollPitchYaw[1] = 0.0f;
                                     preTransform.rollPitchYaw[2] = 0.0f;
                                     preTransform.position = float3(0.0f, 0.0f, 0.0f);
+
+                                    Shared::GASChildData gasChildData;
+                                    gasChildData.setPreTransform(preTransform.scale,
+                                                                 preTransform.rollPitchYaw,
+                                                                 preTransform.position);
+
+                                    float* raw = preTransforms[indexInGAS].data();
+                                    Matrix3x3 matSR = gasChildData.orientation.toMatrix3x3() * scale3x3(gasChildData.scale);
+                                    raw[0] = matSR.m00; raw[1] = matSR.m01; raw[2] = matSR.m02; raw[3] = gasChildData.translation.x;
+                                    raw[4] = matSR.m10; raw[5] = matSR.m11; raw[6] = matSR.m12; raw[7] = gasChildData.translation.y;
+                                    raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = gasChildData.translation.z;
                                     CUdeviceptr preTransformPtr = geomGroup->preTransformBuffer.getCUdeviceptrAt(indexInGAS);
-                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst, preTransformPtr);
+
+                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst, preTransformPtr, gasChildData);
                                 }
                                 return true;
                             });
-                        std::vector<Shared::GeometryInstancePreTransform> preTransforms(numSelectedGeomInsts);
-                        for (int i = 0; i < numSelectedGeomInsts; ++i) {
-                            const GeometryInstancePreTransform &srcPreTransform = geomGroup->preTransforms[i];
-                            Shared::GeometryInstancePreTransform &dstPreTransform = preTransforms[i];
-                            dstPreTransform.setSRT(srcPreTransform.scale,
-                                                   srcPreTransform.rollPitchYaw,
-                                                   srcPreTransform.position);
-                        }
-                        CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
-                                                        preTransforms.data(),
-                                                        geomGroup->preTransformBuffer.sizeInBytes(),
-                                                        cuStream));
+                        geomGroup->preTransformBuffer.unmap(cuStream);
 
                         traversablesUpdated = true;
 
@@ -1656,33 +1656,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         }
                         else if (geomInstsSelected) {
                             const GeometryGroupRef &geomGroup = geomGroupList.getActiveGeometryGroup();
-                            geomGroup->optixGAS.clearChildren();
                             geomGroupList.callForActiveGeomGroup(
                                 [&optixEnv](const GeometryGroupRef &geomGroup, const std::set<uint32_t> &selectedIndices) {
                                     // JP: serialIDに基づいているためまず安全。
                                     for (auto it = selectedIndices.crbegin(); it != selectedIndices.crend(); ++it) {
                                         uint32_t geomInstIdx = *it;
                                         const GeometryInstanceRef &geomInst = geomGroup->geomInsts[geomInstIdx];
+                                        geomGroup->optixGAS.removeChildAt(geomInstIdx);
                                         geomGroup->geomInsts.erase(geomGroup->geomInsts.cbegin() + geomInstIdx);
                                         geomGroup->preTransforms.erase(geomGroup->preTransforms.cbegin() + geomInstIdx);
                                     }
                                 });
-                            for (int i = 0; i < geomGroup->geomInsts.size(); ++i)
-                                geomGroup->optixGAS.addChild(geomGroup->geomInsts[i]->optixGeomInst,
-                                                             geomGroup->preTransformBuffer.getCUdeviceptrAt(i));
-                            geomGroup->propagateMarkDirty();
-                            std::vector<Shared::GeometryInstancePreTransform> preTransforms(geomGroup->geomInsts.size());
+                            std::array<float, 12>* preTransforms = geomGroup->preTransformBuffer.map(cuStream);
                             for (int i = 0; i < geomGroup->geomInsts.size(); ++i) {
-                                const GeometryInstancePreTransform &srcPreTransform = geomGroup->preTransforms[i];
-                                Shared::GeometryInstancePreTransform &dstPreTransform = preTransforms[i];
-                                dstPreTransform.setSRT(srcPreTransform.scale,
-                                                       srcPreTransform.rollPitchYaw,
-                                                       srcPreTransform.position);
+                                Shared::GASChildData gasChildData;
+                                geomGroup->optixGAS.getChildUserData(i, &gasChildData);
+
+                                float* raw = preTransforms[i].data();
+                                Matrix3x3 matSR = gasChildData.orientation.toMatrix3x3() * scale3x3(gasChildData.scale);
+                                raw[0] = matSR.m00; raw[1] = matSR.m01; raw[2] = matSR.m02; raw[3] = gasChildData.translation.x;
+                                raw[4] = matSR.m10; raw[5] = matSR.m11; raw[6] = matSR.m12; raw[7] = gasChildData.translation.y;
+                                raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = gasChildData.translation.z;
                             }
-                            CUDADRV_CHECK(cuMemcpyHtoDAsync(geomGroup->preTransformBuffer.getCUdeviceptr(),
-                                                            preTransforms.data(),
-                                                            preTransforms.size() * sizeof(Shared::GeometryInstancePreTransform),
-                                                            cuStream));
+                            geomGroup->preTransformBuffer.unmap(cuStream);
+                            geomGroup->propagateMarkDirty();
                         }
                         geomGroupList.clearSelection();
                         onSelectionChange();
@@ -1736,10 +1733,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         preTransform.rollPitchYaw[2] = instOrientation[2] * M_PI / 180;
                         preTransform.position = float3(instPosition[0], instPosition[1], instPosition[2]);
 
-                        Shared::GeometryInstancePreTransform dstPreTransform;
-                        dstPreTransform.setSRT(preTransform.scale,
-                                               preTransform.rollPitchYaw,
-                                               preTransform.position);
+                        Shared::GASChildData gasChildData = {};
+                        gasChildData.setPreTransform(preTransform.scale,
+                                                     preTransform.rollPitchYaw,
+                                                     preTransform.position);
+                        activeGroup->optixGAS.setChildUserData(selectedGeomInstIndex, gasChildData);
+
+                        std::array<float, 12> dstPreTransform;
+                        float* raw = dstPreTransform.data();
+                        Matrix3x3 matSR = gasChildData.orientation.toMatrix3x3() * scale3x3(gasChildData.scale);
+                        raw[0] = matSR.m00; raw[1] = matSR.m01; raw[2] = matSR.m02; raw[3] = gasChildData.translation.x;
+                        raw[4] = matSR.m10; raw[5] = matSR.m11; raw[6] = matSR.m12; raw[7] = gasChildData.translation.y;
+                        raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = gasChildData.translation.z;
                         CUDADRV_CHECK(cuMemcpyHtoDAsync(activeGroup->preTransformBuffer.getCUdeviceptrAt(selectedGeomInstIndex),
                                                         &dstPreTransform,
                                                         sizeof(dstPreTransform),

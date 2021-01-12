@@ -36,31 +36,17 @@ namespace Shared {
         const Triangle* triangleBuffer;
     };
 
-
-
-    struct alignas(OPTIX_GEOMETRY_TRANSFORM_BYTE_ALIGNMENT) GeometryInstancePreTransform {
-        float raw[12];
+    struct GASChildData {
         float3 scale;
         Quaternion orientation;
         float3 translation;
 
-        GeometryInstancePreTransform() :
-            raw{ 1.0f, 0.0f, 0.0f, 0.0f,
-                 0.0f, 1.0f, 0.0f, 0.0f,
-                 0.0f, 0.0f, 1.0f, 0.0f },
-            scale(make_float3(1.0f, 1.0f, 1.0f)), translation(make_float3(1.0f, 1.0f, 1.0f)) {}
-
-        void setSRT(const float3 &_scale, const float _rollPitchYaw[3], const float3 &_trans) {
+        void setPreTransform(const float3 &_scale, const float _rollPitchYaw[3], const float3 &_trans) {
             scale = _scale;
             orientation = qFromEulerAngles(_rollPitchYaw[0],
                                            _rollPitchYaw[1],
                                            _rollPitchYaw[2]);
             translation = _trans;
-
-            Matrix3x3 matSR = orientation.toMatrix3x3() * scale3x3(scale);
-            raw[0] = matSR.m00; raw[1] = matSR.m01; raw[ 2] = matSR.m02; raw[ 3] = translation.x;
-            raw[4] = matSR.m10; raw[5] = matSR.m11; raw[ 6] = matSR.m12; raw[ 7] = translation.y;
-            raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = translation.z;
         }
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
@@ -69,12 +55,6 @@ namespace Shared {
             return orientation.toMatrix3x3() * sn;
         }
 #endif
-    };
-
-
-
-    struct GASData {
-        const GeometryInstancePreTransform* preTransforms;
     };
 
 
