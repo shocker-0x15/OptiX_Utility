@@ -131,15 +131,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     struct Geometry {
         struct TriangleMesh {
             std::vector<cudau::TypedBuffer<Shared::Vertex>> vertexBuffers;
+            cudau::TypedBuffer<const Shared::Vertex*> vertexBufferPointerBuffer;
             cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
         };
         struct Curves {
             std::vector<cudau::TypedBuffer<Shared::CurveVertex>> vertexBuffers;
+            cudau::TypedBuffer<const Shared::CurveVertex*> vertexBufferPointerBuffer;
             cudau::TypedBuffer<uint32_t> segmentIndexBuffer;
         };
         struct CustomPrimitives {
-            std::vector<cudau::TypedBuffer<AABB>> aabbBuffers;
             std::vector<cudau::TypedBuffer<Shared::SphereParameter>> paramBuffers;
+            cudau::TypedBuffer<const Shared::SphereParameter*> paramBufferPointerBuffer;
         };
         std::variant<TriangleMesh, Curves, CustomPrimitives> shape;
         optixu::GeometryInstance optixGeomInst;
@@ -153,21 +155,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (std::holds_alternative<TriangleMesh>(shape)) {
                 auto &geom = std::get<TriangleMesh>(shape);
                 geom.triangleBuffer.finalize();
+                geom.vertexBufferPointerBuffer.finalize();
                 for (int i = geom.vertexBuffers.size() - 1; i >= 0; --i)
                     geom.vertexBuffers[i].finalize();
             }
             else if (std::holds_alternative<Curves>(shape)) {
                 auto &geom = std::get<Curves>(shape);
                 geom.segmentIndexBuffer.finalize();
+                geom.vertexBufferPointerBuffer.finalize();
                 for (int i = geom.vertexBuffers.size() - 1; i >= 0; --i)
                     geom.vertexBuffers[i].finalize();
             }
             else {
                 auto &geom = std::get<CustomPrimitives>(shape);
-                for (int i = geom.aabbBuffers.size() - 1; i >= 0; --i) {
-                    geom.aabbBuffers[i].finalize();
+                geom.paramBufferPointerBuffer.finalize();
+                for (int i = geom.paramBuffers.size() - 1; i >= 0; --i)
                     geom.paramBuffers[i].finalize();
-                }
             }
             optixGeomInst.destroy();
         }
@@ -214,12 +217,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             v.position = v.position + v.normal * length(v.position - float3(0, 0, 42)) * 0.25f;
         }
         shape.vertexBuffers[1].initialize(cuContext, cudau::BufferType::Device, vertices);
+        shape.vertexBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
         shape.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Shared::GeometryData geomData = {};
+        auto vertexBufferPointers = shape.vertexBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            geomData.vertexBuffers[i] = shape.vertexBuffers[i].getDevicePointer();
+            vertexBufferPointers[i] = shape.vertexBuffers[i].getDevicePointer();
+        shape.vertexBufferPointerBuffer.unmap();
+        geomData.vertexBuffers = shape.vertexBufferPointerBuffer.getDevicePointer();
         geomData.triangleBuffer = shape.triangleBuffer.getDevicePointer();
+        geomData.numMotionSteps = numMotionSteps;
 
         bunny.optixGeomInst = scene.createGeometryInstance();
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
@@ -293,12 +301,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         shape.vertexBuffers.resize(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
             shape.vertexBuffers[i].initialize(cuContext, cudau::BufferType::Device, vertices[i]);
+        shape.vertexBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
         shape.segmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
+        auto vertexBufferPointers = shape.vertexBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            geomData.curveVertexBuffers[i] = shape.vertexBuffers[i].getDevicePointer();
+            vertexBufferPointers[i] = shape.vertexBuffers[i].getDevicePointer();
+        shape.vertexBufferPointerBuffer.unmap();
+        geomData.curveVertexBuffers = shape.vertexBufferPointerBuffer.getDevicePointer();
         geomData.segmentIndexBuffer = shape.segmentIndexBuffer.getDevicePointer();
+        geomData.numMotionSteps = numMotionSteps;
 
         curves.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
@@ -337,8 +350,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         auto &shape = std::get<Geometry::CustomPrimitives>(spheres.shape);
 
         constexpr uint32_t numPrimitives = 25;
-        std::vector<AABB> aabbs0(numPrimitives);
-        std::vector<AABB> aabbs1(numPrimitives);
         std::vector<Shared::SphereParameter> sphereParams0(numPrimitives);
         std::vector<Shared::SphereParameter> sphereParams1(numPrimitives);
 
@@ -351,6 +362,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             float z = -0.8f + 1.6f * (i / 5) / 4.0f;
             param0.center = float3(x, y, z);
             param0.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
+            param0.aabb = AABB();
+            param0.aabb.unify(param0.center - float3(param0.radius));
+            param0.aabb.unify(param0.center + float3(param0.radius));
 
             Shared::SphereParameter &param1 = sphereParams1[i];
             param1 = param0;
@@ -358,40 +372,33 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                            u01(rng) - 0.5f,
                                            u01(rng) - 0.5f);
             param1.radius *= 0.5f + 1.0f * u01(rng);
-
-            AABB &aabb0 = aabbs0[i];
-            aabb0 = AABB();
-            aabb0.unify(param0.center - float3(param0.radius));
-            aabb0.unify(param0.center + float3(param0.radius));
-
-            AABB &aabb1 = aabbs1[i];
-            aabb1 = AABB();
-            aabb1.unify(param1.center - float3(param1.radius));
-            aabb1.unify(param1.center + float3(param1.radius));
+            param1.aabb = AABB();
+            param1.aabb.unify(param1.center - float3(param1.radius));
+            param1.aabb.unify(param1.center + float3(param1.radius));
         }
 
         // JP: AABBバッファーを2ステップ分作る。
         // EN: Create AABB buffer for two steps.
         uint32_t numMotionSteps = 2;
-        shape.aabbBuffers.resize(numMotionSteps);
-        shape.aabbBuffers[0].initialize(cuContext, cudau::BufferType::Device, aabbs0);
-        shape.aabbBuffers[1].initialize(cuContext, cudau::BufferType::Device, aabbs1);
         shape.paramBuffers.resize(numMotionSteps);
         shape.paramBuffers[0].initialize(cuContext, cudau::BufferType::Device, sphereParams0);
         shape.paramBuffers[1].initialize(cuContext, cudau::BufferType::Device, sphereParams1);
+        shape.paramBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
 
         Shared::GeometryData geomData = {};
-        for (int i = 0; i < numMotionSteps; ++i) {
-            geomData.aabbBuffers[i] = shape.aabbBuffers[i].getDevicePointer();
-            geomData.paramBuffers[i] = shape.paramBuffers[i].getDevicePointer();
-        }
+        auto paramBufferPointers = shape.paramBufferPointerBuffer.map();
+        for (int i = 0; i < numMotionSteps; ++i)
+            paramBufferPointers[i] = shape.paramBuffers[i].getDevicePointer();
+        shape.paramBufferPointerBuffer.unmap();
+        geomData.paramBuffers = shape.paramBufferPointerBuffer.getDevicePointer();
+        geomData.numMotionSteps = numMotionSteps;
 
         spheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
         spheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
-            spheres.optixGeomInst.setCustomPrimitiveAABBBuffer(shape.aabbBuffers[i], i);
+            spheres.optixGeomInst.setCustomPrimitiveAABBBuffer(shape.paramBuffers[i], i);
         spheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
         spheres.optixGeomInst.setMaterial(0, 0, matForSpheres);
         spheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);

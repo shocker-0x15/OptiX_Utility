@@ -70,10 +70,9 @@ CUDA_DEVICE_FUNCTION float3 calcCurveSurfaceNormal(const GeometryData &geom, con
     float normTime = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
 
     uint32_t baseIndex = geom.segmentIndexBuffer[hpParam.primIndex];
-    const uint32_t numMotionSteps = lengthof(geom.curveVertexBuffers);
-    float stepF = (numMotionSteps - 1) * normTime;
+    float stepF = (geom.numMotionSteps - 1) * normTime;
     uint32_t step = static_cast<uint32_t>(stepF);
-    const float stepWidth = 1.0f / (numMotionSteps - 1);
+    float stepWidth = 1.0f / (geom.numMotionSteps - 1);
     float p = stepF - step;
     for (int i = 0; i < numControlPoints; ++i) {
         const CurveVertex &vA = geom.curveVertexBuffers[step][baseIndex + i];

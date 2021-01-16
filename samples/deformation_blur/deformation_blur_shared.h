@@ -30,6 +30,7 @@ namespace Shared {
     };
 
     struct SphereParameter {
+        AABB aabb;
         float3 center;
         float radius;
     };
@@ -74,18 +75,18 @@ namespace Shared {
     struct GeometryData {
         union {
             struct {
-                const Vertex* vertexBuffers[2];
+                const Vertex** vertexBuffers;
                 const Triangle* triangleBuffer;
             };
             struct {
-                const CurveVertex* curveVertexBuffers[8];
+                const CurveVertex** curveVertexBuffers;
                 const uint32_t* segmentIndexBuffer;
             };
             struct {
-                const AABB* aabbBuffers[2];
-                const SphereParameter* paramBuffers[2];
+                const SphereParameter** paramBuffers;
             };
         };
+        uint32_t numMotionSteps;
     };
 
 
