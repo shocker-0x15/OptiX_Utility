@@ -8,7 +8,7 @@ CUDA_DEVICE_KERNEL void deform(const Shared::Vertex* originalVertices, Shared::V
     if (vIdx >= numVertices)
         return;
     
-    float3 spherePos = normalize(originalVertices[vIdx].position);
+    float3 spherePos = 3 * normalize(originalVertices[vIdx].position);
     vertices[vIdx].position = (1 - t) * originalVertices[vIdx].position + t * spherePos;
     vertices[vIdx].normal = make_float3(0, 0, 0);
 }

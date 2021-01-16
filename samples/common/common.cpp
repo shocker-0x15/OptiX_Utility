@@ -653,4 +653,20 @@ namespace obj {
             v.normal = normalize(v.normal);
         }
     }
+
+    void load(const std::filesystem::path &filepath,
+              std::vector<Vertex>* vertices, std::vector<Triangle>* triangles) {
+        std::vector<obj::MaterialGroup> objMatGroups;
+        load(filepath, vertices, &objMatGroups, nullptr);
+
+        triangles->clear();
+        for (int mIdx = 0; mIdx < objMatGroups.size(); ++mIdx) {
+            const obj::MaterialGroup &matGroup = objMatGroups[mIdx];
+            uint32_t baseIndex = triangles->size();
+            triangles->resize(triangles->size() + matGroup.triangles.size());
+            std::copy_n(matGroup.triangles.data(),
+                        matGroup.triangles.size(),
+                        triangles->data() + baseIndex);
+        }
+    }
 }

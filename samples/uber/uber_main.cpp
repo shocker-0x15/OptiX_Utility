@@ -986,28 +986,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     TriangleMesh meshObject(cuContext, &sceneContext);
     uint32_t objectMatGroupIndex;
     {
-        std::vector<obj::Vertex> objVertices;
-        std::vector<obj::MaterialGroup> objMatGroups;
-        obj::load("../../data/subd_cube.obj", &objVertices, &objMatGroups, nullptr);
-
-        // JP: このサンプルではobjのマテリアルを区別しないのでグループをひとつにまとめる。
-        // EN: Combine groups into one because this sample doesn't distinguish obj materials.
         std::vector<Shared::Vertex> orgObjectVertices;
         std::vector<Shared::Triangle> triangles;
         {
+            std::vector<obj::Vertex> objVertices;
+            std::vector<obj::Triangle> objTriangles;
+            obj::load("../../data/subd_cube.obj", &objVertices, &objTriangles);
+
             orgObjectVertices.resize(objVertices.size());
             for (int vIdx = 0; vIdx < objVertices.size(); ++vIdx) {
                 const obj::Vertex &objVertex = objVertices[vIdx];
-                orgObjectVertices[vIdx] = Shared::Vertex{ 0.3f * objVertex.position, objVertex.normal, objVertex.texCoord };
+                orgObjectVertices[vIdx] = Shared::Vertex{ objVertex.position, objVertex.normal, objVertex.texCoord };
             }
-            for (int mIdx = 0; mIdx < objMatGroups.size(); ++mIdx) {
-                const obj::MaterialGroup &matGroup = objMatGroups[mIdx];
-                uint32_t baseIndex = triangles.size();
-                triangles.resize(triangles.size() + matGroup.triangles.size());
-                std::copy_n(reinterpret_cast<const Shared::Triangle*>(matGroup.triangles.data()),
-                            matGroup.triangles.size(),
-                            triangles.data() + baseIndex);
-            }
+            static_assert(sizeof(Shared::Triangle) == sizeof(obj::Triangle),
+                          "Assume triangle formats are the same.");
+            triangles.resize(objTriangles.size());
+            std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
+                        triangles.size(),
+                        triangles.data());
         }
 
         meshObject.setVertexBuffer(orgObjectVertices.data(), orgObjectVertices.size());
@@ -1799,7 +1795,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // EN: Transform instances.
 
             Matrix3x3 sr0 =
-                scale3x3(0.25 + 0.2f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
+                scale3x3(0.075f + 0.06f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
                 rotateY3x3(2 * M_PI * (animFrameIndex % 180) / 180.0f) *
                 rotateX3x3(2 * M_PI * (animFrameIndex % 300) / 300.0f) *
                 rotateZ3x3(2 * M_PI * (animFrameIndex % 420) / 420.0f);
@@ -1811,7 +1807,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             instObject0.setTransform(tfObject0);
 
             Matrix3x3 sr1 =
-                scale3x3(0.333f + 0.125f * std::sinf(2 * M_PI * (animFrameIndex % 780) / 780.0f + M_PI / 2)) *
+                scale3x3(0.1f + 0.0375f * std::sinf(2 * M_PI * (animFrameIndex % 780) / 780.0f + M_PI / 2)) *
                 rotateY3x3(2 * M_PI * (animFrameIndex % 660) / 660.0f) *
                 rotateX3x3(2 * M_PI * (animFrameIndex % 330) / 330.0f) *
                 rotateZ3x3(2 * M_PI * (animFrameIndex % 570) / 570.0f);

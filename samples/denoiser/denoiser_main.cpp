@@ -380,28 +380,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Geometry bunny;
     {
-        std::vector<obj::Vertex> objVertices;
-        std::vector<obj::MaterialGroup> objMatGroups;
-        obj::load("../../data/stanford_bunny_309_faces.obj", &objVertices, &objMatGroups, nullptr);
-
-        // JP: このサンプルではobjのマテリアルを区別しないのでグループをひとつにまとめる。
-        // EN: Combine groups into one because this sample doesn't distinguish obj materials.
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
         {
+            std::vector<obj::Vertex> objVertices;
+            std::vector<obj::Triangle> objTriangles;
+            obj::load("../../data/stanford_bunny_309_faces.obj", &objVertices, &objTriangles);
+
             vertices.resize(objVertices.size());
             for (int vIdx = 0; vIdx < objVertices.size(); ++vIdx) {
                 const obj::Vertex &objVertex = objVertices[vIdx];
                 vertices[vIdx] = Shared::Vertex{ objVertex.position, objVertex.normal, objVertex.texCoord };
             }
-            for (int mIdx = 0; mIdx < objMatGroups.size(); ++mIdx) {
-                const obj::MaterialGroup &matGroup = objMatGroups[mIdx];
-                uint32_t baseIndex = triangles.size();
-                triangles.resize(triangles.size() + matGroup.triangles.size());
-                std::copy_n(reinterpret_cast<const Shared::Triangle*>(matGroup.triangles.data()),
-                            matGroup.triangles.size(),
-                            triangles.data() + baseIndex);
-            }
+            static_assert(sizeof(Shared::Triangle) == sizeof(obj::Triangle),
+                          "Assume triangle formats are the same.");
+            triangles.resize(objTriangles.size());
+            std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
+                        triangles.size(),
+                        triangles.data());
         }
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
