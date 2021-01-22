@@ -69,7 +69,6 @@ TODO:
 - ユニットテスト。
 - Linux環境でのテスト。
 - CMake整備。
-- setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
 - ASのRelocationサポート。
 - AOV Denoiserサポート。
 - Instance Pointersサポート。
@@ -80,17 +79,18 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
-- InstanceのsetChildはTraversal Graph Depthに影響しないので名前を変えるべき？setTraversable()?
+- Priv構造体がOptiXの構造体を直接持っていない場合が多々あるのがもったいない？
+  => OptixBuildInputは巨大なパディングを含んでいるので好ましくない。
+  => IASが直接持っているOptixBuildInputを除去orポインター化？
+     OptixBuildInputInstanceArrayを持つようにするとrebuildなどの各処理で毎回OptixBuildInputのクリアが必要。
+     ポインター化はメモリの無駄遣いを本質的には解決しない。
 - optixuのenumかOptiXのenum、使い分ける基準について考える。
-  OptiX側のenumが余計なものを含んでいる場合はoptixu側でenumを定義したほうがミスが少ない。
+  => OptiX側のenumが余計なものを含んでいる場合はoptixu側でenumを定義したほうがミスが少ない。
+  GeometryTypeはOptiX側のでも良い気もするが、OPTIX_PRIMITIVE_TYPE_とOPTIX_PRIMITIVE_TYPE_FLAGS_でミスりそう。
 - MaterialのヒットグループのISとGeometryInstanceの一致確認。
+  => ついでにプログラムタイプごとの型つくる？
 - GeometryInstanceのGASをdirtyにする処理のうち、いくつかは内部的にSBTレイアウトの無効化をスキップできるはず。
 - HitGroup以外のProgramGroupにユーザーデータを持たせる。
-- GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
-  名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
-  しかしビルドやアップデートを明示的にしているため結局ASであるということをユーザーが意識する必要がある。
-- ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
-  => オフセット値を読み取った後にデータを読み取るというindirectionになるため、そもそもあまり好ましくない気も。
 - Material::setHitGroup()はレイタイプの数値が同じでもヒットグループのパイプラインが違っていれば別個に登録できるが、
   これがAPI上からは読み取りづらい。冗長だが敢えてパイプラインの識別情報も引数として受け取るべき？
 - Scene::generateShaderBindingTableLayout()はPipelineに依存すべき？
@@ -104,6 +104,16 @@ TODO:
     => GASのレイタイプ数設定をパイプラインに依存させる？ => Sceneとパイプラインは切り離したい。
   - GASがレイタイプ数設定を持っているのが不自然？ => パイプラインがレイタイプ数を持つようにして
     SBTレイアウト計算もPipelineに依存させる？
+----------------------------------------------------------------
+- GAS/IASに関してユーザーが気にするところはAS云々ではなくグループ化なので
+  名前を変えるべき？GeometryGroup/InstanceGroupのような感じ。
+  しかしビルドやアップデートを明示的にしているため結局ASであるということをユーザーが意識する必要がある。
+- ユーザーがあるSBTレコード中の各データのストライドを意識せずともそれぞれのオフセットを取得する関数。
+  => オフセット値を読み取った後にデータを読み取るというindirectionになるため、そもそもあまり好ましくない気も。
+- setPayloads/getPayloadsなどで引数側が必要以上の引数を渡していてもエラーが出ない問題。
+  => 言語機能的に難しいか。
+- InstanceのsetChildはTraversal Graph Depthに影響しないので名前を変えるべき？setTraversable()?
+  => GASのsetChildもDepthに影響しないことを考えるとこのままで良いかも。
 
 */
 

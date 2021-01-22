@@ -890,12 +890,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
 
-    cudau::Buffer pickHitGroupSBT;
-    pickHitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
-    pickHitGroupSBT.setMappedMemoryPersistent(true);
-    cudau::Buffer renderHitGroupSBT;
-    renderHitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
-    renderHitGroupSBT.setMappedMemoryPersistent(true);
+    pickPipeline.hitGroupShaderBindingTable.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    pickPipeline.hitGroupShaderBindingTable.setMappedMemoryPersistent(true);
+    renderPipeline.hitGroupShaderBindingTable.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
+    renderPipeline.hitGroupShaderBindingTable.setMappedMemoryPersistent(true);
 
     OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
 
@@ -966,9 +964,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     pickPipeline.pipeline.setScene(scene);
-    pickPipeline.pipeline.setHitGroupShaderBindingTable(pickHitGroupSBT, pickHitGroupSBT.getMappedPointer());
+    pickPipeline.pipeline.setHitGroupShaderBindingTable(pickPipeline.hitGroupShaderBindingTable,
+                                                        pickPipeline.hitGroupShaderBindingTable.getMappedPointer());
     renderPipeline.pipeline.setScene(scene);
-    renderPipeline.pipeline.setHitGroupShaderBindingTable(renderHitGroupSBT, renderHitGroupSBT.getMappedPointer());
+    renderPipeline.pipeline.setHitGroupShaderBindingTable(renderPipeline.hitGroupShaderBindingTable,
+                                                          renderPipeline.hitGroupShaderBindingTable.getMappedPointer());
 
     CUdeviceptr pickPlpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&pickPlpOnDevice, sizeof(pickPlp)));
@@ -1319,9 +1319,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     outputTexture.finalize();
 
 
-
-    renderHitGroupSBT.finalize();
-    pickHitGroupSBT.finalize();
 
     compactedASMem.finalize();
 
