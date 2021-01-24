@@ -4,6 +4,9 @@
 imgui.ini
 samples/**/*.png
 
+tests/gtest
+tests/gtest_build
+
 # User-specific files
 *.suo
 *.user
