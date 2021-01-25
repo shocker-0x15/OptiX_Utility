@@ -11,6 +11,39 @@ def chdir(dst):
 
 def run():
     msbuild = R'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
+
+    # ----------------------------------------------------------------
+    # Unit tests
+
+    sln = os.path.abspath(R'..\tests\unit_tests.sln')
+    config = 'Release'
+    exe = os.path.abspath(os.path.join('x64', config, 'optixu.exe'))
+
+    # Clean
+    cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
+    cmd += [sln]
+    print(' '.join(cmd))
+    ret = subprocess.run(cmd, check=True)
+
+    # Build
+    cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
+    cmd += [sln]
+    print(' '.join(cmd))
+    ret = subprocess.run(cmd, check=True)
+
+    print('Run unit tests')
+    cmd = [exe]
+    print(' '.join(cmd))
+    ret = subprocess.run(cmd, check=True)
+
+    # END: Unit tests
+    # ----------------------------------------------------------------
+
+
+
+    # ----------------------------------------------------------------
+    # Image tests
+
     sln = os.path.abspath(R'..\samples\OptiX_Utility.sln')
     refImgDir = os.path.abspath(R'ref_images')
 
@@ -86,6 +119,9 @@ def run():
         print('Successes: {}/{}, All Success: {}'.format(
             numSuccesses, len(resultsPerConfig), numSuccesses == len(resultsPerConfig)))
         print()
+
+    # END: Image tests
+    # ----------------------------------------------------------------
 
     return 0
 

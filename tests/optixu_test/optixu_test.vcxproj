@@ -24,6 +24,7 @@
     <ProjectGuid>{fb2ea40b-108a-48d0-917f-398e6f96021a}</ProjectGuid>
     <RootNamespace>optixu</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>optixu_tests</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
