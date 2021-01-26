@@ -55,7 +55,8 @@ namespace optixu {
     }
 
     void Context::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -104,7 +105,8 @@ namespace optixu {
     }
 
     void Material::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -204,7 +206,8 @@ namespace optixu {
     }
 
     void Scene::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -529,7 +532,8 @@ namespace optixu {
     }
 
     void GeometryInstance::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -772,8 +776,10 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::destroy() {
-        m->scene->markSBTLayoutDirty();
-        delete m;
+        if (m) {
+            m->scene->markSBTLayoutDirty();
+            delete m;
+        }
         m = nullptr;
     }
 
@@ -1174,7 +1180,8 @@ namespace optixu {
     }
 
     void Transform::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -1527,7 +1534,8 @@ namespace optixu {
     }
 
     void Instance::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -1622,7 +1630,8 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -2005,7 +2014,8 @@ namespace optixu {
     }
 
     void Pipeline::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
@@ -2400,18 +2410,20 @@ namespace optixu {
 
 
     void Module::destroy() {
-        OPTIX_CHECK(optixModuleDestroy(m->rawModule));
-
-        delete m;
+        if (m) {
+            OPTIX_CHECK(optixModuleDestroy(m->rawModule));
+            delete m;
+        }
         m = nullptr;
     }
 
 
 
     void ProgramGroup::destroy() {
-        m->pipeline->destroyProgram(m->rawGroup);
-
-        delete m;
+        if (m) {
+            m->pipeline->destroyProgram(m->rawGroup);
+            delete m;
+        }
         m = nullptr;
     }
 
@@ -2422,7 +2434,8 @@ namespace optixu {
 
 
     void Denoiser::destroy() {
-        delete m;
+        if (m)
+            delete m;
         m = nullptr;
     }
 
