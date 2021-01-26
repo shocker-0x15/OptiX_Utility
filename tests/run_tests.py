@@ -9,6 +9,10 @@ def chdir(dst):
     os.chdir(dst)
     return oldDir
 
+def run_command(cmd):
+    print(' '.join(cmd))
+    ret = subprocess.run(cmd, check=True)
+
 def run():
     msbuild = R'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
 
@@ -22,19 +26,16 @@ def run():
     # Clean
     cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
     cmd += [sln]
-    print(' '.join(cmd))
-    ret = subprocess.run(cmd, check=True)
+    run_command(cmd)
 
     # Build
     cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
     cmd += [sln]
-    print(' '.join(cmd))
-    ret = subprocess.run(cmd, check=True)
+    run_command(cmd)
 
     print('Run unit tests')
     cmd = [exe]
-    print(' '.join(cmd))
-    ret = subprocess.run(cmd, check=True)
+    run_command(cmd)
 
     # END: Unit tests
     # ----------------------------------------------------------------
@@ -42,7 +43,7 @@ def run():
 
 
     # ----------------------------------------------------------------
-    # Image tests
+    # Sample image tests
 
     sln = os.path.abspath(R'..\samples\OptiX_Utility.sln')
     refImgDir = os.path.abspath(R'ref_images')
@@ -57,14 +58,12 @@ def run():
         # Clean
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
         cmd += [sln]
-        print(' '.join(cmd))
-        ret = subprocess.run(cmd, check=True)
+        run_command(cmd)
 
         # Build
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
         cmd += [sln]
-        print(' '.join(cmd))
-        ret = subprocess.run(cmd, check=True)
+        run_command(cmd)
 
     # Run tests
     results = {}
@@ -83,7 +82,7 @@ def run():
             cmd = [exe]
             if 'options' in test:
                 cmd.append(test['options'])
-            ret = subprocess.run(cmd, check=True)
+            run_command(cmd)
 
             # RGBAでdiffをとると差が無いことになってしまう。
             img = Image.open(test['image']).convert('RGB')
@@ -120,7 +119,7 @@ def run():
             numSuccesses, len(resultsPerConfig), numSuccesses == len(resultsPerConfig)))
         print()
 
-    # END: Image tests
+    # END: Sample image tests
     # ----------------------------------------------------------------
 
     return 0
