@@ -2,5 +2,34 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="..\..\cuda_util.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\cuda_util.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util_private.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="shared.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="utils">
+      <UniqueIdentifier>{76dab89a-5349-44c8-aff5-940c3d90f8ae}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\optix_util.cpp">
+      <Filter>utils</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernels_0.cu" />
+    <CudaCompile Include="kernels_1.cu" />
   </ItemGroup>
 </Project>
