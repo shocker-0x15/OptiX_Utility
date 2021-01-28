@@ -171,8 +171,12 @@ TEST(ContextTest, ContextCreation) {
 TEST(ContextTest, ContextBasic) {
     optixu::Context context;
 
+    // JP: 適当なCUDAコンテキストに対してoptixuのコンテキストを生成。
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext), false);
     {
+        // ----------------------------------------------------------------
+        // JP: 共通処理。
+
         optixu::Context retContext;
         EXPECT_EXCEPTION_RET(retContext, context.getContext(), false);
         EXPECT_EQ(retContext, context);
@@ -189,6 +193,9 @@ TEST(ContextTest, ContextBasic) {
         EXPECT_EXCEPTION_RET(retName, context.getName(), false);
         EXPECT_STREQ(retName, nameB);
 
+        // END: 共通処理。
+        // ----------------------------------------------------------------
+
 
 
         CUcontext retCuContext;
@@ -197,6 +204,7 @@ TEST(ContextTest, ContextBasic) {
 
 
 
+        // JP: コールバックの登録。
         struct CallbackUserData {
             uint32_t value;
         };
@@ -208,11 +216,16 @@ TEST(ContextTest, ContextBasic) {
         EXPECT_EXCEPTION(context.setLogCallback(callback, &cbUserData, 2), false);
         EXPECT_EXCEPTION(context.setLogCallback(callback, &cbUserData, 3), false);
         EXPECT_EXCEPTION(context.setLogCallback(callback, &cbUserData, 4), false);
+        // JP: コールバックレベルとして範囲外の値を設定。
         EXPECT_EXCEPTION(context.setLogCallback(callback, &cbUserData, 5), true);
+        // JP: コールバックリセット。
         EXPECT_EXCEPTION(context.setLogCallback(nullptr, nullptr, 0), false);
 
 
 
+        // ----------------------------------------------------------------
+        // JP: 各オブジェクトの生成。
+        
         optixu::Pipeline pipeline;
         EXPECT_EXCEPTION_RET(pipeline, context.createPipeline(), false);
         EXPECT_NE(pipeline, optixu::Pipeline());
@@ -242,10 +255,17 @@ TEST(ContextTest, ContextBasic) {
         EXPECT_NE(denoiser, optixu::Denoiser());
         EXPECT_EXCEPTION(denoiser.destroy(), false);
 
+        // JP: 向こうなenumを使ってデノイザーを生成。
         EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(static_cast<OptixDenoiserInputKind>(~0)), true);
+
+        // END: 各オブジェクトの生成。
+        // ----------------------------------------------------------------
     }
     EXPECT_EXCEPTION(context.destroy(), false);
 
+
+
+    // JP: CUDAのデフォルトコンテキストに対してoptixuのコンテキストを生成。
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(0), false);
     {
         CUcontext retCuContext;
@@ -304,6 +324,10 @@ TEST(MaterialTest, MaterialBasic) {
 
     // ----------------------------------------------------------------
     // JP: 共通処理。
+
+    optixu::Context retContext;
+    EXPECT_EXCEPTION_RET(retContext, mat0.getContext(), false);
+    EXPECT_EQ(retContext, context);
 
     const char* retName = nullptr;
 
