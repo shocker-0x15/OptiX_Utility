@@ -240,8 +240,8 @@ namespace optixu {
         }
         void unregisterName(const void* p) {
             optixuAssert(p, "Object must not be nullptr.");
-            optixuAssert(registeredNames.count(p) > 0, "The object %p has not been registered.", p);
-            registeredNames.erase(p);
+            if (registeredNames.count(p) > 0)
+                registeredNames.erase(p);
         }
         const char* getRegisteredName(const void* p) const {
             if (registeredNames.count(p) > 0)
@@ -327,7 +327,9 @@ namespace optixu {
 
         Priv(_Context* ctxt) :
             context(ctxt), userData(sizeof(uint32_t)) {}
-        ~Priv() {}
+        ~Priv() {
+            context->unregisterName(this);
+        }
 
         _Context* getContext() const {
             return context;
@@ -396,7 +398,9 @@ namespace optixu {
         Priv(_Context* ctxt) : context(ctxt),
             singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
             sbtLayoutIsUpToDate(false) {}
-        ~Priv() {}
+        ~Priv() {
+            context->unregisterName(this);
+        }
 
         _Context* getContext() const {
             return context;
@@ -557,6 +561,7 @@ namespace optixu {
             else {
                 optixuAssert_ShouldNotBeCalled();
             }
+            getContext()->unregisterName(this);
         }
 
         const _Scene* getScene() const {
@@ -667,6 +672,7 @@ namespace optixu {
             cuEventDestroy(finishEvent);
 
             scene->removeGAS(this);
+            getContext()->unregisterName(this);
         }
 
         const _Scene* getScene() const {
@@ -752,6 +758,7 @@ namespace optixu {
                 delete data;
             data = nullptr;
             scene->removeTransform(this);
+            getContext()->unregisterName(this);
         }
 
         const _Scene* getScene() const {
@@ -813,7 +820,9 @@ namespace optixu {
             };
             std::copy_n(identity, 12, instTransform);
         }
-        ~Priv() {}
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
 
         const _Scene* getScene() const {
             return scene;
@@ -891,6 +900,7 @@ namespace optixu {
             cuEventDestroy(finishEvent);
 
             scene->removeIAS(this);
+            getContext()->unregisterName(this);
         }
 
         const _Scene* getScene() const {
@@ -1005,8 +1015,9 @@ namespace optixu {
 
         Priv(const _Pipeline* pl, OptixModule _rawModule) :
             pipeline(pl), rawModule(_rawModule) {}
-
-
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
 
         _Context* getContext() const {
             return pipeline->getContext();
@@ -1032,8 +1043,9 @@ namespace optixu {
 
         Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) :
             pipeline(pl), rawGroup(_rawGroup) {}
-
-
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
 
         _Context* getContext() const {
             return pipeline->getContext();
@@ -1146,6 +1158,7 @@ namespace optixu {
         }
         ~Priv() {
             optixDenoiserDestroy(rawDenoiser);
+            context->unregisterName(this);
         }
 
         _Context* getContext() const {
