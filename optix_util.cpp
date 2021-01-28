@@ -1312,19 +1312,31 @@ namespace optixu {
     }
 
     void Transform::setChild(GeometryAccelerationStructure child) const {
-        m->child = extract(child);
+        auto _child = extract(child);
+        m->throwRuntimeError(_child, "Invalid GAS %p.", _child);
+        m->throwRuntimeError(_child->getScene() == m->scene, "Scene mismatch for the given GAS %s.",
+                             _child->getName().c_str());
+        m->child = _child;
 
         markDirty();
     }
 
     void Transform::setChild(InstanceAccelerationStructure child) const {
-        m->child = extract(child);
+        auto _child = extract(child);
+        m->throwRuntimeError(_child, "Invalid IAS %p.", _child);
+        m->throwRuntimeError(_child->getScene() == m->scene, "Scene mismatch for the given IAS %s.",
+                             _child->getName().c_str());
+        m->child = _child;
 
         markDirty();
     }
 
     void Transform::setChild(Transform child) const {
-        m->child = extract(child);
+        auto _child = extract(child);
+        m->throwRuntimeError(_child, "Invalid transform %p.", _child);
+        m->throwRuntimeError(_child->getScene() == m->scene, "Scene mismatch for the given transform %s.",
+                             _child->getName().c_str());
+        m->child = _child;
 
         markDirty();
     }
@@ -1540,17 +1552,29 @@ namespace optixu {
     }
 
     void Instance::setChild(GeometryAccelerationStructure child, uint32_t matSetIdx) const {
-        m->child = extract(child);
+        auto _child = extract(child);
+        m->throwRuntimeError(_child, "Invalid GAS %p.", _child);
+        m->throwRuntimeError(_child->getScene() == m->scene, "Scene mismatch for the given GAS %s.",
+                             _child->getName().c_str());
+        m->child = _child;
         m->matSetIndex = matSetIdx;
     }
 
     void Instance::setChild(InstanceAccelerationStructure child) const {
-        m->child = extract(child);
+        auto _child = extract(child);
+        m->throwRuntimeError(_child, "Invalid IAS %p.", _child);
+        m->throwRuntimeError(_child->getScene() == m->scene, "Scene mismatch for the given IAS %s.",
+                             _child->getName().c_str());
+        m->child = _child;
         m->matSetIndex = 0;
     }
 
     void Instance::setChild(Transform child, uint32_t matSetIdx) const {
-        m->child = extract(child);
+        auto _child = extract(child);
+        m->throwRuntimeError(_child, "Invalid transform %p.", _child);
+        m->throwRuntimeError(_child->getScene() == m->scene, "Scene mismatch for the given transform %s.",
+                             _child->getName().c_str());
+        m->child = _child;
         m->matSetIndex = matSetIdx;
     }
 
@@ -1900,6 +1924,7 @@ namespace optixu {
         for (auto it = modulesForBuiltin.begin(); it != modulesForBuiltin.end(); ++it)
             it->second->getPublicType().destroy();
         modulesForBuiltin.clear();
+        context->unregisterName(this);
     }
     
     void Pipeline::Priv::markDirty() {
