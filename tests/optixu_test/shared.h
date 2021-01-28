@@ -13,3 +13,4 @@ namespace shared {
 }
 
 #define Pipeline0Payload0Signature uint32_t
+#define Pipeline1Payload0Signature float3

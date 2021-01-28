@@ -144,26 +144,26 @@ TEST(ContextTest, ContextCreation) {
     optixu::Context context;
 
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
 
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(0), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
 
     //EXPECT_EXCEPTION_RET(context, optixu::Context::create(reinterpret_cast<CUcontext>(~static_cast<uintptr_t>(0))), false);
-    //context.destroy();
+    //EXPECT_EXCEPTION(context.destroy(), false);
 
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 0, false), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 1, false), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 2, false), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 3, false), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 4, false), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 4, true), false);
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
 
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 5, false), true);
 }
@@ -216,35 +216,35 @@ TEST(ContextTest, ContextBasic) {
         optixu::Pipeline pipeline;
         EXPECT_EXCEPTION_RET(pipeline, context.createPipeline(), false);
         EXPECT_NE(pipeline, optixu::Pipeline());
-        pipeline.destroy();
+        EXPECT_EXCEPTION(pipeline.destroy(), false);
 
         optixu::Material material;
         EXPECT_EXCEPTION_RET(material, context.createMaterial(), false);
         EXPECT_NE(material, optixu::Material());
-        material.destroy();
+        EXPECT_EXCEPTION(material.destroy(), false);
 
         optixu::Scene scene;
         EXPECT_EXCEPTION_RET(scene, context.createScene(), false);
         EXPECT_NE(scene, optixu::Scene());
-        scene.destroy();
+        EXPECT_EXCEPTION(scene.destroy(), false);
 
         optixu::Denoiser denoiser;
 
         EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(OPTIX_DENOISER_INPUT_RGB), false);
         EXPECT_NE(denoiser, optixu::Denoiser());
-        denoiser.destroy();
+        EXPECT_EXCEPTION(denoiser.destroy(), false);
 
         EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO), false);
         EXPECT_NE(denoiser, optixu::Denoiser());
-        denoiser.destroy();
+        EXPECT_EXCEPTION(denoiser.destroy(), false);
 
         EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL), false);
         EXPECT_NE(denoiser, optixu::Denoiser());
-        denoiser.destroy();
+        EXPECT_EXCEPTION(denoiser.destroy(), false);
 
         EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(static_cast<OptixDenoiserInputKind>(~0)), true);
     }
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
 
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(0), false);
     {
@@ -252,7 +252,7 @@ TEST(ContextTest, ContextBasic) {
         EXPECT_EXCEPTION_RET(retCuContext, context.getCUcontext(), false);
         EXPECT_EQ(retCuContext, reinterpret_cast<CUcontext>(0));
     }
-    context.destroy();
+    EXPECT_EXCEPTION(context.destroy(), false);
 }
 
 
@@ -262,9 +262,9 @@ TEST(MaterialTest, MaterialBasic) {
 
     EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext), false);
 
-    optixu::Pipeline pipeline;
-    EXPECT_EXCEPTION_RET(pipeline, context.createPipeline(), false);
-    EXPECT_EXCEPTION(pipeline.setPipelineOptions(
+    optixu::Pipeline pipeline0;
+    EXPECT_EXCEPTION_RET(pipeline0, context.createPipeline(), false);
+    EXPECT_EXCEPTION(pipeline0.setPipelineOptions(
         optixu::calcSumDwords<Pipeline0Payload0Signature>(),
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(shared::PipelineLaunchParameters0),
@@ -276,7 +276,7 @@ TEST(MaterialTest, MaterialBasic) {
     const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernels_0.ptx");
     optixu::Module moduleOptiX;
     EXPECT_EXCEPTION_RET(moduleOptiX,
-                         pipeline.createModuleFromPTXString(
+                         pipeline0.createModuleFromPTXString(
                              ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
                              OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
                              OPTIX_COMPILE_DEBUG_LEVEL_NONE), false);
@@ -285,24 +285,129 @@ TEST(MaterialTest, MaterialBasic) {
 
     optixu::ProgramGroup hitProgramGroup0;
     EXPECT_EXCEPTION_RET(hitProgramGroup0,
-                         pipeline.createHitProgramGroupForBuiltinIS(
+                         pipeline0.createHitProgramGroupForBuiltinIS(
                              OPTIX_PRIMITIVE_TYPE_TRIANGLE,
                              moduleOptiX, RT_CH_NAME_STR("ch0"),
                              emptyModule, nullptr), false);
 
     optixu::ProgramGroup hitProgramGroup1;
     EXPECT_EXCEPTION_RET(hitProgramGroup1,
-                         pipeline.createHitProgramGroupForBuiltinIS(
+                         pipeline0.createHitProgramGroupForBuiltinIS(
                              OPTIX_PRIMITIVE_TYPE_TRIANGLE,
                              moduleOptiX, RT_CH_NAME_STR("ch1"),
                              emptyModule, nullptr), false);
 
-    hitProgramGroup1.destroy();
-    hitProgramGroup0.destroy();
-    moduleOptiX.destroy();
-    pipeline.destroy();
 
-    context.destroy();
+
+    optixu::Material mat0;
+    EXPECT_EXCEPTION_RET(mat0, context.createMaterial(), false);
+
+    // ----------------------------------------------------------------
+    // JP: 共通処理。
+
+    const char* retName = nullptr;
+
+    // JP: 普通の名前の設定と取得。
+    const char* nameA = "ABCDE";
+    EXPECT_EXCEPTION(mat0.setName(nameA), false);
+    EXPECT_EXCEPTION_RET(retName, mat0.getName(), false);
+    EXPECT_STREQ(retName, nameA);
+
+    // JP: 空白の名前の設定と取得。
+    const char* nameB = "";
+    EXPECT_EXCEPTION(mat0.setName(nameB), false);
+    EXPECT_EXCEPTION_RET(retName, mat0.getName(), false);
+    EXPECT_STREQ(retName, nameB);
+
+    // END: 共通処理。
+    // ----------------------------------------------------------------
+
+
+
+    // ----------------------------------------------------------------
+    // JP: ヒットグループ関連。
+
+    optixu::ProgramGroup retHitProgramGroup;
+
+    // JP: まずは普通に設定と取得。
+    EXPECT_EXCEPTION(mat0.setHitGroup(0, hitProgramGroup0), false);
+    EXPECT_EXCEPTION_RET(retHitProgramGroup, mat0.getHitGroup(pipeline0, 0), false);
+    EXPECT_EQ(retHitProgramGroup, hitProgramGroup0);
+
+    // JP: 同じレイインデックスに対して設定と取得。
+    EXPECT_EXCEPTION(mat0.setHitGroup(0, hitProgramGroup1), false);
+    EXPECT_EXCEPTION_RET(retHitProgramGroup, mat0.getHitGroup(pipeline0, 0), false);
+    EXPECT_EQ(retHitProgramGroup, hitProgramGroup1);
+
+    // JP: 別のレイインデックスに対して設定と取得。
+    EXPECT_EXCEPTION(mat0.setHitGroup(2, hitProgramGroup0), false);
+    EXPECT_EXCEPTION_RET(retHitProgramGroup, mat0.getHitGroup(pipeline0, 2), false);
+    EXPECT_EQ(retHitProgramGroup, hitProgramGroup0);
+
+    // JP: 未設定のレイインデックスから取得。
+    EXPECT_EXCEPTION_RET(retHitProgramGroup, mat0.getHitGroup(pipeline0, 1), true);
+
+    // END: ヒットグループ関連。
+    // ----------------------------------------------------------------
+
+
+
+    // ----------------------------------------------------------------
+    // JP: ユーザーデータ関連。
+    
+    uint32_t udSize, udAlignment;
+
+    // JP: まずは普通に設定と取得。
+    struct UserData0 {
+        uint32_t a;
+        float2 b;
+    };
+    UserData0 ud0 = {};
+    ud0.a = 1;
+    ud0.b = float2(2, 3);
+    EXPECT_EXCEPTION(mat0.setUserData(ud0), false);
+    UserData0 retUd0;
+    EXPECT_EXCEPTION(mat0.getUserData(&retUd0, &udSize, &udAlignment), false);
+    EXPECT_EQ(udSize, sizeof(ud0));
+    EXPECT_EQ(udAlignment, alignof(UserData0));
+    EXPECT_EQ(std::memcmp(&ud0, &retUd0, sizeof(ud0)), 0);
+
+    // JP: 限界サイズのユーザーデータの設定と取得。
+    struct UserData1 {
+        uint8_t a[optixu::s_maxMaterialUserDataSize];
+    };
+    UserData1 ud1 = {};
+    for (int i = 0; i < sizeof(ud1.a); ++i)
+        ud1.a[i] = i;
+    EXPECT_EXCEPTION(mat0.setUserData(ud1), false);
+    UserData1 retUd1;
+    EXPECT_EXCEPTION(mat0.getUserData(&retUd1, &udSize, &udAlignment), false);
+    EXPECT_EQ(udSize, sizeof(ud1));
+    EXPECT_EQ(udAlignment, alignof(UserData1));
+    EXPECT_EQ(std::memcmp(&ud1, &retUd1, sizeof(ud1)), 0);
+
+    // JP: 限界サイズを超えたユーザーデータの設定と取得。
+    struct UserData2 {
+        uint8_t a[optixu::s_maxMaterialUserDataSize + 2];
+    };
+    UserData2 ud2 = {};
+    for (int i = 0; i < sizeof(ud2.a); ++i)
+        ud2.a[i] = i;
+    EXPECT_EXCEPTION(mat0.setUserData(ud2), true);
+
+    // END: ユーザーデータ関連。
+    // ----------------------------------------------------------------
+
+
+
+    EXPECT_EXCEPTION(mat0.destroy(), false);
+
+    EXPECT_EXCEPTION(hitProgramGroup1.destroy(), false);
+    EXPECT_EXCEPTION(hitProgramGroup0.destroy(), false);
+    EXPECT_EXCEPTION(moduleOptiX.destroy(), false);
+    EXPECT_EXCEPTION(pipeline0.destroy(), false);
+
+    EXPECT_EXCEPTION(context.destroy(), false);
 }
 
 
