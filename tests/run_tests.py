@@ -19,7 +19,7 @@ def run():
     # ----------------------------------------------------------------
     # Unit tests
 
-    sln = os.path.abspath(R'..\tests\unit_tests.sln')
+    sln = os.path.abspath(R'..\tests\optixu_unit_tests.sln')
     config = 'Release'
     exe = os.path.abspath(os.path.join('x64', config, 'optixu.exe'))
 
@@ -45,7 +45,7 @@ def run():
     # ----------------------------------------------------------------
     # Sample image tests
 
-    sln = os.path.abspath(R'..\samples\OptiX_Utility.sln')
+    sln = os.path.abspath(R'..\samples\optixu_samples.sln')
     refImgDir = os.path.abspath(R'ref_images')
 
     with open(R'tests.json') as f:
