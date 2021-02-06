@@ -126,7 +126,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                           width, height, 1/*mipCount*/);
             for (int i = 0; i < farSideWallArray.getNumMipmapLevels(); ++i)
-                farSideWallArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
+                farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
 #else
@@ -136,7 +136,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                           width, height, 1);
-            farSideWallArray.transfer<uint8_t>(linearImageData, width * height * 4);
+            farSideWallArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
 #endif
         }
@@ -182,7 +182,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                     width, height, 1/*mipCount*/);
             for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
-                floorArray.transfer<uint8_t>(ddsData[i], sizes[i], i);
+                floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
 #else
@@ -192,7 +192,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                     cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                     width, height, 1);
-            floorArray.transfer<uint8_t>(linearImageData, width * height * 4);
+            floorArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
 #endif
         }
