@@ -103,7 +103,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                            width, height, /*mipCount*/1); // CUDA's bug?
         for (int i = 0; i < array.getNumMipmapLevels(); ++i)
-            array.transfer<uint8_t>(ddsData[i], sizes[i], i);
+            array.write<uint8_t>(ddsData[i], sizes[i], i);
 
         dds::free(ddsData, mipCount, sizes);
 #else
@@ -113,7 +113,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         array.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                            width, height, 1);
-        array.transfer<uint8_t>(linearImageData, width * height * 4);
+        array.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
 

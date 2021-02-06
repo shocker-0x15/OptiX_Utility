@@ -244,7 +244,7 @@ namespace glu {
             return reinterpret_cast<T*>(m_mappedPointer);
         }
         template <typename T>
-        void transfer(const T* srcValues, uint32_t numValues) const {
+        void write(const T* srcValues, uint32_t numValues) const {
             const size_t transferSize = sizeof(T) * numValues;
             const size_t bufferSize = static_cast<size_t>(m_stride) * m_numElements;
             if (transferSize > bufferSize)
@@ -252,14 +252,14 @@ namespace glu {
             glNamedBufferSubData(m_handle, 0, transferSize, srcValues);
         }
         template <typename T>
-        void transfer(const std::vector<T> &values) const {
-            transfer(values.data(), values.size());
+        void write(const std::vector<T> &values) const {
+            write(values.data(), values.size());
         }
         template <typename T>
         void fill(const T &value) const {
             size_t numValues = (static_cast<size_t>(m_stride) * m_numElements) / sizeof(T);
             std::vector values(numValues, value);
-            transfer(values);
+            write(values);
         }
 
         GLuint getHandle() const {

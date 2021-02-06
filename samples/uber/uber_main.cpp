@@ -122,7 +122,7 @@ public:
 
     void setVertexBuffer(const Shared::Vertex* vertices, uint32_t numVertices) {
         m_vertexBuffer.initialize(m_cuContext, g_bufferType, numVertices);
-        m_vertexBuffer.transfer(vertices, numVertices);
+        m_vertexBuffer.write(vertices, numVertices);
     }
 
     const cudau::TypedBuffer<Shared::Vertex> &getVertexBuffer() const {
@@ -137,7 +137,7 @@ public:
         auto triangleBuffer = new cudau::TypedBuffer<Shared::Triangle>();
         group.triangleBuffer = triangleBuffer;
         triangleBuffer->initialize(m_cuContext, g_bufferType, numTriangles);
-        triangleBuffer->transfer(triangles, numTriangles);
+        triangleBuffer->write(triangles, numTriangles);
 
         group.material = material;
 
@@ -614,7 +614,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                        cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                        width, height, 1/*mipCount*/);
         for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
-            arrayCheckerBoard.transfer<uint8_t>(ddsData[i], sizes[i], i);
+            arrayCheckerBoard.write<uint8_t>(ddsData[i], sizes[i], i);
 
         dds::free(ddsData, mipCount, sizes);
 #else
@@ -623,7 +623,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                        cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                        width, height, 1);
-        arrayCheckerBoard.transfer<uint8_t>(linearImageData, width * height * 4);
+        arrayCheckerBoard.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
     }
@@ -642,7 +642,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                width, height, 1/*mipCount*/);
         for (int i = 0; i < arrayGrid.getNumMipmapLevels(); ++i)
-            arrayGrid.transfer<uint8_t>(ddsData[i], sizes[i], i);
+            arrayGrid.write<uint8_t>(ddsData[i], sizes[i], i);
 
         dds::free(ddsData, mipCount, sizes);
 #else
@@ -651,7 +651,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
                                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                                width, height, 1);
-        arrayGrid.transfer<uint8_t>(linearImageData, width * height * 4);
+        arrayGrid.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
 #endif
     }
