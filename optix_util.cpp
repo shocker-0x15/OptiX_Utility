@@ -710,6 +710,64 @@ namespace optixu {
         return m->numMotionSteps;
     }
 
+    OptixVertexFormat GeometryInstance::getVertexFormat() const {
+        m->throwRuntimeError(std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+                             "This geometry instance was created not for triangles.");
+        const auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        return geom.vertexFormat;
+    }
+
+    BufferView GeometryInstance::getVertexBuffer(uint32_t motionStep) {
+        m->throwRuntimeError(!std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry),
+                             "This geometry instance was created not for triangles or curves.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
+        if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
+            const auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+            return geom.vertexBuffers[motionStep];
+        }
+        else if (std::holds_alternative<Priv::CurveGeometry>(m->geometry)) {
+            const auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+            return geom.vertexBuffers[motionStep];
+        }
+        optixuAssert_ShouldNotBeCalled();
+        return BufferView();
+    }
+
+    BufferView GeometryInstance::getWidthBuffer(uint32_t motionStep) {
+        m->throwRuntimeError(std::holds_alternative<Priv::CurveGeometry>(m->geometry),
+                             "This geometry instance was created not for curves.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
+        const auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+        return geom.widthBuffers[motionStep];
+    }
+
+    BufferView GeometryInstance::getTriangleBuffer(OptixIndicesFormat* format) const {
+        m->throwRuntimeError(std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+                             "This geometry instance was created not for triangles.");
+        const auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        if (format)
+            *format = geom.indexFormat;
+        return geom.triangleBuffer;
+    }
+
+    BufferView GeometryInstance::getSegmentIndexBuffer() const {
+        m->throwRuntimeError(std::holds_alternative<Priv::CurveGeometry>(m->geometry),
+                             "This geometry instance was created not for curves.");
+        const auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+        return geom.segmentIndexBuffer;
+    }
+
+    BufferView GeometryInstance::getCustomPrimitiveAABBBuffer(uint32_t motionStep) const {
+        m->throwRuntimeError(std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry),
+                             "This geometry instance was created not for custom primitives.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
+        const auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
+        return geom.primitiveAabbBuffers[motionStep];
+    }
+
     uint32_t GeometryInstance::getPrimitiveIndexOffset() const {
         return m->primitiveIndexOffset;
     }
