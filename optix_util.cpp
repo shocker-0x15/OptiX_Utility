@@ -111,7 +111,7 @@ namespace optixu {
     }
 
     void Material::setHitGroup(uint32_t rayType, ProgramGroup hitGroup) const {
-        auto _pipeline = extract(hitGroup)->getPipeline();
+        const _Pipeline* _pipeline = extract(hitGroup)->getPipeline();
         m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
 
         _Material::Key key{ _pipeline, rayType };
@@ -149,6 +149,14 @@ namespace optixu {
 
 
 
+    void Scene::Priv::addGAS(_GeometryAccelerationStructure* gas) {
+        geomASs[gas->getSerialID()] = gas;
+    }
+
+    void Scene::Priv::removeGAS(_GeometryAccelerationStructure* gas) {
+        geomASs.erase(gas->getSerialID());
+    }
+
     void Scene::Priv::markSBTLayoutDirty() {
         sbtLayoutIsUpToDate = false;
 
@@ -157,7 +165,7 @@ namespace optixu {
     }
 
     uint32_t Scene::Priv::getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
-        SBTOffsetKey key = SBTOffsetKey{ gas, matSetIdx };
+        SBTOffsetKey key = SBTOffsetKey{ gas->getSerialID(), matSetIdx };
         throwRuntimeError(sbtOffsets.count(key), "GAS %s: material set index %u is out of bounds.",
                           gas->getName().c_str(), matSetIdx);
         return sbtOffsets.at(key);
@@ -169,10 +177,10 @@ namespace optixu {
 
         auto records = reinterpret_cast<uint8_t*>(hostMem);
 
-        for (_GeometryAccelerationStructure* gas : geomASs) {
-            uint32_t numMatSets = gas->getNumMaterialSets();
+        for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : geomASs) {
+            uint32_t numMatSets = gas.second->getNumMaterialSets();
             for (uint32_t matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
-                uint32_t numRecords = gas->fillSBTRecords(pipeline, matSetIdx, records);
+                uint32_t numRecords = gas.second->fillSBTRecords(pipeline, matSetIdx, records);
                 records += numRecords * singleRecordSize;
             }
         }
@@ -182,20 +190,20 @@ namespace optixu {
 
     bool Scene::Priv::isReady(bool* hasMotionAS) {
         *hasMotionAS = false;
-        for (_GeometryAccelerationStructure* _gas : geomASs) {
-            *hasMotionAS |= _gas->hasMotion();
-            if (!_gas->isReady())
+        for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : geomASs) {
+            *hasMotionAS |= gas.second->hasMotion();
+            if (!gas.second->isReady())
                 return false;
         }
 
-        for (_Transform* _tr : transforms) {
-            if (!_tr->isReady())
+        for (_Transform* tr : transforms) {
+            if (!tr->isReady())
                 return false;
         }
 
-        for (_InstanceAccelerationStructure* _ias : instASs) {
-            *hasMotionAS |= _ias->hasMotion();
-            if (!_ias->isReady())
+        for (_InstanceAccelerationStructure* ias : instASs) {
+            *hasMotionAS |= ias->hasMotion();
+            if (!ias->isReady())
                 return false;
         }
 
@@ -218,7 +226,9 @@ namespace optixu {
     GeometryAccelerationStructure Scene::createGeometryAccelerationStructure(GeometryType geomType) const {
         // JP: GASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
         // EN: Only generating a GAS doesn't affect a SBT layout, no need to invalidate it.
-        return (new _GeometryAccelerationStructure(m, geomType))->getPublicType();
+        optixuAssert(m->geomASs.count(m->nextGeomASSerialID) == 0,
+                     "Too many GAS creation beyond expectation has been done.");
+        return (new _GeometryAccelerationStructure(m, m->nextGeomASSerialID++, geomType))->getPublicType();
     }
 
     Transform Scene::createTransform() const {
@@ -247,14 +257,18 @@ namespace optixu {
         m->sbtOffsets.clear();
         SizeAlign maxRecordSizeAlign;
         maxRecordSizeAlign += SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
-        for (_GeometryAccelerationStructure* gas : m->geomASs) {
-            uint32_t numMatSets = gas->getNumMaterialSets();
+        // JP: GASの仮想アドレスが実行の度に変わる環境でSBTのレイアウトを固定するため、
+        //     GASはアドレスではなくシリアルIDに紐付けられている。
+        // EN: A GAS is associated to its serial ID instead of its address to make SBT layout fixed
+        //     in an environment where GAS's virtual address changes run to run.
+        for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : m->geomASs) {
+            uint32_t numMatSets = gas.second->getNumMaterialSets();
             for (uint32_t matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
                 SizeAlign gasRecordSizeAlign;
                 uint32_t gasNumSBTRecords;
-                gas->calcSBTRequirements(matSetIdx, &gasRecordSizeAlign, &gasNumSBTRecords);
+                gas.second->calcSBTRequirements(matSetIdx, &gasRecordSizeAlign, &gasNumSBTRecords);
                 maxRecordSizeAlign = max(maxRecordSizeAlign, gasRecordSizeAlign);
-                _Scene::SBTOffsetKey key = { gas, matSetIdx };
+                _Scene::SBTOffsetKey key = { gas.first, matSetIdx };
                 m->sbtOffsets[key] = sbtOffset;
                 sbtOffset += gasNumSBTRecords;
             }
