@@ -884,6 +884,12 @@ private: \
         }
 
         uint32_t getNumMotionSteps() const;
+        OptixVertexFormat getVertexFormat() const;
+        BufferView getVertexBuffer(uint32_t motionStep = 0);
+        BufferView getWidthBuffer(uint32_t motionStep = 0);
+        BufferView getTriangleBuffer(OptixIndicesFormat* format = nullptr) const;
+        BufferView getSegmentIndexBuffer() const;
+        BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
         uint32_t getPrimitiveIndexOffset() const;
         uint32_t getNumMaterials() const;
         OptixGeometryFlags getGeometryFlags(uint32_t matIdx) const;
