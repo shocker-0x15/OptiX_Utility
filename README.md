@@ -238,9 +238,9 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 10 (20H2) & Visual Studio Community 2019 (16.8.3)
+* Windows 10 (20H2) & Visual Studio Community 2019 (16.8.5)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 461.09
+* NVIDIA Driver 461.40
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
