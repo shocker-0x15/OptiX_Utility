@@ -350,14 +350,14 @@ namespace optixu {
 
     class Scene::Priv {
         struct SBTOffsetKey {
-            const _GeometryAccelerationStructure* gas;
+            uint32_t gasSerialID;
             uint32_t matSetIndex;
 
             bool operator<(const SBTOffsetKey &rKey) const {
-                if (gas < rKey.gas) {
+                if (gasSerialID < rKey.gasSerialID) {
                     return true;
                 }
-                else if (gas == rKey.gas) {
+                else if (gasSerialID == rKey.gasSerialID) {
                     if (matSetIndex < rKey.matSetIndex)
                         return true;
                 }
@@ -369,7 +369,7 @@ namespace optixu {
 
                 std::size_t operator()(const SBTOffsetKey& key) const {
                     size_t seed = 0;
-                    auto hash0 = std::hash<const _GeometryAccelerationStructure*>()(key.gas);
+                    auto hash0 = std::hash<uint32_t>()(key.gasSerialID);
                     auto hash1 = std::hash<uint32_t>()(key.matSetIndex);
                     seed ^= hash0 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
                     seed ^= hash1 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -377,13 +377,14 @@ namespace optixu {
                 }
             };
             bool operator==(const SBTOffsetKey &rKey) const {
-                return gas == rKey.gas && matSetIndex == rKey.matSetIndex;
+                return gasSerialID == rKey.gasSerialID && matSetIndex == rKey.matSetIndex;
             }
         };
 
         _Context* context;
-        std::unordered_set<_GeometryAccelerationStructure*> geomASs;
+        std::unordered_map<uint32_t, _GeometryAccelerationStructure*> geomASs;
         std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> sbtOffsets;
+        uint32_t nextGeomASSerialID;
         uint32_t singleRecordSize;
         uint32_t numSBTRecords;
         std::unordered_set<_Transform*> transforms;
@@ -396,6 +397,7 @@ namespace optixu {
         OPTIXU_OPAQUE_BRIDGE(Scene);
 
         Priv(_Context* ctxt) : context(ctxt),
+            nextGeomASSerialID(0),
             singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
             sbtLayoutIsUpToDate(false) {}
         ~Priv() {
@@ -413,12 +415,8 @@ namespace optixu {
 
 
 
-        void addGAS(_GeometryAccelerationStructure* gas) {
-            geomASs.insert(gas);
-        }
-        void removeGAS(_GeometryAccelerationStructure* gas) {
-            geomASs.erase(gas);
-        }
+        void addGAS(_GeometryAccelerationStructure* gas);
+        void removeGAS(_GeometryAccelerationStructure* gas);
         void addTransform(_Transform* tr) {
             transforms.insert(tr);
         }
@@ -609,6 +607,7 @@ namespace optixu {
         };
 
         _Scene* scene;
+        uint32_t serialID;
         GeometryType geomType;
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
@@ -644,8 +643,9 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(GeometryAccelerationStructure);
 
-        Priv(_Scene* _scene, GeometryType _geomType) :
+        Priv(_Scene* _scene, uint32_t _serialID, GeometryType _geomType) :
             scene(_scene),
+            serialID(_serialID),
             geomType(_geomType),
             userData(sizeof(uint32_t)),
             handle(0), compactedHandle(0),
@@ -689,6 +689,10 @@ namespace optixu {
 
 
 
+        uint32_t getSerialID() const {
+            return serialID;
+        }
+        
         uint32_t getNumMaterialSets() const {
             return static_cast<uint32_t>(numRayTypesPerMaterialSet.size());
         }
