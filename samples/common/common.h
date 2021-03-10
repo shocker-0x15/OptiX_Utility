@@ -833,9 +833,9 @@ public:
 
         // Calculate the "unit cube" that the point asked will be located in.
         // The left bound is ( |_x_|,|_y_|,|_z_| ) and the right bound is that plus 1.
-        int32_t xi = std::floor(x);
-        int32_t yi = std::floor(y);
-        int32_t zi = std::floor(z);
+        int32_t xi = floorf(x);
+        int32_t yi = floorf(y);
+        int32_t zi = floorf(z);
 
         const auto fade = [](float t) {
             // Fade function as defined by Ken Perlin.
