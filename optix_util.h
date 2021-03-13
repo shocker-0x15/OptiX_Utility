@@ -100,7 +100,7 @@ TODO:
   現状の問題点：
   - パイプラインごとにマテリアルに設定されているレイタイプ数が異なる場合に、
     最大のレイタイプ数をGASに設定すると、SBTレコードを書き込む際にマテリアルがあるレイタイプに対して
-    設定されていないと言われてしまう。
+    設定されていないと言われてしまう。(とりあえず空のHitGroupを作れるようにして対処してある。)
     => GASのレイタイプ数設定をパイプラインに依存させる？ => Sceneとパイプラインは切り離したい。
     => 多少Sceneがパイプラインに依存するとしてもパイプラインごとに別のレイタイプ数設定のほうがきれいそう。
     => しかしIASが持つSBTオフセットが絶対的な値なので、IASをパイプライン間で共通化させようと思うと結局無理。
@@ -1175,6 +1175,8 @@ private: \
         ProgramGroup createHitProgramGroupForCustomIS(Module module_CH, const char* entryFunctionNameCH,
                                                       Module module_AH, const char* entryFunctionNameAH,
                                                       Module module_IS, const char* entryFunctionNameIS) const;
+        [[nodiscard]]
+        ProgramGroup createEmptyHitProgramGroup() const;
         [[nodiscard]]
         ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
                                                 Module module_CC, const char* entryFunctionNameCC) const;
