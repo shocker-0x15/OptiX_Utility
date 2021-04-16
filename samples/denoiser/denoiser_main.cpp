@@ -628,11 +628,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
     denoiser.getTasks(denoisingTasks.data());
 
-    denoiser.setLayers(linearColorBuffer,
-                       linearAlbedoBuffer,
-                       linearNormalBuffer,
-                       linearOutputBuffer,
-                                                                                                                  OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4, OPTIX_PIXEL_FORMAT_FLOAT4);
     denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
 
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
@@ -706,9 +701,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     You can also create a custom computeIntensity().
     //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
     timerDenoise.start(cuStream);
-    denoiser.computeIntensity(cuStream, denoiserScratchBuffer, hdrIntensity);
+    denoiser.computeIntensity(cuStream,
+                              linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                              denoiserScratchBuffer, hdrIntensity);
     for (int i = 0; i < denoisingTasks.size(); ++i)
-        denoiser.invoke(cuStream, false, hdrIntensity, 0.0f, denoisingTasks[i]);
+        denoiser.invoke(cuStream,
+                        false, hdrIntensity, 0.0f,
+                        linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                        linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                        linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                        optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,
+                        optixu::BufferView(),
+                        linearOutputBuffer,
+                        denoisingTasks[i]);
     timerDenoise.stop(cuStream);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));

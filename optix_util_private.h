@@ -1132,20 +1132,12 @@ namespace optixu {
 
         BufferView stateBuffer;
         BufferView scratchBuffer;
-        BufferView colorBuffer;
-        BufferView albedoBuffer;
-        BufferView normalBuffer;
-        BufferView outputBuffer;
-        OptixPixelFormat colorFormat;
-        OptixPixelFormat albedoFormat;
-        OptixPixelFormat normalFormat;
         struct {
             unsigned int guideAlbedo : 1;
             unsigned int guideNormal : 1;
 
             unsigned int useTiling : 1;
             unsigned int imageSizeSet : 1;
-            unsigned int imageLayersSet : 1;
             unsigned int stateIsReady : 1;
         };
 
@@ -1158,7 +1150,7 @@ namespace optixu {
             overlapWidth(0), maxInputWidth(0), maxInputHeight(0),
             stateSize(0), scratchSize(0), scratchSizeForComputeIntensity(0),
             modelKind(_modelKind), guideAlbedo(_guideAlbedo), guideNormal(_guideNormal),
-            useTiling(false), imageSizeSet(false), imageLayersSet(false), stateIsReady(false) {
+            useTiling(false), imageSizeSet(false), stateIsReady(false) {
             throwRuntimeError(modelKind != OPTIX_DENOISER_MODEL_KIND_AOV && modelKind != OPTIX_DENOISER_MODEL_KIND_TEMPORAL,
                               "OPTIX_DENOISER_MODEL_KIND_(AOV|TEMPORAL) is currently not supported.");
 
