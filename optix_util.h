@@ -1099,7 +1099,7 @@ private: \
 
         // JP: 以下のAPIを呼んだ場合はIASが自動でdirty状態になる。
         // EN: Calling the following APIs automatically marks the IAS dirty.
-        void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction) const;
+        void setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomInstanceAccess) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChildAt(uint32_t index) const;

@@ -1803,7 +1803,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         group->serialID = serialID;
                         group->name = name;
                         group->optixIAS = optixEnv.scene.createInstanceAccelerationStructure();
-                        group->optixIAS.setConfiguration(optixu::ASTradeoff::PreferFastBuild, false, false);
+                        group->optixIAS.setConfiguration(optixu::ASTradeoff::PreferFastBuild, false, false, false);
 
                         instList.loopForSelected(
                             [&group](const InstanceRef &inst) {

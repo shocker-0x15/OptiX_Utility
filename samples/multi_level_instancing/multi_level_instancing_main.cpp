@@ -476,7 +476,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     constexpr uint32_t numMotionKeys = 3;
-    lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
+    lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
     lowerIas.addChild(roomInst);
     lowerIas.addChild(areaLightInst);
@@ -534,7 +534,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure topIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer topIasMem;
     cudau::TypedBuffer<OptixInstance> topInstanceBuffer;
-    topIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
+    topIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
     topIas.addChild(topInstA);
     topIas.addChild(topInstB);
     topIas.addChild(topInstC);

@@ -478,7 +478,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnyInsts.size(); ++i)

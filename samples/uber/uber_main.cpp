@@ -1223,7 +1223,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasSceneMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    iasScene.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false);
+    iasScene.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instFloorFiber);
