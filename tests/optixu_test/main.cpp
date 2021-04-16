@@ -1,4 +1,4 @@
-#if defined(_WIN32) || defined(_WIN64)
+ï»¿#if defined(_WIN32) || defined(_WIN64)
 #    define HP_Platform_Windows
 #    if defined(_MSC_VER)
 #        define HP_Platform_Windows_MSVC
@@ -162,7 +162,7 @@ TEST(ContextTest, ContextCreation) {
         context = optixu::Context::create(cuContext, 4, true);
         context.destroy();
 
-        // JP: ƒR[ƒ‹ƒoƒbƒNƒŒƒxƒ‹‚ª”ÍˆÍŠOB
+        // JP: ã‚³ãƒ¼ãƒ«ãƒãƒƒã‚¯ãƒ¬ãƒ™ãƒ«ãŒç¯„å›²å¤–ã€‚
         EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 5, false));
     }
     catch (std::exception &ex) {
@@ -173,10 +173,10 @@ TEST(ContextTest, ContextCreation) {
 
 TEST(ContextTest, ContextBasic) {
     try {
-        // JP: “K“–‚ÈCUDAƒRƒ“ƒeƒLƒXƒg‚É‘Î‚µ‚Äoptixu‚ÌƒRƒ“ƒeƒLƒXƒg‚ğ¶¬B
+        // JP: é©å½“ãªCUDAã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆã«å¯¾ã—ã¦optixuã®ã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆã‚’ç”Ÿæˆã€‚
         optixu::Context context = optixu::Context::create(cuContext);
         {
-            // JP: ‹¤’Êˆ—B
+            // JP: å…±é€šå‡¦ç†ã€‚
             {
                 optixu::Context retContext = context.getContext();
                 EXPECT_EQ(retContext, context);
@@ -193,7 +193,7 @@ TEST(ContextTest, ContextBasic) {
             CUcontext retCuContext = context.getCUcontext();
             EXPECT_EQ(retCuContext, cuContext);
 
-            // JP: ƒR[ƒ‹ƒoƒbƒN‚Ì“o˜^B
+            // JP: ã‚³ãƒ¼ãƒ«ãƒãƒƒã‚¯ã®ç™»éŒ²ã€‚
             {
                 struct CallbackUserData {
                     uint32_t value;
@@ -206,13 +206,13 @@ TEST(ContextTest, ContextBasic) {
                 context.setLogCallback(callback, &cbUserData, 2);
                 context.setLogCallback(callback, &cbUserData, 3);
                 context.setLogCallback(callback, &cbUserData, 4);
-                // JP: ƒR[ƒ‹ƒoƒbƒNƒŒƒxƒ‹‚Æ‚µ‚Ä”ÍˆÍŠO‚Ì’l‚ğİ’èB
+                // JP: ã‚³ãƒ¼ãƒ«ãƒãƒƒã‚¯ãƒ¬ãƒ™ãƒ«ã¨ã—ã¦ç¯„å›²å¤–ã®å€¤ã‚’è¨­å®šã€‚
                 EXPECT_EXCEPTION(context.setLogCallback(callback, &cbUserData, 5));
-                // JP: ƒR[ƒ‹ƒoƒbƒNƒŠƒZƒbƒgB
+                // JP: ã‚³ãƒ¼ãƒ«ãƒãƒƒã‚¯ãƒªã‚»ãƒƒãƒˆã€‚
                 context.setLogCallback(nullptr, nullptr, 0);
             }
 
-            // JP: ŠeƒIƒuƒWƒFƒNƒg‚Ì¶¬B
+            // JP: å„ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã®ç”Ÿæˆã€‚
             {
                 optixu::Pipeline pipeline = context.createPipeline();
                 EXPECT_NE(pipeline, optixu::Pipeline());
@@ -228,27 +228,23 @@ TEST(ContextTest, ContextBasic) {
 
                 optixu::Denoiser denoiser;
 
-                denoiser = context.createDenoiser(OPTIX_DENOISER_INPUT_RGB);
+                denoiser = context.createDenoiser(OPTIX_DENOISER_MODEL_KIND_LDR, true, true);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
-                denoiser = context.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO);
+                denoiser = context.createDenoiser(OPTIX_DENOISER_MODEL_KIND_HDR, true, true);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
-                denoiser = context.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL);
-                EXPECT_NE(denoiser, optixu::Denoiser());
-                denoiser.destroy();
-
-                // JP: –³Œø‚Èenum‚ğg‚Á‚ÄƒfƒmƒCƒU[‚ğ¶¬B
-                EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(static_cast<OptixDenoiserInputKind>(~0)), true);
+                // JP: ç„¡åŠ¹ãªenumã‚’ä½¿ã£ã¦ãƒ‡ãƒã‚¤ã‚¶ãƒ¼ã‚’ç”Ÿæˆã€‚
+                EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(static_cast<OptixDenoiserModelKind>(~0), true, true), true);
             }
         }
         context.destroy();
 
 
 
-        // JP: CUDA‚ÌƒfƒtƒHƒ‹ƒgƒRƒ“ƒeƒLƒXƒg‚É‘Î‚µ‚Äoptixu‚ÌƒRƒ“ƒeƒLƒXƒg‚ğ¶¬B
+        // JP: CUDAã®ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆã«å¯¾ã—ã¦optixuã®ã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆã‚’ç”Ÿæˆã€‚
         context = optixu::Context::create(0);
         {
             EXPECT_EQ(context.getCUcontext(), reinterpret_cast<CUcontext>(0));
@@ -299,46 +295,46 @@ TEST(MaterialTest, MaterialBasic) {
 
         optixu::Material mat0 = context.createMaterial();
 
-        // JP: ‹¤’Êˆ—B
+        // JP: å…±é€šå‡¦ç†ã€‚
         {
             EXPECT_EQ(mat0.getContext(), context);
 
-            // JP: •’Ê‚Ì–¼‘O‚Ìİ’è‚Ææ“¾B
+            // JP: æ™®é€šã®åå‰ã®è¨­å®šã¨å–å¾—ã€‚
             const char* nameA = "ABCDE";
             mat0.setName(nameA);
             EXPECT_STREQ(mat0.getName(), nameA);
 
-            // JP: ‹ó”’‚Ì–¼‘O‚Ìİ’è‚Ææ“¾B
+            // JP: ç©ºç™½ã®åå‰ã®è¨­å®šã¨å–å¾—ã€‚
             const char* nameB = "";
             mat0.setName(nameB);
             EXPECT_STREQ(mat0.getName(), nameB);
         }
 
-        // JP: ƒqƒbƒgƒOƒ‹[ƒvŠÖ˜AB
+        // JP: ãƒ’ãƒƒãƒˆã‚°ãƒ«ãƒ¼ãƒ—é–¢é€£ã€‚
         {
             optixu::ProgramGroup retHitProgramGroup;
 
-            // JP: ‚Ü‚¸‚Í•’Ê‚Éİ’è‚Ææ“¾B
+            // JP: ã¾ãšã¯æ™®é€šã«è¨­å®šã¨å–å¾—ã€‚
             mat0.setHitGroup(0, hitProgramGroup0);
             EXPECT_EQ(mat0.getHitGroup(pipeline0, 0), hitProgramGroup0);
 
-            // JP: “¯‚¶ƒŒƒCƒCƒ“ƒfƒbƒNƒX‚É‘Î‚µ‚Äİ’è‚Ææ“¾B
+            // JP: åŒã˜ãƒ¬ã‚¤ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹ã«å¯¾ã—ã¦è¨­å®šã¨å–å¾—ã€‚
             mat0.setHitGroup(0, hitProgramGroup1);
             EXPECT_EQ(mat0.getHitGroup(pipeline0, 0), hitProgramGroup1);
 
-            // JP: •Ê‚ÌƒŒƒCƒCƒ“ƒfƒbƒNƒX‚É‘Î‚µ‚Äİ’è‚Ææ“¾B
+            // JP: åˆ¥ã®ãƒ¬ã‚¤ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹ã«å¯¾ã—ã¦è¨­å®šã¨å–å¾—ã€‚
             mat0.setHitGroup(2, hitProgramGroup0);
             EXPECT_EQ(mat0.getHitGroup(pipeline0, 2), hitProgramGroup0);
 
-            // JP: –¢İ’è‚ÌƒŒƒCƒCƒ“ƒfƒbƒNƒX‚©‚çæ“¾B
+            // JP: æœªè¨­å®šã®ãƒ¬ã‚¤ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹ã‹ã‚‰å–å¾—ã€‚
             EXPECT_EXCEPTION_RET(retHitProgramGroup, mat0.getHitGroup(pipeline0, 1));
         }
 
-        // JP: ƒ†[ƒU[ƒf[ƒ^ŠÖ˜AB
+        // JP: ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿é–¢é€£ã€‚
         {
             uint32_t udSize, udAlignment;
 
-            // JP: ‚Ü‚¸‚Í•’Ê‚Éİ’è‚Ææ“¾B
+            // JP: ã¾ãšã¯æ™®é€šã«è¨­å®šã¨å–å¾—ã€‚
             struct UserData0 {
                 uint32_t a;
                 float2 b;
@@ -353,7 +349,7 @@ TEST(MaterialTest, MaterialBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData0));
             EXPECT_EQ(std::memcmp(&ud0, &retUd0, sizeof(ud0)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚Ìƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã®ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData1 {
                 uint8_t a[optixu::s_maxMaterialUserDataSize];
             };
@@ -367,7 +363,7 @@ TEST(MaterialTest, MaterialBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData1));
             EXPECT_EQ(std::memcmp(&ud1, &retUd1, sizeof(ud1)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚ğ’´‚¦‚½ƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã‚’è¶…ãˆãŸãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData2 {
                 uint8_t a[optixu::s_maxMaterialUserDataSize + 2];
             };
@@ -400,22 +396,22 @@ TEST(SceneTest, SceneBasic) {
 
         optixu::Scene scene0 = context.createScene();
 
-        // JP: ‹¤’Êˆ—B
+        // JP: å…±é€šå‡¦ç†ã€‚
         {
             EXPECT_EQ(scene0.getContext(), context);
 
-            // JP: •’Ê‚Ì–¼‘O‚Ìİ’è‚Ææ“¾B
+            // JP: æ™®é€šã®åå‰ã®è¨­å®šã¨å–å¾—ã€‚
             const char* nameA = "ABCDE";
             scene0.setName(nameA);
             EXPECT_STREQ(scene0.getName(), nameA);
 
-            // JP: ‹ó”’‚Ì–¼‘O‚Ìİ’è‚Ææ“¾B
+            // JP: ç©ºç™½ã®åå‰ã®è¨­å®šã¨å–å¾—ã€‚
             const char* nameB = "";
             scene0.setName(nameB);
             EXPECT_STREQ(scene0.getName(), nameB);
         }
 
-        // JP: ƒIƒuƒWƒFƒNƒg¶¬‘O‚ÌSBTƒŒƒCƒAƒEƒgŠÖ˜AB
+        // JP: ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆç”Ÿæˆå‰ã®SBTãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆé–¢é€£ã€‚
         {
             EXPECT_EQ(scene0.shaderBindingTableLayoutIsReady(), false);
 
@@ -434,7 +430,7 @@ TEST(SceneTest, SceneBasic) {
             EXPECT_EQ(scene0.shaderBindingTableLayoutIsReady(), false);
         }
 
-        // JP: ŠeƒIƒuƒWƒFƒNƒg‚Ì¶¬B
+        // JP: å„ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã®ç”Ÿæˆã€‚
         {
             optixu::GeometryInstance geomInstTri = scene0.createGeometryInstance();
             EXPECT_NE(geomInstTri, optixu::GeometryInstance());
@@ -493,7 +489,7 @@ TEST(SceneTest, SceneBasic) {
             ias.destroy();
         }
 
-        // JP: ƒIƒuƒWƒFƒNƒg¶¬Œã‚ÌSBTƒŒƒCƒAƒEƒgŠÖ˜AB
+        // JP: ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆç”Ÿæˆå¾Œã®SBTãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆé–¢é€£ã€‚
         {
             size_t sbtSize;
             scene0.generateShaderBindingTableLayout(&sbtSize);
@@ -530,26 +526,26 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
         optixu::GeometryInstance geomInstCubic = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
         optixu::GeometryInstance geomInstCustom = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
 
-        // JP: ‹¤’Êˆ—B
+        // JP: å…±é€šå‡¦ç†ã€‚
         {
             EXPECT_EQ(geomInstTri.getContext(), context);
 
-            // JP: •’Ê‚Ì–¼‘O‚Ìİ’è‚Ææ“¾B
+            // JP: æ™®é€šã®åå‰ã®è¨­å®šã¨å–å¾—ã€‚
             const char* nameA = "ABCDE";
             geomInstTri.setName(nameA);
             EXPECT_STREQ(geomInstTri.getName(), nameA);
 
-            // JP: ‹ó”’‚Ì–¼‘O‚Ìİ’è‚Ææ“¾B
+            // JP: ç©ºç™½ã®åå‰ã®è¨­å®šã¨å–å¾—ã€‚
             const char* nameB = "";
             geomInstTri.setName(nameB);
             EXPECT_STREQ(geomInstTri.getName(), nameB);
         }
 
-        // JP: OŠpŒ`ƒvƒŠƒ~ƒeƒBƒuB
+        // JP: ä¸‰è§’å½¢ãƒ—ãƒªãƒŸãƒ†ã‚£ãƒ–ã€‚
         {
             optixu::GeometryInstance geomInst = geomInstTri;
 
-            // JP: ‚Ü‚¸‚ÍƒfƒtƒHƒ‹ƒg’l‚Ìæ“¾B
+            // JP: ã¾ãšã¯ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆå€¤ã®å–å¾—ã€‚
             EXPECT_EQ(geomInst.getNumMotionSteps(), 1);
             EXPECT_EQ(geomInst.getVertexFormat(), OPTIX_VERTEX_FORMAT_FLOAT3);
             EXPECT_EQ(geomInst.getVertexBuffer(), optixu::BufferView());
@@ -646,10 +642,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
             EXPECT_EXCEPTION(geomInst.getGeometryFlags(numMaterials));
 
-            // JP: ƒ†[ƒU[ƒf[ƒ^ŠÖ˜AB
+            // JP: ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿é–¢é€£ã€‚
             uint32_t udSize, udAlignment;
 
-            // JP: ‚Ü‚¸‚Í•’Ê‚Éİ’è‚Ææ“¾B
+            // JP: ã¾ãšã¯æ™®é€šã«è¨­å®šã¨å–å¾—ã€‚
             struct UserData0 {
                 uint32_t a;
                 float2 b;
@@ -664,7 +660,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData0));
             EXPECT_EQ(std::memcmp(&ud0, &retUd0, sizeof(ud0)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚Ìƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã®ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData1 {
                 uint8_t a[optixu::s_maxGeometryInstanceUserDataSize];
             };
@@ -678,7 +674,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData1));
             EXPECT_EQ(std::memcmp(&ud1, &retUd1, sizeof(ud1)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚ğ’´‚¦‚½ƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã‚’è¶…ãˆãŸãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData2 {
                 uint8_t a[optixu::s_maxGeometryInstanceUserDataSize + 2];
             };
@@ -688,14 +684,14 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.setUserData(ud2));
         }
 
-        // JP: ‹ÈüƒvƒŠƒ~ƒeƒBƒuB
+        // JP: æ›²ç·šãƒ—ãƒªãƒŸãƒ†ã‚£ãƒ–ã€‚
         optixu::GeometryInstance curveGeomInsts[] = {
             geomInstLinear, geomInstQuadratic, geomInstCubic
         };
         for (int curveDim = 1; curveDim <= 3; ++curveDim) {
             optixu::GeometryInstance geomInst = curveGeomInsts[curveDim - 1];
 
-            // JP: ‚Ü‚¸‚ÍƒfƒtƒHƒ‹ƒg’l‚Ìæ“¾B
+            // JP: ã¾ãšã¯ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆå€¤ã®å–å¾—ã€‚
             EXPECT_EQ(geomInst.getNumMotionSteps(), 1);
             EXPECT_EXCEPTION(geomInst.getVertexFormat());
             EXPECT_EQ(geomInst.getVertexBuffer(), optixu::BufferView());
@@ -774,10 +770,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
             EXPECT_EXCEPTION(geomInst.getGeometryFlags(numMaterials));
 
-            // JP: ƒ†[ƒU[ƒf[ƒ^ŠÖ˜AB
+            // JP: ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿é–¢é€£ã€‚
             uint32_t udSize, udAlignment;
 
-            // JP: ‚Ü‚¸‚Í•’Ê‚Éİ’è‚Ææ“¾B
+            // JP: ã¾ãšã¯æ™®é€šã«è¨­å®šã¨å–å¾—ã€‚
             struct UserData0 {
                 uint32_t a;
                 float2 b;
@@ -792,7 +788,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData0));
             EXPECT_EQ(std::memcmp(&ud0, &retUd0, sizeof(ud0)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚Ìƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã®ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData1 {
                 uint8_t a[optixu::s_maxGeometryInstanceUserDataSize];
             };
@@ -806,7 +802,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData1));
             EXPECT_EQ(std::memcmp(&ud1, &retUd1, sizeof(ud1)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚ğ’´‚¦‚½ƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã‚’è¶…ãˆãŸãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData2 {
                 uint8_t a[optixu::s_maxGeometryInstanceUserDataSize + 2];
             };
@@ -816,11 +812,11 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.setUserData(ud2));
         }
 
-        // JP: ƒ†[ƒU[’è‹`ƒvƒŠƒ~ƒeƒBƒuB
+        // JP: ãƒ¦ãƒ¼ã‚¶ãƒ¼å®šç¾©ãƒ—ãƒªãƒŸãƒ†ã‚£ãƒ–ã€‚
         {
             optixu::GeometryInstance geomInst = geomInstCustom;
 
-            // JP: ‚Ü‚¸‚ÍƒfƒtƒHƒ‹ƒg’l‚Ìæ“¾B
+            // JP: ã¾ãšã¯ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆå€¤ã®å–å¾—ã€‚
             EXPECT_EQ(geomInst.getNumMotionSteps(), 1);
             EXPECT_EXCEPTION(geomInst.getVertexFormat());
             EXPECT_EXCEPTION(geomInst.getVertexBuffer());
@@ -898,10 +894,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
             EXPECT_EXCEPTION(geomInst.getGeometryFlags(numMaterials));
 
-            // JP: ƒ†[ƒU[ƒf[ƒ^ŠÖ˜AB
+            // JP: ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿é–¢é€£ã€‚
             uint32_t udSize, udAlignment;
 
-            // JP: ‚Ü‚¸‚Í•’Ê‚Éİ’è‚Ææ“¾B
+            // JP: ã¾ãšã¯æ™®é€šã«è¨­å®šã¨å–å¾—ã€‚
             struct UserData0 {
                 uint32_t a;
                 float2 b;
@@ -916,7 +912,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData0));
             EXPECT_EQ(std::memcmp(&ud0, &retUd0, sizeof(ud0)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚Ìƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã®ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData1 {
                 uint8_t a[optixu::s_maxGeometryInstanceUserDataSize];
             };
@@ -930,7 +926,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(udAlignment, alignof(UserData1));
             EXPECT_EQ(std::memcmp(&ud1, &retUd1, sizeof(ud1)), 0);
 
-            // JP: ŒÀŠEƒTƒCƒY‚ğ’´‚¦‚½ƒ†[ƒU[ƒf[ƒ^‚Ìİ’è‚Ææ“¾B
+            // JP: é™ç•Œã‚µã‚¤ã‚ºã‚’è¶…ãˆãŸãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ‡ãƒ¼ã‚¿ã®è¨­å®šã¨å–å¾—ã€‚
             struct UserData2 {
                 uint8_t a[optixu::s_maxGeometryInstanceUserDataSize + 2];
             };

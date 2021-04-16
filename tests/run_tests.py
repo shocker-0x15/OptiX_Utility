@@ -21,7 +21,7 @@ def run():
 
     sln = os.path.abspath(R'..\tests\optixu_unit_tests.sln')
     config = 'Release'
-    exe = os.path.abspath(os.path.join('x64', config, 'optixu.exe'))
+    exe = os.path.abspath(os.path.join('x64', config, 'optixu_tests.exe'))
 
     # Clean
     cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
@@ -99,8 +99,9 @@ def run():
                 "numDiffPixels": numDiffPixels
             }
 
-            for output in test['outputs']:
-                os.remove(output)
+            if numDiffPixels == 0:
+                for output in test['outputs']:
+                    os.remove(output)
 
             chdir(oldDir)
         

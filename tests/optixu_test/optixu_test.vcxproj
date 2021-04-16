@@ -80,12 +80,12 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)gtest\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.3.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)gtest\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)gtest\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)gtest\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.3.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)gtest\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)gtest\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
