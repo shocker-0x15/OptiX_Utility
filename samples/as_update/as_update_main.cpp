@@ -653,7 +653,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     // JP: update()を使用するためにアップデート可能に設定しておく。
     // EN: Make the AS updatable to use update().
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnies.size(); ++i)

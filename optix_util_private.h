@@ -871,6 +871,7 @@ namespace optixu {
         struct {
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
+            unsigned int allowRandomInstanceAccess : 1;
             unsigned int readyToBuild : 1;
             unsigned int available : 1;
             unsigned int readyToCompact : 1;
@@ -884,7 +885,7 @@ namespace optixu {
             scene(_scene),
             handle(0), compactedHandle(0),
             tradeoff(ASTradeoff::Default),
-            allowUpdate(false), allowCompaction(false),
+            allowUpdate(false), allowCompaction(false), allowRandomInstanceAccess(false),
             readyToBuild(false), available(false),
             readyToCompact(false), compactedAvailable(false) {
             scene->addIAS(this);

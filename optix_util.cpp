@@ -1002,9 +1002,10 @@ namespace optixu {
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
         else if (m->tradeoff == ASTradeoff::PreferFastBuild)
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-        m->buildOptions.buildFlags |= ((m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                       (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0) |
-                                       (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0));
+        m->buildOptions.buildFlags |=
+            (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0)
+            | (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0)
+            | (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0);
 
         uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0)
@@ -1784,7 +1785,10 @@ namespace optixu {
         m = nullptr;
     }
 
-    void InstanceAccelerationStructure::setConfiguration(ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction) const {
+    void InstanceAccelerationStructure::setConfiguration(ASTradeoff tradeoff,
+                                                         bool allowUpdate,
+                                                         bool allowCompaction,
+                                                         bool allowRandomInstanceAccess) const {
         bool changed = false;
         changed |= m->tradeoff != tradeoff;
         m->tradeoff = tradeoff;
@@ -1792,6 +1796,8 @@ namespace optixu {
         m->allowUpdate = allowUpdate;
         changed |= m->allowCompaction != allowCompaction;
         m->allowCompaction = allowCompaction;
+        changed |= m->allowRandomInstanceAccess != allowRandomInstanceAccess;
+        m->allowRandomInstanceAccess = allowRandomInstanceAccess;
 
         if (changed)
             m->markDirty(false);
@@ -1858,8 +1864,10 @@ namespace optixu {
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
         else if (m->tradeoff == ASTradeoff::PreferFastBuild)
             m->buildOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-        m->buildOptions.buildFlags |= ((m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0) |
-                                       (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0));
+        m->buildOptions.buildFlags |= 
+            (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0)
+            | (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0)
+            | (m->allowRandomInstanceAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_INSTANCE_ACCESS : 0);
 
         OPTIX_CHECK(optixAccelComputeMemoryUsage(m->getRawContext(), &m->buildOptions,
                                                  &m->buildInput, 1,
