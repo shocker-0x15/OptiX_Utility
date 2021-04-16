@@ -785,7 +785,7 @@ private: \
         [[nodiscard]]
         Scene createScene() const;
         [[nodiscard]]
-        Denoiser createDenoiser(OptixDenoiserInputKind inputKind) const;
+        Denoiser createDenoiser(OptixDenoiserModelKind modelKind, bool guideAlbedo, bool guideNormal) const;
     };
 
 
@@ -1271,7 +1271,6 @@ private: \
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(Denoiser);
 
-        void setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const;
         void prepare(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
                      size_t* stateBufferSize, size_t* scratchBufferSize, size_t* scratchBufferSizeForComputeIntensity,
                      uint32_t* numTasks) const;

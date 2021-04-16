@@ -1116,7 +1116,7 @@ namespace optixu {
     class Denoiser::Priv {
         _Context* context;
         OptixDenoiser rawDenoiser;
-        OptixDenoiserInputKind inputKind;
+        OptixDenoiserModelKind modelKind;
 
         uint32_t imageWidth;
         uint32_t imageHeight;
@@ -1139,7 +1139,9 @@ namespace optixu {
         OptixPixelFormat albedoFormat;
         OptixPixelFormat normalFormat;
         struct {
-            unsigned int modelSet : 1;
+            unsigned int guideAlbedo : 1;
+            unsigned int guideNormal : 1;
+
             unsigned int useTiling : 1;
             unsigned int imageSizeSet : 1;
             unsigned int imageLayersSet : 1;
@@ -1149,16 +1151,20 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(Denoiser);
 
-        Priv(_Context* ctxt, OptixDenoiserInputKind _inputKind) :
+        Priv(_Context* ctxt, OptixDenoiserModelKind _modelKind, bool _guideAlbedo, bool _guideNormal) :
             context(ctxt),
-            inputKind(_inputKind),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
             overlapWidth(0), maxInputWidth(0), maxInputHeight(0),
             stateSize(0), scratchSize(0), scratchSizeForComputeIntensity(0),
-            modelSet(false), useTiling(false), imageSizeSet(false), imageLayersSet(false), stateIsReady(false) {
+            modelKind(_modelKind), guideAlbedo(_guideAlbedo), guideNormal(_guideNormal),
+            useTiling(false), imageSizeSet(false), imageLayersSet(false), stateIsReady(false) {
+            throwRuntimeError(modelKind != OPTIX_DENOISER_MODEL_KIND_AOV && modelKind != OPTIX_DENOISER_MODEL_KIND_TEMPORAL,
+                              "OPTIX_DENOISER_MODEL_KIND_(AOV|TEMPORAL) is currently not supported.");
+
             OptixDenoiserOptions options = {};
-            options.inputKind = inputKind;
-            OPTIX_CHECK(optixDenoiserCreate(context->getRawContext(), &options, &rawDenoiser));
+            options.guideAlbedo = _guideAlbedo;
+            options.guideNormal = _guideNormal;
+            OPTIX_CHECK(optixDenoiserCreate(context->getRawContext(), modelKind, &options, &rawDenoiser));
         }
         ~Priv() {
             optixDenoiserDestroy(rawDenoiser);

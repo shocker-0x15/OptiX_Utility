@@ -82,8 +82,8 @@ namespace optixu {
         return (new _Pipeline(m))->getPublicType();
     }
 
-    Denoiser Context::createDenoiser(OptixDenoiserInputKind inputKind) const {
-        return (new _Denoiser(m, inputKind))->getPublicType();
+    Denoiser Context::createDenoiser(OptixDenoiserModelKind modelKind, bool guideAlbedo, bool guideNormal) const {
+        return (new _Denoiser(m, modelKind, guideAlbedo, guideNormal))->getPublicType();
     }
 
     CUcontext Context::getCUcontext() const {
@@ -2599,23 +2599,9 @@ namespace optixu {
         m = nullptr;
     }
 
-    void Denoiser::setModel(OptixDenoiserModelKind kind, void* data, size_t sizeInBytes) const {
-        m->throwRuntimeError((kind != OPTIX_DENOISER_MODEL_KIND_USER) != (data != nullptr),
-                             "When a user model is used, data must be provided, otherwise data must be null.");
-        m->throwRuntimeError(kind != OPTIX_DENOISER_MODEL_KIND_AOV,
-                             "OPTIX_DENOISER_MODEL_KIND_AOV is currently not supported.");
-        OPTIX_CHECK(optixDenoiserSetModel(m->rawDenoiser, kind, data, sizeInBytes));
-
-        m->stateIsReady = false;
-        m->imageSizeSet = false;
-
-        m->modelSet = true;
-    }
-
     void Denoiser::prepare(uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
                            size_t* stateBufferSize, size_t* scratchBufferSize, size_t* scratchBufferSizeForComputeIntensity,
                            uint32_t* numTasks) const {
-        m->throwRuntimeError(m->modelSet, "Model has not been set.");
         m->throwRuntimeError(tileWidth <= imageWidth && tileHeight <= imageHeight,
                              "Tile width/height must be equal to or smaller than the image size.");
 
@@ -2713,9 +2699,9 @@ namespace optixu {
                              OptixPixelFormat colorFormat, OptixPixelFormat albedoFormat, OptixPixelFormat normalFormat) const {
         m->throwRuntimeError(m->imageSizeSet, "Call prepare() before this function.");
         m->throwRuntimeError(color.isValid(), "Input color buffer must be set.");
-        if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO || m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
+        if (m->guideAlbedo)
             m->throwRuntimeError(albedo.isValid(), "Denoiser requires albedo buffer.");
-        if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
+        if (m->guideNormal)
             m->throwRuntimeError(normal.isValid(), "Denoiser requires normal buffer.");
 
         m->colorBuffer = color;
@@ -2795,17 +2781,16 @@ namespace optixu {
 
         // TODO: 入出力画像のrowStrideを指定できるようにする。
 
-        OptixImage2D denoiserInputs[3];
-        setupInputLayer(m->colorFormat, m->colorBuffer.getCUdeviceptr(), &denoiserInputs[0]);
-        if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO ||
-            m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
-            setupInputLayer(m->albedoFormat, m->albedoBuffer.getCUdeviceptr(), &denoiserInputs[1]);
-        if (m->inputKind == OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL)
-            setupInputLayer(m->normalFormat, m->normalBuffer.getCUdeviceptr(), &denoiserInputs[2]);
+        OptixDenoiserLayer denoiserLayer = {};
+        OptixDenoiserGuideLayer guideLayer = {};
+        setupInputLayer(m->colorFormat, m->colorBuffer.getCUdeviceptr(), &denoiserLayer.input);
+        if (m->guideAlbedo)
+            setupInputLayer(m->albedoFormat, m->albedoBuffer.getCUdeviceptr(), &guideLayer.albedo);
+        if (m->guideNormal)
+            setupInputLayer(m->normalFormat, m->normalBuffer.getCUdeviceptr(), &guideLayer.normal);
 
-        OptixImage2D denoiserOutput = {};
         {
-            OptixImage2D &layer = denoiserOutput;
+            OptixImage2D &layer = denoiserLayer.output;
             OptixPixelFormat format = m->colorFormat;
             uint32_t pixelStride = getPixelSize(format);
             layer.rowStrideInBytes = m->imageWidth * pixelStride;
@@ -2822,9 +2807,9 @@ namespace optixu {
         OPTIX_CHECK(optixDenoiserInvoke(m->rawDenoiser, stream,
                                         &params,
                                         m->stateBuffer.getCUdeviceptr(), m->stateBuffer.sizeInBytes(),
-                                        denoiserInputs, numInputLayers,
+                                        &guideLayer,
+                                        &denoiserLayer, 1,
                                         offsetX, offsetY,
-                                        &denoiserOutput,
                                         m->scratchBuffer.getCUdeviceptr(), m->scratchBuffer.sizeInBytes()));
     }
 }

@@ -608,8 +608,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
     constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
     constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
-    optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_INPUT_RGB_ALBEDO_NORMAL);
-    denoiser.setModel(OPTIX_DENOISER_MODEL_KIND_HDR, nullptr, 0);
+    optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_MODEL_KIND_HDR, true, true);
     size_t stateSize;
     size_t scratchSize;
     size_t scratchSizeForComputeIntensity;
