@@ -137,7 +137,7 @@ namespace curve {
             return make_float3(u3 + 0.5f * (u - uu), uu - 4 * u3, u3);
         }
 
-        CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[3]) {
+        CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[4]) {
             m_p[0] = (cps[2] + cps[0]) / 6 + (4 / 6.0f) * cps[1];
             m_p[1] = cps[2] - cps[0];
             m_p[2] = cps[2] - cps[1];
