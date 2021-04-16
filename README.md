@@ -11,7 +11,7 @@ It provides fine-level controllability but requires the user to write troublesom
 The purpose of this OptiX Utility is to provide classes and functions which encapsulate parts that tend to be boilerplate code while keeping fine controllability.
 
 ## 機能 / Features
-Currently based on OptiX 7.2.0
+Currently based on OptiX 7.3.0
 - Traversable types
   - [x] Single GAS
   - [x] Single-level instancing
@@ -35,8 +35,9 @@ Currently based on OptiX 7.2.0
 - Callable programs
 - OptiX AI denoiser
   - [x] LDR/HDR
-  - [x] User
+  - [ ] Temporal
   - [ ] AOV
+  - [ ] User
 - Automatic payload/attribute value packing in kernel code
 - [ ] Multi-GPU
 
@@ -238,16 +239,16 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 10 (20H2) & Visual Studio Community 2019 (16.9.1)
+* Windows 10 (20H2) & Visual Studio Community 2019 (16.9.4)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 461.72
+* NVIDIA Driver 466.11
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
 * CUDA 11.2 \
   OptiX Utility may work with a bit older versions. The sample code just assumes this version.
-* OptiX 7.2.0 (requires Maxwell or later generation NVIDIA GPU)
+* OptiX 7.3.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
