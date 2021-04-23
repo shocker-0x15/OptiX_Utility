@@ -94,6 +94,7 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
+- Denoiserの事前設定は画像サイズにも依存するので、各バッファーはinvoke時ではなく事前に渡しておくべき？
 - Priv構造体がOptiXの構造体を直接持っていない場合が多々あるのがもったいない？
   => OptixBuildInputは巨大なパディングを含んでいるので好ましくない。
   => IASが直接持っているOptixBuildInputを除去orポインター化？
@@ -1295,6 +1296,9 @@ private: \
         void computeIntensity(CUstream stream,
                               const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                               const BufferView &scratchBuffer, CUdeviceptr outputIntensity) const;
+        void computeAverageColor(CUstream stream,
+                                 const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
+                                 const BufferView &scratchBuffer, CUdeviceptr outputAverageColor) const;
         void invoke(CUstream stream,
                     bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
                     const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
@@ -1303,6 +1307,16 @@ private: \
                     const BufferView &flow, OptixPixelFormat flowFormat,
                     const BufferView &previousDenoisedBeauty,
                     const BufferView &denoisedBeauty,
+                    const DenoisingTask &task) const;
+        // JP: AOVデノイザー用。
+        // EN: For AOV denoiser.
+        void invoke(CUstream stream,
+                    bool denoiseAlpha, CUdeviceptr hdrAverageColor, float blendFactor,
+                    const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
+                    const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
+                    const BufferView &albedo, OptixPixelFormat albedoFormat,
+                    const BufferView &normal, OptixPixelFormat normalFormat,
+                    const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
                     const DenoisingTask &task) const;
     };
 

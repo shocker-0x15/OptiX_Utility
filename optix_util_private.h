@@ -1073,10 +1073,14 @@ namespace optixu {
 
     static inline uint32_t getPixelSize(OptixPixelFormat format) {
         switch (format) {
+        case OPTIX_PIXEL_FORMAT_HALF2:
+            return 2 * sizeof(uint16_t);
         case OPTIX_PIXEL_FORMAT_HALF3:
             return 3 * sizeof(uint16_t);
         case OPTIX_PIXEL_FORMAT_HALF4:
             return 4 * sizeof(uint16_t);
+        case OPTIX_PIXEL_FORMAT_FLOAT2:
+            return 2 * sizeof(float);
         case OPTIX_PIXEL_FORMAT_FLOAT3:
             return 3 * sizeof(float);
         case OPTIX_PIXEL_FORMAT_FLOAT4:
@@ -1129,6 +1133,7 @@ namespace optixu {
         size_t stateSize;
         size_t scratchSize;
         size_t scratchSizeForComputeIntensity;
+        size_t scratchSizeForComputeAverageColor;
 
         BufferView stateBuffer;
         BufferView scratchBuffer;
@@ -1141,6 +1146,19 @@ namespace optixu {
             unsigned int stateIsReady : 1;
         };
 
+        void invoke(CUstream stream,
+                    bool denoiseAlpha, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
+                    const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
+                    const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
+                    const BufferView &albedo, OptixPixelFormat albedoFormat,
+                    const BufferView &normal, OptixPixelFormat normalFormat,
+                    const BufferView &flow, OptixPixelFormat flowFormat,
+                    const BufferView &previousDenoisedBeauty,
+                    const BufferView* previousDenoisedAovs,
+                    const BufferView &denoisedBeauty,
+                    const BufferView* denoisedAovs,
+                    const DenoisingTask &task) const;
+
     public:
         OPTIXU_OPAQUE_BRIDGE(Denoiser);
 
@@ -1148,12 +1166,10 @@ namespace optixu {
             context(ctxt),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
             overlapWidth(0), maxInputWidth(0), maxInputHeight(0),
-            stateSize(0), scratchSize(0), scratchSizeForComputeIntensity(0),
+            stateSize(0), scratchSize(0),
+            scratchSizeForComputeIntensity(0), scratchSizeForComputeAverageColor(0),
             modelKind(_modelKind), guideAlbedo(_guideAlbedo), guideNormal(_guideNormal),
             useTiling(false), imageSizeSet(false), stateIsReady(false) {
-            throwRuntimeError(modelKind != OPTIX_DENOISER_MODEL_KIND_AOV && modelKind != OPTIX_DENOISER_MODEL_KIND_TEMPORAL,
-                              "OPTIX_DENOISER_MODEL_KIND_(AOV|TEMPORAL) is currently not supported.");
-
             OptixDenoiserOptions options = {};
             options.guideAlbedo = _guideAlbedo;
             options.guideNormal = _guideNormal;
