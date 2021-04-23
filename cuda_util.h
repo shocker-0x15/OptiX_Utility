@@ -477,6 +477,11 @@ namespace cudau {
         void resize(int32_t numElements, CUstream stream = 0) {
             Buffer::resize(numElements, sizeof(T), stream);
         }
+        void resize(int32_t numElements, const T &value, CUstream stream = 0) {
+            std::vector<T> values(numElements, value);
+            Buffer::resize(numElements, sizeof(T), stream);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), values.data(), values.size() * sizeof(T), stream));
+        }
 
         T* getDevicePointer() const {
             return reinterpret_cast<T*>(getCUdeviceptr());
