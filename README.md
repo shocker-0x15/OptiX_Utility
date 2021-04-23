@@ -247,7 +247,10 @@ I've confirmed that the program runs correctly in the following environment.
 It requires the following libraries.
 
 * CUDA 11.2 \
-  OptiX Utility may work with a bit older versions. The sample code just assumes this version.
+  OptiX Utilityは少し古いバージョンでも動作するとは思います。単にサンプルコードがこのバージョンに依存しているだけです。\
+  ※CUDA 11.3には現状バグがあり、OptiX Utilityと一緒に使用することができません。\
+  OptiX Utility may work with a bit older versions. The sample code just assumes this version.\
+  \* CUDA 11.3 currently has a bug which prevents to use it with OptiX Utility.
 * OptiX 7.3.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
