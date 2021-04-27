@@ -79,7 +79,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     float3 prevAlbedoResult = make_float3(0.0f, 0.0f, 0.0f);
     float3 prevNormalResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.numAccumFrames > 0) {
-        prevColorResult = getXYZ(plp.colorAccumBuffer.read(launchIndex));
+        prevColorResult = getXYZ(plp.beautyAccumBuffer.read(launchIndex));
         prevAlbedoResult = getXYZ(plp.albedoAccumBuffer.read(launchIndex));
         prevNormalResult = getXYZ(plp.normalAccumBuffer.read(launchIndex));
     }
@@ -87,7 +87,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     float3 colorResult = (1 - curWeight) * prevColorResult + curWeight * payload.contribution;
     float3 albedoResult = (1 - curWeight) * prevAlbedoResult + curWeight * denoiserData.firstHitAlbedo;
     float3 normalResult = (1 - curWeight) * prevNormalResult + curWeight * denoiserData.firstHitNormal;
-    plp.colorAccumBuffer.write(launchIndex, make_float4(colorResult, 1.0f));
+    plp.beautyAccumBuffer.write(launchIndex, make_float4(colorResult, 1.0f));
     plp.albedoAccumBuffer.write(launchIndex, make_float4(albedoResult, 1.0f));
     plp.normalAccumBuffer.write(launchIndex, make_float4(normalResult, 1.0f));
 
@@ -96,14 +96,22 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     float2 flow = (curRasterPos - prevRasterPos) * make_float2(plp.imageSize.x, plp.imageSize.y);
     //if (launchIndex.x == 511 && launchIndex.y == 511)
     //    printf("%.3f, %.3f\n", flow.x, flow.y);
-    plp.linearFlowBuffer[launchIndex.y + plp.imageSize.x + launchIndex.x] = make_float2(flow.x, flow.y/*, 0.0f, 0.0f*/);
+    if (isnan(denoiserData.firstHitPrevPositionInWorld.x))
+        flow = make_float2(0.0f, 0.0f);
+    plp.linearFlowBuffer[launchIndex.y * plp.imageSize.x + launchIndex.x] = make_float2(flow.x, flow.y/*, 0.0f, 0.0f*/);
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     SearchRayPayload* payload;
-    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, &payload, nullptr);
+    DenoiserData* denoiserData;
+    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, &payload, &denoiserData);
     payload->contribution += payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
+    if (payload->pathLength == 1) {
+        denoiserData->firstHitAlbedo = make_float3(0.0f, 0.0f, 0.0f);
+        denoiserData->firstHitNormal = make_float3(0.0f, 0.0f, 0.0f);
+        denoiserData->firstHitPrevPositionInWorld = make_float3(NAN, NAN, NAN);
+    }
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
@@ -136,12 +144,6 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
     }
 
-    float3 vOut = -optixGetWorldRayDirection();
-    bool isFrontFace = dot(vOut, sn) > 0;
-    if (!isFrontFace)
-        sn = -sn;
-    p = p + sn * 0.001f;
-
     float3 albedo;
     if (mat.texture)
         albedo = getXYZ(tex2DLod<float4>(mat.texture, texCoord.x, texCoord.y, 0.0f));
@@ -153,6 +155,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         denoiserData->firstHitNormal = sn;
         denoiserData->firstHitPrevPositionInWorld = p; // TODO: previous transform
     }
+
+    float3 vOut = -optixGetWorldRayDirection();
+    bool isFrontFace = dot(vOut, sn) > 0;
+    if (!isFrontFace)
+        sn = -sn;
+    p = p + sn * 0.001f;
 
     const float3 LightRadiance = make_float3(30, 30, 30);
     // Hard-coded directly visible light

@@ -97,7 +97,7 @@ namespace Shared {
         int2 imageSize;
         uint32_t numAccumFrames;
         optixu::BlockBuffer2D<PCG32RNG, 1> rngBuffer;
-        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> beautyAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         float2* linearFlowBuffer;
@@ -122,6 +122,16 @@ namespace Shared {
         float3 firstHitAlbedo;
         float3 firstHitNormal;
         float3 firstHitPrevPositionInWorld;
+    };
+
+
+
+    enum class BufferToDisplay {
+        NoisyBeauty = 0,
+        Albedo,
+        Normal,
+        Flow,
+        DenoisedBeauty,
     };
 }
 

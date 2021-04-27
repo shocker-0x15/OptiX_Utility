@@ -88,6 +88,13 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 
+namespace ImGui {
+    template <typename EnumType>
+    bool RadioButtonE(const char* label, EnumType* v, EnumType v_button) {
+        return RadioButton(label, reinterpret_cast<int*>(v), static_cast<int>(v_button));
+    }
+}
+
 int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path exeDir = getExecutableDirectory();
 
@@ -838,10 +845,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    cudau::Array colorAccumBuffer;
+    cudau::Array beautyAccumBuffer;
     cudau::Array albedoAccumBuffer;
     cudau::Array normalAccumBuffer;
-    colorAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
+    beautyAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
                                   renderTargetSizeX, renderTargetSizeY, 1);
     albedoAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
@@ -850,12 +857,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     normalAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
                                    cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
                                    renderTargetSizeX, renderTargetSizeY, 1);
-    cudau::TypedBuffer<float4> linearColorBuffer;
+    cudau::TypedBuffer<float4> linearBeautyBuffer;
     cudau::TypedBuffer<float4> linearAlbedoBuffer;
     cudau::TypedBuffer<float4> linearNormalBuffer;
     cudau::TypedBuffer<float2> linearFlowBuffer;
-    cudau::TypedBuffer<float4> linearOutputBuffer;
-    linearColorBuffer.initialize(cuContext, cudau::BufferType::Device,
+    cudau::TypedBuffer<float4> linearDenoisedBeautyBuffer;
+    linearBeautyBuffer.initialize(cuContext, cudau::BufferType::Device,
                                  renderTargetSizeX * renderTargetSizeY);
     linearAlbedoBuffer.initialize(cuContext, cudau::BufferType::Device,
                                   renderTargetSizeX * renderTargetSizeY);
@@ -863,7 +870,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                   renderTargetSizeX * renderTargetSizeY);
     linearFlowBuffer.initialize(cuContext, cudau::BufferType::Device,
                                 renderTargetSizeX * renderTargetSizeY);
-    linearOutputBuffer.initialize(cuContext, cudau::BufferType::Device,
+    linearDenoisedBeautyBuffer.initialize(cuContext, cudau::BufferType::Device,
                                   renderTargetSizeX * renderTargetSizeY);
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
@@ -917,9 +924,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuModuleLoad(&moduleCopyBuffers, (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_buffers.ptx").string().c_str()));
     cudau::Kernel kernelCopyBuffers(moduleCopyBuffers, "copyBuffers", cudau::dim3(8, 8), 0);
 
-    CUmodule moduleCopyDenoisedBuffer;
-    CUDADRV_CHECK(cuModuleLoad(&moduleCopyDenoisedBuffer, (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_denoised_buffer.ptx").string().c_str()));
-    cudau::Kernel kernelCopyDenoisedBuffer(moduleCopyDenoisedBuffer, "copyDenoisedBuffer", cudau::dim3(8, 8), 0);
+    CUmodule moduleCopyToOutputBuffer;
+    CUDADRV_CHECK(cuModuleLoad(&moduleCopyToOutputBuffer, (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_to_output_buffer.ptx").string().c_str()));
+    cudau::Kernel kernelCopyToOutputBuffer(moduleCopyToOutputBuffer, "copyToOutputBuffer", cudau::dim3(8, 8), 0);
 
     CUdeviceptr hdrIntensity;
     CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
@@ -962,7 +969,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.travHandle = travHandle;
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
     plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-    plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
+    plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
     plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
     plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
     plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
@@ -1027,14 +1034,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
 
-            colorAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
+            beautyAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
             albedoAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
             normalAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
-            linearColorBuffer.resize(renderTargetSizeX * renderTargetSizeY);
+            linearBeautyBuffer.resize(renderTargetSizeX * renderTargetSizeY);
             linearAlbedoBuffer.resize(renderTargetSizeX * renderTargetSizeY);
             linearNormalBuffer.resize(renderTargetSizeX * renderTargetSizeY);
             linearFlowBuffer.resize(renderTargetSizeX * renderTargetSizeY);
-            linearOutputBuffer.resize(renderTargetSizeX * renderTargetSizeY);
+            linearDenoisedBeautyBuffer.resize(renderTargetSizeX * renderTargetSizeY);
 
             rngBuffer.resize(renderTargetSizeX, renderTargetSizeY);
             {
@@ -1048,9 +1055,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             };
 
             plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-            plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
+            plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
             plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
             plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
+            plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
 
             {
                 size_t stateSize;
@@ -1190,6 +1198,52 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::End();
         }
 
+        static bool useTemporalDenosier = true;
+        static Shared::BufferToDisplay bufferTypeToDisplay = Shared::BufferToDisplay::DenoisedBeauty;
+        static float motionVectorScale = -1.0f;
+        {
+            ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            if (ImGui::Checkbox("Temporal Denoiser", &useTemporalDenosier)) {
+                CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+                denoiser.destroy();
+
+                OptixDenoiserModelKind modelKind = useTemporalDenosier ?
+                    OPTIX_DENOISER_MODEL_KIND_TEMPORAL :
+                    OPTIX_DENOISER_MODEL_KIND_HDR;
+                denoiser = optixContext.createDenoiser(modelKind, true, true);
+
+                size_t stateSize;
+                size_t scratchSize;
+                size_t scratchSizeForComputeIntensity;
+                uint32_t numTasks;
+                denoiser.prepare(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
+                                 &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
+                                 &numTasks);
+                hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
+                hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
+                hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
+                denoiserStateBuffer.resize(stateSize, 1);
+                denoiserScratchBuffer.resize(std::max(scratchSize, scratchSizeForComputeIntensity), 1);
+
+                denoisingTasks.resize(numTasks);
+                denoiser.getTasks(denoisingTasks.data());
+
+                denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+            }
+            
+            ImGui::Text("Buffer to Display");
+            ImGui::RadioButtonE("Noisy Beauty", &bufferTypeToDisplay, Shared::BufferToDisplay::NoisyBeauty);
+            ImGui::RadioButtonE("Albedo", &bufferTypeToDisplay, Shared::BufferToDisplay::Albedo);
+            ImGui::RadioButtonE("Normal", &bufferTypeToDisplay, Shared::BufferToDisplay::Normal);
+            ImGui::RadioButtonE("Flow", &bufferTypeToDisplay, Shared::BufferToDisplay::Flow);
+            ImGui::RadioButtonE("Denoised Beauty", &bufferTypeToDisplay, Shared::BufferToDisplay::DenoisedBeauty);
+
+            ImGui::SliderFloat("Motion Vector Scale", &motionVectorScale, -2.0f, 2.0f);
+
+            ImGui::End();
+        }
+
         // Stats Window
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -1265,10 +1319,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // EN: Copy the results to the linear buffers (and normalize normals).
         cudau::dim3 dimCopyBuffers = kernelCopyBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
         kernelCopyBuffers(cuStream, dimCopyBuffers,
-                          colorAccumBuffer.getSurfaceObject(0),
+                          beautyAccumBuffer.getSurfaceObject(0),
                           albedoAccumBuffer.getSurfaceObject(0),
                           normalAccumBuffer.getSurfaceObject(0),
-                          linearColorBuffer.getDevicePointer(),
+                          linearBeautyBuffer.getDevicePointer(),
                           linearAlbedoBuffer.getDevicePointer(),
                           linearNormalBuffer.getDevicePointer(),
                           uint2(renderTargetSizeX, renderTargetSizeY));
@@ -1282,23 +1336,49 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     You can also create a custom computeIntensity().
         //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
         denoiser.computeIntensity(cuStream,
-                                  linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                                  linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                                   denoiserScratchBuffer, hdrIntensity);
+        //float hdrIntensityOnHost;
+        //CUDADRV_CHECK(cuMemcpyDtoH(&hdrIntensityOnHost, hdrIntensity, sizeof(hdrIntensityOnHost)));
+        //printf("%g\n", hdrIntensityOnHost);
         for (int i = 0; i < denoisingTasks.size(); ++i)
             denoiser.invoke(cuStream,
                             false, hdrIntensity, 0.0f,
-                            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                            linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearFlowBuffer, OPTIX_PIXEL_FORMAT_FLOAT2,
-                            frameIndex == 0 ? linearColorBuffer : linearOutputBuffer, // TODO: リサイズ時などは無効
-                            linearOutputBuffer,
+                            frameIndex == 0 ? linearBeautyBuffer : linearDenoisedBeautyBuffer, // TODO: リサイズ時などは無効
+                            linearDenoisedBeautyBuffer,
                             denoisingTasks[i]);
 
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
 
-        kernelCopyDenoisedBuffer(cuStream, kernelCopyDenoisedBuffer.calcGridDim(renderTargetSizeX, renderTargetSizeY),
-                                 linearOutputBuffer.getDevicePointer(),
+        void* bufferToDisplay = nullptr;
+        switch (bufferTypeToDisplay) {
+        case Shared::BufferToDisplay::NoisyBeauty:
+            bufferToDisplay = linearBeautyBuffer.getDevicePointer();
+            break;
+        case Shared::BufferToDisplay::Albedo:
+            bufferToDisplay = linearAlbedoBuffer.getDevicePointer();
+            break;
+        case Shared::BufferToDisplay::Normal:
+            bufferToDisplay = linearNormalBuffer.getDevicePointer();
+            break;
+        case Shared::BufferToDisplay::Flow:
+            bufferToDisplay = linearFlowBuffer.getDevicePointer();
+            break;
+        case Shared::BufferToDisplay::DenoisedBeauty:
+            bufferToDisplay = linearDenoisedBeautyBuffer.getDevicePointer();
+            break;
+        default:
+            Assert_ShouldNotBeCalled();
+            break;
+        }
+        kernelCopyToOutputBuffer(cuStream, kernelCopyToOutputBuffer.calcGridDim(renderTargetSizeX, renderTargetSizeY),
+                                 bufferToDisplay,
+                                 bufferTypeToDisplay,
+                                 0.5f, std::pow(10.0f, motionVectorScale),
                                  outputBufferSurfaceHolder.getNext(),
                                  uint2(renderTargetSizeX, renderTargetSizeY));
 
@@ -1327,7 +1407,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: OptiXによる描画結果を表示用レンダーターゲットにコピーする。
         // EN: Copy the OptiX rendering results to the display render target.
 
-        glEnable(GL_FRAMEBUFFER_SRGB);
+        if (bufferTypeToDisplay == Shared::BufferToDisplay::NoisyBeauty ||
+            bufferTypeToDisplay == Shared::BufferToDisplay::DenoisedBeauty) {
+            glEnable(GL_FRAMEBUFFER_SRGB);
+            ImGui::GetStyle() = guiStyleWithGamma;
+        }
+        else {
+            glDisable(GL_FRAMEBUFFER_SRGB);
+            ImGui::GetStyle() = guiStyle;
+        }
 
         glViewport(0, 0, curFBWidth, curFBHeight);
 
@@ -1374,7 +1462,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     
     CUDADRV_CHECK(cuMemFree(hdrIntensity));
 
-    CUDADRV_CHECK(cuModuleUnload(moduleCopyDenoisedBuffer));
+    CUDADRV_CHECK(cuModuleUnload(moduleCopyToOutputBuffer));
     CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
     
     denoiserScratchBuffer.finalize();
@@ -1384,15 +1472,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     
     rngBuffer.finalize();
 
-    linearOutputBuffer.finalize();
+    linearDenoisedBeautyBuffer.finalize();
     linearFlowBuffer.finalize();
     linearNormalBuffer.finalize();
     linearAlbedoBuffer.finalize();
-    linearColorBuffer.finalize();
+    linearBeautyBuffer.finalize();
 
     normalAccumBuffer.finalize();
     albedoAccumBuffer.finalize();
-    colorAccumBuffer.finalize();
+    beautyAccumBuffer.finalize();
 
 
 

@@ -137,7 +137,7 @@
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
     <CudaCompile Include="copy_buffers.cu" />
-    <CudaCompile Include="copy_denoised_buffer.cu">
+    <CudaCompile Include="copy_to_output_buffer.cu">
       <Filter>non-essentials</Filter>
     </CudaCompile>
   </ItemGroup>
