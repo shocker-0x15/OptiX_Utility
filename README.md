@@ -35,8 +35,8 @@ Currently based on OptiX 7.3.0
 - Callable programs
 - OptiX AI denoiser
   - [x] LDR/HDR
-  - [ ] Temporal
-  - [ ] AOV
+  - [x] Temporal
+  - [x] AOV
   - [ ] User
 - Automatic payload/attribute value packing in kernel code
 - [ ] Multi-GPU
