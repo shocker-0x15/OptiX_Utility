@@ -38,8 +38,8 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 
     PCG32RNG rng = plp.rngBuffer[launchIndex];
 
-    float x = static_cast<float>(launchIndex.x + 0.5f/*rng.getFloat0cTo1o()*/) / plp.imageSize.x;
-    float y = static_cast<float>(launchIndex.y + 0.5f/*rng.getFloat0cTo1o()*/) / plp.imageSize.y;
+    float x = (launchIndex.x + (plp.enableJittering ? rng.getFloat0cTo1o() : 0.5f)) / plp.imageSize.x;
+    float y = (launchIndex.y + (plp.enableJittering ? rng.getFloat0cTo1o() : 0.5f)) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
@@ -140,7 +140,6 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
         texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
 
-        p = optixTransformPointFromObjectToWorldSpace(p);
         sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
     }
 
@@ -151,10 +150,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         albedo = mat.albedo;
 
     if (payload->pathLength == 1) {
+        const InstanceData &inst = plp.instances[optixGetInstanceId()];
         denoiserData->firstHitAlbedo = albedo;
         denoiserData->firstHitNormal = sn;
-        denoiserData->firstHitPrevPositionInWorld = p; // TODO: previous transform
+        denoiserData->firstHitPrevPositionInWorld = inst.prevScale * (inst.prevRotation * p) + inst.prevTranslation;
     }
+
+    p = optixTransformPointFromObjectToWorldSpace(p);
 
     float3 vOut = -optixGetWorldRayDirection();
     bool isFrontFace = dot(vOut, sn) > 0;

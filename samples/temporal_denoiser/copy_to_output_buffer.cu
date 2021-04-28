@@ -15,8 +15,16 @@ CUDA_DEVICE_KERNEL void copyToOutputBuffer(void* linearBuffer,
     float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     switch (bufferTypeToDisplay) {
     case Shared::BufferToDisplay::NoisyBeauty:
-    case Shared::BufferToDisplay::Albedo:
     case Shared::BufferToDisplay::DenoisedBeauty: {
+        auto typedLinearBuffer = reinterpret_cast<float4*>(linearBuffer);
+        value = typedLinearBuffer[linearIndex];
+        // simple tone-map
+        value.x = 1 - std::exp(-value.x);
+        value.y = 1 - std::exp(-value.y);
+        value.z = 1 - std::exp(-value.z);
+        break;
+    }
+    case Shared::BufferToDisplay::Albedo: {
         auto typedLinearBuffer = reinterpret_cast<float4*>(linearBuffer);
         value = typedLinearBuffer[linearIndex];
         break;

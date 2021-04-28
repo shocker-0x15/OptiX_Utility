@@ -90,6 +90,22 @@ namespace Shared {
             isEmitter(false) {}
     };
 
+    struct InstanceData {
+        float scale;
+        Matrix3x3 rotation;
+        float3 translation;
+        float prevScale;
+        Matrix3x3 prevRotation;
+        float3 prevTranslation;
+
+        InstanceData() :
+            scale(1.0f), translation(make_float3(0.0f, 0.0f, 0.0f)),
+            prevScale(1.0f), prevTranslation(make_float3(0.0f, 0.0f, 0.0f)) {}
+        InstanceData(float _scale, const Matrix3x3 &_rotation, const float3 &_translation) :
+            scale(_scale), rotation(_rotation), translation(_translation),
+            prevScale(_scale), prevRotation(_rotation), prevTranslation(_translation) {}
+    };
+
 
 
     struct PipelineLaunchParameters {
@@ -103,6 +119,8 @@ namespace Shared {
         float2* linearFlowBuffer;
         PerspectiveCamera camera;
         PerspectiveCamera prevCamera;
+        const InstanceData* instances;
+        unsigned int enableJittering : 1;
     };
 
 

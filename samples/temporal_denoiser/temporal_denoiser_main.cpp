@@ -1,12 +1,14 @@
 ﻿/*
 
-JP: このサンプルはデノイザーの使用方法を示します。
-    OptiXはモンテカルロレイトレーシングによるレンダリング結果の分散、
-    画像中のノイズを低減するデノイザーを提供しています。
+JP: このサンプルはテンポラルデノイザーの使用方法を示します。
+    OptiXはノイズを低減するにあたってフレーム間の画像の安定性を考慮に入れたテンポラルデノイザーを提供しています。
+    テンポラルデノイザーはアルベドや法線に加えて、前フレームのデノイズ済みビューティー、
+    ピクセルごとの対応を示すフローチャンネルを補助画像として受け取ります。
 
-EN: This sample shows how to use the denoiser.
-    OptiX provides the denoiser to reduce noises in the image coming from variance of the rendering result
-    by Monte Carlo ray tracing.
+EN: This sample shows how to use the temporal denoiser.
+    OptiX provides temporal denoiser taking the image stability between frames into account when denoising.
+    The temporal denoiser takes the denoised beauty of the previous frame and a flow channel indicating
+    per-pixel correspondance as auxiliary images in addition to albedo and normal.
 
 */
 
@@ -149,7 +151,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     float UIScaling = contentScaleX;
     GLFWwindow* window = glfwCreateWindow(static_cast<int32_t>(renderTargetSizeX * UIScaling),
                                           static_cast<int32_t>(renderTargetSizeY * UIScaling),
-                                          "OptiX Utility - Denoiser", NULL, NULL);
+                                          "OptiX Utility - Temporal Denoiser", NULL, NULL);
     glfwSetWindowUserPointer(window, nullptr);
     if (!window) {
         hpprintf("Failed to create a GLFW window.\n");
@@ -377,7 +379,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-#define USE_BLOCK_COMPRESSED_TEXTURE
+    constexpr bool useBlockCompressedTexture = true;
 
     optixu::Material ceilingMat = optixContext.createMaterial();
     ceilingMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
@@ -399,8 +401,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        if constexpr (useBlockCompressedTexture) {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
@@ -414,7 +415,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
-#else
+        }
+        else {
             int32_t width, height, n;
             uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
                                                  &width, &height, &n, 4);
@@ -423,7 +425,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                           width, height, 1);
             farSideWallArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
-#endif
         }
         farSideWallMatData.texture = texSampler.createTextureObject(farSideWallArray);
     }
@@ -455,8 +456,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        if constexpr (useBlockCompressedTexture) {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
@@ -470,7 +470,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
-#else
+        }
+        else {
             int32_t width, height, n;
             uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
                                                  &width, &height, &n, 4);
@@ -479,7 +480,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     width, height, 1);
             floorArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
-#endif
         }
         floorMatData.texture = texSampler.createTextureObject(floorArray);
     }
@@ -716,8 +716,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
+    cudau::TypedBuffer<Shared::InstanceData> instDataBuffer;
+    instDataBuffer.initialize(cuContext, cudau::BufferType::Device, 2 + NumBunnies);
+    Shared::InstanceData* instData = instDataBuffer.map();
+    uint32_t instID = 0;
+
     optixu::Instance roomInst = scene.createInstance();
     roomInst.setChild(room.optixGas);
+    roomInst.setID(instID);
+    instData[instID] = Shared::InstanceData();
+    ++instID;
 
     float areaLightInstXfm[] = {
         1, 0, 0, 0,
@@ -727,34 +735,115 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Instance areaLightInst = scene.createInstance();
     areaLightInst.setChild(areaLight.optixGas);
     areaLightInst.setTransform(areaLightInstXfm);
+    areaLightInst.setID(instID);
+    instData[instID] = Shared::InstanceData(1.0f, Matrix3x3(), float3(0.0f, 0.9f, 0.0f));
+    ++instID;
 
-    std::vector<optixu::Instance> bunnyInsts;
+    struct MovingInstance {
+        optixu::Instance inst;
+        Shared::InstanceData instData;
+        uint32_t ID;
+        float scale_t;
+        float scaleFreq;
+        float scaleBase;
+        float scaleAmp;
+        float radius;
+        float anglularPos_t;
+        float angularPosFreq;
+        float angularPosOffset;
+        float y_t;
+        float yBase;
+        float yFreq;
+        float yAmp;
+
+        void setTransform() {
+            float scale = scaleBase + scaleAmp * std::sin(2 * M_PI * (scale_t / scaleFreq));
+
+            float angle = 2 * M_PI * (anglularPos_t / angularPosFreq) + angularPosOffset;
+            float x = radius * std::cos(angle);
+            float z = radius * std::sin(angle);
+
+            float y = yBase + yAmp * std::sin(2 * M_PI * (y_t / yFreq));
+
+            float bunnyXfm[] = {
+                scale, 0, 0, x,
+                0, scale, 0, y,
+                0, 0, scale, z,
+            };
+            inst.setTransform(bunnyXfm);
+
+            instData.scale = scale;
+            instData.rotation = Matrix3x3();
+            instData.translation = float3(x, y, z);
+        }
+
+        void initializeState(float initScale_t, float _scaleFreq, float _scaleBase, float _scaleAmp,
+                             float _radius, float _angularPosFreq, float _angularPosOffset,
+                             float initY_t, float _yBase, float _yFreq, float _yAmp) {
+            scale_t = initScale_t;
+            scaleFreq = _scaleFreq;
+            scaleBase = _scaleBase;
+            scaleAmp = _scaleAmp;
+            radius = _radius;
+            anglularPos_t = 0.0f;
+            angularPosFreq = _angularPosFreq;
+            angularPosOffset = _angularPosOffset;
+            y_t = initY_t;
+            yBase = _yBase;
+            yFreq = _yFreq;
+            yAmp = _yAmp;
+
+            scale_t = std::fmod(scale_t, scaleFreq);
+            anglularPos_t = std::fmod(anglularPos_t, angularPosFreq);
+            y_t = std::fmod(y_t, yFreq);
+            setTransform();
+
+            instData.prevScale = instData.scale;
+            instData.prevRotation = instData.rotation;
+            instData.prevTranslation = instData.translation;
+        }
+
+        void update(float dt) {
+            instData.prevScale = instData.scale;
+            instData.prevRotation = instData.rotation;
+            instData.prevTranslation = instData.translation;
+
+            scale_t = std::fmod(scale_t + dt, scaleFreq);
+            anglularPos_t = std::fmod(anglularPos_t + dt, angularPosFreq);
+            y_t = std::fmod(y_t + dt, yFreq);
+            setTransform();
+        }
+    };
+
+    std::vector<MovingInstance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
-        float x = r * std::cos(GoldenAngle * i);
-        float z = r * std::sin(GoldenAngle * i);
+        float angle = std::fmod(GoldenAngle * i, 2 * M_PI);
 
         Shared::MaterialData matData;
-        matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * M_PI), 1.0f),
+        matData.albedo = sRGB_degamma(HSVtoRGB(angle / (2 * M_PI),
                                                std::sqrt(r / 0.9f),
                                                1.0f));
         bunnyMats[i].setUserData(matData);
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.003f + tt * 0.0006f;
-        float bunnyInstXfm[] = {
-            scale, 0, 0, x,
-            0, scale, 0, -1 + (1 - tt),
-            0, 0, scale, z
-        };
-        optixu::Instance bunnyInst = scene.createInstance();
-        bunnyInst.setChild(bunny.optixGas, i);
-        bunnyInst.setTransform(bunnyInstXfm);
+        MovingInstance bunnyInst;
+        bunnyInst.inst = scene.createInstance();
+        bunnyInst.inst.setChild(bunny.optixGas, i);
+        bunnyInst.inst.setID(instID);
+        bunnyInst.ID = instID;
+        bunnyInst.initializeState(0.0f, 1.0f, scale, 0.0f,
+                                  r, 10.0f, angle,
+                                  0.0f, -1 + (1 - tt), 1.0f, 0.0f);
         bunnyInsts.push_back(bunnyInst);
+        ++instID;
     }
+
+    instDataBuffer.unmap();
 
 
 
@@ -763,11 +852,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastBuild, false, false, false);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnyInsts.size(); ++i)
-        ias.addChild(bunnyInsts[i]);
+        ias.addChild(bunnyInsts[i].inst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -978,6 +1067,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.position = make_float3(0, 0, 3.16f);
     plp.camera.orientation = rotateY3x3(M_PI);
     plp.prevCamera = plp.camera;
+    plp.instances = instDataBuffer.getDevicePointer();
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -989,17 +1079,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     struct GPUTimer {
         cudau::Timer frame;
+        cudau::Timer update;
         cudau::Timer render;
         cudau::Timer denoise;
 
         void initialize(CUcontext context) {
             frame.initialize(context);
+            update.initialize(context);
             render.initialize(context);
             denoise.initialize(context);
         }
         void finalize() {
             denoise.finalize();
             render.finalize();
+            update.finalize();
             frame.finalize();
         }
     };
@@ -1199,10 +1292,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
 
         static bool useTemporalDenosier = true;
+        static bool enableJittering = false;
         static Shared::BufferToDisplay bufferTypeToDisplay = Shared::BufferToDisplay::DenoisedBeauty;
         static float motionVectorScale = -1.0f;
+        static bool animate = true;
+        bool lastFrameWasAnimated = false;
         {
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            if (ImGui::Button(animate ? "Stop" : "Play")) {
+                if (animate)
+                    lastFrameWasAnimated = true;
+                animate = !animate;
+            }
 
             if (ImGui::Checkbox("Temporal Denoiser", &useTemporalDenosier)) {
                 CUDADRV_CHECK(cuStreamSynchronize(cuStream));
@@ -1231,6 +1333,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                 denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
             }
+
+            ImGui::Checkbox("Jittering", &enableJittering);
             
             ImGui::Text("Buffer to Display");
             ImGui::RadioButtonE("Noisy Beauty", &bufferTypeToDisplay, Shared::BufferToDisplay::NoisyBeauty);
@@ -1249,10 +1353,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             float cudaFrameTime = frameIndex >= 2 ? curGPUTimer.frame.report() : 0.0f;
+            float updateTime = frameIndex >= 2 ? curGPUTimer.update.report() : 0.0f;
             float renderTime = frameIndex >= 2 ? curGPUTimer.render.report() : 0.0f;
             float denoiseTime = frameIndex >= 2 ? curGPUTimer.denoise.report() : 0.0f;
             //ImGui::SetNextItemWidth(100.0f);
             ImGui::Text("CUDA/OptiX GPU %.3f [ms]:", cudaFrameTime);
+            ImGui::Text("  Update: %.3f [ms]", updateTime);
             ImGui::Text("  Render: %.3f [ms]", renderTime);
             ImGui::Text("  Denoise: %.3f [ms]", denoiseTime);
 
@@ -1263,51 +1369,38 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         curGPUTimer.frame.start(cuStream);
         
-        //// JP: Bunnyの頂点に変異を加えてGASをアップデートする。
-        ////     法線ベクトルも修正する。
-        //// EN: Deform bunnys' vertices and update its GAS.
-        ////     Modify normal vectors as well.
-        //{
-        //    float t = 0.5f + 0.5f * std::sin(2 * M_PI * static_cast<float>(frameIndex % 180) / 180);
-        //    deform(cuStream, deform.calcGridDim(bunnyVertexBuffer.numElements()),
-        //           bunnyVertexBuffer.getDevicePointer(), deformedBunnyVertexBuffer.getDevicePointer(),
-        //           bunnyVertexBuffer.numElements(), 20.0f, t);
-        //    accumulateVertexNormals(cuStream, accumulateVertexNormals.calcGridDim(bunnyTriangleBuffer.numElements()),
-        //                            deformedBunnyVertexBuffer.getDevicePointer(), bunnyTriangleBuffer.getDevicePointer(),
-        //                            bunnyTriangleBuffer.numElements());
-        //    normalizeVertexNormals(cuStream, normalizeVertexNormals.calcGridDim(bunnyVertexBuffer.numElements()),
-        //                           deformedBunnyVertexBuffer.getDevicePointer(),
-        //                           bunnyVertexBuffer.numElements());
-        //    bunnyGas.update(cuStream, asBuildScratchMem);
-        //}
+        // JP: 各インスタンスのトランスフォームを更新する。
+        // EN: Update the transform of each instance.
+        if (animate || lastFrameWasAnimated) {
+            for (int i = 0; i < bunnyInsts.size(); ++i) {
+                MovingInstance &bunnyInst = bunnyInsts[i];
+                bunnyInst.update(animate ? 1.0f / 60.0f : 0.0f);
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(instDataBuffer.getCUdeviceptrAt(bunnyInst.ID),
+                                                &bunnyInst.instData, sizeof(bunnyInsts[i].instData), cuStream));
+            }
+        }
 
-        //// JP: 各インスタンスのトランスフォームを更新する。
-        //// EN: Update the transform of each instance.
-        //for (int i = 0; i < bunnies.size(); ++i)
-        //    bunnies[i].update(1.0f / 60.0f);
-
-        //// JP: IASのアップデートを行う。
-        ////     品質を維持するためにたまにはリビルドする。
-        ////     アップデートの代用としてのリビルドでは、インスタンスの追加・削除や
-        ////     ASビルド設定の変更を行っていないのでmarkDirty()やprepareForBuild()は必要無い。
-        //// EN: Update the IAS.
-        ////     Sometimes perform rebuild to maintain AS quality.
-        ////     Rebuild as the alternative for update doesn't involves
-        ////     add/remove of instances and changes of AS build settings
-        ////     so neither of markDirty() nor prepareForBuild() is required.
-        //if (frameIndex % 10 == 0)
-        //    plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
-        //else
-        //    ias.update(cuStream, asBuildScratchMem);
+        // JP: IASのリビルドを行う。
+        //     アップデートの代用としてのリビルドでは、インスタンスの追加・削除や
+        //     ASビルド設定の変更を行っていないのでmarkDirty()やprepareForBuild()は必要無い。
+        // EN: Rebuild the IAS.
+        //     Rebuild as the alternative for update doesn't involves
+        //     add/remove of instances and changes of AS build settings
+        //     so neither of markDirty() nor prepareForBuild() is required.
+        curGPUTimer.update.start(cuStream);
+        if (animate)
+            plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+        curGPUTimer.update.stop(cuStream);
 
         // Render
-        bool firstAccumFrame = cameraIsActuallyMoving || resized || frameIndex == 0;
+        bool firstAccumFrame = animate || cameraIsActuallyMoving || resized || frameIndex == 0;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
             numAccumFrames = 0;
         else
             ++numAccumFrames;
         plp.numAccumFrames = numAccumFrames;
+        plp.enableJittering = enableJittering;
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
         curGPUTimer.render.start(cuStream);
         pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
@@ -1348,12 +1441,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearFlowBuffer, OPTIX_PIXEL_FORMAT_FLOAT2,
-                            frameIndex == 0 ? linearBeautyBuffer : linearDenoisedBeautyBuffer, // TODO: リサイズ時などは無効
+                            (frameIndex == 0 || resized) ? linearBeautyBuffer : linearDenoisedBeautyBuffer,
                             linearDenoisedBeautyBuffer,
                             denoisingTasks[i]);
 
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
 
+        // JP: デノイズ結果や中間バッファーの可視化。
+        // EN: Visualize the denosed result or intermediate buffers.
         void* bufferToDisplay = nullptr;
         switch (bufferTypeToDisplay) {
         case Shared::BufferToDisplay::NoisyBeauty:
@@ -1396,7 +1491,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 0, 0, 0, renderTargetSizeX, renderTargetSizeY, 1,
                 GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage);
             saveImage("output.png", renderTargetSizeX, renderTargetSizeY, rawImage,
-                      false, false);
+                      false, true);
             delete[] rawImage;
             break;
         }
@@ -1495,9 +1590,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.destroy();
 
     for (int i = bunnyInsts.size() - 1; i >= 0; --i)
-        bunnyInsts[i].destroy();
+        bunnyInsts[i].inst.destroy();
     areaLightInst.destroy();
     roomInst.destroy();
+
+    instDataBuffer.finalize();
 
     bunny.finalize();    
     areaLight.finalize();
