@@ -1375,6 +1375,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             for (int i = 0; i < bunnyInsts.size(); ++i) {
                 MovingInstance &bunnyInst = bunnyInsts[i];
                 bunnyInst.update(animate ? 1.0f / 60.0f : 0.0f);
+                // TODO: まとめて送る。
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(instDataBuffer.getCUdeviceptrAt(bunnyInst.ID),
                                                 &bunnyInst.instData, sizeof(bunnyInsts[i].instData), cuStream));
             }
