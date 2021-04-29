@@ -1011,11 +1011,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
     CUmodule moduleCopyBuffers;
     CUDADRV_CHECK(cuModuleLoad(&moduleCopyBuffers, (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_buffers.ptx").string().c_str()));
-    cudau::Kernel kernelCopyBuffers(moduleCopyBuffers, "copyBuffers", cudau::dim3(8, 8), 0);
-
-    CUmodule moduleCopyToOutputBuffer;
-    CUDADRV_CHECK(cuModuleLoad(&moduleCopyToOutputBuffer, (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_to_output_buffer.ptx").string().c_str()));
-    cudau::Kernel kernelCopyToOutputBuffer(moduleCopyToOutputBuffer, "copyToOutputBuffer", cudau::dim3(8, 8), 0);
+    cudau::Kernel kernelCopyToLinearBuffers(moduleCopyBuffers, "copyToLinearBuffers", cudau::dim3(8, 8), 0);
+    cudau::Kernel kernelVisualizeToOutputBuffer(moduleCopyBuffers, "visualizeToOutputBuffer", cudau::dim3(8, 8), 0);
 
     CUdeviceptr hdrIntensity;
     CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
@@ -1096,7 +1093,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             frame.finalize();
         }
     };
-    
+
     GPUTimer gpuTimers[2];
     gpuTimers[0].initialize(cuContext);
     gpuTimers[1].initialize(cuContext);
@@ -1335,7 +1332,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             }
 
             ImGui::Checkbox("Jittering", &enableJittering);
-            
+
             ImGui::Text("Buffer to Display");
             ImGui::RadioButtonE("Noisy Beauty", &bufferTypeToDisplay, Shared::BufferToDisplay::NoisyBeauty);
             ImGui::RadioButtonE("Albedo", &bufferTypeToDisplay, Shared::BufferToDisplay::Albedo);
@@ -1368,7 +1365,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         curGPUTimer.frame.start(cuStream);
-        
+
         // JP: 各インスタンスのトランスフォームを更新する。
         // EN: Update the transform of each instance.
         if (animate || lastFrameWasAnimated) {
@@ -1413,8 +1410,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
         // EN: Copy the results to the linear buffers (and normalize normals).
-        cudau::dim3 dimCopyBuffers = kernelCopyBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
-        kernelCopyBuffers(cuStream, dimCopyBuffers,
+        cudau::dim3 dimCopyBuffers = kernelCopyToLinearBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
+        kernelCopyToLinearBuffers(cuStream, dimCopyBuffers,
                           beautyAccumBuffer.getSurfaceObject(0),
                           albedoAccumBuffer.getSurfaceObject(0),
                           normalAccumBuffer.getSurfaceObject(0),
@@ -1473,7 +1470,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             Assert_ShouldNotBeCalled();
             break;
         }
-        kernelCopyToOutputBuffer(cuStream, kernelCopyToOutputBuffer.calcGridDim(renderTargetSizeX, renderTargetSizeY),
+        kernelVisualizeToOutputBuffer(cuStream, kernelVisualizeToOutputBuffer.calcGridDim(renderTargetSizeX, renderTargetSizeY),
                                  bufferToDisplay,
                                  bufferTypeToDisplay,
                                  0.5f, std::pow(10.0f, motionVectorScale),
@@ -1560,7 +1557,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     
     CUDADRV_CHECK(cuMemFree(hdrIntensity));
 
-    CUDADRV_CHECK(cuModuleUnload(moduleCopyToOutputBuffer));
     CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
     
     denoiserScratchBuffer.finalize();

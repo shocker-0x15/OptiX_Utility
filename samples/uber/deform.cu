@@ -2,19 +2,21 @@
 
 #include "uber_shared.h"
 
-CUDA_DEVICE_KERNEL void deform(const Shared::Vertex* originalVertices, Shared::Vertex* vertices, uint32_t numVertices,
-                               float t) {
+CUDA_DEVICE_KERNEL void deform(
+    const Shared::Vertex* originalVertices, Shared::Vertex* vertices, uint32_t numVertices,
+    float t) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
         return;
-    
+
     float3 spherePos = 3 * normalize(originalVertices[vIdx].position);
     vertices[vIdx].position = (1 - t) * originalVertices[vIdx].position + t * spherePos;
     vertices[vIdx].normal = make_float3(0, 0, 0);
 }
 
-CUDA_DEVICE_KERNEL void accumulateVertexNormals(Shared::Vertex* vertices,
-                                                Shared::Triangle* triangles, uint32_t numTriangles) {
+CUDA_DEVICE_KERNEL void accumulateVertexNormals(
+    Shared::Vertex* vertices,
+    Shared::Triangle* triangles, uint32_t numTriangles) {
     uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
         return;

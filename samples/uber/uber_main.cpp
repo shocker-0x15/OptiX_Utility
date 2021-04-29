@@ -592,7 +592,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     textureObjectBuffer.initialize(cuContext, g_bufferType, 128);
     uint32_t textureID = 0;
 
-#define USE_BLOCK_COMPRESSED_TEXTURE
+    constexpr bool useBlockCompressedTexture = true;
 
     CUtexObject* textureObjects = textureObjectBuffer.map();
 
@@ -603,8 +603,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
     cudau::Array arrayCheckerBoard;
-    {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+    if constexpr (useBlockCompressedTexture) {
         int32_t width, height, mipCount;
         size_t* sizes;
         dds::Format format;
@@ -617,7 +616,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             arrayCheckerBoard.write<uint8_t>(ddsData[i], sizes[i], i);
 
         dds::free(ddsData, mipCount, sizes);
-#else
+    }
+    else {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("../../data/checkerboard_line.png", &width, &height, &n, 4);
         arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
@@ -625,14 +625,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                        width, height, 1);
         arrayCheckerBoard.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
-#endif
     }
     uint32_t texCheckerBoardIndex = textureID++;
     textureObjects[texCheckerBoardIndex] = texSampler.createTextureObject(arrayCheckerBoard);
 
     cudau::Array arrayGrid;
-    {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+    if constexpr (useBlockCompressedTexture) {
         int32_t width, height, mipCount;
         size_t* sizes;
         dds::Format format;
@@ -645,7 +643,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             arrayGrid.write<uint8_t>(ddsData[i], sizes[i], i);
 
         dds::free(ddsData, mipCount, sizes);
-#else
+    }
+    else {
         int32_t width, height, n;
         uint8_t* linearImageData = stbi_load("../../data/grid.png", &width, &height, &n, 4);
         arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
@@ -653,7 +652,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                width, height, 1);
         arrayGrid.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
-#endif
     }
     uint32_t texGridIndex = textureID++;
     textureObjects[texGridIndex] = texSampler.createTextureObject(arrayGrid);

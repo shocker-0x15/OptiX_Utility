@@ -87,35 +87,36 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-#define USE_BLOCK_COMPRESSED_TEXTURE
+    constexpr bool useBlockCompressedTexture = true;
 
     const auto createTexture = [&cuContext](const std::filesystem::path &filepath) {
         cudau::Array array;
 
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
-        int32_t width, height, mipCount;
-        size_t* sizes;
-        dds::Format format;
-        uint8_t** ddsData = dds::load(filepath.string().c_str(),
-                                      &width, &height, &mipCount, &sizes, &format);
+        if (filepath.extension() == ".DDS") {
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load(filepath.string().c_str(),
+                                          &width, &height, &mipCount, &sizes, &format);
 
-        array.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                           width, height, /*mipCount*/1); // CUDA's bug?
-        for (int i = 0; i < array.getNumMipmapLevels(); ++i)
-            array.write<uint8_t>(ddsData[i], sizes[i], i);
+            array.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                               width, height, /*mipCount*/1); // CUDA's bug?
+            for (int i = 0; i < array.getNumMipmapLevels(); ++i)
+                array.write<uint8_t>(ddsData[i], sizes[i], i);
 
-        dds::free(ddsData, mipCount, sizes);
-#else
-        int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load(filepath.string().c_str(),
-                                             &width, &height, &n, 4);
-        array.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                           cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                           width, height, 1);
-        array.write<uint8_t>(linearImageData, width * height * 4);
-        stbi_image_free(linearImageData);
-#endif
+            dds::free(ddsData, mipCount, sizes);
+        }
+        else {
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load(filepath.string().c_str(),
+                                                 &width, &height, &n, 4);
+            array.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
+                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                               width, height, 1);
+            array.write<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+        }
 
         return array;
     };
@@ -150,12 +151,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
     Shared::MaterialData floorMatData = {};
     cudau::Array floorArray = createTexture(
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
-        "../../data/checkerboard_line.DDS"
-#else
-        "../../data/checkerboard_line.png"
-#endif
-    );
+        useBlockCompressedTexture ?
+        "../../data/checkerboard_line.DDS" :
+        "../../data/checkerboard_line.png");
     {
         cudau::TextureSampler texSampler;
         texSampler.setXyFilterMode(cudau::TextureFilterMode::Point);
@@ -177,12 +175,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunnyMat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
     Shared::MaterialData bunnyMatData = {};
     cudau::Array bunnyArray = createTexture(
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
-        "../../data/wood_bunny.DDS"
-#else
-        "../../data/wood_bunny.png"
-#endif
-    );
+        useBlockCompressedTexture ?
+        "../../data/wood_bunny.DDS" :
+        "../../data/wood_bunny.png");
     {
         cudau::TextureSampler texSampler;
         texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);

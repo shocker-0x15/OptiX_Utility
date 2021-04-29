@@ -85,7 +85,7 @@ TODO:
 - Linux環境でのテスト。
 - CMake整備。
 - ASのRelocationサポート。
-- AOV Denoiserサポート。
+- AOV Denoiserのサンプル作成。
 - Instance Pointersサポート。
 - removeUncompacted再考。(compaction終了待ちとしてとらえる？)
 - 途中で各オブジェクトのパラメターを変更した際の処理。

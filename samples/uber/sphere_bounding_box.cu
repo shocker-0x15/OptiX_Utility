@@ -4,7 +4,8 @@
 
 using namespace Shared;
 
-CUDA_DEVICE_KERNEL void calculateBoundingBoxesForSpheres(const SphereParameter * sphereParameters, AABB * aabbs, uint32_t numSpheres) {
+CUDA_DEVICE_KERNEL void calculateBoundingBoxesForSpheres(
+    const SphereParameter* sphereParameters, AABB* aabbs, uint32_t numSpheres) {
     uint32_t sphereIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (sphereIdx >= numSpheres)
         return;
