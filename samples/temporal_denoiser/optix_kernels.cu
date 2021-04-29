@@ -96,7 +96,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     float2 flow = (curRasterPos - prevRasterPos) * make_float2(plp.imageSize.x, plp.imageSize.y);
     //if (launchIndex.x == 511 && launchIndex.y == 511)
     //    printf("%.3f, %.3f\n", flow.x, flow.y);
-    if (isnan(denoiserData.firstHitPrevPositionInWorld.x))
+    if (plp.resetFlowBuffer || isnan(denoiserData.firstHitPrevPositionInWorld.x))
         flow = make_float2(0.0f, 0.0f);
     plp.linearFlowBuffer[launchIndex.y * plp.imageSize.x + launchIndex.x] = make_float2(flow.x, flow.y/*, 0.0f, 0.0f*/);
 }

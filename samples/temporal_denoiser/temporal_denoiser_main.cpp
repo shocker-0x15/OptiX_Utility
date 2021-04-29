@@ -1395,6 +1395,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Render
         bool firstAccumFrame = animate || cameraIsActuallyMoving || resized || frameIndex == 0;
+        bool resetFlowBuffer = resized || frameIndex == 0;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
             numAccumFrames = 0;
@@ -1402,6 +1403,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ++numAccumFrames;
         plp.numAccumFrames = numAccumFrames;
         plp.enableJittering = enableJittering;
+        plp.resetFlowBuffer = resetFlowBuffer;
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
         curGPUTimer.render.start(cuStream);
         pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
@@ -1442,7 +1444,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearFlowBuffer, OPTIX_PIXEL_FORMAT_FLOAT2,
-                            (frameIndex == 0 || resized) ? linearBeautyBuffer : linearDenoisedBeautyBuffer,
+                            resetFlowBuffer ? linearBeautyBuffer : linearDenoisedBeautyBuffer,
                             linearDenoisedBeautyBuffer,
                             denoisingTasks[i]);
 
