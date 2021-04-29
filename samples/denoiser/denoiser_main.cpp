@@ -92,7 +92,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
-#define USE_BLOCK_COMPRESSED_TEXTURE
+    constexpr bool useBlockCompressedTexture = true;
 
     optixu::Material ceilingMat = optixContext.createMaterial();
     ceilingMat.setHitGroup(Shared::RayType_Search, shadingHitProgramGroup);
@@ -114,8 +114,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        if constexpr (useBlockCompressedTexture) {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
@@ -129,7 +128,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
-#else
+        }
+        else {
             int32_t width, height, n;
             uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
                                                  &width, &height, &n, 4);
@@ -138,7 +138,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                           width, height, 1);
             farSideWallArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
-#endif
         }
         farSideWallMatData.texture = texSampler.createTextureObject(farSideWallArray);
     }
@@ -170,8 +169,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        {
-#if defined(USE_BLOCK_COMPRESSED_TEXTURE)
+        if constexpr (useBlockCompressedTexture) {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
@@ -185,7 +183,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, mipCount, sizes);
-#else
+        }
+        else {
             int32_t width, height, n;
             uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
                                                  &width, &height, &n, 4);
@@ -194,7 +193,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     width, height, 1);
             floorArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
-#endif
         }
         floorMatData.texture = texSampler.createTextureObject(floorArray);
     }

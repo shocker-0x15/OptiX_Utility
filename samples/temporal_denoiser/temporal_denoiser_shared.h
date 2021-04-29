@@ -121,6 +121,7 @@ namespace Shared {
         PerspectiveCamera prevCamera;
         const InstanceData* instances;
         unsigned int enableJittering : 1;
+        unsigned int resetFlowBuffer : 1;
     };
 
 

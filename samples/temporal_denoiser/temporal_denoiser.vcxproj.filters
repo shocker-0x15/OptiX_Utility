@@ -137,7 +137,6 @@
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
     <CudaCompile Include="copy_buffers.cu" />
-    <CudaCompile Include="copy_to_output_buffer.cu" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
