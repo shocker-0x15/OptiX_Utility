@@ -17,6 +17,8 @@ EN: This sample shows how to build an instance acceleration structure (IAS) from
 
 #include "single_level_instancing_shared.h"
 
+#include "../common/obj_loader.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。

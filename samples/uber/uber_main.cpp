@@ -10,6 +10,8 @@ EN: This sample is a spaghetti test place for the author.
 
 #include "uber_shared.h"
 
+#include "../common/obj_loader.h"
+
 // Include glfw3.h after our OpenGL definitions
 #include "../common/gl_util.h"
 #include <GLFW/glfw3.h>

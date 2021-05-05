@@ -15,6 +15,7 @@
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
+    <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="deformation_blur_main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -26,6 +27,7 @@
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\curve_evaluator.h" />
+    <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="deformation_blur_shared.h" />
   </ItemGroup>
   <ItemGroup>

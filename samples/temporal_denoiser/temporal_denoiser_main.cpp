@@ -14,6 +14,7 @@ EN: This sample shows how to use the temporal denoiser.
 
 #include "temporal_denoiser_shared.h"
 
+#include "../common/obj_loader.h"
 #include "../common/dds_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"

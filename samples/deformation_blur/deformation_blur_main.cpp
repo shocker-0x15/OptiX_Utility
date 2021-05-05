@@ -10,6 +10,8 @@ EN: This sample shows how to build a GAS to handle deformation blur.
 
 #include "deformation_blur_shared.h"
 
+#include "../common/obj_loader.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。

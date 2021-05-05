@@ -12,6 +12,8 @@ EN: This sample shows how to build a single geometry acceleration structure (GAS
 
 #include "single_gas_shared.h"
 
+#include "../common/obj_loader.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。

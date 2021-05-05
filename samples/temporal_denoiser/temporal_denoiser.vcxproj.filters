@@ -67,6 +67,9 @@
     <ClCompile Include="..\common\gl_util.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\obj_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -132,6 +135,12 @@
     </ClInclude>
     <ClInclude Include="..\common\gl_util.h">
       <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\obj_loader.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\stb_image_write.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
