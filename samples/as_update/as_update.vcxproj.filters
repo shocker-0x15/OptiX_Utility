@@ -64,6 +64,9 @@
     <ClCompile Include="..\common\gl_util.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\obj_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
@@ -126,6 +129,12 @@
     </ClInclude>
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h">
       <Filter>non-essentials\ext\gl3w</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\obj_loader.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\stb_image_write.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

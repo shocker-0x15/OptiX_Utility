@@ -24,6 +24,7 @@
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\gl_util.cpp" />
+    <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="uber_main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -33,6 +34,7 @@
     <ClInclude Include="..\common\curve_evaluator.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="..\common\stopwatch.h" />
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h" />

@@ -20,6 +20,8 @@ EN: This sample shows how to use multi-level instancing as well as motion transf
 
 #include "multi_level_instancing_shared.h"
 
+#include "../common/obj_loader.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。

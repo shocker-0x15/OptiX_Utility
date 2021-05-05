@@ -23,10 +23,12 @@
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\gl_util.cpp" />
+    <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="pick_main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h" />
+    <ClInclude Include="..\..\ext\stb_image_write.h" />
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
@@ -46,6 +48,7 @@
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="pick_shared.h" />
   </ItemGroup>
   <ItemGroup>

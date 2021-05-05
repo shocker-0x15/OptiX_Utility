@@ -12,6 +12,8 @@ EN: This sample demonstrates an example of implementing object picking in an int
 
 #include "pick_shared.h"
 
+#include "../common/obj_loader.h"
+
 // Include glfw3.h after our OpenGL definitions
 #include "../common/gl_util.h"
 #include <GLFW/glfw3.h>

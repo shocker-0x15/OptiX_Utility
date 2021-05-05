@@ -12,6 +12,8 @@ EN: This sample shows how to update GAS and IAS.
 
 #include "as_update_shared.h"
 
+#include "../common/obj_loader.h"
+
 // Include glfw3.h after our OpenGL definitions
 #include "../common/gl_util.h"
 #include <GLFW/glfw3.h>

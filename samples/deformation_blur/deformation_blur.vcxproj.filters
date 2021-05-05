@@ -25,6 +25,9 @@
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\obj_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -50,6 +53,9 @@
       <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="..\common\curve_evaluator.h" />
+    <ClInclude Include="..\common\obj_loader.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />

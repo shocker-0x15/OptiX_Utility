@@ -25,6 +25,9 @@
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\obj_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -48,6 +51,9 @@
     </ClInclude>
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\obj_loader.h">
+      <Filter>non-essentials</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
