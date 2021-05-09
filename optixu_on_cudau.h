@@ -4,8 +4,23 @@
 #include "optix_util.h"
 
 namespace optixu {
+    template <typename T, typename... Ts>
+    inline constexpr bool is_any_v = std::disjunction_v<std::is_same<T, Ts>...>;
+
+
+
     template <typename T>
     class NativeBlockBuffer2D {
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+        static constexpr bool isNativeType =
+            is_any_v<T,
+            float, float2, float3, float4,
+            int32_t, int2, int3, int4,
+            uint32_t, uint2, uint3, uint4>; // other types?
+        static constexpr size_t typeSize = sizeof(T);
+        static_assert(typeSize % sizeof(uint32_t) == 0 && typeSize >= 4 && typeSize <= 16,
+                      "Unsupported size of type.");
+#endif
         CUsurfObject m_surfObject;
 
     public:
@@ -19,24 +34,97 @@ namespace optixu {
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION T read(uint2 idx) const {
-            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+            if constexpr (isNativeType) {
+                return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+            }
+            else {
+                if constexpr (sizeof(T) == 4) {
+                    union {
+                        T targetType;
+                        uint32_t uiValue;
+                    } u;
+                    u.uiValue = surf2Dread<uint32_t>(m_surfObject, idx.x * sizeof(uint32_t), idx.y);
+                    return u.targetType;
+                }
+                if constexpr (sizeof(T) == 8) {
+                    union {
+                        T targetType;
+                        uint2 uiValue;
+                    } u;
+                    u.uiValue = surf2Dread<uint2>(m_surfObject, idx.x * sizeof(uint2), idx.y);
+                    return u.targetType;
+                }
+                if constexpr (sizeof(T) == 12) {
+                    union {
+                        T targetType;
+                        uint3 uiValue;
+                    } u;
+                    u.uiValue = surf2Dread<uint3>(m_surfObject, idx.x * sizeof(uint3), idx.y);
+                    return u.targetType;
+                }
+                if constexpr (sizeof(T) == 16) {
+                    union {
+                        T targetType;
+                        uint4 uiValue;
+                    } u;
+                    u.uiValue = surf2Dread<uint4>(m_surfObject, idx.x * sizeof(uint4), idx.y);
+                    return u.targetType;
+                }
+            }
         }
         RT_DEVICE_FUNCTION void write(uint2 idx, const T &value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+            if constexpr (isNativeType) {
+                surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+            }
+            else {
+                if constexpr (sizeof(T) == 4) {
+                    union {
+                        T targetType;
+                        uint32_t uiValue;
+                    } u;
+                    u.targetType = value;
+                    surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint32_t), idx.y);
+                }
+                if constexpr (sizeof(T) == 8) {
+                    union {
+                        T targetType;
+                        uint2 uiValue;
+                    } u;
+                    u.targetType = value;
+                    surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint2), idx.y);
+                }
+                if constexpr (sizeof(T) == 12) {
+                    union {
+                        T targetType;
+                        uint3 uiValue;
+                    } u;
+                    u.targetType = value;
+                    surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint3), idx.y);
+                }
+                if constexpr (sizeof(T) == 16) {
+                    union {
+                        T targetType;
+                        uint4 uiValue;
+                    } u;
+                    u.targetType = value;
+                    surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint4), idx.y);
+                }
+            }
         }
         template <uint32_t comp, typename U>
         RT_DEVICE_FUNCTION void writeComp(uint2 idx, U value) const {
             surf2Dwrite(value, m_surfObject, idx.x * sizeof(T) + comp * sizeof(U), idx.y);
         }
+
         RT_DEVICE_FUNCTION T read(int2 idx) const {
-            return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y);
+            return read(make_uint2(idx.x, idx.y));
         }
         RT_DEVICE_FUNCTION void write(int2 idx, const T &value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T), idx.y);
+            write(make_uint2(idx.x, idx.y), value);
         }
         template <uint32_t comp, typename U>
         RT_DEVICE_FUNCTION void writeComp(int2 idx, U value) const {
-            surf2Dwrite(value, m_surfObject, idx.x * sizeof(T) + comp * sizeof(U), idx.y);
+            writeComp<comp>(make_uint2(idx.x, idx.y), value);
         }
 #endif
     };
