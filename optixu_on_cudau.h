@@ -39,33 +39,37 @@ namespace optixu {
             }
             else {
                 if constexpr (sizeof(T) == 4) {
-                    union {
+                    union U {
                         T targetType;
                         uint32_t uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.uiValue = surf2Dread<uint32_t>(m_surfObject, idx.x * sizeof(uint32_t), idx.y);
                     return u.targetType;
                 }
                 if constexpr (sizeof(T) == 8) {
-                    union {
+                    union U {
                         T targetType;
                         uint2 uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.uiValue = surf2Dread<uint2>(m_surfObject, idx.x * sizeof(uint2), idx.y);
                     return u.targetType;
                 }
                 if constexpr (sizeof(T) == 12) {
-                    union {
+                    union U {
                         T targetType;
                         uint3 uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.uiValue = surf2Dread<uint3>(m_surfObject, idx.x * sizeof(uint3), idx.y);
                     return u.targetType;
                 }
                 if constexpr (sizeof(T) == 16) {
-                    union {
+                    union U {
                         T targetType;
                         uint4 uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.uiValue = surf2Dread<uint4>(m_surfObject, idx.x * sizeof(uint4), idx.y);
                     return u.targetType;
@@ -78,33 +82,37 @@ namespace optixu {
             }
             else {
                 if constexpr (sizeof(T) == 4) {
-                    union {
+                    union U {
                         T targetType;
                         uint32_t uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.targetType = value;
                     surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint32_t), idx.y);
                 }
                 if constexpr (sizeof(T) == 8) {
-                    union {
+                    union U {
                         T targetType;
                         uint2 uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.targetType = value;
                     surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint2), idx.y);
                 }
                 if constexpr (sizeof(T) == 12) {
-                    union {
+                    union U {
                         T targetType;
                         uint3 uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.targetType = value;
                     surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint3), idx.y);
                 }
                 if constexpr (sizeof(T) == 16) {
-                    union {
+                    union U {
                         T targetType;
                         uint4 uiValue;
+                        RT_DEVICE_FUNCTION U() {}
                     } u;
                     u.targetType = value;
                     surf2Dwrite(u.uiValue, m_surfObject, idx.x * sizeof(uint4), idx.y);
@@ -138,7 +146,7 @@ namespace optixu {
         uint32_t m_height;
         uint32_t m_numXBlocks;
 
-#if defined(__CUDA_ARCH__)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION constexpr uint32_t calcLinearIndex(uint32_t idxX, uint32_t idxY) const {
             constexpr uint32_t blockWidth = 1 << log2BlockWidth;
             constexpr uint32_t mask = blockWidth - 1;
@@ -161,7 +169,7 @@ namespace optixu {
             m_numXBlocks = ((width + mask) & ~mask) >> log2BlockWidth;
         }
 
-#if defined(__CUDA_ARCH__)
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION uint2 getSize() const {
             return make_uint2(m_width, m_height);
         }
@@ -185,6 +193,20 @@ namespace optixu {
             optixuAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
                          "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
+        }
+
+        RT_DEVICE_FUNCTION T read(uint2 idx) const {
+            return (*this)[idx];
+        }
+        RT_DEVICE_FUNCTION void write(uint2 idx, const T &value) {
+            (*this)[idx] = value;
+        }
+
+        RT_DEVICE_FUNCTION T read(int2 idx) const {
+            return (*this)[idx];
+        }
+        RT_DEVICE_FUNCTION void write(int2 idx, const T &value) {
+            (*this)[idx] = value;
         }
 #endif
     };
