@@ -716,7 +716,7 @@ struct Quaternion {
         float zw = z * w;
         float ww = w * w;
         *pitch = std::atan2(2 * (xw + yz), ww - xx - yy + zz); // around x
-        *yaw = std::asin(std::fmin(std::fmax(2 * (yw - xz), -1), 1)); // around y
+        *yaw = std::asin(std::fmin(std::fmax(2.0f * (yw - xz), -1.0f), 1.0f)); // around y
         *roll = std::atan2(2 * (zw + xy), ww + xx - yy - zz); // around z
     }
     CUDA_DEVICE_FUNCTION Matrix3x3 toMatrix3x3() const {
@@ -820,9 +820,15 @@ public:
 
         // If we have any repeat on, change the coordinates to their "local" repetitions.
         if (repeat > 0) {
+#if defined(__CUDA_ARCH__)
             x = fmodf(x, repeat);
             y = fmodf(y, repeat);
             z = fmodf(z, repeat);
+#else
+            x = std::fmod(x, static_cast<float>(repeat));
+            y = std::fmod(y, static_cast<float>(repeat));
+            z = std::fmod(z, static_cast<float>(repeat));
+#endif
             if (x < 0)
                 x += repeat;
             if (y < 0)
@@ -833,9 +839,15 @@ public:
 
         // Calculate the "unit cube" that the point asked will be located in.
         // The left bound is ( |_x_|,|_y_|,|_z_| ) and the right bound is that plus 1.
+#if defined(__CUDA_ARCH__)
         int32_t xi = floorf(x);
         int32_t yi = floorf(y);
         int32_t zi = floorf(z);
+#else
+        int32_t xi = static_cast<int32_t>(std::floor(x));
+        int32_t yi = static_cast<int32_t>(std::floor(y));
+        int32_t zi = static_cast<int32_t>(std::floor(z));
+#endif
 
         const auto fade = [](float t) {
             // Fade function as defined by Ken Perlin.
@@ -910,7 +922,7 @@ public:
         if (supSpecified) {
             float amplitude = 1.0f;
             float tempSupValue = 0;
-            for (int i = 0; i < m_numOctaves; ++i) {
+            for (int i = 0; i < static_cast<int32_t>(m_numOctaves); ++i) {
                 tempSupValue += amplitude;
                 amplitude *= m_persistence;
             }
@@ -921,7 +933,7 @@ public:
             m_initialAmplitude = supValueOrInitialAmplitude;
             float amplitude = m_initialAmplitude;
             m_supValue = 0;
-            for (int i = 0; i < m_numOctaves; ++i) {
+            for (int i = 0; i < static_cast<int32_t>(m_numOctaves); ++i) {
                 m_supValue += amplitude;
                 amplitude *= m_persistence;
             }
@@ -932,7 +944,7 @@ public:
         float total = 0;
         float frequency = m_initialFrequency;
         float amplitude = m_initialAmplitude;
-        for (int i = 0; i < m_numOctaves; ++i) {
+        for (int i = 0; i < static_cast<int32_t>(m_numOctaves); ++i) {
             total += m_primaryNoiseGen.evaluate(p, frequency) * amplitude;
 
             amplitude *= m_persistence;
@@ -1098,8 +1110,8 @@ void saveImage(const std::filesystem::path &filepath,
     uint32_t height = buffer.getHeight();
     auto data = new float4[width * height];
     buffer.map();
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
+    for (int y = 0; y < static_cast<int32_t>(height); ++y) {
+        for (int x = 0; x < static_cast<int32_t>(width); ++x) {
             data[y * width + x] = buffer(x, y);
         }
     }

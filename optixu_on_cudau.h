@@ -75,6 +75,7 @@ namespace optixu {
                     return u.targetType;
                 }
             }
+            return T();
         }
         RT_DEVICE_FUNCTION void write(uint2 idx, const T &value) const {
             if constexpr (isNativeType) {

@@ -2617,7 +2617,7 @@ namespace optixu {
         throwRuntimeError(noisyBeauty.isValid(), "Input noisy beauty buffer must be provided.");
         throwRuntimeError(denoisedBeauty.isValid(), "Denoised beauty buffer must be provided.");
         throwRuntimeError(numAovs == 0 || (noisyAovs && denoisedAovs), "Both of noisy/denoised AOV buffers must be provided.");
-        for (int i = 0; i < numAovs; ++i) {
+        for (uint32_t i = 0; i < numAovs; ++i) {
             throwRuntimeError(noisyAovs[i].isValid() && denoisedAovs[i].isValid(),
                               "Either of AOV %u input/output buffer is invalid.", i);
         }
@@ -2679,11 +2679,11 @@ namespace optixu {
         };
         std::vector<LayerInfo> layerInfos(1 + numAovs);
         layerInfos[0] = LayerInfo{ noisyBeauty, denoisedBeauty, previousDenoisedBeauty, beautyFormat };
-        for (int i = 0; i < numAovs; ++i)
+        for (uint32_t i = 0; i < numAovs; ++i)
             layerInfos[i + 1] = LayerInfo{ noisyAovs[i], denoisedAovs[i], previousDenoisedAovs[i], aovFormats[i] };
 
         std::vector<OptixDenoiserLayer> denoiserLayers(1 + numAovs);
-        for (int layerIdx = 0; layerIdx < 1 + numAovs; ++layerIdx) {
+        for (uint32_t layerIdx = 0; layerIdx < 1 + numAovs; ++layerIdx) {
             const LayerInfo &layerInfo = layerInfos[layerIdx];
             OptixDenoiserLayer &denoiserLayer = denoiserLayers[layerIdx];
             std::memset(&denoiserLayer, 0, sizeof(denoiserLayer));
