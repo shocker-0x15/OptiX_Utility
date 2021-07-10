@@ -181,7 +181,7 @@ namespace cudau {
         uint32_t m_sharedMemSize;
 
     public:
-        Kernel() {}
+        Kernel() : m_kernel(nullptr), m_blockDim(1), m_sharedMemSize(0) {}
         Kernel(CUmodule module, const char* name, const dim3 blockDim, uint32_t sharedMemSize) :
             m_blockDim(blockDim), m_sharedMemSize(sharedMemSize) {
             CUDADRV_CHECK(cuModuleGetFunction(&m_kernel, module, name));

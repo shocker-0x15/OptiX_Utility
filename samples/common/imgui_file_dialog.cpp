@@ -10,7 +10,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
     ImGuiStyle &style = ImGui::GetStyle();
 
     const auto getSeparatorHeightWithSpacing = [&style]() {
-        return std::fmax(1, style.ItemSpacing.y);
+        return std::fmax(1.0f, style.ItemSpacing.y);
     };
 
     Result res = Result_Undecided;
@@ -76,7 +76,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
         // ----------------------------------------------------------------
         // JP: ファイルリストの表示と選択処理。
 
-        float fileListHeight = std::fmax(ImGui::GetWindowSize().y - windowMinHeight, 0) + fileListMinHeight;
+        float fileListHeight = std::fmax(ImGui::GetWindowSize().y - windowMinHeight, 0.0f) + fileListMinHeight;
         ImGui::BeginChild("File List", ImVec2(ImGui::GetWindowContentRegionWidth(), fileListHeight));
 
         bool multiplySelected = (m_numSelectedDirs + m_numSelectedFiles) > 1;

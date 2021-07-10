@@ -193,7 +193,7 @@ namespace obj {
         triangles->clear();
         for (int mIdx = 0; mIdx < objMatGroups.size(); ++mIdx) {
             const obj::MaterialGroup &matGroup = objMatGroups[mIdx];
-            uint32_t baseIndex = triangles->size();
+            uint32_t baseIndex = static_cast<uint32_t>(triangles->size());
             triangles->resize(triangles->size() + matGroup.triangles.size());
             std::copy_n(matGroup.triangles.data(),
                         matGroup.triangles.size(),
