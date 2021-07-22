@@ -94,6 +94,7 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
+- ヒットグループのSBTのユーザーデータ配置順は逆であるべき？
 - Denoiserの事前設定は画像サイズにも依存するので、各バッファーはinvoke時ではなく事前に渡しておくべき？
 - Priv構造体がOptiXの構造体を直接持っていない場合が多々あるのがもったいない？
   => OptixBuildInputは巨大なパディングを含んでいるので好ましくない。
@@ -674,6 +675,49 @@ namespace optixu {
 
     JP: 
     EN: 
+
+
+
+    Hit Group Shader Binding Table Layout
+    | GAS 0 - MS 0 | GAS 0 - MS 1 | ... | GAS 0 - MS * | GAS 1 - MS 0 | GAS 1 - MS 1 | ...
+    GAS: Geometry Acceleration Structure
+    MS: Material Set
+   
+    Per-GAS, Per-Material Set SBT Layout
+    | GAS * - MS *                               |
+    | GeomInst 0 | GeomInst 1 | ... | GeomInst * |
+    GeomInst: Geometry Instance
+   
+    Per-Geometry Instance SBT Layout
+    | GeomInst *                                 |
+    | Material 0 | Material 1 | ... | Material * |
+   
+    Per-Material SBT Layout
+    | Material *                                 |
+    | Ray Type 0 | Ray Type 1 | ... | Ray Type * |
+    | SBT Record | SBT Record |     | SBT Record |
+   
+    SBT Record
+    <-- SBT Record Stride (Globally Common) --------------------------->
+    | Header | Material  | GeomInst  | GAS Child | GAS       | Padding |
+    |        | User Data | User Data | User Data | User Data |         |
+             ^
+             |
+             optixGetSbtDataPointer()
+   
+    JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
+        Material, GeometryInstanceのsetUserData(),
+        GeometryInstanceAccelerationStructureのsetChildUserData(), setUserData()
+        で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
+        各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGeometryInstanceに属していても
+        マテリアルが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
+    EN: Data set by each of Material, GeometryInstance's setUserData(),
+        GeometryInstanceAccelerationStructure's setChildUserData() and setUserData()
+        line up in the order (Each relative offset follows the specified alignment)
+        at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
+        Note that the start position of each data changes depending on the sizes of forward data.
+        Therefore for example, the start positions of GeometryInstance's data are possibly different
+        if materials are different even if those belong to the same GeometryInstance.
 
     */
 
