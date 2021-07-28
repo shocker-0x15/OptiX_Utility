@@ -979,6 +979,26 @@ std::string readTxtFile(const std::filesystem::path& filepath);
 
 
 
+struct MovingAverageTime {
+    float values[60];
+    uint32_t index;
+    uint32_t numValidValues;
+    MovingAverageTime() : index(0), numValidValues(0) {}
+    void append(float value) {
+        values[index] = value;
+        index = (index + 1) % lengthof(values);
+        numValidValues = std::min<uint32_t>(numValidValues + 1, lengthof(values));
+    }
+    float getAverage() const {
+        float sum = 0.0f;
+        for (int i = 0; i < numValidValues; ++i)
+            sum += values[(index - 1 - i + lengthof(values)) % lengthof(values)];
+        return numValidValues > 0 ? sum / numValidValues : 0.0f;
+    }
+};
+
+
+
 class SlotFinder {
     uint32_t m_numLayers;
     uint32_t m_numLowestFlagBins;
