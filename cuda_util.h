@@ -293,9 +293,9 @@ namespace cudau {
         CUgraphicsResource m_cudaGfxResource;
 
         struct {
-            unsigned int m_initialized : 1;
             unsigned int m_persistentMappedMemory : 1;
             unsigned int m_mapped : 1;
+            unsigned int m_initialized : 1;
         };
 
         Buffer(const Buffer &) = delete;
