@@ -97,7 +97,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     if (geom.triangleBuffer)
         triangle = geom.triangleBuffer[hp.primIndex];
     else // triangle soup
-        triangle = Triangle{ 3 * hp.primIndex + 0, 3 * hp.primIndex + 1, 3 * hp.primIndex + 2 };
+        triangle = Triangle{ 3u * hp.primIndex + 0, 3u * hp.primIndex + 1, 3u * hp.primIndex + 2 };
     const Vertex &v0 = geom.vertexBuffer[triangle.index0];
     const Vertex &v1 = geom.vertexBuffer[triangle.index1];
     const Vertex &v2 = geom.vertexBuffer[triangle.index2];
