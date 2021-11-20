@@ -29,14 +29,15 @@ struct HitPointParameter {
 //     各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGASに属していても
 //     GASの子ごとのデータサイズが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
 //     このサンプルではGASとGASの子達、Materialにはユーザーデータは設定していない。
-// EN: Data set by each of Material, GeometryInstance's setUserData(),
-//     GeometryInstanceAccelerationStructure's setChildUserData() and setUserData()
+// EN: Data set by each of
+//     GeometryInstanceAccelerationStructure's setUserData() and setChildUserData(),
+//     GeometryInstance's setUserData(), Material's setUserData()
 //     line up in the order (Each relative offset follows the specified alignment)
-//     at the position pointed by optixGetSbtDataPointer().
+//     at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
 //     Note that the start position of each data changes depending on the sizes of forward data.
-//     Therefore for example, the start positions of GeometryInstance's data are possibly different
-//     if materials are different even if those belong to the same GeometryInstance.
-//     This sample did not set user data to GAS, GAS's child and Material.
+//     Therefore for example, the start positions of GeometryInstance's data are different
+//     if data sizes of GAS children are different even if those belong to the same GAS.
+//     This sample does not set user data to GAS, GAS's child and Material.
 struct HitGroupSBTRecordData {
     GeometryData geomData;
 

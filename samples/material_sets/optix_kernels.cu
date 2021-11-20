@@ -35,9 +35,9 @@ struct HitPointParameter {
 //     line up in the order (Each relative offset follows the specified alignment)
 //     at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
 //     Note that the start position of each data changes depending on the sizes of forward data.
-//     Therefore for example, the start positions of GeometryInstance's data are possibly different
-//     if materials are different even if those belong to the same GeometryInstance.
-//     This sample did not set user data to GAS and GAS's children.
+//     Therefore for example, the start positions of GeometryInstance's data are different
+//     if data sizes of GAS children are different even if those belong to the same GAS.
+//     This sample does not set user data to GAS and GAS's children.
 struct HitGroupSBTRecordData {
     GeometryData geomData;
     MaterialData matData;
