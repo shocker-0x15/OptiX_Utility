@@ -343,7 +343,8 @@ namespace optixu {
         SizeAlign getUserDataSizeAlign() const {
             return userDataSizeAlign;
         }
-        void setRecordData(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const;
+        void setRecordHeader(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const;
+        void setRecordData(uint8_t* record, SizeAlign* curSizeAlign) const;
     };
 
 
@@ -585,10 +586,13 @@ namespace optixu {
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
-        void calcSBTRequirements(uint32_t gasMatSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+        void calcSBTRequirements(uint32_t gasMatSetIdx,
+                                 const SizeAlign &gasUserDataSizeAlign,
+                                 const SizeAlign &gasChildUserDataSizeAlign,
+                                 SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
-                                const void* gasChildUserData, const SizeAlign gasChildUserDataSizeAlign,
-                                const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
+                                const void* gasUserData, const SizeAlign &gasUserDataSizeAlign,
+                                const void* gasChildUserData, const SizeAlign &gasChildUserDataSizeAlign,
                                 uint32_t numRayTypes, uint8_t* records) const;
     };
 

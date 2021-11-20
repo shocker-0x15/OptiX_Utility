@@ -32,6 +32,12 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+  JP: OptiX 7.4.0をサポート。
+      SBTレコード中のユーザーデータの並び順が逆になった。
+  EN: Supported OptiX 7.4.0.
+      The order of user data in a SBT record has been reversed.
+
+- !!BREAKING
   JP: OptiX 7.3.0をサポート。
       InstanceAccelerationStructure::setConfiguration()が一つ多くの引数を受け取るようになった。
       Denoiserの入出力レイヤーをinvoke(), computeIntensity()に直接渡すように変更。setLayers()を削除。
@@ -765,25 +771,26 @@ namespace optixu {
    
     SBT Record
     <-- SBT Record Stride (Globally Common) --------------------------->
-    | Header | Material  | GeomInst  | GAS Child | GAS       | Padding |
+    | Header | GAS       | GAS Child | GeomInst  | Material  | Padding |
     |        | User Data | User Data | User Data | User Data |         |
              ^
              |
              optixGetSbtDataPointer()
    
     JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
-        Material, GeometryInstanceのsetUserData(),
-        GeometryInstanceAccelerationStructureのsetChildUserData(), setUserData()
+        GeometryInstanceAccelerationStructureのsetUserData(), setChildUserData(),
+        GeometryInstanceのsetUserData(), MaterialのsetUserData()
         で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
-        各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGeometryInstanceに属していても
-        マテリアルが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
-    EN: Data set by each of Material, GeometryInstance's setUserData(),
-        GeometryInstanceAccelerationStructure's setChildUserData() and setUserData()
+        各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGASに属していても
+        GASの子ごとのデータサイズが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
+    EN: Data set by each of
+        GeometryInstanceAccelerationStructure's setUserData() and setChildUserData(),
+        GeometryInstance's setUserData(), Material's setUserData()
         line up in the order (Each relative offset follows the specified alignment)
         at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
         Note that the start position of each data changes depending on the sizes of forward data.
-        Therefore for example, the start positions of GeometryInstance's data are possibly different
-        if materials are different even if those belong to the same GeometryInstance.
+        Therefore for example, the start positions of GeometryInstance's data are different
+        if data sizes of GAS children are different even if those belong to the same GAS.
 
     */
 

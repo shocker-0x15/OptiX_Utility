@@ -35,8 +35,8 @@ CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
 #endif
 
 struct HitGroupSBTRecordData {
-    uint32_t materialIndex;
     uint32_t geomInstIndex;
+    uint32_t materialIndex;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());

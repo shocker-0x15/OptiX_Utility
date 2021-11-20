@@ -36,10 +36,10 @@ struct HitPointParameter {
 //     Therefore for example, the start positions of GeometryInstance's data are possibly different
 //     if materials are different even if those belong to the same GeometryInstance.
 struct HitGroupSBTRecordData {
-    MaterialData matData;
-    GeometryData geomData;
-    GASChildData gasChildData;
     GASData gasData;
+    GASChildData gasChildData;
+    GeometryData geomData;
+    MaterialData matData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());

@@ -92,13 +92,16 @@ namespace optixu {
 
 
 
-    void Material::Priv::setRecordData(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const {
+    void Material::Priv::setRecordHeader(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const {
         Key key{ pipeline, rayType };
         throwRuntimeError(programs.count(key), "No hit group is set to the pipeline %s, ray type %u",
                           pipeline->getName().c_str(), rayType);
         const _ProgramGroup* hitGroup = programs.at(key);
         *curSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
         hitGroup->packHeader(record);
+    }
+
+    void Material::Priv::setRecordData(uint8_t* record, SizeAlign* curSizeAlign) const {
         uint32_t offset;
         curSizeAlign->add(userDataSizeAlign, &offset);
         std::memcpy(record + offset, userData.data(), userDataSizeAlign.size);
@@ -513,7 +516,10 @@ namespace optixu {
         }
     }
 
-    void GeometryInstance::Priv::calcSBTRequirements(uint32_t gasMatSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const {
+    void GeometryInstance::Priv::calcSBTRequirements(uint32_t gasMatSetIdx,
+                                                     const SizeAlign &gasUserDataSizeAlign,
+                                                     const SizeAlign &gasChildUserDataSizeAlign,
+                                                     SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const {
         *maxRecordSizeAlign = SizeAlign();
         for (int matIdx = 0; matIdx < materials.size(); ++matIdx) {
             throwRuntimeError(materials[matIdx][0], "Default material (== material set 0) is not set for the slot %u.", matIdx);
@@ -522,6 +528,8 @@ namespace optixu {
             if (!mat)
                 mat = materials[matIdx][0];
             SizeAlign recordSizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
+            recordSizeAlign += gasUserDataSizeAlign;
+            recordSizeAlign += gasChildUserDataSizeAlign;
             recordSizeAlign += mat->getUserDataSizeAlign();
             *maxRecordSizeAlign = max(*maxRecordSizeAlign, recordSizeAlign);
         }
@@ -530,8 +538,8 @@ namespace optixu {
     }
 
     uint32_t GeometryInstance::Priv::fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
-                                                    const void* gasChildUserData, const SizeAlign gasChildUserDataSizeAlign,
-                                                    const void* gasUserData, const SizeAlign gasUserDataSizeAlign,
+                                                    const void* gasUserData, const SizeAlign &gasUserDataSizeAlign,
+                                                    const void* gasChildUserData, const SizeAlign &gasChildUserDataSizeAlign,
                                                     uint32_t numRayTypes, uint8_t* records) const {
         uint32_t numMaterials = static_cast<uint32_t>(materials.size());
         for (uint32_t matIdx = 0; matIdx < numMaterials; ++matIdx) {
@@ -542,14 +550,15 @@ namespace optixu {
                 mat = materials[matIdx][0];
             for (uint32_t rIdx = 0; rIdx < numRayTypes; ++rIdx) {
                 SizeAlign curSizeAlign;
-                mat->setRecordData(pipeline, rIdx, records, &curSizeAlign);
+                mat->setRecordHeader(pipeline, rIdx, records, &curSizeAlign);
                 uint32_t offset;
-                curSizeAlign.add(userDataSizeAlign, &offset);
-                std::memcpy(records + offset, userData.data(), userDataSizeAlign.size);
-                curSizeAlign.add(gasChildUserDataSizeAlign, &offset);
-                std::memcpy(records + offset, gasChildUserData, gasChildUserDataSizeAlign.size);
                 curSizeAlign.add(gasUserDataSizeAlign, &offset);
                 std::memcpy(records + offset, gasUserData, gasUserDataSizeAlign.size);
+                curSizeAlign.add(gasChildUserDataSizeAlign, &offset);
+                std::memcpy(records + offset, gasChildUserData, gasChildUserDataSizeAlign.size);
+                curSizeAlign.add(userDataSizeAlign, &offset);
+                std::memcpy(records + offset, userData.data(), userDataSizeAlign.size);
+                mat->setRecordData(records, &curSizeAlign);
                 records += scene->getSingleRecordSize();
             }
         }
@@ -845,7 +854,10 @@ namespace optixu {
         for (const Child &child : children) {
             SizeAlign geomInstRecordSizeAlign;
             uint32_t geomInstNumSBTRecords;
-            child.geomInst->calcSBTRequirements(matSetIdx, &geomInstRecordSizeAlign, &geomInstNumSBTRecords);
+            child.geomInst->calcSBTRequirements(matSetIdx,
+                                                userDataSizeAlign,
+                                                child.userDataSizeAlign,
+                                                &geomInstRecordSizeAlign, &geomInstNumSBTRecords);
             geomInstRecordSizeAlign += child.userDataSizeAlign;
             *maxRecordSizeAlign = max(*maxRecordSizeAlign, geomInstRecordSizeAlign);
             *numSBTRecords += geomInstNumSBTRecords;
@@ -864,8 +876,8 @@ namespace optixu {
         for (uint32_t sbtGasIdx = 0; sbtGasIdx < children.size(); ++sbtGasIdx) {
             const Child &child = children[sbtGasIdx];
             uint32_t numRecords = child.geomInst->fillSBTRecords(pipeline, matSetIdx,
-                                                                 child.userData.data(), child.userDataSizeAlign,
                                                                  userData.data(), userDataSizeAlign,
+                                                                 child.userData.data(), child.userDataSizeAlign,
                                                                  numRayTypes, records);
             records += numRecords * scene->getSingleRecordSize();
             sumRecords += numRecords;
