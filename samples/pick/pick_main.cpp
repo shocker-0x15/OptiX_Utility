@@ -356,8 +356,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const std::string ptx = readTxtFile(getExecutableDirectory() / "pick/ptxes/pick_kernels.ptx");
         p.module = optixPipeline.createModuleFromPTXString(
             ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-            OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
         p.rayGenPrograms["perspective"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("perspectiveRaygen"));
         p.rayGenPrograms["equirectangular"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("equirectangularRaygen"));
@@ -399,8 +399,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const std::string ptx = readTxtFile(getExecutableDirectory() / "pick/ptxes/render_kernels.ptx");
         p.module = optixPipeline.createModuleFromPTXString(
             ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-            OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
         p.rayGenPrograms["perspective"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("perspectiveRaygen"));
         p.rayGenPrograms["equirectangular"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("equirectangularRaygen"));

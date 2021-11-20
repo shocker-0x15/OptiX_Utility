@@ -271,6 +271,9 @@ namespace optixu {
 #define optixuAssert_NotImplemented() optixuAssert(false, "Not implemented yet!")
 
     namespace detail {
+        static constexpr uint32_t maxNumPayloadsInDwords = 32;
+#define OPTIXU_STR_MAX_NUM_PAYLOADS "32"
+
         template <typename T>
         RT_DEVICE_FUNCTION constexpr size_t getNumDwords() {
             return (sizeof(T) + 3) / 4;
@@ -338,6 +341,30 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
+        /*
+        make_index_sequence<0>: 空の I... で make_index_sequence の特殊化が呼ばれ、
+                                空の I... に対する index_sequence が作られる。
+        make_index_sequence<1>: make_index_sequence<0, 0> が呼ばれる。
+                                I... = 0 に対する index_sequence が作られる。
+        make_index_sequence<2>: make_index_sequence<1, 1> が呼ばれる。
+                                make_index_sequence<0, 0, 1> が呼ばれる。
+                                I... = 0, 1 に対する index_sequence が作られる。
+        make_index_sequence<3>: make_index_sequence<2, 2> が呼ばれる。
+                                make_index_sequence<1, 1, 2> が呼ばれる。
+                                make_index_sequence<0, 0, 1, 2> が呼ばれる。
+                                I... = 0, 1, 2 に対する index_sequence が作られる。
+        ...
+        */
+
+        template <size_t... I>
+        struct index_sequence {};
+
+        template <size_t N, size_t... I>
+        struct make_index_sequence : make_index_sequence<N - 1, N - 1, I...> {};
+
+        template <size_t... I>
+        struct make_index_sequence<0, I...> : index_sequence<I...> {};
+
         template <uint32_t start, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION void packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
             static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
@@ -398,46 +425,98 @@ namespace optixu {
                 traceSetPayloads<startSlot + numDwords>(p, tailPayloads...);
         }
 
+        template <size_t... I>
+        RT_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
+                                      const float3 &origin, const float3 &direction,
+                                      float tmin, float tmax, float rayTime,
+                                      OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
+                                      uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
+                                      uint32_t** payloads,
+                                      index_sequence<I...>) {
+            optixTrace(handle,
+                       origin, direction,
+                       tmin, tmax, rayTime,
+                       visibilityMask, rayFlags,
+                       SBToffset, SBTstride, missSBTIndex,
+                       *payloads[I]...);
+        }
+
         struct PayloadFunc {
             template <uint32_t index>
             RT_DEVICE_FUNCTION static uint32_t get() {
-                if constexpr (index == 0)
-                    return optixGetPayload_0();
-                if constexpr (index == 1)
-                    return optixGetPayload_1();
-                if constexpr (index == 2)
-                    return optixGetPayload_2();
-                if constexpr (index == 3)
-                    return optixGetPayload_3();
-                if constexpr (index == 4)
-                    return optixGetPayload_4();
-                if constexpr (index == 5)
-                    return optixGetPayload_5();
-                if constexpr (index == 6)
-                    return optixGetPayload_6();
-                if constexpr (index == 7)
-                    return optixGetPayload_7();
+#define OPTIXU_INTRINSIC_GET_PAYLOAD(Index) if constexpr (index == Index) return optixGetPayload_##Index()
+                OPTIXU_INTRINSIC_GET_PAYLOAD(0);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(1);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(2);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(3);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(4);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(5);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(6);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(7);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(8);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(9);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(10);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(11);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(12);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(13);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(14);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(15);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(16);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(17);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(18);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(19);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(20);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(21);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(22);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(23);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(24);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(25);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(26);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(27);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(28);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(29);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(30);
+                OPTIXU_INTRINSIC_GET_PAYLOAD(31);
+#undef OPTIXU_INTRINSIC_GET_PAYLOAD
                 return 0;
             }
 
             template <uint32_t index>
             RT_DEVICE_FUNCTION static void set(uint32_t p) {
-                if constexpr (index == 0)
-                    optixSetPayload_0(p);
-                if constexpr (index == 1)
-                    optixSetPayload_1(p);
-                if constexpr (index == 2)
-                    optixSetPayload_2(p);
-                if constexpr (index == 3)
-                    optixSetPayload_3(p);
-                if constexpr (index == 4)
-                    optixSetPayload_4(p);
-                if constexpr (index == 5)
-                    optixSetPayload_5(p);
-                if constexpr (index == 6)
-                    optixSetPayload_6(p);
-                if constexpr (index == 7)
-                    optixSetPayload_7(p);
+#define OPTIXU_INTRINSIC_SET_PAYLOAD(Index) if constexpr (index == Index) optixSetPayload_ ##Index(p)
+                OPTIXU_INTRINSIC_SET_PAYLOAD(0);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(1);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(2);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(3);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(4);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(5);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(6);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(7);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(8);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(9);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(10);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(11);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(12);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(13);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(14);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(15);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(16);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(17);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(18);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(19);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(20);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(21);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(22);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(23);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(24);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(25);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(26);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(27);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(28);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(29);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(30);
+                OPTIXU_INTRINSIC_SET_PAYLOAD(31);
+#undef OPTIXU_INTRINSIC_SET_PAYLOAD
             }
         };
 
@@ -501,40 +580,25 @@ namespace optixu {
                                   uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
                                   PayloadTypes &... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
-        static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
-
-#define OPTIXU_TRACE_ARGUMENTS \
-    handle, \
-    origin, direction, \
-    tmin, tmax, rayTime, \
-    visibilityMask, rayFlags, \
-    SBToffset, SBTstride, missSBTIndex
-
+        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " dwords.");
         if constexpr (numDwords == 0) {
-            optixTrace(OPTIXU_TRACE_ARGUMENTS);
+            optixTrace(handle,
+                       origin, direction,
+                       tmin, tmax, rayTime,
+                       visibilityMask, rayFlags,
+                       SBToffset, SBTstride, missSBTIndex);
         }
         else {
             uint32_t* p[numDwords];
             detail::traceSetPayloads<0>(p, payloads...);
-
-            if constexpr (numDwords == 1)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0]);
-            if constexpr (numDwords == 2)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1]);
-            if constexpr (numDwords == 3)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2]);
-            if constexpr (numDwords == 4)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3]);
-            if constexpr (numDwords == 5)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4]);
-            if constexpr (numDwords == 6)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5]);
-            if constexpr (numDwords == 7)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6]);
-            if constexpr (numDwords == 8)
-                optixTrace(OPTIXU_TRACE_ARGUMENTS, *p[0], *p[1], *p[2], *p[3], *p[4], *p[5], *p[6], *p[7]);
+            detail::trace(handle,
+                          origin, direction,
+                          tmin, tmax, rayTime,
+                          visibilityMask, rayFlags,
+                          SBToffset, SBTstride, missSBTIndex,
+                          p, detail::make_index_sequence<numDwords>{});
         }
-#undef OPTIXU_TRACE_ARGUMENTS
     }
 
 
@@ -542,7 +606,8 @@ namespace optixu {
     template <typename... PayloadTypes>
     RT_DEVICE_FUNCTION void getPayloads(PayloadTypes*... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
-        static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
+        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " dwords.");
         static_assert(numDwords > 0, "Calling this function without payloads has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::PayloadFunc, 0>(payloads...);
@@ -551,7 +616,8 @@ namespace optixu {
     template <typename... PayloadTypes>
     RT_DEVICE_FUNCTION void setPayloads(const PayloadTypes*... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
-        static_assert(numDwords <= 8, "Maximum number of payloads is 8 dwords.");
+        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " dwords.");
         static_assert(numDwords > 0, "Calling this function without payloads has no effect.");
         if constexpr (numDwords > 0)
             detail::setValues<detail::PayloadFunc, 0>(payloads...);
