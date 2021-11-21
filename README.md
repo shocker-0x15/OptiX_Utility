@@ -13,35 +13,37 @@ The purpose of this OptiX Utility is to provide classes and functions which enca
 ## 機能 / Features
 Currently based on OptiX 7.4.0
 - Traversable types
-  - [x] Single GAS
-  - [x] Single-level instancing
-  - [x] Multi-level instancing
+  - Single GAS
+  - Single-level instancing
+  - Multi-level instancing
 - Primitive types
-  - [x] Triangles
-  - [x] Curves (Linear Segments, Quadratic, Cubic B-Splines, Catmull-Rom Splines)
-  - [x] User-defined custom primitives
+  - Triangles
+  - Curves (Linear Segments, Quadratic, Cubic B-Splines, Catmull-Rom Splines)
+  - User-defined custom primitives
 - Motion blur types
-  - [x] Instance motion blur
-  - [x] Deformation blur
+  - Instance motion blur
+  - Deformation blur
 - Acceleration structure management
-  - [x] Full build
-  - [x] Fast update
-  - [x] Compaction
-  - [ ] Relocation
+  - Full build
+  - Fast update
+  - Compaction
 - Shader binding table management
   - Automatic build
   - Memory management is still under user control
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX AI denoiser
-  - [x] LDR/HDR
-  - [x] Temporal
-  - [x] AOV
-  - [ ] Temporal AOV
-  - [ ] User
+  - LDR/HDR
+  - Temporal
+  - AOV
 - Automatic payload/attribute value packing in kernel code
-- [ ] Payload annotations
-- [ ] Multi-GPU
+
+### TODO
+- AS Relocation
+- Temporal AOV Denoiser
+- Denoiser with User-provided Model
+- Payload annotations
+- Multi-GPU
 
 ## 構成要素 / Components
 - **optix_util.h, optix_util_private.h, optix_util.cpp**\
@@ -84,12 +86,10 @@ optixu::Module mainModule = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPIL
 optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
 optixu::ProgramGroup searchRayHitProgramGroup =
-    pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    pipeline.createHitProgramGroupForTriangleIS(
         mainModule, RT_CH_NAME_STR("shading"), emptyModule, nullptr);
 optixu::ProgramGroup visibilityRayHitProgramGroup =
-    pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr, mainModule, RT_AH_NAME_STR("visibility"));
 // ...
 pipeline.link(2, OPTIX_COMPILE_DEBUG_LEVEL_FULL);
