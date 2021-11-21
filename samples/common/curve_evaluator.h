@@ -236,7 +236,6 @@ namespace curve {
         }
     };
 
-    // TODO: implement a proper code for Catmull-Rom.
     template <>
     struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM> {
         float4 m_p[4];

@@ -39,6 +39,7 @@ Currently based on OptiX 7.4.0
 - Automatic payload/attribute value packing in kernel code
 
 ### TODO
+- Parallel Module Compilation
 - AS Relocation
 - Temporal AOV Denoiser
 - Denoiser with User-provided Model
