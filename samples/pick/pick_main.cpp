@@ -364,8 +364,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         p.missProgram = optixPipeline.createMissProgram(p.module, RT_MS_NAME_STR("miss"));
 
-        p.hitProgramGroup = optixPipeline.createHitProgramGroupForBuiltinIS(
-            OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        p.hitProgramGroup = optixPipeline.createHitProgramGroupForTriangleIS(
             p.module, RT_CH_NAME_STR("closesthit"),
             emptyModule, nullptr);
 
@@ -407,8 +406,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         p.missProgram = optixPipeline.createMissProgram(p.module, RT_MS_NAME_STR("miss"));
 
-        p.hitProgramGroup = optixPipeline.createHitProgramGroupForBuiltinIS(
-            OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        p.hitProgramGroup = optixPipeline.createHitProgramGroupForTriangleIS(
             p.module, RT_CH_NAME_STR("closesthit"),
             emptyModule, nullptr);
 

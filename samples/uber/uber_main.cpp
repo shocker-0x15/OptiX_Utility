@@ -471,19 +471,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("searchRay"));
     optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE, moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE, moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
+    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
-    optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
+    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
@@ -969,6 +973,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             floorFiberVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
             floorFiberVertexBuffer.numElements(), floorFiberVertexBuffer.stride()));
         floorFiberGeomInst.setSegmentIndexBuffer(floorFiberSegmentIndexBuffer);
+        floorFiberGeomInst.setCurveEndcapFlags(curveEndcap);
         floorFiberGeomInst.setMaterial(0, 0, matFloorFiber);
         floorFiberGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         floorFiberGeomInst.setUserData(sceneContext.geometryID);

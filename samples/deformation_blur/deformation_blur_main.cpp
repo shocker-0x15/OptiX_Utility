@@ -60,13 +60,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
-    optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE,
+    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
@@ -325,6 +325,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                    buffer.numElements(), sizeof(Shared::CurveVertex)), i);
         }
         curves.optixGeomInst.setSegmentIndexBuffer(shape.segmentIndexBuffer);
+        curves.optixGeomInst.setCurveEndcapFlags(curveEndcap);
         curves.optixGeomInst.setMaterial(0, 0, matForCurves);
         curves.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         curves.optixGeomInst.setUserData(geomData);

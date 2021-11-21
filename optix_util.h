@@ -32,58 +32,64 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
-  JP: OptiX 7.4.0をサポート。
-      SBTレコード中のユーザーデータの並び順が逆になった。
-  EN: Supported OptiX 7.4.0.
-      The order of user data in a SBT record has been reversed.
+  JP: - OptiX 7.4.0をサポート。
+      - SBTレコード中のユーザーデータの並び順が逆になった。
+        !! ユーザーのOptiXカーネルを少し修正する必要があります。
+      - 三角形プリミティブ、カーブプリミティブ用のヒットグループ作成をそれぞれ
+        createHitProgramGroupForTriangleIS()とcreateHitProgramGroupForCurveIS()で行うように変更。
+  EN: - Supported OptiX 7.4.0.
+      - The order of user data in a SBT record has been reversed.
+        !! User's OptiX kernels need to be modified a bit.
+      - Changed hit group creation of triangle and curve primitives to use
+        createHitProgramGroupForTriangleIS() and createHitProgramGroupForCurveIS() respectively.
 
 - !!BREAKING
-  JP: OptiX 7.3.0をサポート。
-      InstanceAccelerationStructure::setConfiguration()が一つ多くの引数を受け取るようになった。
-      Denoiserの入出力レイヤーをinvoke(), computeIntensity()に直接渡すように変更。setLayers()を削除。
-  EN: Supported OptiX 7.3.0.
-      InstanceAccelerationStructure::setConfiguration() takes one more additional argument.
-      Changed Denoiser's invoke(), computeIntensisty() to directly take input/output layers.
-      Removed setLayers().
+  JP: - OptiX 7.3.0をサポート。
+      - InstanceAccelerationStructure::setConfiguration()が一つ多くの引数を受け取るようになった。
+      - Denoiserの入出力レイヤーをinvoke(), computeIntensity()に直接渡すように変更。setLayers()を削除。
+  EN: - Supported OptiX 7.3.0.
+      - InstanceAccelerationStructure::setConfiguration() takes one more additional argument.
+      - Changed Denoiser's invoke(), computeIntensisty() to directly take input/output layers.
+        Removed setLayers().
 
 - !!BREAKING
-  JP: カーブプリミティブをサポート。
-      ヒットグループを生成する関数を変更。三角形とカーブに関してはcreateHitProgramGroupForBuiltinIS()を、
-      カスタムプリミティブに関してはcreateHitProgramGroupForCustomIS()を使用してください。
-  EN: Added support for curve primitives.
-      Changed the function to create a hit group. Use createHitProgramGroupForBuiltinIS() for triangles and
-      curves and createHitProgramGroupForCustomIS() for custom primitives.
+  JP: - カーブプリミティブをサポート。
+      - ヒットグループを生成する関数を変更。三角形とカーブに関してはcreateHitProgramGroupForBuiltinIS()を、
+        カスタムプリミティブに関してはcreateHitProgramGroupForCustomIS()を使用してください。
+  EN: - Added support for curve primitives.
+      - Changed the function to create a hit group. Use createHitProgramGroupForBuiltinIS() for triangles and
+        curves and createHitProgramGroupForCustomIS() for custom primitives.
 
 - !!BREAKING
-  JP: GeometryInstanceとGASをSceneから生成する関数の引数の型をenumに変更。
-  EN: Changed the type of argument of the functions to create a GeometryInstance or a GAS from a Scene to enum.
+  JP: - GeometryInstanceとGASをSceneから生成する関数の引数の型をenumに変更。
+  EN: - Changed the type of argument of the functions to create a GeometryInstance or a GAS from a Scene to enum.
 
 - !!BREAKING
-  JP: GAS/IASのremoveChild()を削除。代わりにremoveChildAt()を定義。
-      GAS/IAS::findChildIndex()を使用すれば目的の子のインデックスを特定できる。
-      また、GAS/IAS::clearChildren()を定義。
-  EN: Removed GAS/IAS's removeChild(), instead defined removeChildAt().
-      Use GAS/IAS::findChildIndex() to identify the index of the target child.
-      Also, defined GAS/IAS::clearChildren().
+  JP: - GAS/IASのremoveChild()を削除。代わりにremoveChildAt()を定義。
+        GAS/IAS::findChildIndex()を使用すれば目的の子のインデックスを特定できる。
+      - また、GAS/IAS::clearChildren()を定義。
+  EN: - Removed GAS/IAS's removeChild(), instead defined removeChildAt().
+        Use GAS/IAS::findChildIndex() to identify the index of the target child.
+      - Also, defined GAS/IAS::clearChildren().
 
-- JP: GASの子ごとのユーザーデータを設定するAPIを追加。
-  EN: Added APIs to set per-GAS child user data.
+- JP: - GASの子ごとのユーザーデータを設定するAPIを追加。
+  EN: - Added APIs to set per-GAS child user data.
 
-- JP: 各種パラメターを取得するためのAPIを追加。
-  EN: Added APIs to get parameters.
+- JP: - 各種パラメターを取得するためのAPIを追加。
+  EN: - Added APIs to get parameters.
 
-- JP: マテリアルのユーザーデータのサイズやアラインメントを、シェーダーバインディングテーブルレイアウト生成後に
-      変更した場合にレイアウトを手動で無効化するためのScene::markShaderBindingTableLayoutDirty()を追加。
-      併せてScene::shaderBindingTableLayoutIsReady()も追加。
-  EN: Added Scene::markShaderBindingTableLayoutDirty() to manually invalidate the layout of shader binding table
-      for the case changing the size and/or alignment of a material's user data after generating the layout.
-      Added Scene::shaderBindingTableLayoutIsReady() as well.
+- JP: - マテリアルのユーザーデータのサイズやアラインメントを、シェーダーバインディングテーブルレイアウト生成後に
+        変更した場合にレイアウトを手動で無効化するためのScene::markShaderBindingTableLayoutDirty()を追加。
+      - 併せてScene::shaderBindingTableLayoutIsReady()も追加。
+  EN: - Added Scene::markShaderBindingTableLayoutDirty() to manually invalidate the layout of shader binding table
+        for the case changing the size and/or alignment of a material's user data after generating the layout.
+      - Added Scene::shaderBindingTableLayoutIsReady() as well.
 
 - !!BREAKING
-  JP: InstanceAccelerationStructure::prepareForBuild()が引数でインスタンス数を返さないように変更。
-      InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
-  EN: Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
-      Use InstanceAccelerationStructure::getNumChildren() instead.
+  JP: - InstanceAccelerationStructure::prepareForBuild()が引数でインスタンス数を返さないように変更。
+        InstanceAccelerationStructure::getNumChildren()を代わりに使用してください。
+  EN: - Changed InstanceAccelerationStructure::prepareForBuild() not to return the number of instances as an argument.
+        Use InstanceAccelerationStructure::getNumChildren() instead.
 
 ----------------------------------------------------------------
 TODO:
@@ -100,7 +106,6 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
-- ヒットグループのSBTのユーザーデータ配置順は逆であるべき？
 - Denoiserの事前設定は画像サイズにも依存するので、各バッファーはinvoke時ではなく事前に渡しておくべき？
 - Priv構造体がOptiXの構造体を直接持っていない場合が多々あるのがもったいない？
   => OptixBuildInputは巨大なパディングを含んでいるので好ましくない。
@@ -347,30 +352,6 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
-        /*
-        make_index_sequence<0>: 空の I... で make_index_sequence の特殊化が呼ばれ、
-                                空の I... に対する index_sequence が作られる。
-        make_index_sequence<1>: make_index_sequence<0, 0> が呼ばれる。
-                                I... = 0 に対する index_sequence が作られる。
-        make_index_sequence<2>: make_index_sequence<1, 1> が呼ばれる。
-                                make_index_sequence<0, 0, 1> が呼ばれる。
-                                I... = 0, 1 に対する index_sequence が作られる。
-        make_index_sequence<3>: make_index_sequence<2, 2> が呼ばれる。
-                                make_index_sequence<1, 1, 2> が呼ばれる。
-                                make_index_sequence<0, 0, 1, 2> が呼ばれる。
-                                I... = 0, 1, 2 に対する index_sequence が作られる。
-        ...
-        */
-
-        template <size_t... I>
-        struct index_sequence {};
-
-        template <size_t N, size_t... I>
-        struct make_index_sequence : make_index_sequence<N - 1, N - 1, I...> {};
-
-        template <size_t... I>
-        struct make_index_sequence<0, I...> : index_sequence<I...> {};
-
         template <uint32_t start, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION void packToUInts(uint32_t* v, const HeadType &head, const TailTypes &... tails) {
             static_assert(sizeof(HeadType) % sizeof(uint32_t) == 0,
@@ -438,7 +419,7 @@ namespace optixu {
                                       OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
                                       uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
                                       uint32_t** payloads,
-                                      index_sequence<I...>) {
+                                      std::index_sequence<I...>) {
             optixTrace(handle,
                        origin, direction,
                        tmin, tmax, rayTime,
@@ -447,10 +428,23 @@ namespace optixu {
                        *payloads[I]...);
         }
 
+        template <size_t... I>
+        RT_DEVICE_FUNCTION void reportIntersection(float hitT, uint32_t hitKind, const uint32_t* attributes,
+                                                   std::index_sequence<I...>) {
+            optixReportIntersection(hitT, hitKind, attributes[I]...);
+        }
+
+        template <size_t... I>
+        RT_DEVICE_FUNCTION void throwException(int32_t exceptionCode, const uint32_t* exDetails,
+                                               std::index_sequence<I...>) {
+            optixThrowException(exceptionCode, exDetails[I]...);
+        }
+
         struct PayloadFunc {
             template <uint32_t index>
             RT_DEVICE_FUNCTION static uint32_t get() {
-#define OPTIXU_INTRINSIC_GET_PAYLOAD(Index) if constexpr (index == Index) return optixGetPayload_##Index()
+#define OPTIXU_INTRINSIC_GET_PAYLOAD(Index) \
+    if constexpr (index == Index) return optixGetPayload_##Index()
                 OPTIXU_INTRINSIC_GET_PAYLOAD(0);
                 OPTIXU_INTRINSIC_GET_PAYLOAD(1);
                 OPTIXU_INTRINSIC_GET_PAYLOAD(2);
@@ -489,7 +483,8 @@ namespace optixu {
 
             template <uint32_t index>
             RT_DEVICE_FUNCTION static void set(uint32_t p) {
-#define OPTIXU_INTRINSIC_SET_PAYLOAD(Index) if constexpr (index == Index) optixSetPayload_ ##Index(p)
+#define OPTIXU_INTRINSIC_SET_PAYLOAD(Index) \
+    if constexpr (index == Index) optixSetPayload_ ##Index(p)
                 OPTIXU_INTRINSIC_SET_PAYLOAD(0);
                 OPTIXU_INTRINSIC_SET_PAYLOAD(1);
                 OPTIXU_INTRINSIC_SET_PAYLOAD(2);
@@ -529,22 +524,17 @@ namespace optixu {
         struct AttributeFunc {
             template <uint32_t index>
             RT_DEVICE_FUNCTION static uint32_t get() {
-                if constexpr (index == 0)
-                    return optixGetAttribute_0();
-                if constexpr (index == 1)
-                    return optixGetAttribute_1();
-                if constexpr (index == 2)
-                    return optixGetAttribute_2();
-                if constexpr (index == 3)
-                    return optixGetAttribute_3();
-                if constexpr (index == 4)
-                    return optixGetAttribute_4();
-                if constexpr (index == 5)
-                    return optixGetAttribute_5();
-                if constexpr (index == 6)
-                    return optixGetAttribute_6();
-                if constexpr (index == 7)
-                    return optixGetAttribute_7();
+#define OPTIXU_INTRINSIC_GET_ATTRIBUTE(Index) \
+    if constexpr (index == Index) return optixGetAttribute_##Index()
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(0);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(1);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(2);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(3);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(4);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(5);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(6);
+                OPTIXU_INTRINSIC_GET_ATTRIBUTE(7);
+#undef OPTIXU_INTRINSIC_GET_ATTRIBUTE
                 return 0;
             }
         };
@@ -552,22 +542,17 @@ namespace optixu {
         struct ExceptionDetailFunc {
             template <uint32_t index>
             RT_DEVICE_FUNCTION static uint32_t get() {
-                if constexpr (index == 0)
-                    return optixGetExceptionDetail_0();
-                if constexpr (index == 1)
-                    return optixGetExceptionDetail_1();
-                if constexpr (index == 2)
-                    return optixGetExceptionDetail_2();
-                if constexpr (index == 3)
-                    return optixGetExceptionDetail_3();
-                if constexpr (index == 4)
-                    return optixGetExceptionDetail_4();
-                if constexpr (index == 5)
-                    return optixGetExceptionDetail_5();
-                if constexpr (index == 6)
-                    return optixGetExceptionDetail_6();
-                if constexpr (index == 7)
-                    return optixGetExceptionDetail_7();
+#define OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(Index) \
+    if constexpr (index == Index) return optixGetExceptionDetail_##Index()
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(0);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(1);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(2);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(3);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(4);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(5);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(6);
+                OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL(7);
+#undef OPTIXU_INTRINSIC_GET_EXCEPTION_DETAIL
                 return 0;
             }
         };
@@ -587,7 +572,7 @@ namespace optixu {
                                   PayloadTypes &... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= detail::maxNumPayloadsInDwords,
-                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " dwords.");
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         if constexpr (numDwords == 0) {
             optixTrace(handle,
                        origin, direction,
@@ -603,7 +588,7 @@ namespace optixu {
                           tmin, tmax, rayTime,
                           visibilityMask, rayFlags,
                           SBToffset, SBTstride, missSBTIndex,
-                          p, detail::make_index_sequence<numDwords>{});
+                          p, std::make_index_sequence<numDwords>{});
         }
     }
 
@@ -613,7 +598,7 @@ namespace optixu {
     RT_DEVICE_FUNCTION void getPayloads(PayloadTypes*... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= detail::maxNumPayloadsInDwords,
-                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " dwords.");
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         static_assert(numDwords > 0, "Calling this function without payloads has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::PayloadFunc, 0>(payloads...);
@@ -623,7 +608,7 @@ namespace optixu {
     RT_DEVICE_FUNCTION void setPayloads(const PayloadTypes*... payloads) {
         constexpr size_t numDwords = detail::calcSumDwords<PayloadTypes...>();
         static_assert(numDwords <= detail::maxNumPayloadsInDwords,
-                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " dwords.");
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         static_assert(numDwords > 0, "Calling this function without payloads has no effect.");
         if constexpr (numDwords > 0)
             detail::setValues<detail::PayloadFunc, 0>(payloads...);
@@ -642,23 +627,7 @@ namespace optixu {
         else {
             uint32_t a[numDwords];
             detail::packToUInts<0>(a, attributes...);
-
-            if constexpr (numDwords == 1)
-                optixReportIntersection(hitT, hitKind, a[0]);
-            if constexpr (numDwords == 2)
-                optixReportIntersection(hitT, hitKind, a[0], a[1]);
-            if constexpr (numDwords == 3)
-                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2]);
-            if constexpr (numDwords == 4)
-                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3]);
-            if constexpr (numDwords == 5)
-                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4]);
-            if constexpr (numDwords == 6)
-                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5]);
-            if constexpr (numDwords == 7)
-                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
-            if constexpr (numDwords == 8)
-                optixReportIntersection(hitT, hitKind, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+            detail::reportIntersection(hitT, hitKind, a, std::make_index_sequence<numDwords>{});
         }
     }
 
@@ -684,23 +653,7 @@ namespace optixu {
         else {
             uint32_t ed[numDwords];
             detail::packToUInts<0>(ed, exceptionDetails...);
-
-            if constexpr (numDwords == 1)
-                optixThrowException(exceptionCode, ed[0]);
-            if constexpr (numDwords == 2)
-                optixThrowException(exceptionCode, ed[0], ed[1]);
-            if constexpr (numDwords == 3)
-                optixThrowException(exceptionCode, ed[0], ed[1], ed[2]);
-            if constexpr (numDwords == 4)
-                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3]);
-            if constexpr (numDwords == 5)
-                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4]);
-            if constexpr (numDwords == 6)
-                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4], ed[5]);
-            if constexpr (numDwords == 7)
-                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4], ed[5], ed[6]);
-            if constexpr (numDwords == 8)
-                optixThrowException(exceptionCode, ed[0], ed[1], ed[2], ed[3], ed[4], ed[5], ed[6], ed[7]);
+            detail::throwException(exceptionCode, ed, std::make_index_sequence<numDwords>{});
         }
     }
 
@@ -818,6 +771,7 @@ namespace optixu {
         LinearSegments,
         QuadraticBSplines,
         CubicBSplines,
+        CatmullRomSplines,
         CustomPrimitives,
     };
 
@@ -1004,6 +958,7 @@ private: \
         void setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep = 0) const;
         void setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
+        void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, const BufferView &matIndexBuffer, uint32_t indexSize = sizeof(uint32_t)) const;
@@ -1301,9 +1256,14 @@ private: \
         [[nodiscard]]
         ProgramGroup createMissProgram(Module module, const char* entryFunctionName) const;
         [[nodiscard]]
-        ProgramGroup createHitProgramGroupForBuiltinIS(OptixPrimitiveType primType,
-                                                       Module module_CH, const char* entryFunctionNameCH,
-                                                       Module module_AH, const char* entryFunctionNameAH) const;
+        ProgramGroup createHitProgramGroupForTriangleIS(
+            Module module_CH, const char* entryFunctionNameCH,
+            Module module_AH, const char* entryFunctionNameAH) const;
+        [[nodiscard]]
+        ProgramGroup createHitProgramGroupForCurveIS(
+            OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
+            Module module_CH, const char* entryFunctionNameCH,
+            Module module_AH, const char* entryFunctionNameAH) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCustomIS(Module module_CH, const char* entryFunctionNameCH,
                                                       Module module_AH, const char* entryFunctionNameAH,

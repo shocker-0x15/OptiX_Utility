@@ -37,22 +37,26 @@ template <OptixPrimitiveType curveType>
 CUDA_DEVICE_FUNCTION float3 calcCurveSurfaceNormal(const GeometryData &geom, uint32_t primIndex, float curveParam, const float3 &hp) {
     constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
     float4 controlPoints[numControlPoints];
-#if defined(USE_EMBEDDED_DATA)
-    OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-    uint32_t sbtGasIndex = optixGetSbtGASIndex();
-    if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-        optixGetLinearCurveVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
-    else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-        optixGetQuadraticBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
-    else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-        optixGetCubicBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
-#else
-    uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
-    for (int i = 0; i < numControlPoints; ++i) {
-        const CurveVertex &v = geom.curveVertexBuffer[baseIndex + i];
-        controlPoints[i] = make_float4(v.position, v.width);
+    if constexpr (useEmbeddedVertexData) {
+        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+        uint32_t sbtGasIndex = optixGetSbtGASIndex();
+        if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+            optixGetLinearCurveVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
+            optixGetQuadraticBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
+            optixGetCubicBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
+            optixGetCatmullRomVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
     }
-#endif
+    else {
+        uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
+#pragma unroll
+        for (int i = 0; i < numControlPoints; ++i) {
+            const CurveVertex &v = geom.curveVertexBuffer[baseIndex + i];
+            controlPoints[i] = make_float4(v.position, v.width);
+        }
+    }
 
     curve::Evaluator<curveType> ce(controlPoints);
     float3 sn = ce.calcNormal(curveParam, hp);
@@ -124,6 +128,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
             sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(geom, primIndex, curveParam, hp);
         else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
             sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp);
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(geom, primIndex, curveParam, hp);
     }
 
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));

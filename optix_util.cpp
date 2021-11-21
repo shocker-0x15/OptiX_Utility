@@ -227,6 +227,7 @@ namespace optixu {
                              geomType == GeometryType::LinearSegments ||
                              geomType == GeometryType::QuadraticBSplines ||
                              geomType == GeometryType::CubicBSplines ||
+                             geomType == GeometryType::CatmullRomSplines ||
                              geomType == GeometryType::CustomPrimitives,
                              "Invalid geometry type: %u.", static_cast<uint32_t>(geomType));
         return (new _GeometryInstance(m, geomType))->getPublicType();
@@ -237,6 +238,7 @@ namespace optixu {
                              geomType == GeometryType::LinearSegments ||
                              geomType == GeometryType::QuadraticBSplines ||
                              geomType == GeometryType::CubicBSplines ||
+                             geomType == GeometryType::CatmullRomSplines ||
                              geomType == GeometryType::CustomPrimitives,
                              "Invalid geometry type: %u.", static_cast<uint32_t>(geomType));
         // JP: GASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
@@ -384,8 +386,11 @@ namespace optixu {
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE;
             else if (geomType == GeometryType::CubicBSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE;
+            else if (geomType == GeometryType::CatmullRomSplines)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM;
             else
                 optixuAssert_ShouldNotBeCalled();
+            curveArray.endcapFlags = geom.endcapFlags;
 
             curveArray.vertexBuffers  = geom.vertexBufferArray;
             curveArray.vertexStrideInBytes = vertexStride;
@@ -649,6 +654,13 @@ namespace optixu {
                              "This geometry instance was created not for curves.");
         auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
         geom.segmentIndexBuffer = segmentIndexBuffer;
+    }
+
+    void GeometryInstance::setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const {
+        m->throwRuntimeError(std::holds_alternative<Priv::CurveGeometry>(m->geometry),
+                             "This geometry instance was created not for curves.");
+        auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+        geom.endcapFlags = endcapFlags;
     }
 
     void GeometryInstance::setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep) const {
@@ -936,7 +948,13 @@ namespace optixu {
         m->throwRuntimeError(_geomInst, "Invalid geometry instance %p.", _geomInst);
         m->throwRuntimeError(_geomInst->getScene() == m->scene, "Scene mismatch for the given geometry instance %s.",
                              _geomInst->getName().c_str());
-        const char* geomTypeStrs[] = { "triangles", "curves", "custom primitives" };
+        const char* geomTypeStrs[] = {
+            "triangles",
+            "linear segments",
+            "quadratic B-splines",
+            "cubic B-splines",
+            "Catmull-Rom splines",
+            "custom primitives" };
         m->throwRuntimeError(_geomInst->getGeometryType() == m->geomType,
                              "This GAS was created for %s.", geomTypeStrs[static_cast<uint32_t>(m->geomType)]);
         m->throwRuntimeError(m->geomType == GeometryType::Triangles || preTransform == 0,
@@ -2065,9 +2083,9 @@ namespace optixu {
     Pipeline::Priv::~Priv() {
         if (pipelineLinked)
             optixPipelineDestroy(rawPipeline);
-        for (auto it = modulesForBuiltin.begin(); it != modulesForBuiltin.end(); ++it)
+        for (auto it = modulesForCurveIS.begin(); it != modulesForCurveIS.end(); ++it)
             it->second->getPublicType().destroy();
-        modulesForBuiltin.clear();
+        modulesForCurveIS.clear();
         context->unregisterName(this);
     }
     
@@ -2077,30 +2095,32 @@ namespace optixu {
         pipelineLinked = false;
     }
 
-    OptixModule Pipeline::Priv::getModuleForBuiltin(OptixPrimitiveType primType) {
-        if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE)
+    OptixModule Pipeline::Priv::getModuleForCurves(OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags) {
+        if (curveType == OPTIX_PRIMITIVE_TYPE_TRIANGLE || curveType == OPTIX_PRIMITIVE_TYPE_CUSTOM)
             return nullptr;
 
-        if (modulesForBuiltin.count(primType) == 0) {
+        KeyForCurveModule key{ curveType, endcapFlags, OPTIX_BUILD_FLAG_NONE };
+        if (modulesForCurveIS.count(key) == 0) {
             OptixModuleCompileOptions moduleCompileOptions = {};
             moduleCompileOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
 
             OptixBuiltinISOptions builtinISOptions = {};
-            builtinISOptions.builtinISModuleType = primType;
+            builtinISOptions.builtinISModuleType = curveType;
+            builtinISOptions.curveEndcapFlags = endcapFlags;
+            builtinISOptions.buildFlags = OPTIX_BUILD_FLAG_NONE;
             builtinISOptions.usesMotionBlur = pipelineCompileOptions.usesMotionBlur;
 
             OptixModule rawModule;
-
             OPTIX_CHECK(optixBuiltinISModuleGet(context->getRawContext(),
                                                 &moduleCompileOptions,
                                                 &pipelineCompileOptions,
                                                 &builtinISOptions,
                                                 &rawModule));
 
-            modulesForBuiltin[primType] = new _Module(this, rawModule);
+            modulesForCurveIS[key] = new _Module(this, rawModule);
         }
 
-        return modulesForBuiltin.at(primType)->getRawModule();
+        return modulesForCurveIS.at(key)->getRawModule();
     }
     
     void Pipeline::Priv::createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group) {
@@ -2296,11 +2316,9 @@ namespace optixu {
         return (new _ProgramGroup(m, group))->getPublicType();
     }
 
-    ProgramGroup Pipeline::createHitProgramGroupForBuiltinIS(OptixPrimitiveType primType,
-                                                             Module module_CH, const char* entryFunctionNameCH,
-                                                             Module module_AH, const char* entryFunctionNameAH) const {
-        m->throwRuntimeError(primType != OPTIX_PRIMITIVE_TYPE_CUSTOM,
-                             "Use the createHitProgramGroupForCustomIS() for custom primitives.");
+    ProgramGroup Pipeline::createHitProgramGroupForTriangleIS(
+        Module module_CH, const char* entryFunctionNameCH,
+        Module module_AH, const char* entryFunctionNameAH) const {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         m->throwRuntimeError((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
@@ -2328,7 +2346,49 @@ namespace optixu {
             desc.hitgroup.moduleAH = _module_AH->getRawModule();
             desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
         }
-        desc.hitgroup.moduleIS = m->getModuleForBuiltin(primType);
+
+        OptixProgramGroupOptions options = {};
+
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
+
+        return (new _ProgramGroup(m, group))->getPublicType();
+    }
+
+    ProgramGroup Pipeline::createHitProgramGroupForCurveIS(
+        OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
+        Module module_CH, const char* entryFunctionNameCH,
+        Module module_AH, const char* entryFunctionNameAH) const {
+        m->throwRuntimeError(curveType != OPTIX_PRIMITIVE_TYPE_TRIANGLE && curveType != OPTIX_PRIMITIVE_TYPE_CUSTOM,
+                             "Use the createHitProgramGroupForTriangleIS() or createHitProgramGroupForCustomIS() for triangles or custom primitives respectively.");
+        _Module* _module_CH = extract(module_CH);
+        _Module* _module_AH = extract(module_AH);
+        m->throwRuntimeError((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
+                             "Either of CH module or entry function name is not provided.");
+        m->throwRuntimeError((_module_AH != nullptr) == (entryFunctionNameAH != nullptr),
+                             "Either of AH module or entry function name is not provided.");
+        m->throwRuntimeError(entryFunctionNameCH || entryFunctionNameAH,
+                             "Either of CH/AH entry function name must be provided.");
+        if (_module_CH)
+            m->throwRuntimeError(_module_CH->getPipeline() == m,
+                                 "Pipeline mismatch for the given CH module %s.",
+                                 _module_CH->getName().c_str());
+        if (_module_AH)
+            m->throwRuntimeError(_module_AH->getPipeline() == m,
+                                 "Pipeline mismatch for the given AH module %s.",
+                                 _module_AH->getName().c_str());
+
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        if (entryFunctionNameCH && _module_CH) {
+            desc.hitgroup.moduleCH = _module_CH->getRawModule();
+            desc.hitgroup.entryFunctionNameCH = entryFunctionNameCH;
+        }
+        if (entryFunctionNameAH && _module_AH) {
+            desc.hitgroup.moduleAH = _module_AH->getRawModule();
+            desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
+        }
+        desc.hitgroup.moduleIS = m->getModuleForCurves(curveType, endcapFlags);
         desc.hitgroup.entryFunctionNameIS = nullptr;
 
         OptixProgramGroupOptions options = {};

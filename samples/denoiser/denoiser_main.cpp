@@ -59,12 +59,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
     optixu::ProgramGroup emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optixu::ProgramGroup shadingHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    optixu::ProgramGroup shadingHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("shading"),
         emptyModule, nullptr);
-    optixu::ProgramGroup visibilityHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    optixu::ProgramGroup visibilityHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr,
         moduleOptiX, RT_AH_NAME_STR("visibility"));
 

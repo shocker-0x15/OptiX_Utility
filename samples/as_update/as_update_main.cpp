@@ -332,8 +332,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 

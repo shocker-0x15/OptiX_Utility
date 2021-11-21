@@ -18,7 +18,7 @@ Currently based on OptiX 7.4.0
   - [x] Multi-level instancing
 - Primitive types
   - [x] Triangles
-  - [x] Curves (Linear, Quadratic, Cubic B-Splines)
+  - [x] Curves (Linear Segments, Quadratic, Cubic B-Splines, Catmull-Rom Splines)
   - [x] User-defined custom primitives
 - Motion blur types
   - [x] Instance motion blur
