@@ -281,13 +281,11 @@ TEST(MaterialTest, MaterialBasic) {
 
         optixu::Module emptyModule;
 
-        optixu::ProgramGroup hitProgramGroup0 = pipeline0.createHitProgramGroupForBuiltinIS(
-            OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        optixu::ProgramGroup hitProgramGroup0 = pipeline0.createHitProgramGroupForTriangleIS(
             moduleOptiX, RT_CH_NAME_STR("ch0"),
             emptyModule, nullptr);
 
-        optixu::ProgramGroup hitProgramGroup1 = pipeline0.createHitProgramGroupForBuiltinIS(
-            OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+        optixu::ProgramGroup hitProgramGroup1 = pipeline0.createHitProgramGroupForTriangleIS(
             moduleOptiX, RT_CH_NAME_STR("ch1"),
             emptyModule, nullptr);
 
