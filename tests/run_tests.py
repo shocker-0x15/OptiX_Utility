@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import subprocess
 import json
@@ -85,7 +86,8 @@ def run():
             run_command(cmd)
 
             # RGBAでdiffをとると差が無いことになってしまう。
-            img = Image.open(test['image']).convert('RGB')
+            testImgPath = test['image']
+            img = Image.open(testImgPath).convert('RGB')
             refImg = Image.open(os.path.join(refImgDir, testDir, 'reference.png')).convert('RGB')
             diffImg = ImageChops.difference(img, refImg)
             diffBBox = diffImg.getbbox()
@@ -99,8 +101,10 @@ def run():
                 "numDiffPixels": numDiffPixels
             }
 
-            if numDiffPixels == 0:
-                for output in test['outputs']:
+            for output in test['outputs']:
+                if config == 'Release' and output == testImgPath and numDiffPixels > 0:
+                    shutil.move(testImgPath, os.path.join(refImgDir, testDir))
+                else:
                     os.remove(output)
 
             chdir(oldDir)

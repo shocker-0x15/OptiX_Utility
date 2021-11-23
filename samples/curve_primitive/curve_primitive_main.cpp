@@ -48,13 +48,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR |
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE);
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     optixu::Module emptyModule;
 
@@ -62,22 +63,41 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
-    optixu::ProgramGroup hitProgramGroupForLinearCurves = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR,
+
+    // JP: 各種カーブ用のヒットグループを作成する。
+    //     各種カーブには三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
+    //     カーブを含むことになるASと同じビルド設定を予め指定しておく必要がある。
+    // EN: Create a hit group for each of curve types.
+    //     Each curve type uses a built-in intersection program similar to triangle,
+    //     so the user doesn't need to specify it.
+    //     The same build configuration as an AS having the curve is required.
+    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool curveASUpdatable = false;
+    constexpr bool curveASCompactable = true;
+    optixu::ProgramGroup hitProgramGroupForLinearCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR, OPTIX_CURVE_ENDCAP_DEFAULT,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
-    optixu::ProgramGroup hitProgramGroupForQuadraticCurves = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE,
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+    optixu::ProgramGroup hitProgramGroupForQuadraticCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
-    optixu::ProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE,
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+    optixu::ProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+    optixu::ProgramGroup hitProgramGroupForCatmullRomCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -113,6 +133,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     matForQuadraticCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForQuadraticCurves);
     optixu::Material matForCubicCurves = optixContext.createMaterial();
     matForCubicCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicCurves);
+    optixu::Material matForCatmullRomCurves = optixContext.createMaterial();
+    matForCatmullRomCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCatmullRomCurves);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -195,9 +217,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 }
                 for (int s = 0; s < numSegments; ++s) {
                     float p = (float)(s + 1) / numSegments;
-                    float3 pos = float3(x + 0.3f * deltaX * (u01(rng) - 0.5f),
+                    float3 pos = float3(x + 0.6f * deltaX * (u01(rng) - 0.5f),
                                         0.1f * (s + 1),
-                                        z + 0.3f * deltaZ * (u01(rng) - 0.5f));
+                                        z + 0.6f * deltaZ * (u01(rng) - 0.5f));
                     float width = baseWidth * (1 - p);
                     vertices->push_back(Shared::CurveVertex{ pos, width });
                 }
@@ -238,14 +260,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: GeometryInstance for curves requires to be specified at the creation.
 
     // Linear Segments
-    optixu::GeometryInstance linearCurveGeomInst = scene.createGeometryInstance(optixu::GeometryType::LinearSegments);
+    optixu::GeometryInstance linearCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::LinearSegments);
     cudau::TypedBuffer<Shared::CurveVertex> linearCurveVertexBuffer;
     cudau::TypedBuffer<uint32_t> linearCurveSegmentIndexBuffer;
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
         generateCurves(&vertices, &indices,
-                       -1.0f / 3.0f + 0.05f, 1.0f / 3.0f - 0.05f, numX,
+                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
                        -1.0f + 0.05f, 1.0f - 0.05f, numZ,
                        baseWidth, 1);
 
@@ -269,14 +292,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     // Quadratic B-Splines
-    optixu::GeometryInstance quadraticCurveGeomInst = scene.createGeometryInstance(optixu::GeometryType::QuadraticBSplines);
+    optixu::GeometryInstance quadraticCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::QuadraticBSplines);
     cudau::TypedBuffer<Shared::CurveVertex> quadraticCurveVertexBuffer;
     cudau::TypedBuffer<uint32_t> quadraticCurveSegmentIndexBuffer;
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
         generateCurves(&vertices, &indices,
-                       -1.0f / 3.0f + 0.05f, 1.0f / 3.0f - 0.05f, numX,
+                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
                        -1.0f + 0.05f, 1.0f - 0.05f, numZ,
                        baseWidth, 2);
 
@@ -294,20 +318,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
             quadraticCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
             quadraticCurveVertexBuffer.numElements(), quadraticCurveVertexBuffer.stride()));
         quadraticCurveGeomInst.setSegmentIndexBuffer(quadraticCurveSegmentIndexBuffer);
+        quadraticCurveGeomInst.setCurveEndcapFlags(curveEndcap);
         quadraticCurveGeomInst.setMaterial(0, 0, matForQuadraticCurves);
         quadraticCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         quadraticCurveGeomInst.setUserData(geomData);
     }
 
     // Cubic B-Splines
-    optixu::GeometryInstance cubicCurveGeomInst = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
+    optixu::GeometryInstance cubicCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
     cudau::TypedBuffer<Shared::CurveVertex> cubicCurveVertexBuffer;
     cudau::TypedBuffer<uint32_t> cubicCurveSegmentIndexBuffer;
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
         generateCurves(&vertices, &indices,
-                       -1.0f / 3.0f + 0.05f, 1.0f / 3.0f - 0.05f, numX,
+                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
                        -1.0f + 0.05f, 1.0f - 0.05f, numZ,
                        baseWidth, 3);
 
@@ -325,9 +351,43 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cubicCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
             cubicCurveVertexBuffer.numElements(), cubicCurveVertexBuffer.stride()));
         cubicCurveGeomInst.setSegmentIndexBuffer(cubicCurveSegmentIndexBuffer);
+        cubicCurveGeomInst.setCurveEndcapFlags(curveEndcap);
         cubicCurveGeomInst.setMaterial(0, 0, matForCubicCurves);
         cubicCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         cubicCurveGeomInst.setUserData(geomData);
+    }
+
+    // Catmull-Rom Splines
+    optixu::GeometryInstance catmullRomCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CatmullRomSplines);
+    cudau::TypedBuffer<Shared::CurveVertex> catmullRomCurveVertexBuffer;
+    cudau::TypedBuffer<uint32_t> catmullRomCurveSegmentIndexBuffer;
+    {
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateCurves(&vertices, &indices,
+                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+                       -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+                       baseWidth, 3);
+
+        catmullRomCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        catmullRomCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.curveVertexBuffer = catmullRomCurveVertexBuffer.getDevicePointer();
+        geomData.segmentIndexBuffer = catmullRomCurveSegmentIndexBuffer.getDevicePointer();
+
+        catmullRomCurveGeomInst.setVertexBuffer(optixu::BufferView(
+            catmullRomCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            catmullRomCurveVertexBuffer.numElements(), catmullRomCurveVertexBuffer.stride()));
+        catmullRomCurveGeomInst.setWidthBuffer(optixu::BufferView(
+            catmullRomCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            catmullRomCurveVertexBuffer.numElements(), catmullRomCurveVertexBuffer.stride()));
+        catmullRomCurveGeomInst.setSegmentIndexBuffer(catmullRomCurveSegmentIndexBuffer);
+        catmullRomCurveGeomInst.setCurveEndcapFlags(curveEndcap);
+        catmullRomCurveGeomInst.setMaterial(0, 0, matForCatmullRomCurves);
+        catmullRomCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        catmullRomCurveGeomInst.setUserData(geomData);
     }
 
 
@@ -354,15 +414,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: GAS for curves must be created separately with GAS for triangles.
     //     Also, curves with different degrees can't be mixed.
     //     Specify that the GAS is for curves at the creation.
-#if defined(USE_EMBEDDED_DATA)
-    constexpr bool useVertexData = true;
-#else
-    constexpr bool useVertexData = false;
-#endif
 
-    optixu::GeometryAccelerationStructure linearCurvesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
+    optixu::GeometryAccelerationStructure linearCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
     cudau::Buffer linearCurvesGasMem;
-    linearCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, useVertexData);
+    linearCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                     Shared::useEmbeddedVertexData);
     linearCurvesGas.setNumMaterialSets(1);
     linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     linearCurvesGas.addChild(linearCurveGeomInst);
@@ -370,9 +427,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     linearCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    optixu::GeometryAccelerationStructure quadraticCurvesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
+    optixu::GeometryAccelerationStructure quadraticCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
     cudau::Buffer quadraticCurvesGasMem;
-    quadraticCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, useVertexData);
+    quadraticCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                        Shared::useEmbeddedVertexData);
     quadraticCurvesGas.setNumMaterialSets(1);
     quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     quadraticCurvesGas.addChild(quadraticCurveGeomInst);
@@ -380,14 +439,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    optixu::GeometryAccelerationStructure cubicCurvesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
+    optixu::GeometryAccelerationStructure cubicCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer cubicCurvesGasMem;
-    cubicCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, useVertexData);
+    cubicCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                    Shared::useEmbeddedVertexData);
     cubicCurvesGas.setNumMaterialSets(1);
     cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     cubicCurvesGas.addChild(cubicCurveGeomInst);
     cubicCurvesGas.prepareForBuild(&asMemReqs);
     cubicCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::GeometryAccelerationStructure catmullRomCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CatmullRomSplines);
+    cudau::Buffer catmullRomCurvesGasMem;
+    catmullRomCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                         Shared::useEmbeddedVertexData);
+    catmullRomCurvesGas.setNumMaterialSets(1);
+    catmullRomCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    catmullRomCurvesGas.addChild(catmullRomCurveGeomInst);
+    catmullRomCurvesGas.prepareForBuild(&asMemReqs);
+    catmullRomCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 
@@ -398,7 +471,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     floorInst.setChild(floorGas);
     float linearCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, -2.0f / 3.0f,
+        1.0f, 0.0f, 0.0f, -3.0f / 4.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
@@ -407,7 +480,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     linearCurvesInst.setTransform(linearCurvesInstXfm);
 
     float quadraticCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f, -1.0f / 4.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
@@ -416,13 +489,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticCurvesInst.setTransform(quadraticCurvesInstXfm);
 
     float cubicCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, 2.0f / 3.0f,
+        1.0f, 0.0f, 0.0f, 1.0f / 4.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance cubicCurvesInst = scene.createInstance();
     cubicCurvesInst.setChild(cubicCurvesGas);
     cubicCurvesInst.setTransform(cubicCurvesInstXfm);
+
+    float catmullRomCurvesInstXfm[] = {
+        1.0f, 0.0f, 0.0f, 3.0f / 4.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance catmullRomCurvesInst = scene.createInstance();
+    catmullRomCurvesInst.setChild(catmullRomCurvesGas);
+    catmullRomCurvesInst.setTransform(catmullRomCurvesInstXfm);
 
 
 
@@ -436,6 +518,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(linearCurvesInst);
     ias.addChild(quadraticCurvesInst);
     ias.addChild(cubicCurvesInst);
+    ias.addChild(catmullRomCurvesInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -455,6 +538,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     linearCurvesGas.rebuild(cuStream, linearCurvesGasMem, asBuildScratchMem);
     quadraticCurvesGas.rebuild(cuStream, quadraticCurvesGasMem, asBuildScratchMem);
     cubicCurvesGas.rebuild(cuStream, cubicCurvesGasMem, asBuildScratchMem);
+    catmullRomCurvesGas.rebuild(cuStream, catmullRomCurvesGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -471,6 +555,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         { linearCurvesGas, &linearCurvesGasMem, 0, 0 },
         { quadraticCurvesGas, &quadraticCurvesGasMem, 0, 0 },
         { cubicCurvesGas, &cubicCurvesGasMem, 0, 0 },
+        { catmullRomCurvesGas, &catmullRomCurvesGasMem, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -545,8 +630,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.accumBuffer = accumBuffer.getBlockBuffer2D();
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 1.0f, 2.5f);
-    plp.camera.orientation = rotateX3x3(-M_PI / 8) * rotateY3x3(M_PI);
+    plp.camera.position = make_float3(0, 1.0f, 3.0f);
+    plp.camera.orientation = rotateX3x3(-M_PI / 9) * rotateY3x3(M_PI);
     //plp.camera.position = make_float3(0, 0.01f, 2.5f);
     //plp.camera.orientation = rotateY3x3(M_PI);
 
@@ -586,16 +671,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
+    catmullRomCurvesInst.destroy();
     cubicCurvesInst.destroy();
     quadraticCurvesInst.destroy();
     linearCurvesInst.destroy();
     floorInst.destroy();
 
     asBuildScratchMem.finalize();
+    catmullRomCurvesGas.destroy();
     cubicCurvesGas.destroy();
     quadraticCurvesGas.destroy();
     linearCurvesGas.destroy();
     floorGas.destroy();
+
+    catmullRomCurveSegmentIndexBuffer.finalize();
+    catmullRomCurveVertexBuffer.finalize();
+    catmullRomCurveGeomInst.destroy();
 
     cubicCurveSegmentIndexBuffer.finalize();
     cubicCurveVertexBuffer.finalize();
@@ -615,6 +706,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     scene.destroy();
 
+    matForCatmullRomCurves.destroy();
     matForCubicCurves.destroy();
     matForQuadraticCurves.destroy();
     matForLinearCurves.destroy();
@@ -624,6 +716,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
+    hitProgramGroupForCatmullRomCurves.destroy();
     hitProgramGroupForCubicCurves.destroy();
     hitProgramGroupForQuadraticCurves.destroy();
     hitProgramGroupForLinearCurves.destroy();

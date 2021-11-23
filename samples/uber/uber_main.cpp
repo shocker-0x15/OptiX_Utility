@@ -461,8 +461,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::string ptx = readTxtFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     optixu::Module emptyModule;
 
@@ -471,19 +471,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("searchRay"));
     optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE, moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE, moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
+    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
+    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
+    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
-    optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
+    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool curveASUpdatable = false;
+    constexpr bool curveASCompactable = true;
+    constexpr bool curveASAllowRandomVertexAccess = false;
+    optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
+    optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
+    optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"),
+        curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
 
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
@@ -969,6 +980,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             floorFiberVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
             floorFiberVertexBuffer.numElements(), floorFiberVertexBuffer.stride()));
         floorFiberGeomInst.setSegmentIndexBuffer(floorFiberSegmentIndexBuffer);
+        floorFiberGeomInst.setCurveEndcapFlags(curveEndcap);
         floorFiberGeomInst.setMaterial(0, 0, matFloorFiber);
         floorFiberGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         floorFiberGeomInst.setUserData(sceneContext.geometryID);
@@ -1097,7 +1109,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure gasFloorFiber = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer gasFloorFiberMem;
     cudau::Buffer gasFloorFiberCompactedMem;
-    gasFloorFiber.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    gasFloorFiber.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                   curveASAllowRandomVertexAccess);
     gasFloorFiber.setNumMaterialSets(1);
     gasFloorFiber.setNumRayTypes(0, Shared::NumRayTypes);
     gasFloorFiber.addChild(floorFiberGeomInst);

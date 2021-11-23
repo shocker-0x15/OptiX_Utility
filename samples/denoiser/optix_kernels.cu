@@ -23,8 +23,8 @@ struct HitPointParameter {
 };
 
 struct HitGroupSBTRecordData {
-    MaterialData matData;
     GeometryData geomData;
+    MaterialData matData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());

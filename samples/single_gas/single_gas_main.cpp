@@ -47,8 +47,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::string ptx = readTxtFile(getExecutableDirectory() / "single_gas/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     optixu::Module emptyModule;
 
@@ -56,8 +56,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
 
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    // JP: 三角形用のヒットグループを作成する。
+    //     このサンプルではAny-Hit Programは使用しない。
+    //     三角形はビルトインのIntersection Programを使用するためユーザーが指定する必要はない。
+    // EN: Create a hit group for triangles.
+    //     This sample doesn't use any-hit programs.
+    //     The user doesn't need to specify an intersection program since triangles use the build-in.
+    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit0"),
         emptyModule, nullptr);
 

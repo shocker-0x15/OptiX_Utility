@@ -22,24 +22,25 @@ struct HitPointParameter {
     }
 };
 
-// JP: optixGetSbtDataPointer()で取得できるポインターの位置に
-//     Material, GeometryInstanceのsetUserData(),
-//     GeometryInstanceAccelerationStructureのsetChildUserData(), setUserData()
+// JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
+//     GeometryInstanceAccelerationStructureのsetUserData(), setChildUserData(),
+//     GeometryInstanceのsetUserData(), MaterialのsetUserData()
 //     で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
-//     各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGeometryInstanceに属していても
-//     マテリアルが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
-//     このサンプルではGASの子達、GASにはユーザーデータは設定していない。
-// EN: Data set by each of Material, GeometryInstance's setUserData(),
-//     GeometryInstanceAccelerationStructure's setChildUserData() and setUserData()
+//     各データの開始位置は前方のデータのサイズによって変わるので、例えば同じGASに属していても
+//     GASの子ごとのデータサイズが異なればGeometryInstanceのデータの開始位置は異なる可能性があることに注意。
+//     このサンプルではGAS、GASの子達にはユーザーデータは設定していない。
+// EN: Data set by each of
+//     GeometryInstanceAccelerationStructure's setUserData() and setChildUserData(),
+//     GeometryInstance's setUserData(), Material's setUserData()
 //     line up in the order (Each relative offset follows the specified alignment)
-//     at the position pointed by optixGetSbtDataPointer().
+//     at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
 //     Note that the start position of each data changes depending on the sizes of forward data.
-//     Therefore for example, the start positions of GeometryInstance's data are possibly different
-//     if materials are different even if those belong to the same GeometryInstance.
-//     This sample did not set user data to GAS's child and GAS.
+//     Therefore for example, the start positions of GeometryInstance's data are different
+//     if data sizes of GAS children are different even if those belong to the same GAS.
+//     This sample does not set user data to GAS and GAS's children.
 struct HitGroupSBTRecordData {
-    MaterialData matData;
     GeometryData geomData;
+    MaterialData matData;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());

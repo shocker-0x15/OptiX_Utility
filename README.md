@@ -11,35 +11,43 @@ It provides fine-level controllability but requires the user to write troublesom
 The purpose of this OptiX Utility is to provide classes and functions which encapsulate parts that tend to be boilerplate code while keeping fine controllability.
 
 ## 機能 / Features
-Currently based on OptiX 7.3.0
+Currently based on OptiX 7.4.0
 - Traversable types
-  - [x] Single GAS
-  - [x] Single-level instancing
-  - [x] Multi-level instancing
+  - Single GAS
+  - Single-level instancing
+  - Multi-level instancing
 - Primitive types
-  - [x] Triangles
-  - [x] Curves (Linear, Quadratic, Cubic B-Splines)
-  - [x] User-defined custom primitives
+  - Triangles
+  - Curves (Linear Segments, Quadratic, Cubic B-Splines, Catmull-Rom Splines)
+  - User-defined custom primitives
 - Motion blur types
-  - [x] Instance motion blur
-  - [x] Deformation blur
+  - Instance motion blur
+  - Deformation blur
 - Acceleration structure management
-  - [x] Full build
-  - [x] Fast update
-  - [x] Compaction
-  - [ ] Relocation
+  - Full build
+  - Fast update
+  - Compaction
 - Shader binding table management
   - Automatic build
   - Memory management is still under user control
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX AI denoiser
-  - [x] LDR/HDR
-  - [x] Temporal
-  - [x] AOV
-  - [ ] User
+  - LDR
+  - HDR
+  - HDR AOV (Not tested)
+  - HDR Temporal
+  - HDR Temporal AOV (Not tested)
 - Automatic payload/attribute value packing in kernel code
-- [ ] Multi-GPU
+
+### TODO
+- Parallel Module Compilation
+- AS Relocation
+- Test AOV denoisers
+- Denoiser with User-provided Model
+- Payload Annotations
+- Test Linux Environment
+- Multi-GPU
 
 ## 構成要素 / Components
 - **optix_util.h, optix_util_private.h, optix_util.cpp**\
@@ -82,12 +90,10 @@ optixu::Module mainModule = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPIL
 optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
 optixu::ProgramGroup searchRayHitProgramGroup =
-    pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    pipeline.createHitProgramGroupForTriangleIS(
         mainModule, RT_CH_NAME_STR("shading"), emptyModule, nullptr);
 optixu::ProgramGroup visibilityRayHitProgramGroup =
-    pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr, mainModule, RT_AH_NAME_STR("visibility"));
 // ...
 pipeline.link(2, OPTIX_COMPILE_DEBUG_LEVEL_FULL);
@@ -239,19 +245,19 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 10 (21H1) & Visual Studio Community 2019 (16.11.5)
+* Windows 10 (21H2) & Visual Studio Community 2019 (16.11.7)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 496.13
+* NVIDIA Driver 496.76
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 11.3 Update 1 \
+* CUDA 11.5 \
   OptiX Utilityは少し古いバージョンでも動作するとは思います。単にサンプルコードがこのバージョンに依存しているだけです。\
   ※CUDA 11.3.0にはバグがあり、OptiX Utilityと一緒に使用することができません。Update 1以降が必要です。\
   OptiX Utility may work with a bit older versions. The sample code just assumes this version.\
   \* CUDA 11.3.0 has a bug which prevents to use it with OptiX Utility. You need to use Update 1 or later.
-* OptiX 7.3.0 (requires Maxwell or later generation NVIDIA GPU)
+* OptiX 7.4.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))

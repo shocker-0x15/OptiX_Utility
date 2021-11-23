@@ -51,8 +51,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::string ptx = readTxtFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     optixu::Module emptyModule;
 
@@ -60,15 +60,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
-    optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForBuiltinIS(
-        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE,
+    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool curveASUpdatable = false;
+    constexpr bool curveASCompactable = true;
+    optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
 
     // JP: このヒットグループはレイと球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
     // EN: This is for ray-sphere intersection, so pass a custom intersection program.
@@ -325,12 +329,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                    buffer.numElements(), sizeof(Shared::CurveVertex)), i);
         }
         curves.optixGeomInst.setSegmentIndexBuffer(shape.segmentIndexBuffer);
+        curves.optixGeomInst.setCurveEndcapFlags(curveEndcap);
         curves.optixGeomInst.setMaterial(0, 0, matForCurves);
         curves.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         curves.optixGeomInst.setUserData(geomData);
 
         curves.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
-        curves.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        curves.optixGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                         Shared::useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);

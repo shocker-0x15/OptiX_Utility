@@ -22,7 +22,8 @@ CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
              primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
-             primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
+             primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
+             primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM) {
         ret.b0 = optixGetCurveParameter();
         ret.b1 = __uint_as_float(0x7F800000 | primType); // not safe.
     }
@@ -35,8 +36,8 @@ CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
 #endif
 
 struct HitGroupSBTRecordData {
-    uint32_t materialIndex;
     uint32_t geomInstIndex;
+    uint32_t materialIndex;
 
     CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
@@ -204,6 +205,9 @@ RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointCurve)(const HitPointParameter
     else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
         calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp,
                                                                      sn, texCoord);
+    else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(geom, primIndex, curveParam, hp,
+                                                                  sn, texCoord);
 }
 
 RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParameter &hitPointParam, const GeometryData &geom,
