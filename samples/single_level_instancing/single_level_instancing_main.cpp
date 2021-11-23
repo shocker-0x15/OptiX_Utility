@@ -59,6 +59,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
+    // JP: 三角形用のヒットグループを作成する。
+    //     このサンプルではAny-Hit Programは使用しない。
+    //     三角形はビルトインのIntersection Programを使用するためユーザーが指定する必要はない。
+    // EN: Create a hit group for triangles.
+    //     This sample doesn't use any-hit programs.
+    //     The user doesn't need to specify an intersection program since triangles use the build-in.
     optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);

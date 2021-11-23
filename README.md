@@ -33,17 +33,20 @@ Currently based on OptiX 7.4.0
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX AI denoiser
-  - LDR/HDR
-  - Temporal
-  - AOV
+  - LDR
+  - HDR
+  - HDR AOV (Not tested)
+  - HDR Temporal
+  - HDR Temporal AOV (Not tested)
 - Automatic payload/attribute value packing in kernel code
 
 ### TODO
 - Parallel Module Compilation
 - AS Relocation
-- Temporal AOV Denoiser
+- Test AOV denoisers
 - Denoiser with User-provided Model
-- Payload annotations
+- Payload Annotations
+- Test Linux Environment
 - Multi-GPU
 
 ## 構成要素 / Components

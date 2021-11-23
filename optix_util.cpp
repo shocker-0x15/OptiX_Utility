@@ -2095,7 +2095,9 @@ namespace optixu {
         pipelineLinked = false;
     }
 
-    OptixModule Pipeline::Priv::getModuleForCurves(OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags) {
+    OptixModule Pipeline::Priv::getModuleForCurves(
+        OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
+        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) {
         if (curveType == OPTIX_PRIMITIVE_TYPE_TRIANGLE || curveType == OPTIX_PRIMITIVE_TYPE_CUSTOM)
             return nullptr;
 
@@ -2107,7 +2109,15 @@ namespace optixu {
             OptixBuiltinISOptions builtinISOptions = {};
             builtinISOptions.builtinISModuleType = curveType;
             builtinISOptions.curveEndcapFlags = endcapFlags;
-            builtinISOptions.buildFlags = OPTIX_BUILD_FLAG_NONE;
+            builtinISOptions.buildFlags = 0;
+            if (tradeoff == ASTradeoff::PreferFastTrace)
+                builtinISOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+            else if (tradeoff == ASTradeoff::PreferFastBuild)
+                builtinISOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+            builtinISOptions.buildFlags |=
+                (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0)
+                | (allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0)
+                | (allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0);
             builtinISOptions.usesMotionBlur = pipelineCompileOptions.usesMotionBlur;
 
             OptixModule rawModule;
@@ -2358,7 +2368,8 @@ namespace optixu {
     ProgramGroup Pipeline::createHitProgramGroupForCurveIS(
         OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
         Module module_CH, const char* entryFunctionNameCH,
-        Module module_AH, const char* entryFunctionNameAH) const {
+        Module module_AH, const char* entryFunctionNameAH,
+        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const {
         m->throwRuntimeError(curveType != OPTIX_PRIMITIVE_TYPE_TRIANGLE && curveType != OPTIX_PRIMITIVE_TYPE_CUSTOM,
                              "Use the createHitProgramGroupForTriangleIS() or createHitProgramGroupForCustomIS() for triangles or custom primitives respectively.");
         _Module* _module_CH = extract(module_CH);
@@ -2388,7 +2399,9 @@ namespace optixu {
             desc.hitgroup.moduleAH = _module_AH->getRawModule();
             desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
         }
-        desc.hitgroup.moduleIS = m->getModuleForCurves(curveType, endcapFlags);
+        desc.hitgroup.moduleIS = m->getModuleForCurves(
+            curveType, endcapFlags,
+            tradeoff, allowUpdate, allowCompaction, allowRandomVertexAccess);
         desc.hitgroup.entryFunctionNameIS = nullptr;
 
         OptixProgramGroupOptions options = {};
@@ -2697,7 +2710,8 @@ namespace optixu {
             throwRuntimeError(albedo.isValid(), "Denoiser requires albedo buffer.");
         if (guideNormal)
             throwRuntimeError(normal.isValid(), "Denoiser requires normal buffer.");
-        if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
+        if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL ||
+            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV)
             throwRuntimeError(flow.isValid() && previousDenoisedBeauty.isValid(),
                               "Denoiser requires flow buffer and the previous denoised beauty buffer.");
         OptixDenoiserParams params = {};
@@ -2740,7 +2754,8 @@ namespace optixu {
             setupInputLayer(albedoFormat, albedo.getCUdeviceptr(), &guideLayer.albedo);
         if (guideNormal)
             setupInputLayer(normalFormat, normal.getCUdeviceptr(), &guideLayer.normal);
-        if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
+        if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL ||
+            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV)
             setupInputLayer(flowFormat, flow.getCUdeviceptr(), &guideLayer.flow);
 
         struct LayerInfo {
@@ -2761,7 +2776,8 @@ namespace optixu {
             std::memset(&denoiserLayer, 0, sizeof(denoiserLayer));
 
             setupInputLayer(layerInfo.format, layerInfo.input.getCUdeviceptr(), &denoiserLayer.input);
-            if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
+            if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL ||
+                modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV)
                 setupOutputLayer(layerInfo.format, layerInfo.previousOuput.getCUdeviceptr(), &denoiserLayer.previousOutput);
             setupOutputLayer(layerInfo.format, layerInfo.output.getCUdeviceptr(), &denoiserLayer.output);
         }
@@ -2805,7 +2821,8 @@ namespace optixu {
         m->stateSize = sizes.stateSizeInBytes;
         m->scratchSize = m->useTiling ?
             sizes.withOverlapScratchSizeInBytes : sizes.withoutOverlapScratchSizeInBytes;
-        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV)
+        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV)
             m->scratchSizeForComputeAverageColor = sizeof(int32_t) * (3 + 3 * m->imageWidth * m->imageHeight);
         else
             m->scratchSizeForComputeIntensity = sizeof(int32_t) * (2 + m->imageWidth * m->imageHeight);
@@ -2966,8 +2983,8 @@ namespace optixu {
                           const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
                           const BufferView &albedo, OptixPixelFormat albedoFormat,
                           const BufferView &normal, OptixPixelFormat normalFormat,
-                          /*const BufferView &flow, OptixPixelFormat flowFormat,
-                          const BufferView &previousDenoisedBeauty, const BufferView* previousDenoisedAovs,*/
+                          const BufferView &flow, OptixPixelFormat flowFormat,
+                          const BufferView &previousDenoisedBeauty, const BufferView* previousDenoisedAovs,
                           const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
                           const DenoisingTask &task) const {
         m->invoke(stream,
@@ -2975,8 +2992,8 @@ namespace optixu {
                   noisyBeauty, beautyFormat, noisyAovs, aovFormats, numAovs,
                   albedo, albedoFormat,
                   normal, normalFormat,
-                  BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,/*flow, flowFormat,*/
-                  BufferView(), nullptr,/*previousDenoisedBeauty, previousDenoisedAovs,*/
+                  flow, flowFormat,
+                  previousDenoisedBeauty, previousDenoisedAovs,
                   denoisedBeauty, denoisedAovs,
                   task);
     }

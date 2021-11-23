@@ -1263,7 +1263,8 @@ private: \
         ProgramGroup createHitProgramGroupForCurveIS(
             OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
             Module module_CH, const char* entryFunctionNameCH,
-            Module module_AH, const char* entryFunctionNameAH) const;
+            Module module_AH, const char* entryFunctionNameAH,
+            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCustomIS(Module module_CH, const char* entryFunctionNameCH,
                                                       Module module_AH, const char* entryFunctionNameAH,
@@ -1393,6 +1394,8 @@ private: \
                     const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
                     const BufferView &albedo, OptixPixelFormat albedoFormat,
                     const BufferView &normal, OptixPixelFormat normalFormat,
+                    const BufferView &flow, OptixPixelFormat flowFormat,
+                    const BufferView &previousDenoisedBeauty, const BufferView* previousDenoisedAovs,
                     const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
                     const DenoisingTask &task) const;
     };

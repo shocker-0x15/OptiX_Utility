@@ -65,10 +65,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
         emptyModule, nullptr);
 
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool curveASUpdatable = false;
+    constexpr bool curveASCompactable = true;
     optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
 
     // JP: このヒットグループはレイと球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
     // EN: This is for ray-sphere intersection, so pass a custom intersection program.
@@ -331,7 +335,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         curves.optixGeomInst.setUserData(geomData);
 
         curves.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
-        curves.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        curves.optixGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                         Shared::useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);

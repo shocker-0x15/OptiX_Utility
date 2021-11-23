@@ -479,15 +479,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
         emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool curveASUpdatable = false;
+    constexpr bool curveASCompactable = true;
+    constexpr bool curveASAllowRandomVertexAccess = false;
     optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
-        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
+        moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
     optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
-        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
+        moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
     optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
-        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
+        emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"),
+        curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
 
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
@@ -1102,7 +1109,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure gasFloorFiber = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer gasFloorFiberMem;
     cudau::Buffer gasFloorFiberCompactedMem;
-    gasFloorFiber.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    gasFloorFiber.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
+                                   curveASAllowRandomVertexAccess);
     gasFloorFiber.setNumMaterialSets(1);
     gasFloorFiber.setNumRayTypes(0, Shared::NumRayTypes);
     gasFloorFiber.addChild(floorFiberGeomInst);

@@ -63,26 +63,41 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
     optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
+
+    // JP: 各種カーブ用のヒットグループを作成する。
+    //     各種カーブには三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
+    //     カーブを含むことになるASと同じビルド設定を予め指定しておく必要がある。
+    // EN: Create a hit group for each of curve types.
+    //     Each curve type uses a built-in intersection program similar to triangle,
+    //     so the user doesn't need to specify it.
+    //     The same build configuration as an AS having the curve is required.
+    constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
+    constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool curveASUpdatable = false;
+    constexpr bool curveASCompactable = true;
     optixu::ProgramGroup hitProgramGroupForLinearCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR, OPTIX_CURVE_ENDCAP_DEFAULT,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForQuadraticCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForCatmullRomCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -403,7 +418,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure linearCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
     cudau::Buffer linearCurvesGasMem;
-    linearCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true,
+    linearCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
                                      Shared::useEmbeddedVertexData);
     linearCurvesGas.setNumMaterialSets(1);
     linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -415,7 +430,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure quadraticCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
     cudau::Buffer quadraticCurvesGasMem;
-    quadraticCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true,
+    quadraticCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
                                         Shared::useEmbeddedVertexData);
     quadraticCurvesGas.setNumMaterialSets(1);
     quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -427,7 +442,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure cubicCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer cubicCurvesGasMem;
-    cubicCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true,
+    cubicCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
                                     Shared::useEmbeddedVertexData);
     cubicCurvesGas.setNumMaterialSets(1);
     cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
@@ -439,7 +454,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure catmullRomCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CatmullRomSplines);
     cudau::Buffer catmullRomCurvesGasMem;
-    catmullRomCurvesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true,
+    catmullRomCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
                                          Shared::useEmbeddedVertexData);
     catmullRomCurvesGas.setNumMaterialSets(1);
     catmullRomCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);

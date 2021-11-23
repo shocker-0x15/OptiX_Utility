@@ -1053,7 +1053,9 @@ namespace optixu {
 
 
         void markDirty();
-        OptixModule getModuleForCurves(OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags);
+        OptixModule getModuleForCurves(
+            OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
+            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
         void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
         void destroyProgram(OptixProgramGroup group);
     };

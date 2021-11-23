@@ -54,32 +54,36 @@ template <OptixPrimitiveType curveType>
 CUDA_DEVICE_FUNCTION float3 calcCurveSurfaceNormal(const GeometryData &geom, const HitPointParameter &hpParam, float rayTime, const float3 &hp) {
     constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
     float4 controlPoints[numControlPoints];
-#if defined(USE_EMBEDDED_DATA)
-    OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-    uint32_t sbtGasIndex = optixGetSbtGASIndex();
-    if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-        optixGetLinearCurveVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
-    else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-        optixGetQuadraticBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
-    else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-        optixGetCubicBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
-#else
-    OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-    float timeBegin = optixGetGASMotionTimeBegin(gasHandle);
-    float timeEnd = optixGetGASMotionTimeEnd(gasHandle);
-    float normTime = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
-
-    uint32_t baseIndex = geom.segmentIndexBuffer[hpParam.primIndex];
-    float stepF = (geom.numMotionSteps - 1) * normTime;
-    uint32_t step = static_cast<uint32_t>(stepF);
-    float stepWidth = 1.0f / (geom.numMotionSteps - 1);
-    float p = stepF - step;
-    for (int i = 0; i < numControlPoints; ++i) {
-        const CurveVertex &vA = geom.curveVertexBuffers[step][baseIndex + i];
-        const CurveVertex &vB = geom.curveVertexBuffers[step + 1][baseIndex + i];
-        controlPoints[i] = (1 - p) * make_float4(vA.position, vA.width) + p * make_float4(vB.position, vB.width);
+    if constexpr (useEmbeddedVertexData) {
+        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+        uint32_t sbtGasIndex = optixGetSbtGASIndex();
+        if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+            optixGetLinearCurveVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
+            optixGetQuadraticBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
+            optixGetCubicBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
+            optixGetCatmullRomVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
     }
-#endif
+    else {
+        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+        float timeBegin = optixGetGASMotionTimeBegin(gasHandle);
+        float timeEnd = optixGetGASMotionTimeEnd(gasHandle);
+        float normTime = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
+
+        uint32_t baseIndex = geom.segmentIndexBuffer[hpParam.primIndex];
+        float stepF = (geom.numMotionSteps - 1) * normTime;
+        uint32_t step = static_cast<uint32_t>(stepF);
+        float stepWidth = 1.0f / (geom.numMotionSteps - 1);
+        float p = stepF - step;
+#pragma unroll
+        for (int i = 0; i < numControlPoints; ++i) {
+            const CurveVertex &vA = geom.curveVertexBuffers[step][baseIndex + i];
+            const CurveVertex &vB = geom.curveVertexBuffers[step + 1][baseIndex + i];
+            controlPoints[i] = (1 - p) * make_float4(vA.position, vA.width) + p * make_float4(vB.position, vB.width);
+        }
+    }
 
     curve::Evaluator<curveType> ce(controlPoints);
     float3 sn = ce.calcNormal(hpParam.b1, hp);
