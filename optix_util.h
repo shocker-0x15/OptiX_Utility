@@ -31,6 +31,15 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- JP: - createModuleFromPTXString(), createMissProgram(),
+        createHitProgramGroupFor***IS(), createCallableProgramGroup()
+        がペイロードアノテーションを追加で受け取れるように変更。
+        詳細については新たなサンプル"payload_annotation"を参照。
+  EN: - Changed createModuleFromPTXString(), createMissProgram(),
+        createHitProgramGroupFor***IS(), createCallableProgramGroup()
+        to be able to additionally take payload annotations.
+        See a new sample "payload_annotation" for the details.
+
 - !!BREAKING
   JP: - OptiX 7.4.0をサポート。
       - SBTレコード中のユーザーデータの並び順が逆になった。
@@ -166,6 +175,7 @@ TODO:
 #include <cstdint>
 #include <cfloat>
 #include <string>
+#include <initializer_list>
 #endif
 #include <optix.h>
 
@@ -236,6 +246,8 @@ OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixMotionFlags);
 OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixRayFlags);
 OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixTraversableGraphFlags);
 OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixExceptionFlags);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixPayloadSemantics);
+OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixPayloadTypeID);
 
 #undef OPTIXU_DEFINE_OPERATORS_FOR_FLAGS
 
@@ -413,14 +425,16 @@ namespace optixu {
         }
 
         template <size_t... I>
-        RT_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
+        RT_DEVICE_FUNCTION void trace(OptixPayloadTypeID payloadTypeID,
+                                      OptixTraversableHandle handle,
                                       const float3 &origin, const float3 &direction,
                                       float tmin, float tmax, float rayTime,
                                       OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
                                       uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
                                       uint32_t** payloads,
                                       std::index_sequence<I...>) {
-            optixTrace(handle,
+            optixTrace(payloadTypeID,
+                       handle,
                        origin, direction,
                        tmin, tmax, rayTime,
                        visibilityMask, rayFlags,
@@ -564,7 +578,8 @@ namespace optixu {
     //     However take them as normal reference to ease consistency check of template arguments and for
     //     conforming optixTrace.
     template <typename... PayloadTypes>
-    RT_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
+    RT_DEVICE_FUNCTION void trace(OptixPayloadTypeID payloadTypeID,
+                                  OptixTraversableHandle handle,
                                   const float3 &origin, const float3 &direction,
                                   float tmin, float tmax, float rayTime,
                                   OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
@@ -574,7 +589,8 @@ namespace optixu {
         static_assert(numDwords <= detail::maxNumPayloadsInDwords,
                       "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         if constexpr (numDwords == 0) {
-            optixTrace(handle,
+            optixTrace(payloadTypeID,
+                       handle,
                        origin, direction,
                        tmin, tmax, rayTime,
                        visibilityMask, rayFlags,
@@ -583,13 +599,30 @@ namespace optixu {
         else {
             uint32_t* p[numDwords];
             detail::traceSetPayloads<0>(p, payloads...);
-            detail::trace(handle,
+            detail::trace(payloadTypeID,
+                          handle,
                           origin, direction,
                           tmin, tmax, rayTime,
                           visibilityMask, rayFlags,
                           SBToffset, SBTstride, missSBTIndex,
                           p, std::make_index_sequence<numDwords>{});
         }
+    }
+
+    template <typename... PayloadTypes>
+    RT_DEVICE_FUNCTION void trace(OptixTraversableHandle handle,
+                                  const float3 &origin, const float3 &direction,
+                                  float tmin, float tmax, float rayTime,
+                                  OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
+                                  uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
+                                  PayloadTypes &... payloads) {
+        trace(OPTIX_PAYLOAD_TYPE_DEFAULT,
+              handle,
+              origin, direction,
+              tmin, tmax, rayTime,
+              visibilityMask, rayFlags,
+              SBToffset, SBTstride, missSBTIndex,
+              payloads...);
     }
 
 
@@ -765,6 +798,7 @@ namespace optixu {
 #define OPTIXU_PREPROCESS_OBJECT(Type) class Type
     OPTIXU_PREPROCESS_OBJECTS();
 #undef OPTIXU_PREPROCESS_OBJECT
+    class PayloadType;
 
     enum class GeometryType {
         Triangles = 0,
@@ -1230,6 +1264,26 @@ private: \
 
 
 
+    class PayloadType {
+        OPTIXU_PIMPL();
+
+        static PayloadType create(const uint32_t* payloadSizesInDwords,
+                                  const OptixPayloadSemantics* semantics,
+                                  uint32_t numPayloads);
+    public:
+        template <typename... PayloadTypes, uint32_t N>
+        static PayloadType create(const OptixPayloadSemantics(&semantics)[N]) {
+            static_assert(N == sizeof...(PayloadTypes),
+                          "Number of semantics passed doesnn't match to the number of payload variables.");
+            uint32_t payloadSizesInDwords[N] = { detail::getNumDwords<PayloadTypes>()... };
+            return create(payloadSizesInDwords, semantics, N);
+        }
+
+        void destroy();
+    };
+
+
+
     class Pipeline {
         OPTIXU_PIMPL();
 
@@ -1247,33 +1301,42 @@ private: \
         [[nodiscard]]
         Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
                                          OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
-                                         OptixModuleCompileBoundValueEntry* boundValues = nullptr, uint32_t numBoundValues = 0) const;
+                                         OptixModuleCompileBoundValueEntry* boundValues = nullptr, uint32_t numBoundValues = 0,
+                                         PayloadType* payloadTypes = nullptr, uint32_t numPayloadTypes = 0) const;
 
         [[nodiscard]]
         ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;
         [[nodiscard]]
         ProgramGroup createExceptionProgram(Module module, const char* entryFunctionName) const;
         [[nodiscard]]
-        ProgramGroup createMissProgram(Module module, const char* entryFunctionName) const;
+        ProgramGroup createMissProgram(
+            Module module, const char* entryFunctionName,
+            PayloadType payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForTriangleIS(
             Module module_CH, const char* entryFunctionNameCH,
-            Module module_AH, const char* entryFunctionNameAH) const;
+            Module module_AH, const char* entryFunctionNameAH,
+            PayloadType payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCurveIS(
             OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
-            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) const;
+            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+            PayloadType payloadType = PayloadType()) const;
         [[nodiscard]]
-        ProgramGroup createHitProgramGroupForCustomIS(Module module_CH, const char* entryFunctionNameCH,
-                                                      Module module_AH, const char* entryFunctionNameAH,
-                                                      Module module_IS, const char* entryFunctionNameIS) const;
+        ProgramGroup createHitProgramGroupForCustomIS(
+            Module module_CH, const char* entryFunctionNameCH,
+            Module module_AH, const char* entryFunctionNameAH,
+            Module module_IS, const char* entryFunctionNameIS,
+            PayloadType payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createEmptyHitProgramGroup() const;
         [[nodiscard]]
-        ProgramGroup createCallableProgramGroup(Module module_DC, const char* entryFunctionNameDC,
-                                                Module module_CC, const char* entryFunctionNameCC) const;
+        ProgramGroup createCallableProgramGroup(
+            Module module_DC, const char* entryFunctionNameDC,
+            Module module_CC, const char* entryFunctionNameCC,
+            PayloadType payloadType = PayloadType()) const;
 
         void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
 

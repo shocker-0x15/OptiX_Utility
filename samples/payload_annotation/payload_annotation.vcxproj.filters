@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="util">
+      <UniqueIdentifier>{6f26d21a-72b8-449a-b8dd-7ac1d7c4bfb2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials">
+      <UniqueIdentifier>{6a7a6321-df38-4bc0-946b-5ffa0c754713}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext">
+      <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\cuda_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\optix_util.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
+    </ClCompile>
+    <ClCompile Include="payload_annotation_main.cpp" />
+    <ClCompile Include="..\common\common.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\dds_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\obj_loader.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\cuda_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util_private.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\stb_image_write.h">
+      <Filter>non-essentials\ext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
+    </ClInclude>
+    <ClInclude Include="payload_annotation_shared.h" />
+    <ClInclude Include="..\common\common.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\dds_loader.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optixu_on_cudau.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\obj_loader.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="optix_kernels.cu" />
+  </ItemGroup>
+</Project>

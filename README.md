@@ -39,13 +39,13 @@ Currently based on OptiX 7.4.0
   - HDR Temporal
   - HDR Temporal AOV (Not tested)
 - Automatic payload/attribute value packing in kernel code
+- Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
 - Parallel Module Compilation
 - AS Relocation
 - Test AOV denoisers
 - Denoiser with User-provided Model
-- Payload Annotations
 - Test Linux Environment
 - Multi-GPU
 
