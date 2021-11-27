@@ -55,8 +55,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::string ptx = readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");
     std::vector<optixu::PayloadType> payloadTypes;
     if constexpr (Shared::usePayloadAnnotation) {
-        // JP: 
-        // EN: 
+        // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
+        // EN: Create payload types for two ray types.
         payloadTypes.resize(2);
         payloadTypes[0] = optixu::PayloadType::create<SearchRayPayloadSignature>(
             {
@@ -107,8 +107,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                  OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
             });
     }
-    // JP: 
-    // EN: 
+    // JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
+    // EN: Pass payload types to module creation when using payload annotation.
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -120,16 +120,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::ProgramGroup pathTracingRayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    // 
-    // JP: 
-    // EN: 
+
+    // JP: Miss Programで使用されているペイロードタイプ情報を渡す。
+    // EN: Pass the payload type used in the miss program.
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(
         moduleOptiX, RT_MS_NAME_STR("miss"),
         Shared::usePayloadAnnotation ? payloadTypes[0] : optixu::PayloadType());
     optixu::ProgramGroup emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    // JP: 
-    // EN: 
+    // JP: それぞれのヒットグループで使われているペイロードタイプ情報を渡す。
+    // EN: Pass the payload type for each hit group.
     optixu::ProgramGroup shadingHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("shading"),
         emptyModule, nullptr,
@@ -305,10 +305,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::Buffer asBuildScratchMem;
 
-    // JP: このサンプルではデノイザーに焦点を当て、
-    //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
-    // EN: Use one GeometryInstance per GAS for simplicty and
-    //     to focus on denoiser in this sample.
     struct Geometry {
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
         cudau::TypedBuffer<Shared::Triangle> triangleBuffer;

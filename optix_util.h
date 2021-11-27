@@ -431,7 +431,7 @@ namespace optixu {
                                       float tmin, float tmax, float rayTime,
                                       OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
                                       uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
-                                      uint32_t** payloads,
+                                      uint32_t* const* payloads,
                                       std::index_sequence<I...>) {
             optixTrace(payloadTypeID,
                        handle,
@@ -1272,14 +1272,19 @@ private: \
                                   uint32_t numPayloads);
     public:
         template <typename... PayloadTypes, uint32_t N>
-        static PayloadType create(const OptixPayloadSemantics(&semantics)[N]) {
+        static PayloadType create(const OptixPayloadSemantics (&semantics)[N]) {
+            // Nの代わりにsizeof...(PayloadTypes)を使った場合、渡された引数の数が足りない場合を検知できない。
             static_assert(N == sizeof...(PayloadTypes),
-                          "Number of semantics passed doesnn't match to the number of payload variables.");
-            uint32_t payloadSizesInDwords[N] = { detail::getNumDwords<PayloadTypes>()... };
+                          "Number of semantics passed doesn't match to the number of payload variables.");
+            constexpr uint32_t payloadSizesInDwords[N] = { detail::getNumDwords<PayloadTypes>()... };
             return create(payloadSizesInDwords, semantics, N);
         }
 
         void destroy();
+        operator bool() const { return m; }
+        bool operator==(const PayloadType &r) const { return m == r.m; }
+        bool operator!=(const PayloadType &r) const { return m != r.m; }
+        bool operator<(const PayloadType &r) const { return m < r.m; }
     };
 
 
