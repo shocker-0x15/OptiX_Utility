@@ -59,12 +59,35 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
         constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
             OPTIX_PAYLOAD_TYPE_ID_0 :
             OPTIX_PAYLOAD_TYPE_DEFAULT;
+#if USE_RAW_INTRINSICS
+        optixTrace(
+            payloadTypeID,
+            plp.travHandle, origin, direction,
+            0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            RayType_Search, NumRayTypes, RayType_Search,
+            *((uint32_t*)&rng + 0),
+            *((uint32_t*)&rng + 1),
+            *(uint32_t*)&alpha.x,
+            *(uint32_t*)&alpha.y,
+            *(uint32_t*)&alpha.z,
+            *(uint32_t*)&contribution.x,
+            *(uint32_t*)&contribution.y,
+            *(uint32_t*)&contribution.z,
+            *(uint32_t*)&origin.x,
+            *(uint32_t*)&origin.y,
+            *(uint32_t*)&origin.z,
+            *(uint32_t*)&direction.x,
+            *(uint32_t*)&direction.y,
+            *(uint32_t*)&direction.z,
+            *((uint32_t*)&flags + 0));
+#else
         optixu::trace<SearchRayPayloadSignature>(
             payloadTypeID,
             plp.travHandle, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
             rng, alpha, contribution, origin, direction, flags);
+#endif
         accContribution += accAlpha * contribution;
         accAlpha *= alpha;
         if (flags.terminate || flags.pathLength >= 10)
@@ -89,10 +112,22 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
 
     PathFlags flags;
+#if USE_RAW_INTRINSICS
+    *((uint32_t*)&flags + 0) = optixGetPayload_14();
+#else
     optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, nullptr, nullptr, nullptr, &flags);
+#endif
     float3 contribution = make_float3(0.01f, 0.01f, 0.01f);
     flags.terminate = true;
+#if USE_RAW_INTRINSICS
+    optixSetPayload_5(*(uint32_t*)&contribution.x);
+    optixSetPayload_6(*(uint32_t*)&contribution.y);
+    optixSetPayload_7(*(uint32_t*)&contribution.z);
+
+    optixSetPayload_14(*((uint32_t*)&flags + 0));
+#else
     optixu::setPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &contribution, nullptr, nullptr, &flags);
+#endif
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
@@ -107,7 +142,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
     PCG32RNG rng;
     PathFlags flags;
+#if USE_RAW_INTRINSICS
+    *((uint32_t*)&rng + 0) = optixGetPayload_0();
+    *((uint32_t*)&rng + 1) = optixGetPayload_1();
+
+    *((uint32_t*)&flags + 0) = optixGetPayload_14();
+#else
     optixu::getPayloads<SearchRayPayloadSignature>(&rng, nullptr, nullptr, nullptr, nullptr, &flags);
+#endif
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -170,12 +212,21 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
             OPTIX_PAYLOAD_TYPE_ID_1 :
             OPTIX_PAYLOAD_TYPE_DEFAULT;
+#if USE_RAW_INTRINSICS
+        optixTrace(
+            payloadTypeID,
+            plp.travHandle, p, shadowRayDir,
+            0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+            RayType_Visibility, NumRayTypes, RayType_Visibility,
+            *(uint32_t*)&visibility);
+#else
         optixu::trace<VisibilityRayPayloadSignature>(
             payloadTypeID,
             plp.travHandle, p, shadowRayDir,
             0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Visibility, NumRayTypes, RayType_Visibility,
             visibility);
+#endif
 
         float cosSP = dot(sn, shadowRayDir);
         float G = visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
@@ -206,7 +257,30 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     float3 alpha = albedo;
     flags.terminate = false;
 
+#if USE_RAW_INTRINSICS
+    optixSetPayload_0(*((uint32_t*)&rng + 0));
+    optixSetPayload_1(*((uint32_t*)&rng + 1));
+
+    optixSetPayload_2(*(uint32_t*)&alpha.x);
+    optixSetPayload_3(*(uint32_t*)&alpha.y);
+    optixSetPayload_4(*(uint32_t*)&alpha.z);
+
+    optixSetPayload_5(*(uint32_t*)&contribution.x);
+    optixSetPayload_6(*(uint32_t*)&contribution.y);
+    optixSetPayload_7(*(uint32_t*)&contribution.z);
+
+    optixSetPayload_8(*(uint32_t*)&p.x);
+    optixSetPayload_9(*(uint32_t*)&p.y);
+    optixSetPayload_10(*(uint32_t*)&p.z);
+
+    optixSetPayload_11(*(uint32_t*)&vIn.x);
+    optixSetPayload_12(*(uint32_t*)&vIn.y);
+    optixSetPayload_13(*(uint32_t*)&vIn.z);
+
+    optixSetPayload_14(*((uint32_t*)&flags + 0));
+#else
     optixu::setPayloads<SearchRayPayloadSignature>(&rng, &alpha, &contribution, &p, &vIn, &flags);
+#endif
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
@@ -216,7 +290,11 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_1);
 
     float visibility = 0.0f;
+#if USE_RAW_INTRINSICS
+    optixSetPayload_0(*(uint32_t*)&visibility);
+#else
     optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+#endif
 
     optixTerminateRay();
 }
