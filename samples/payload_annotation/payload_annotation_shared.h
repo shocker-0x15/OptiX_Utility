@@ -6,7 +6,6 @@ namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;
 
     static constexpr bool usePayloadAnnotation = true;
-#define USE_RAW_INTRINSICS 0
 
 
 
