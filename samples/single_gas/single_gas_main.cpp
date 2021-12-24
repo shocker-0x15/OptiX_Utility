@@ -204,9 +204,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
     {
-#define USE_TRIANGLE_SROUP_FOR_AREA_LIGHT
+#define USE_TRIANGLE_SOUP_FOR_AREA_LIGHT
 
-#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+#if defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
             { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
@@ -237,7 +237,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
-#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+#if !defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 #endif
         geomData.matSR_N = transpose(inverse(matSR));
@@ -245,7 +245,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
         // EN: It will be interpreted as triangle soup if not setting an index buffer.
         areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
-#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+#if !defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
 #endif
         areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
