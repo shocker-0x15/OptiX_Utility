@@ -97,7 +97,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     SearchRayPayload* payload;
     float3* albedo;
     float3* normal;
-    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, &payload, &albedo, &normal);
+    SearchRayPayloadSignature::get(nullptr, &payload, &albedo, &normal);
     payload->contribution += payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
 }
@@ -111,7 +111,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     SearchRayPayload* payload;
     float3* firstHitAlbedo;
     float3* firstHitNormal;
-    optixu::getPayloads<SearchRayPayloadSignature>(&rng, &payload, &firstHitAlbedo, &firstHitNormal);
+    SearchRayPayloadSignature::get(&rng, &payload, &firstHitAlbedo, &firstHitNormal);
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -210,12 +210,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     payload->direction = vIn;
     payload->terminate = false;
 
-    optixu::setPayloads<SearchRayPayloadSignature>(&rng, nullptr, nullptr, nullptr);
+    SearchRayPayloadSignature::set(&rng, nullptr, nullptr, nullptr);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
     float visibility = 0.0f;
-    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+    VisibilityRayPayloadSignature::set(&visibility);
 
     optixTerminateRay();
 }

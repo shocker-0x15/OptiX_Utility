@@ -89,10 +89,10 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
 
     PathFlags flags;
-    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, nullptr, nullptr, nullptr, &flags);
+    SearchRayPayloadSignature::get(nullptr, nullptr, nullptr, nullptr, nullptr, &flags);
     float3 contribution = make_float3(0.01f, 0.01f, 0.01f);
     flags.terminate = true;
-    optixu::setPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &contribution, nullptr, nullptr, &flags);
+    SearchRayPayloadSignature::set(nullptr, nullptr, &contribution, nullptr, nullptr, &flags);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
@@ -107,7 +107,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
     PCG32RNG rng;
     PathFlags flags;
-    optixu::getPayloads<SearchRayPayloadSignature>(&rng, nullptr, nullptr, nullptr, nullptr, &flags);
+    SearchRayPayloadSignature::get(&rng, nullptr, nullptr, nullptr, nullptr, &flags);
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -206,7 +206,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     float3 alpha = albedo;
     flags.terminate = false;
 
-    optixu::setPayloads<SearchRayPayloadSignature>(&rng, &alpha, &contribution, &p, &vIn, &flags);
+    SearchRayPayloadSignature::set(&rng, &alpha, &contribution, &p, &vIn, &flags);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
@@ -216,7 +216,7 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_1);
 
     float visibility = 0.0f;
-    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+    VisibilityRayPayloadSignature::set(&visibility);
 
     optixTerminateRay();
 }

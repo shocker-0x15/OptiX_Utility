@@ -97,7 +97,7 @@ namespace Shared {
         unsigned int pathLength : 31;
         unsigned int terminate : 1;
     };
-}
 
-#define SearchRayPayloadSignature Shared::PCG32RNG, float3, float3, float3, float3, Shared::PathFlags
-#define VisibilityRayPayloadSignature float
+    using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, float3, float3, float3, float3, PathFlags>;
+    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
+}

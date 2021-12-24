@@ -61,9 +61,11 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
 
     float3 color;
     // JP: ペイロードとともにトレースを呼び出す。
-    //     ペイロード数は最大で合計8DW。
+    //     テンプレート引数としてペイロードシグネチャー型を渡す必要がある。
+    //     ペイロード数は最大で合計32DW。
     // EN: Trace call with payloads.
-    //     The maximum number of payloads is 8 dwords in total.
+    //     Passing a payload signature type as the template argument is required.
+    //     The maximum number of payloads is 32 dwords in total.
     optixu::trace<PayloadSignature>(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
@@ -76,17 +78,11 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
     float3 color = make_float3(0, 0, 0.1f);
 
-    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
-    //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
-    //     型の不一致を検出できるようにすることを推奨する。
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通してペイロードをセットする。
     //     書き換えていないペイロードに関してはnullポインターを渡しても良い。
-    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
-    //     It is recommended to explicitly pass the same template arguments to 
-    //     corresponding trace/getPayloads/setPayloads to notice type mismatch.
+    // EN: Set payloads via a payload signature type corresponding to optixu::trace().
     //     Passing the null pointers is possible for the payloads which were read only.
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
@@ -120,15 +116,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     //     There is no object to world space transform since this sample uses only a single GAS.
     float3 color = 0.5f * sn + make_float3(0.5f);
 
-    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
-    //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
-    //     型の不一致を検出できるようにすることを推奨する。
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通してペイロードをセットする。
     //     書き換えていないペイロードに関してはnullポインターを渡しても良い。
-    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
-    //     It is recommended to explicitly pass the same template arguments to 
-    //     corresponding trace/getPayloads/setPayloads to notice type mismatch.
+    // EN: Set payloads via a payload signature type corresponding to optixu::trace().
     //     Passing the null pointers is possible for the payloads which were read only.
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }

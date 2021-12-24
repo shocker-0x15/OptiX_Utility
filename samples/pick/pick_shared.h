@@ -100,7 +100,7 @@ namespace Shared {
         const PickInfo* pickInfo;
         optixu::NativeBlockBuffer2D<float4> resultBuffer;
     };
-}
 
-#define RenderPayloadSignature float3
-#define PickPayloadSignature Shared::PickInfo
+    using RenderPayloadSignature = optixu::PayloadSignature<float3>;
+    using PickPayloadSignature = optixu::PayloadSignature<PickInfo>;
+}

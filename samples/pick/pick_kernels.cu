@@ -99,7 +99,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     PickInfo info = {};
     info.hit = false;
-    optixu::setPayloads<PickPayloadSignature>(&info);
+    PickPayloadSignature::set(&info);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -120,5 +120,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     info.gasChildID = gasChild.gasChildID;
     info.geomID = geom.geomID;
     info.matID = mat.matID;
-    optixu::setPayloads<PickPayloadSignature>(&info);
+    PickPayloadSignature::set(&info);
 }

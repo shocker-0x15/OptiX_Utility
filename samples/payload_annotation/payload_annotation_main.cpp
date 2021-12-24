@@ -1,5 +1,9 @@
 ﻿/*
 
+※このサンプルコードはドライバー側におそらくバグがあるため現時点では未完成・未検証。
+* This sample is not completed/verified since the driver may have a bug.
+  https://forums.developer.nvidia.com/t/payload-usage-annotation/196380/7
+
 JP: このサンプルはペイロードの使用方法を明示的に指定することでパイプラインの最適化を助ける方法について示します。
     ペイロードのパラメターごとの各シェーダーにおけるアクセスフラグを記述したデータを作成し、
     モジュールやプログラムグループ作成時に指定、併せてカーネル内でも使用するペイロードタイプを指定することで
@@ -42,8 +46,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: アノテーション機能を使用する場合は、パイプラインオプションにおけるペイロードサイズにゼロを指定する。
     // EN: Specify zero for the payload size in the pipeline option in the case where using the annotation feature.
     constexpr uint32_t payloadSizeInDwords = Shared::usePayloadAnnotation ? 0 :
-        std::max(optixu::calcSumDwords<SearchRayPayloadSignature>(),
-                 optixu::calcSumDwords<VisibilityRayPayloadSignature>());
+        std::max(Shared::SearchRayPayloadSignature::numDwords,
+                 Shared::VisibilityRayPayloadSignature::numDwords);
     pipeline.setPipelineOptions(payloadSizeInDwords,
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
@@ -58,7 +62,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
         // EN: Create payload types for two ray types.
         payloadTypes.resize(2);
-        payloadTypes[0] = optixu::PayloadType::create<SearchRayPayloadSignature>(
+        payloadTypes[0] = optixu::PayloadType::create<Shared::SearchRayPayloadSignature>(
             {
                 // rng
                 (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
@@ -97,7 +101,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                  OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
                  OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
             });
-        payloadTypes[1] = optixu::PayloadType::create<VisibilityRayPayloadSignature>(
+        payloadTypes[1] = optixu::PayloadType::create<Shared::VisibilityRayPayloadSignature>(
             {
                 // visibility
                 (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |

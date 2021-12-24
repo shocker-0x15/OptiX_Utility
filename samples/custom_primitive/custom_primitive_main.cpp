@@ -34,9 +34,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
-                                std::max(optixu::calcSumDwords<float2>(),
-                                         optixu::calcSumDwords<SphereAttributeSignature>()),
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
+                                std::max<uint32_t>(optixu::calcSumDwords<float2>(),
+                                                   Shared::SphereAttributeSignature::numDwords),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |

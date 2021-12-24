@@ -72,7 +72,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -96,5 +96,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         color = getXYZ(tex2DLod<float4>(mat.texture, texCoord.x, texCoord.y, 0.0f));
     else
         color = mat.albedo;
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }

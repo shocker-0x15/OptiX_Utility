@@ -103,7 +103,7 @@ namespace Shared {
         uint32_t numAccumFrames;
         PerspectiveCamera camera;
     };
-}
 
-#define SphereAttributeSignature float, float
-#define PayloadSignature float3
+    using SphereAttributeSignature = optixu::AttributeSignature<float, float>;
+    using PayloadSignature = optixu::PayloadSignature<float3>;
+}

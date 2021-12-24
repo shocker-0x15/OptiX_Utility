@@ -72,10 +72,10 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
-    optixu::setPayloads<PayloadSignature>(&sbtr.matData.color);
+    PayloadSignature::set(&sbtr.matData.color);
 }

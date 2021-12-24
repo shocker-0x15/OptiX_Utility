@@ -36,7 +36,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     カーネル中で使用しているアトリビュートサイズは2Dwords(三角形の重心座標 float2)。
     // EN: This sample uses only a single GAS.
     //     The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2).
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
