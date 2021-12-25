@@ -54,8 +54,8 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     while (true) {
         float3 contribution;
         float3 alpha;
-        // JP: 
-        // EN: 
+        // JP: 通常のレイ用のペイロードタイプを指定する。
+        // EN: Specify a payload type for the normal ray.
         constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
             OPTIX_PAYLOAD_TYPE_ID_0 :
             OPTIX_PAYLOAD_TYPE_DEFAULT;
@@ -83,9 +83,9 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
-    // JP: 
-    // EN: 
-    if constexpr (Shared::usePayloadAnnotation)
+    // JP: 通常のレイ用のペイロードタイプを指定する。
+    // EN: Specify a payload type for the normal ray.
+    if constexpr (usePayloadAnnotation)
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
 
     PathFlags flags;
@@ -96,9 +96,9 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
-    // JP: 
-    // EN: 
-    if constexpr (Shared::usePayloadAnnotation)
+    // JP: 通常のレイ用のペイロードタイプを指定する。
+    // EN: Specify a payload type for the normal ray.
+    if constexpr (usePayloadAnnotation)
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
 
     auto sbtr = HitGroupSBTRecordData::get();
@@ -165,8 +165,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
         float visibility = 1.0f;
-        // JP: 
-        // EN: 
+        // JP: シャドウレイ用のペイロードタイプを指定する。
+        // EN: Specify a payload type for shadow ray.
         constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
             OPTIX_PAYLOAD_TYPE_ID_1 :
             OPTIX_PAYLOAD_TYPE_DEFAULT;
@@ -210,9 +210,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
-    // JP: 
-    // EN: 
-    if constexpr (Shared::usePayloadAnnotation)
+    // JP: シャドウレイ用のペイロードタイプを指定する。
+    // EN: Specify a payload type for shadow ray.
+    if constexpr (usePayloadAnnotation)
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_1);
 
     float visibility = 0.0f;

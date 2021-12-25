@@ -95,6 +95,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                  OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
                  OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
                 // flags
+                // JP: Missプログラムではterminateに書込みしか行っていないように見えるが、
+                //     flagsはビットフィールドなのでRead Writeとして取り扱う必要がある。
+                // EN: The miss program seems to only write to "terminate" but
+                //     flags is a bit field so needs to be regarded as read write.
                 (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
                  OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
                  OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE |

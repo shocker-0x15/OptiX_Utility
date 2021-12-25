@@ -366,9 +366,11 @@ namespace optixu {
         template <uint32_t index>
         using TypeAt = std::tuple_element_t<index, Types>;
         static constexpr uint32_t numParameters = sizeof...(PayloadTypes);
-        static constexpr uint32_t numDwords = detail::calcSumDwords<PayloadTypes...>();
+        static constexpr uint32_t numDwords = static_cast<uint32_t>(detail::calcSumDwords<PayloadTypes...>());
         static constexpr uint32_t _arraySize = numParameters > 0 ? numParameters : 1u;
-        static constexpr uint32_t sizesInDwords[_arraySize] = { detail::getNumDwords<PayloadTypes>()... };
+        static constexpr uint32_t sizesInDwords[_arraySize] = {
+            static_cast<uint32_t>(detail::getNumDwords<PayloadTypes>())...
+        };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION static void get(PayloadTypes*... payloads);
@@ -382,8 +384,10 @@ namespace optixu {
         template <uint32_t index>
         using TypeAt = std::tuple_element_t<index, Types>;
         static constexpr uint32_t numParameters = sizeof...(AttributeTypes);
-        static constexpr uint32_t numDwords = detail::calcSumDwords<AttributeTypes...>();
-        static constexpr uint32_t sizesInDwords[numParameters] = { detail::getNumDwords<AttributeTypes>()... };
+        static constexpr uint32_t numDwords = static_cast<uint32_t>(detail::calcSumDwords<AttributeTypes...>());
+        static constexpr uint32_t sizesInDwords[numParameters] = {
+            static_cast<uint32_t>(detail::getNumDwords<AttributeTypes>())...
+        };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION static void get(AttributeTypes*... attributes);
@@ -396,8 +400,10 @@ namespace optixu {
         template <uint32_t index>
         using TypeAt = std::tuple_element_t<index, Types>;
         static constexpr uint32_t numParameters = sizeof...(ExceptionDetailTypes);
-        static constexpr uint32_t numDwords = detail::calcSumDwords<ExceptionDetailTypes...>();
-        static constexpr uint32_t sizesInDwords[numParameters] = { detail::getNumDwords<ExceptionDetailTypes>()... };
+        static constexpr uint32_t numDwords = static_cast<uint32_t>(detail::calcSumDwords<ExceptionDetailTypes...>());
+        static constexpr uint32_t sizesInDwords[numParameters] = {
+            static_cast<uint32_t>(detail::getNumDwords<ExceptionDetailTypes>())...
+        };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         RT_DEVICE_FUNCTION static void get(ExceptionDetailTypes*... exDetails);
@@ -1444,6 +1450,8 @@ private: \
         //     Ray Generationシェーダーを起動する。
         // EN: Setup the shader binding table based on the scene set, then launch the ray generation shader.
         void launch(CUstream stream, CUdeviceptr plpOnDevice, uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
+
+        Scene getScene() const;
     };
 
 
