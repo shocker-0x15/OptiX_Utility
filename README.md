@@ -194,8 +194,8 @@ OptiX Utilityはペイロードのパッキングを簡単にしたりカーネ�
 
 OptiX utility provides template wrapper for device-side built-in functions to ease packing of payloads and to avoid type inconsistency for inter-kernel communications.
 ```cpp
-#define SearchRayPayloadSignature PCG32RNG, SearchRayPayload*
-#define VisibilityRayPayloadSignature float
+using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, SearchRayPayload*>;
+using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 // ...
 CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
     // ...
@@ -217,7 +217,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     // ...
     PCG32RNG rng;
     SearchRayPayload* payload;
-    optixu::getPayloads<SearchRayPayloadSignature>(&rng, &payload);
+    SearchRayPayloadSignature::get(&rng, &payload);
     // ...
     {
         // ...
@@ -229,12 +229,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         // ...
     }
     // ...
-    optixu::setPayloads<SearchRayPayloadSignature>(&rng, nullptr);
+    SearchRayPayloadSignature::set(&rng, nullptr);
 }
 // ...
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
     float visibility = 0.0f;
-    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+    VisibilityRayPayloadSignature::set(&visibility);
 
     optixTerminateRay();
 }
