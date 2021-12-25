@@ -152,7 +152,7 @@ namespace Shared {
         Flow,
         DenoisedBeauty,
     };
-}
 
-#define SearchRayPayloadSignature Shared::PCG32RNG, Shared::SearchRayPayload*, Shared::DenoiserData*
-#define VisibilityRayPayloadSignature float
+    using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, SearchRayPayload*, DenoiserData*>;
+    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
+}

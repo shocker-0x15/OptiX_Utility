@@ -312,7 +312,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,

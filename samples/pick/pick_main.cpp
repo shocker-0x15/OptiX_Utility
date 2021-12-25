@@ -345,7 +345,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixPipeline = optixContext.createPipeline();
         optixPipeline.setPipelineOptions(
-            optixu::calcSumDwords<PickPayloadSignature>(),
+            Shared::PickPayloadSignature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(Shared::PickPipelineLaunchParameters),
             false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
@@ -387,7 +387,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixPipeline = optixContext.createPipeline();
         optixPipeline.setPipelineOptions(
-            optixu::calcSumDwords<RenderPayloadSignature>(),
+            Shared::RenderPayloadSignature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(Shared::RenderPipelineLaunchParameters),
             false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,

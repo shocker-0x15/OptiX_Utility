@@ -1,5 +1,7 @@
 #include "temporal_denoiser_shared.h"
 
+using namespace Shared;
+
 CUDA_DEVICE_KERNEL void copyToLinearBuffers(
     optixu::NativeBlockBuffer2D<float4> colorAccumBuffer,
     optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer,
@@ -25,7 +27,7 @@ CUDA_DEVICE_KERNEL void copyToLinearBuffers(
 
 CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     void* linearBuffer,
-    Shared::BufferToDisplay bufferTypeToDisplay,
+    BufferToDisplay bufferTypeToDisplay,
     float motionVectorOffset, float motionVectorScale,
     optixu::NativeBlockBuffer2D<float4> outputBuffer,
     uint2 imageSize) {
@@ -38,8 +40,8 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     uint32_t linearIndex = launchIndex.y * imageSize.x + launchIndex.x;
     float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     switch (bufferTypeToDisplay) {
-    case Shared::BufferToDisplay::NoisyBeauty:
-    case Shared::BufferToDisplay::DenoisedBeauty: {
+    case BufferToDisplay::NoisyBeauty:
+    case BufferToDisplay::DenoisedBeauty: {
         auto typedLinearBuffer = reinterpret_cast<float4*>(linearBuffer);
         value = typedLinearBuffer[linearIndex];
         // simple tone-map
@@ -48,12 +50,12 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
         value.z = 1 - std::exp(-value.z);
         break;
     }
-    case Shared::BufferToDisplay::Albedo: {
+    case BufferToDisplay::Albedo: {
         auto typedLinearBuffer = reinterpret_cast<float4*>(linearBuffer);
         value = typedLinearBuffer[linearIndex];
         break;
     }
-    case Shared::BufferToDisplay::Normal: {
+    case BufferToDisplay::Normal: {
         auto typedLinearBuffer = reinterpret_cast<float4*>(linearBuffer);
         value = typedLinearBuffer[linearIndex];
         value.x = 0.5f + 0.5f * value.x;
@@ -61,7 +63,7 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
         value.z = 0.5f + 0.5f * value.z;
         break;
     }
-    case Shared::BufferToDisplay::Flow: {
+    case BufferToDisplay::Flow: {
         auto typedLinearBuffer = reinterpret_cast<float2*>(linearBuffer);
         float2 f2Value = typedLinearBuffer[linearIndex];
         value = make_float4(fminf(fmaxf(motionVectorScale * f2Value.x + motionVectorOffset, 0.0f), 1.0f),

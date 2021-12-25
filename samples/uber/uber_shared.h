@@ -172,8 +172,8 @@ namespace Shared {
             unsigned int terminate : 1;
         };
     };
-}
 
-#define SphereAttributeSignature float, float
-#define SearchRayPayloadSignature OptixTraversableHandle, Shared::PCG32RNG, Shared::SearchRayPayload*
-#define VisibilityRayPayloadSignature float
+    using SphereAttributeSignature = optixu::AttributeSignature<float, float>;
+    using SearchRayPayloadSignature = optixu::PayloadSignature<OptixTraversableHandle, PCG32RNG, SearchRayPayload*>;
+    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
+}

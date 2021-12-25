@@ -105,7 +105,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     SearchRayPayload* payload;
     DenoiserData* denoiserData;
-    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, &payload, &denoiserData);
+    SearchRayPayloadSignature::get(nullptr, &payload, &denoiserData);
     payload->contribution += payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
     if (payload->pathLength == 1) {
@@ -123,7 +123,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     PCG32RNG rng;
     SearchRayPayload* payload;
     DenoiserData* denoiserData;
-    optixu::getPayloads<SearchRayPayloadSignature>(&rng, &payload, &denoiserData);
+    SearchRayPayloadSignature::get(&rng, &payload, &denoiserData);
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -225,12 +225,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     payload->direction = vIn;
     payload->terminate = false;
 
-    optixu::setPayloads<SearchRayPayloadSignature>(&rng, nullptr, nullptr);
+    SearchRayPayloadSignature::set(&rng, nullptr, nullptr);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
     float visibility = 0.0f;
-    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+    VisibilityRayPayloadSignature::set(&visibility);
 
     optixTerminateRay();
 }

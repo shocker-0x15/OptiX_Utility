@@ -3,8 +3,15 @@
 #include "../common/common.h"
 
 namespace Shared {
+    static constexpr float Pi = 3.14159265358979323846f;
+
+    static constexpr bool usePayloadAnnotation = true;
+
+
+
     enum RayType {
-        RayType_Primary = 0,
+        RayType_Search = 0,
+        RayType_Visibility,
         NumRayTypes
     };
 
@@ -62,18 +69,35 @@ namespace Shared {
         const Triangle* triangleBuffer;
     };
 
+    struct MaterialData {
+        CUtexObject texture;
+        float3 albedo;
+        bool isEmitter;
+
+        MaterialData() :
+            texture(0),
+            albedo(make_float3(0.0f, 0.0f, 0.5f)),
+            isEmitter(false) {}
+    };
+
 
 
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
-        int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
-        optixu::BlockBuffer2D<PCG32RNG, 4> rngBuffer;
-        optixu::BlockBuffer2D<float4, 1> accumBuffer;
-        float timeBegin;
-        float timeEnd;
+        int2 imageSize;
         uint32_t numAccumFrames;
+        optixu::NativeBlockBuffer2D<PCG32RNG> rngBuffer;
+        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
     };
 
-    using PayloadSignature = optixu::PayloadSignature<float3>;
+
+
+    struct PathFlags {
+        unsigned int pathLength : 31;
+        unsigned int terminate : 1;
+    };
+
+    using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, float3, float3, float3, float3, PathFlags>;
+    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 }

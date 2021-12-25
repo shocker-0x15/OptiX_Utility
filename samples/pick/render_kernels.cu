@@ -82,7 +82,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
-    optixu::setPayloads<RenderPayloadSignature>(&color);
+    RenderPayloadSignature::set(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -109,5 +109,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         optixGetSbtGASIndex() == pickInfo.matIndex &&
         optixGetPrimitiveIndex() == pickInfo.primIndex)
         color = 0.5f * color;
-    optixu::setPayloads<RenderPayloadSignature>(&color);
+    RenderPayloadSignature::set(&color);
 }

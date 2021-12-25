@@ -28,7 +28,7 @@ CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
         ret.b1 = __uint_as_float(0x7F800000 | primType); // not safe.
     }
     else {
-        optixu::getAttributes<SphereAttributeSignature>(&ret.b0, &ret.b1);
+        SphereAttributeSignature::get(&ret.b0, &ret.b1);
     }
     ret.primIndex = optixGetPrimitiveIndex();
     return ret;
@@ -69,10 +69,10 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
     SearchRayPayload* payloadPtr = &payload;
     while (true) {
         // JP: ペイロードとともにトレースを呼び出す。
-        //     ペイロード数は最大で8DWだが、
+        //     ペイロード数は最大で8DW(OptiX 7.3.0時点)だが、
         //     3つ目のペイロードをそのまま渡すと収まりきらないのでポインターとして渡す。
         // EN: Trace call with payloads.
-        //     The maximum number of payloads is 8 dwords in total.
+        //     The maximum number of payloads is 8 dwords in total (in OptiX 7.3.0).
         //     However pass the third payload as pointer because its direct size cannot fit in.
         optixu::trace<SearchRayPayloadSignature>(
             traversable, origin, direction,
@@ -105,14 +105,12 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(searchRay)() {
-    // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通じてペイロードを取得する。
     //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
-    // EN: The signature used in getPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
+    // EN: Get payloads via a payload signature type corresponding to optixu::trace().
     //     However pass the null pointer as the first payload because we don't need the first payload here.
     SearchRayPayload* payload;
-    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &payload);
+    SearchRayPayloadSignature::get(nullptr, nullptr, &payload);
     payload->contribution = payload->contribution + payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
     payload->terminate = true;
 }
@@ -229,18 +227,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
     const MaterialData &mat = plp.materialData[sbtr.materialIndex];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
 
-    // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
-    //     対応するtrace/getPayloads/setPayloadsのテンプレート引数に同じ型を明示的に渡して
-    //     不一致を検出できるようにすることを推奨する。
-    // EN: The signature used in getPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
-    //     It is recommended to explicitly pass the same template arguments to 
-    //     corresponding trace/getPayloads/setPayloads to notice mismatch.
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通じてペイロードを取得する。
+    // EN: Get payloads via a payload signature type corresponding to optixu::trace().
     OptixTraversableHandle traversable;
     PCG32RNG rng;
     SearchRayPayload* payload;
-    optixu::getPayloads<SearchRayPayloadSignature>(&traversable, &rng, &payload);
+    SearchRayPayloadSignature::get(&traversable, &rng, &payload);
 
     float3 p;
     float3 sn;
@@ -328,13 +320,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
     payload->specularBounce = false;
     payload->terminate = false;
 
-    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通してペイロードをセットする。
     //     しかしここでは書き換えていないペイロードに関してはnullポインターを渡す。
-    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
+    // EN: Set payloads via a payload signature type corresponding to optixu::trace().
     //     However pass the null pointers for the payloads which were read only.
-    optixu::setPayloads<SearchRayPayloadSignature>(nullptr, &rng, nullptr);
+    SearchRayPayloadSignature::set(nullptr, &rng, nullptr);
 }
 
 // JP: それなりの規模のパストレーシングを実装する場合はプログラムは基本的に共通化して
@@ -348,14 +338,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_specular)() {
     const MaterialData &mat = plp.materialData[sbtr.materialIndex];
     const GeometryData &geom = plp.geomInstData[sbtr.geomInstIndex];
 
-    // JP: getPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通じてペイロードを取得する。
     //     しかしここでは最初のペイロードが不要なためnullポインターを最初のペイロードに渡す。
-    // EN: The signature used in getPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
+    // EN: Get payloads via a payload signature type corresponding to optixu::trace().
     //     However pass the null pointer as the first payload because we don't need the first payload here.
     SearchRayPayload* payload;
-    optixu::getPayloads<SearchRayPayloadSignature>(nullptr, nullptr, &payload);
+    SearchRayPayloadSignature::get(nullptr, nullptr, &payload);
 
     float3 p;
     float3 sn;
@@ -387,12 +375,10 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_specular)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
-    // JP: setPayloads()のシグネチャーはoptixu::trace()におけるペイロード部を
-    //     ポインターとしたものに一致しなければならない。
-    // EN: The signature used in setPayloads() must match the one replacing the part of payloads
-    //     in optixu::trace() to pointer types.
+    // JP: optixu::trace()に対応するペイロードシグネチャー型を通してペイロードをセットする。
+    // EN: Set payloads via a payload signature type corresponding to optixu::trace().
     float visibility = 0.0f;
-    optixu::setPayloads<VisibilityRayPayloadSignature>(&visibility);
+    VisibilityRayPayloadSignature::set(&visibility);
 
     optixTerminateRay();
 }

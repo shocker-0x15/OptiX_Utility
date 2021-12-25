@@ -44,6 +44,6 @@ namespace Shared {
         optixu::NativeBlockBuffer2D<float4> resultBuffer;
         PerspectiveCamera camera;
     };
-}
 
-#define PayloadSignature float3
+    using PayloadSignature = optixu::PayloadSignature<float3>;
+}

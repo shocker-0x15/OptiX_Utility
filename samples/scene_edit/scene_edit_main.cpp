@@ -1155,7 +1155,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false,

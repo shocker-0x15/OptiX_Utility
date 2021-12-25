@@ -23,9 +23,11 @@ struct HitPointParameter {
             ret.b2 = bc.y;
         }
         else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
-            // JP: Intersection Programで設定したアトリビュート変数は optixu::getAttributes() で取得できる。
-            // EN: Attribute variables set in the intersection program can be obtained using optixu::getAttributes().
-            optixu::getAttributes<SphereAttributeSignature>(&ret.b1, &ret.b2);
+            // JP: Intersection Programで設定したアトリビュート変数は
+            //     optixu::reportIntersection() に対応するアトリビュートシグネチャー型を通じて取得できる。
+            // EN: Attribute variables set in the intersection program can be obtained using
+            //     an attribute signature type corresponding to optixu::reportIntersection().
+            SphereAttributeSignature::get(&ret.b1, &ret.b2);
         }
         ret.primIndex = optixGetPrimitiveIndex();
         return ret;
@@ -73,10 +75,10 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
     float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
     float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
 
-    // JP: ペイロードと同様に、対応するreportIntersection()/getAttributes()で
-    //     明示的にテンプレート引数を渡すことで型の不一致を検出できるようにすることを推奨する。
-    // EN: It is recommended to explicitly pass template arguments to corresponding
-    //     reportIntersection()/getAttributes() to detect type mismatch similar to payloads.
+    // JP: アトリビュートシグネチャー型をテンプレート引数に指定して、
+    //     アトリビュートとともに交叉が有効であることを報告する。
+    // EN: Specify an attribute signature type as the template argument and
+    //     report that the intersection is valid with attributes.
     optixu::reportIntersection<SphereAttributeSignature>(t, isFront ? 0 : 1, theta, phi);
 }
 
@@ -103,7 +105,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -138,5 +140,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     // EN: Visualize the normal.
     //     There is no object to world space transform since this sample uses only a single GAS.
     float3 color = 0.5f * sn + make_float3(0.5f);
-    optixu::setPayloads<PayloadSignature>(&color);
+    PayloadSignature::set(&color);
 }

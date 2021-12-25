@@ -2,8 +2,10 @@
 
 #include "uber_shared.h"
 
+using namespace Shared;
+
 CUDA_DEVICE_KERNEL void deform(
-    const Shared::Vertex* originalVertices, Shared::Vertex* vertices, uint32_t numVertices,
+    const Vertex* originalVertices, Vertex* vertices, uint32_t numVertices,
     float t) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
@@ -15,16 +17,16 @@ CUDA_DEVICE_KERNEL void deform(
 }
 
 CUDA_DEVICE_KERNEL void accumulateVertexNormals(
-    Shared::Vertex* vertices,
-    Shared::Triangle* triangles, uint32_t numTriangles) {
+    Vertex* vertices,
+    Triangle* triangles, uint32_t numTriangles) {
     uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
         return;
 
-    const Shared::Triangle &tri = triangles[triIdx];
-    Shared::Vertex &v0 = vertices[tri.index0];
-    Shared::Vertex &v1 = vertices[tri.index1];
-    Shared::Vertex &v2 = vertices[tri.index2];
+    const Triangle &tri = triangles[triIdx];
+    Vertex &v0 = vertices[tri.index0];
+    Vertex &v1 = vertices[tri.index1];
+    Vertex &v2 = vertices[tri.index2];
 
     const auto atomicAddNormalAsInt32 = [](float3* dstN, const int3 &vn) {
         atomicAdd(reinterpret_cast<int32_t*>(&dstN->x), vn.x);
@@ -44,7 +46,7 @@ CUDA_DEVICE_KERNEL void accumulateVertexNormals(
     atomicAddNormalAsInt32(&v2.normal, vnInt32);
 }
 
-CUDA_DEVICE_KERNEL void normalizeVertexNormals(Shared::Vertex* vertices, uint32_t numVertices) {
+CUDA_DEVICE_KERNEL void normalizeVertexNormals(Vertex* vertices, uint32_t numVertices) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
         return;

@@ -38,7 +38,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Appropriately setting primitive type flags is required since this sample uses curve intersection.
     //     There are multiple curve types and the sample use all of them.
     //     The attribute size of curves is 1 Dword (float).
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
                                 std::max(optixu::calcSumDwords<float2>(),
                                          optixu::calcSumDwords<float>()),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),

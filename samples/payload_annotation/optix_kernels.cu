@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "denoiser_shared.h"
+#include "payload_annotation_shared.h"
 
 using namespace Shared;
 
@@ -36,7 +36,7 @@ struct HitGroupSBTRecordData {
 CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
-    PCG32RNG rng = plp.rngBuffer[launchIndex];
+    PCG32RNG rng = plp.rngBuffer.read(launchIndex);
 
     float x = static_cast<float>(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
     float y = static_cast<float>(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
@@ -46,72 +46,68 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
-    SearchRayPayload payload;
-    payload.alpha = make_float3(1.0f, 1.0f, 1.0f);
-    payload.contribution = make_float3(0.0f, 0.0f, 0.0f);
-    payload.pathLength = 1;
-    payload.terminate = false;
-    SearchRayPayload* payloadPtr = &payload;
-    float3 firstHitAlbedo = make_float3(0.0f, 0.0f, 0.0f);
-    float3 firstHitNormal = make_float3(0.0f, 0.0f, 0.0f);
-    float3* firstHitAlbedoPtr = &firstHitAlbedo;
-    float3* firstHitNormalPtr = &firstHitNormal;
+    float3 accContribution = make_float3(0.0f, 0.0f, 0.0f);
+    float3 accAlpha = make_float3(1.0f, 1.0f, 1.0f);
+    PathFlags flags;
+    flags.pathLength = 1;
+    flags.terminate = false;
     while (true) {
+        float3 contribution;
+        float3 alpha;
+        // JP: 通常のレイ用のペイロードタイプを指定する。
+        // EN: Specify a payload type for the normal ray.
+        constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
+            OPTIX_PAYLOAD_TYPE_ID_0 :
+            OPTIX_PAYLOAD_TYPE_DEFAULT;
         optixu::trace<SearchRayPayloadSignature>(
+            payloadTypeID,
             plp.travHandle, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
-            rng, payloadPtr, firstHitAlbedoPtr, firstHitNormalPtr);
-        if (payload.terminate || payload.pathLength >= 10)
+            rng, alpha, contribution, origin, direction, flags);
+        accContribution += accAlpha * contribution;
+        accAlpha *= alpha;
+        if (flags.terminate || flags.pathLength >= 10)
             break;
-
-        origin = payload.origin;
-        direction = payload.direction;
-        ++payload.pathLength;
+        ++flags.pathLength;
     }
 
-    plp.rngBuffer[launchIndex] = rng;
-
-    // Normal input to the denoiser should be in camera space (right handed, looking down the negative Z-axis).
-    firstHitNormal = transpose(plp.camera.orientation) * firstHitNormal;
-    firstHitNormal.x *= -1;
+    plp.rngBuffer.write(launchIndex, rng);
 
     float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
-    float3 prevAlbedoResult = make_float3(0.0f, 0.0f, 0.0f);
-    float3 prevNormalResult = make_float3(0.0f, 0.0f, 0.0f);
-    if (plp.numAccumFrames > 0) {
+    if (plp.numAccumFrames > 0)
         prevColorResult = getXYZ(plp.colorAccumBuffer.read(launchIndex));
-        prevAlbedoResult = getXYZ(plp.albedoAccumBuffer.read(launchIndex));
-        prevNormalResult = getXYZ(plp.normalAccumBuffer.read(launchIndex));
-    }
     float curWeight = 1.0f / (1 + plp.numAccumFrames);
-    float3 colorResult = (1 - curWeight) * prevColorResult + curWeight * payload.contribution;
-    float3 albedoResult = (1 - curWeight) * prevAlbedoResult + curWeight * firstHitAlbedo;
-    float3 normalResult = (1 - curWeight) * prevNormalResult + curWeight * firstHitNormal;
+    float3 colorResult = (1 - curWeight) * prevColorResult + curWeight * accContribution;
     plp.colorAccumBuffer.write(launchIndex, make_float4(colorResult, 1.0f));
-    plp.albedoAccumBuffer.write(launchIndex, make_float4(albedoResult, 1.0f));
-    plp.normalAccumBuffer.write(launchIndex, make_float4(normalResult, 1.0f));
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
-    SearchRayPayload* payload;
-    float3* albedo;
-    float3* normal;
-    SearchRayPayloadSignature::get(nullptr, &payload, &albedo, &normal);
-    payload->contribution += payload->alpha * make_float3(0.01f, 0.01f, 0.01f);
-    payload->terminate = true;
+    // JP: 通常のレイ用のペイロードタイプを指定する。
+    // EN: Specify a payload type for the normal ray.
+    if constexpr (usePayloadAnnotation)
+        optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
+
+    PathFlags flags;
+    SearchRayPayloadSignature::get(nullptr, nullptr, nullptr, nullptr, nullptr, &flags);
+    float3 contribution = make_float3(0.01f, 0.01f, 0.01f);
+    flags.terminate = true;
+    SearchRayPayloadSignature::set(nullptr, nullptr, &contribution, nullptr, nullptr, &flags);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
+    // JP: 通常のレイ用のペイロードタイプを指定する。
+    // EN: Specify a payload type for the normal ray.
+    if constexpr (usePayloadAnnotation)
+        optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
+
     auto sbtr = HitGroupSBTRecordData::get();
     const MaterialData &mat = sbtr.matData;
     const GeometryData &geom = sbtr.geomData;
 
     PCG32RNG rng;
-    SearchRayPayload* payload;
-    float3* firstHitAlbedo;
-    float3* firstHitNormal;
-    SearchRayPayloadSignature::get(&rng, &payload, &firstHitAlbedo, &firstHitNormal);
+    PathFlags flags;
+    SearchRayPayloadSignature::get(&rng, nullptr, nullptr, nullptr, nullptr, &flags);
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -145,15 +141,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     else
         albedo = mat.albedo;
 
-    if (payload->pathLength == 1) {
-        *firstHitAlbedo = albedo;
-        *firstHitNormal = sn;
-    }
+    float3 contribution = make_float3(0.0f, 0.0f, 0.0f);
 
     const float3 LightRadiance = make_float3(30, 30, 30);
     // Hard-coded directly visible light
-    if (mat.isEmitter && isFrontFace && payload->pathLength == 1)
-        payload->contribution += payload->alpha * LightRadiance;
+    if (mat.isEmitter && isFrontFace && flags.pathLength == 1)
+        contribution += LightRadiance;
 
     // Next Event Estimation
     {
@@ -172,7 +165,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
         float visibility = 1.0f;
+        // JP: シャドウレイ用のペイロードタイプを指定する。
+        // EN: Specify a payload type for shadow ray.
+        constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
+            OPTIX_PAYLOAD_TYPE_ID_1 :
+            OPTIX_PAYLOAD_TYPE_DEFAULT;
         optixu::trace<VisibilityRayPayloadSignature>(
+            payloadTypeID,
             plp.travHandle, p, shadowRayDir,
             0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Visibility, NumRayTypes, RayType_Visibility,
@@ -181,8 +180,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float cosSP = dot(sn, shadowRayDir);
         float G = visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
         float3 fs = cosSP > 0 ? albedo / Pi : make_float3(0, 0, 0);
-        float3 contribution = payload->alpha * fs * G * Le / areaPDF;
-        payload->contribution += contribution;
+        contribution += fs * G * Le / areaPDF;
     }
 
     const auto makeCoordinateSystem = [](const float3 &n, float3* s, float3* t) {
@@ -205,15 +203,18 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     vIn = make_float3(dot(make_float3(s.x, t.x, sn.x), vIn),
                       dot(make_float3(s.y, t.y, sn.y), vIn),
                       dot(make_float3(s.z, t.z, sn.z), vIn));
-    payload->alpha = payload->alpha * albedo;
-    payload->origin = p;
-    payload->direction = vIn;
-    payload->terminate = false;
+    float3 alpha = albedo;
+    flags.terminate = false;
 
-    SearchRayPayloadSignature::set(&rng, nullptr, nullptr, nullptr);
+    SearchRayPayloadSignature::set(&rng, &alpha, &contribution, &p, &vIn, &flags);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
+    // JP: シャドウレイ用のペイロードタイプを指定する。
+    // EN: Specify a payload type for shadow ray.
+    if constexpr (usePayloadAnnotation)
+        optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_1);
+
     float visibility = 0.0f;
     VisibilityRayPayloadSignature::set(&visibility);
 

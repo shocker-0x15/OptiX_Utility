@@ -35,11 +35,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: This sample uses two-level AS (single-level instancing).
     //     Appropriately setting primitive type flags is required since this sample uses curve and
     //     custom primitive intersection.
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
-                                std::max({
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
+                                std::max<uint32_t>({
                                     optixu::calcSumDwords<float2>(),
                                     optixu::calcSumDwords<float>(),
-                                    optixu::calcSumDwords<SphereAttributeSignature>() }),
+                                    Shared::SphereAttributeSignature::numDwords }),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |

@@ -1,16 +1,24 @@
 ﻿/*
 
-JP: このサンプルはデノイザーの使用方法を示します。
-    OptiXはモンテカルロレイトレーシングによるレンダリング結果の分散、
-    画像中のノイズを低減するデノイザーを提供しています。
+※このサンプルコードはドライバー側におそらくバグがあるため現時点では未完成・未検証。
+* This sample is not completed/verified since the driver may have a bug.
+  https://forums.developer.nvidia.com/t/payload-usage-annotation/196380/7
 
-EN: This sample shows how to use the denoiser.
-    OptiX provides the denoiser to reduce noises in the image coming from variance of the rendering result
-    by Monte Carlo ray tracing.
+JP: このサンプルはペイロードの使用方法を明示的に指定することでパイプラインの最適化を助ける方法について示します。
+    ペイロードのパラメターごとの各シェーダーにおけるアクセスフラグを記述したデータを作成し、
+    モジュールやプログラムグループ作成時に指定、併せてカーネル内でも使用するペイロードタイプを指定することで
+    ペイロード使用方法のアノテーションを行うことができます。
+    アノテーションを適切に行うことによって複雑なパイプラインにおけるレジスター使用量を削減し、
+    性能向上につながる可能性があります。
 
+EN: This sample shows how to explicitly annotate payload usages to help pipeline optimization.
+    Create data describing access flags in each shader per payload parameter to pass to module and 
+    program group creation along with specifying a used payload type in kernel to annotate payload usages.
+    Appropriate annotations allow to reduce register consumption in complex pipelines and possibly
+    improve performance.
 */
 
-#include "denoiser_shared.h"
+#include "payload_annotation_shared.h"
 
 #include "../common/obj_loader.h"
 #include "../common/dds_loader.h"
@@ -35,10 +43,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
-    // EN: This sample uses two-level AS (single-level instancing).
-    pipeline.setPipelineOptions(std::max(Shared::SearchRayPayloadSignature::numDwords,
-                                         Shared::VisibilityRayPayloadSignature::numDwords),
+    // JP: アノテーション機能を使用する場合は、パイプラインオプションにおけるペイロードサイズにゼロを指定する。
+    // EN: Specify zero for the payload size in the pipeline option in the case where using the annotation feature.
+    constexpr uint32_t payloadSizeInDwords = Shared::usePayloadAnnotation ? 0 :
+        std::max(Shared::SearchRayPayloadSignature::numDwords,
+                 Shared::VisibilityRayPayloadSignature::numDwords);
+    pipeline.setPipelineOptions(payloadSizeInDwords,
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
@@ -46,25 +56,99 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "denoiser/ptxes/optix_kernels.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");
+    std::vector<optixu::PayloadType> payloadTypes;
+    if constexpr (Shared::usePayloadAnnotation) {
+        // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
+        // EN: Create payload types for two ray types.
+        payloadTypes.resize(2);
+        payloadTypes[0] = optixu::PayloadType::create<Shared::SearchRayPayloadSignature>(
+            {
+                // rng
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
+                // alpha
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
+                // contribution
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
+                // origin
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
+                // direction
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
+                // flags
+                // JP: Missプログラムではterminateに書込みしか行っていないように見えるが、
+                //     flagsはビットフィールドなのでRead Writeとして取り扱う必要がある。
+                // EN: The miss program seems to only write to "terminate" but
+                //     flags is a bit field so needs to be regarded as read write.
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
+            });
+        payloadTypes[1] = optixu::PayloadType::create<Shared::VisibilityRayPayloadSignature>(
+            {
+                // visibility
+                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_CH_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                 OPTIX_PAYLOAD_SEMANTICS_AH_WRITE |
+                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
+            });
+    }
+    // JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
+    // EN: Pass payload types to module creation when using payload annotation.
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
+        nullptr, 0,
+        payloadTypes.data(), payloadTypes.size());
 
     optixu::Module emptyModule;
 
     optixu::ProgramGroup pathTracingRayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+
+    // JP: Miss Programで使用されているペイロードタイプ情報を渡す。
+    // EN: Pass the payload type used in the miss program.
+    optixu::ProgramGroup missProgram = pipeline.createMissProgram(
+        moduleOptiX, RT_MS_NAME_STR("miss"),
+        Shared::usePayloadAnnotation ? payloadTypes[0] : optixu::PayloadType());
     optixu::ProgramGroup emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
+    // JP: それぞれのヒットグループで使われているペイロードタイプ情報を渡す。
+    // EN: Pass the payload type for each hit group.
     optixu::ProgramGroup shadingHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("shading"),
-        emptyModule, nullptr);
+        emptyModule, nullptr,
+        Shared::usePayloadAnnotation ? payloadTypes[0] : optixu::PayloadType());
     optixu::ProgramGroup visibilityHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr,
-        moduleOptiX, RT_AH_NAME_STR("visibility"));
+        moduleOptiX, RT_AH_NAME_STR("visibility"),
+        Shared::usePayloadAnnotation ? payloadTypes[1] : optixu::PayloadType());
+
+    for (int i = 0; i < payloadTypes.size(); ++i)
+        payloadTypes[i].destroy();
 
     pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
@@ -229,10 +313,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::Buffer asBuildScratchMem;
 
-    // JP: このサンプルではデノイザーに焦点を当て、
-    //     ほかをシンプルにするために1つのGASあたり1つのGeometryInstanceとする。
-    // EN: Use one GeometryInstance per GAS for simplicty and
-    //     to focus on denoiser in this sample.
     struct Geometry {
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
         cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
@@ -560,94 +640,32 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
     cudau::Array colorAccumBuffer;
-    cudau::Array albedoAccumBuffer;
-    cudau::Array normalAccumBuffer;
     colorAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
                                   renderTargetSizeX, renderTargetSizeY, 1);
-    albedoAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
-                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                                   renderTargetSizeX, renderTargetSizeY, 1);
-    normalAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
-                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                                   renderTargetSizeX, renderTargetSizeY, 1);
-    cudau::TypedBuffer<float4> linearColorBuffer;
-    cudau::TypedBuffer<float4> linearAlbedoBuffer;
-    cudau::TypedBuffer<float4> linearNormalBuffer;
-    cudau::TypedBuffer<float4> linearOutputBuffer;
-    linearColorBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                 renderTargetSizeX * renderTargetSizeY);
-    linearAlbedoBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                  renderTargetSizeX * renderTargetSizeY);
-    linearNormalBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                  renderTargetSizeX * renderTargetSizeY);
-    linearOutputBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                  renderTargetSizeX * renderTargetSizeY);
 
-    optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
-    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+    cudau::Array rngBuffer;
+    rngBuffer.initialize2D(
+        cuContext, cudau::ArrayElementType::UInt32, sizeof(Shared::PCG32RNG) / sizeof(uint32_t),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+        renderTargetSizeX, renderTargetSizeY, 1);
     {
         std::mt19937_64 rng(591842031321323413);
 
-        rngBuffer.map();
+        auto rngs = rngBuffer.map<Shared::PCG32RNG>();
         for (int y = 0; y < renderTargetSizeY; ++y)
             for (int x = 0; x < renderTargetSizeX; ++x)
-                rngBuffer(x, y).setState(rng());
+                rngs[y * renderTargetSizeX + x].setState(rng());
         rngBuffer.unmap();
     };
-
-
-
-    // ----------------------------------------------------------------
-    // JP: デノイザーのセットアップ。
-    // EN: Setup a denoiser.
-
-    constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
-    constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
-    constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
-    optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_MODEL_KIND_HDR, true, true);
-    size_t stateSize;
-    size_t scratchSize;
-    size_t scratchSizeForComputeIntensity;
-    uint32_t numTasks;
-    denoiser.prepare(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-                     &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-                     &numTasks);
-    hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
-    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
-    hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
-    cudau::Buffer denoiserStateBuffer;
-    cudau::Buffer denoiserScratchBuffer;
-    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateSize, 1);
-    denoiserScratchBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                     std::max(scratchSize, scratchSizeForComputeIntensity), 1);
-
-    std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
-    denoiser.getTasks(denoisingTasks.data());
-
-    denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
-
-    // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
-    // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
-    CUmodule moduleCopyBuffers;
-    CUDADRV_CHECK(cuModuleLoad(&moduleCopyBuffers, (getExecutableDirectory() / "denoiser/ptxes/copy_buffers.ptx").string().c_str()));
-    cudau::Kernel kernelCopyBuffers(moduleCopyBuffers, "copyBuffers", cudau::dim3(8, 8), 0);
-
-    CUdeviceptr hdrIntensity;
-    CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
-
-    // END: Setup a denoiser.
-    // ----------------------------------------------------------------
 
 
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
-    plp.rngBuffer = rngBuffer.getBlockBuffer2D();
+    plp.rngBuffer = rngBuffer.getSurfaceObject(0);
     plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
-    plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
-    plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
     plp.camera.fovY = 50 * M_PI / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.16f);
@@ -662,89 +680,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     cudau::Timer timerRender;
-    cudau::Timer timerDenoise;
     timerRender.initialize(cuContext);
-    timerDenoise.initialize(cuContext);
     
     // JP: レンダリング
     // EN: Render
-    constexpr uint32_t numSamples = 8;
+    constexpr uint32_t numSamples = 64;
     timerRender.start(cuStream);
     for (int frameIndex = 0; frameIndex < numSamples; ++frameIndex) {
         plp.numAccumFrames = frameIndex;
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
         pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
     }
-
-    // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
-    // EN: Copy the results to the linear buffers (and normalize normals).
-    cudau::dim3 dimCopyBuffers = kernelCopyBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
-    kernelCopyBuffers(cuStream, dimCopyBuffers,
-                      colorAccumBuffer.getSurfaceObject(0),
-                      albedoAccumBuffer.getSurfaceObject(0),
-                      normalAccumBuffer.getSurfaceObject(0),
-                      linearColorBuffer.getDevicePointer(),
-                      linearAlbedoBuffer.getDevicePointer(),
-                      linearNormalBuffer.getDevicePointer(),
-                      uint2(renderTargetSizeX, renderTargetSizeY));
     timerRender.stop(cuStream);
-
-    // JP: パストレーシング結果のデノイズ。
-    //     毎フレーム呼ぶ必要があるのはcomputeIntensity()とinvoke()。
-    //     computeIntensity()は自作することもできる。
-    //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
-    // EN: Denoise the path tracing result.
-    //     computeIntensity() and invoke() should be calld every frame.
-    //     You can also create a custom computeIntensity().
-    //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
-    timerDenoise.start(cuStream);
-    denoiser.computeIntensity(cuStream,
-                              linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                              denoiserScratchBuffer, hdrIntensity);
-    for (int i = 0; i < denoisingTasks.size(); ++i)
-        denoiser.invoke(cuStream,
-                        false, hdrIntensity, 0.0f,
-                        linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                        linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                        linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                        optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,
-                        optixu::BufferView(),
-                        linearOutputBuffer,
-                        denoisingTasks[i]);
-    timerDenoise.stop(cuStream);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, timerRender.report());
-    hpprintf("Denoise: %.3f[ms]\n", timerDenoise.report());
 
-    timerDenoise.finalize();
     timerRender.finalize();
 
-
-
-    // JP: 結果とデノイズ用付随バッファーの画像出力。
-    // EN: Output the result and buffers associated to the denoiser as images.
-    auto normalPixels = normalAccumBuffer.map<float4>();
-    std::vector<uint32_t> normalImageData(renderTargetSizeX * renderTargetSizeY);
-    for (int y = 0; y < renderTargetSizeY; ++y) {
-        for (int x = 0; x < renderTargetSizeX; ++x) {
-            uint32_t linearIndex = renderTargetSizeX * y + x;
-
-            float4 normal = normalPixels[linearIndex];
-            uint32_t &dstNormal = normalImageData[linearIndex];
-            dstNormal = (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.x)) << 0) |
-                        (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.y)) << 8) |
-                        (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.z)) << 16) |
-                        (std::min<uint32_t>(255, 255 * (0.5f + 0.5f * normal.w)) << 24);
-        }
-    }
-    normalAccumBuffer.unmap();
-
-    saveImage("color.png", colorAccumBuffer, true, true);
-    saveImage("albedo.png", albedoAccumBuffer, false, false);
-    saveImage("normal.png", renderTargetSizeX, renderTargetSizeY, normalImageData.data());
-    saveImage("color_denoised.png", renderTargetSizeX, linearOutputBuffer, true, true);
+    // JP: 結果の画像出力。
+    // EN: Output the result as an image.
+    saveImage("output.png", colorAccumBuffer, true, true);
 
 
 
@@ -752,24 +709,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     
-    CUDADRV_CHECK(cuMemFree(hdrIntensity));
-
-    CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
-    
-    denoiserScratchBuffer.finalize();
-    denoiserStateBuffer.finalize();
-    
-    denoiser.destroy();
-    
     rngBuffer.finalize();
 
-    linearOutputBuffer.finalize();
-    linearNormalBuffer.finalize();
-    linearAlbedoBuffer.finalize();
-    linearColorBuffer.finalize();
-
-    normalAccumBuffer.finalize();
-    albedoAccumBuffer.finalize();
     colorAccumBuffer.finalize();
 
 

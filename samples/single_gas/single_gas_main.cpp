@@ -36,7 +36,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     カーネル中で使用しているアトリビュートサイズは2Dwords(三角形の重心座標 float2)。
     // EN: This sample uses only a single GAS.
     //     The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2).
-    pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
+    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
                                 optixu::calcSumDwords<float2>(),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
@@ -204,9 +204,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
     {
-#define USE_TRIANGLE_SROUP_FOR_AREA_LIGHT
+#define USE_TRIANGLE_SOUP_FOR_AREA_LIGHT
 
-#if defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+#if defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         Shared::Vertex vertices[] = {
             { make_float3(-0.25f, 0.0f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
             { make_float3(-0.25f, 0.0f,  0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
@@ -237,7 +237,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
-#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+#if !defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
 #endif
         geomData.matSR_N = transpose(inverse(matSR));
@@ -245,7 +245,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: インデックスバッファーを設定しない場合はトライアングルスープとして取り扱われる。
         // EN: It will be interpreted as triangle soup if not setting an index buffer.
         areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
-#if !defined(USE_TRIANGLE_SROUP_FOR_AREA_LIGHT)
+#if !defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
 #endif
         areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
