@@ -10,7 +10,7 @@ namespace shared {
     struct PipelineLaunchParameters1 {
         OptixTraversableHandle travHandle;
     };
-}
 
-#define Pipeline0Payload0Signature uint32_t
-#define Pipeline1Payload0Signature float3
+    using Pipeline0Payload0Signature = optixu::PayloadSignature<uint32_t>;
+    using Pipeline1Payload0Signature = optixu::PayloadSignature<float3>;
+}

@@ -265,7 +265,7 @@ TEST(MaterialTest, MaterialBasic) {
 
         optixu::Pipeline pipeline0 = context.createPipeline();
         pipeline0.setPipelineOptions(
-            optixu::calcSumDwords<Pipeline0Payload0Signature>(),
+            shared::Pipeline0Payload0Signature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(shared::PipelineLaunchParameters0),
             false,

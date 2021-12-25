@@ -20,16 +20,16 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(ms0)() {}
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(ch0)() {
     float3 value;
-    optixu::getPayloads<Pipeline1Payload0Signature>(&value);
+    Pipeline1Payload0Signature::get(&value);
     value = make_float3(value.x + 1, value.y + 1, value.z + 1);
-    optixu::setPayloads<Pipeline1Payload0Signature>(&value);
+    Pipeline1Payload0Signature::set(&value);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(ch1)() {
     float3 value;
-    optixu::getPayloads<Pipeline1Payload0Signature>(&value);
+    Pipeline1Payload0Signature::get(&value);
     value = make_float3(value.x + 2, value.y + 2, value.z + 2);
-    optixu::setPayloads<Pipeline1Payload0Signature>(&value);
+    Pipeline1Payload0Signature::set(&value);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(ah0)() {}

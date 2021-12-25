@@ -22,16 +22,16 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(ms0)() {
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(ch0)() {
     uint32_t value;
-    optixu::getPayloads<Pipeline0Payload0Signature>(&value);
+    Pipeline0Payload0Signature::get(&value);
     value += 1;
-    optixu::setPayloads<Pipeline0Payload0Signature>(&value);
+    Pipeline0Payload0Signature::set(&value);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(ch1)() {
     uint32_t value;
-    optixu::getPayloads<Pipeline0Payload0Signature>(&value);
+    Pipeline0Payload0Signature::get(&value);
     value += 2;
-    optixu::setPayloads<Pipeline0Payload0Signature>(&value);
+    Pipeline0Payload0Signature::set(&value);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(ah0)() {
