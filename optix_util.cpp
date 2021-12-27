@@ -2244,7 +2244,7 @@ namespace optixu {
     Module Pipeline::createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
                                                OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
                                                OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
-                                               PayloadType* payloadTypes, uint32_t numPayloadTypes) const {
+                                               const PayloadType* payloadTypes, uint32_t numPayloadTypes) const {
         std::vector<OptixPayloadType> optixPayloadTypes(numPayloadTypes);
         for (uint32_t i = 0; i < numPayloadTypes; ++i)
             optixPayloadTypes[i] = payloadTypes[i].getRawType();
@@ -2314,7 +2314,7 @@ namespace optixu {
 
     ProgramGroup Pipeline::createMissProgram(
         Module module, const char* entryFunctionName,
-        PayloadType payloadType) const {
+        const PayloadType &payloadType) const {
         _Module* _module = extract(module);
         m->throwRuntimeError((_module != nullptr) == (entryFunctionName != nullptr),
                              "Either of Miss module or entry function name is not provided.");
@@ -2342,7 +2342,7 @@ namespace optixu {
     ProgramGroup Pipeline::createHitProgramGroupForTriangleIS(
         Module module_CH, const char* entryFunctionNameCH,
         Module module_AH, const char* entryFunctionNameAH,
-        PayloadType payloadType) const {
+        const PayloadType &payloadType) const {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         m->throwRuntimeError((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
@@ -2387,7 +2387,7 @@ namespace optixu {
         Module module_CH, const char* entryFunctionNameCH,
         Module module_AH, const char* entryFunctionNameAH,
         ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
-        PayloadType payloadType) const {
+        const PayloadType &payloadType) const {
         m->throwRuntimeError(curveType != OPTIX_PRIMITIVE_TYPE_TRIANGLE && curveType != OPTIX_PRIMITIVE_TYPE_CUSTOM,
                              "Use the createHitProgramGroupForTriangleIS() or createHitProgramGroupForCustomIS() for triangles or custom primitives respectively.");
         _Module* _module_CH = extract(module_CH);
@@ -2437,7 +2437,7 @@ namespace optixu {
         Module module_CH, const char* entryFunctionNameCH,
         Module module_AH, const char* entryFunctionNameAH,
         Module module_IS, const char* entryFunctionNameIS,
-        PayloadType payloadType) const {
+        const PayloadType &payloadType) const {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         _Module* _module_IS = extract(module_IS);
@@ -2499,7 +2499,7 @@ namespace optixu {
     ProgramGroup Pipeline::createCallableProgramGroup(
         Module module_DC, const char* entryFunctionNameDC,
         Module module_CC, const char* entryFunctionNameCC,
-        PayloadType payloadType) const {
+        const PayloadType &payloadType) const {
         _Module* _module_DC = extract(module_DC);
         _Module* _module_CC = extract(module_CC);
         m->throwRuntimeError((_module_DC != nullptr) == (entryFunctionNameDC != nullptr),

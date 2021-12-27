@@ -1376,7 +1376,7 @@ private: \
         Module createModuleFromPTXString(const std::string &ptxString, int32_t maxRegisterCount,
                                          OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
                                          OptixModuleCompileBoundValueEntry* boundValues = nullptr, uint32_t numBoundValues = 0,
-                                         PayloadType* payloadTypes = nullptr, uint32_t numPayloadTypes = 0) const;
+                                         const PayloadType* payloadTypes = nullptr, uint32_t numPayloadTypes = 0) const;
 
         [[nodiscard]]
         ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;
@@ -1385,32 +1385,32 @@ private: \
         [[nodiscard]]
         ProgramGroup createMissProgram(
             Module module, const char* entryFunctionName,
-            PayloadType payloadType = PayloadType()) const;
+            const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForTriangleIS(
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
-            PayloadType payloadType = PayloadType()) const;
+            const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCurveIS(
             OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
             ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
-            PayloadType payloadType = PayloadType()) const;
+            const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCustomIS(
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
             Module module_IS, const char* entryFunctionNameIS,
-            PayloadType payloadType = PayloadType()) const;
+            const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createEmptyHitProgramGroup() const;
         [[nodiscard]]
         ProgramGroup createCallableProgramGroup(
             Module module_DC, const char* entryFunctionNameDC,
             Module module_CC, const char* entryFunctionNameCC,
-            PayloadType payloadType = PayloadType()) const;
+            const PayloadType &payloadType = PayloadType()) const;
 
         void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
 
