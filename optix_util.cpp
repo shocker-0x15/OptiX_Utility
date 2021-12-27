@@ -2081,21 +2081,6 @@ namespace optixu {
 
 
 
-    // static
-    PayloadType PayloadType::create(const uint32_t* payloadSizesInDwords,
-                                    const OptixPayloadSemantics* semantics,
-                                    uint32_t numPayloads) {
-        return (new _PayloadType(payloadSizesInDwords, semantics, numPayloads))->getPublicType();
-    }
-
-    void PayloadType::destroy() {
-        if (m)
-            delete m;
-        m = nullptr;
-    }
-
-
-
     Pipeline::Priv::~Priv() {
         if (pipelineLinked)
             optixPipelineDestroy(rawPipeline);
@@ -2261,10 +2246,8 @@ namespace optixu {
                                                OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
                                                PayloadType* payloadTypes, uint32_t numPayloadTypes) const {
         std::vector<OptixPayloadType> optixPayloadTypes(numPayloadTypes);
-        for (uint32_t i = 0; i < numPayloadTypes; ++i) {
-            const _PayloadType* _payloadType = extract(payloadTypes[i]);
-            optixPayloadTypes[i] = _payloadType->getRawPayloadType();
-        }
+        for (uint32_t i = 0; i < numPayloadTypes; ++i)
+            optixPayloadTypes[i] = payloadTypes[i].getRawType();
 
         OptixModuleCompileOptions moduleCompileOptions = {};
         moduleCompileOptions.maxRegisterCount = maxRegisterCount;
@@ -2346,11 +2329,9 @@ namespace optixu {
         desc.miss.entryFunctionName = entryFunctionName;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = {};
-        if (const _PayloadType* _payloadType = extract(payloadType); _payloadType) {
-            optixPayloadType = _payloadType->getRawPayloadType();
+        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
-        }
 
         OptixProgramGroup group;
         m->createProgram(desc, options, &group);
@@ -2391,11 +2372,9 @@ namespace optixu {
         }
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = {};
-        if (const _PayloadType* _payloadType = extract(payloadType); _payloadType) {
-            optixPayloadType = _payloadType->getRawPayloadType();
+        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
-        }
 
         OptixProgramGroup group;
         m->createProgram(desc, options, &group);
@@ -2444,11 +2423,9 @@ namespace optixu {
         desc.hitgroup.entryFunctionNameIS = nullptr;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = {};
-        if (const _PayloadType* _payloadType = extract(payloadType); _payloadType) {
-            optixPayloadType = _payloadType->getRawPayloadType();
+        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
-        }
 
         OptixProgramGroup group;
         m->createProgram(desc, options, &group);
@@ -2498,11 +2475,9 @@ namespace optixu {
         desc.hitgroup.entryFunctionNameIS = entryFunctionNameIS;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = {};
-        if (const _PayloadType* _payloadType = extract(payloadType); _payloadType) {
-            optixPayloadType = _payloadType->getRawPayloadType();
+        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
-        }
 
         OptixProgramGroup group;
         m->createProgram(desc, options, &group);
@@ -2554,11 +2529,9 @@ namespace optixu {
         }
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = {};
-        if (const _PayloadType* _payloadType = extract(payloadType); _payloadType) {
-            optixPayloadType = _payloadType->getRawPayloadType();
+        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
-        }
 
         OptixProgramGroup group;
         m->createProgram(desc, options, &group);
