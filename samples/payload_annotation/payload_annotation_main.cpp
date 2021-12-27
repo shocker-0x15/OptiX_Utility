@@ -57,11 +57,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");
-    std::vector<optixu::PayloadType> payloadTypes;
+    optixu::PayloadType payloadTypes[2];
     if constexpr (Shared::usePayloadAnnotation) {
         // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
         // EN: Create payload types for two ray types.
-        payloadTypes.resize(2);
         payloadTypes[0] = optixu::PayloadType::create<Shared::SearchRayPayloadSignature>(
             {
                 // rng
@@ -122,7 +121,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
         nullptr, 0,
-        payloadTypes.data(), payloadTypes.size());
+        payloadTypes, Shared::usePayloadAnnotation ? lengthof(payloadTypes) : 0);
 
     optixu::Module emptyModule;
 
@@ -146,9 +145,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         emptyModule, nullptr,
         moduleOptiX, RT_AH_NAME_STR("visibility"),
         Shared::usePayloadAnnotation ? payloadTypes[1] : optixu::PayloadType());
-
-    for (int i = 0; i < payloadTypes.size(); ++i)
-        payloadTypes[i].destroy();
 
     pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
