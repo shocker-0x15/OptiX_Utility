@@ -1336,8 +1336,10 @@ private: \
             return ret;
         }
 
-        template <typename PayloadSignatureType>
-        static PayloadType create(const OptixPayloadSemantics (&varSemantics)[PayloadSignatureType::numParameters]) {
+        template <typename PayloadSignatureType, uint32_t N>
+        static PayloadType create(const OptixPayloadSemantics (&varSemantics)[N]) {
+            static_assert(PayloadSignatureType::numParameters == N,
+                          "Number of semantics does not match to that of the signature.");
             PayloadType ret;
             ret.numDwords = PayloadSignatureType::numDwords;
             uint32_t offset = 0;
