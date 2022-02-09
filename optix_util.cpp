@@ -1,6 +1,6 @@
 ﻿/*
 
-   Copyright 2021 Shin Watanabe
+   Copyright 2022 Shin Watanabe
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -2938,7 +2938,7 @@ namespace optixu {
     }
 
     void Denoiser::setupState(CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const {
-        m->throwRuntimeError(m->imageSizeSet, "Call setImageSizes() before this function.");
+        m->throwRuntimeError(m->imageSizeSet, "Call prepare() before this function.");
         m->throwRuntimeError(stateBuffer.sizeInBytes() >= m->stateSize,
                              "Size of the given state buffer is not enough.");
         m->throwRuntimeError(scratchBuffer.sizeInBytes() >= m->scratchSize,

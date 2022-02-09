@@ -1,6 +1,6 @@
 ﻿/*
 
-   Copyright 2021 Shin Watanabe
+   Copyright 2022 Shin Watanabe
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -121,7 +121,6 @@ TODO:
 - Assertとexceptionの整理。
 
 検討事項 (Items under author's consideration, ignore this :) ):
-- ヒットグループのSBTのユーザーデータ配置順は逆であるべき？
 - Denoiserの事前設定は画像サイズにも依存するので、各バッファーはinvoke時ではなく事前に渡しておくべき？
 - Priv構造体がOptiXの構造体を直接持っていない場合が多々あるのがもったいない？
   => OptixBuildInputは巨大なパディングを含んでいるので好ましくない。
