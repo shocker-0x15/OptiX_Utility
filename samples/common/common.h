@@ -36,6 +36,7 @@
 #   include <cstdint>
 #   include <cmath>
 
+#   include <numbers>
 #   include <fstream>
 #   include <sstream>
 #   include <array>
@@ -84,6 +85,11 @@ void devPrintf(const char* fmt, ...);
 
 #define Assert_ShouldNotBeCalled() Assert(false, "Should not be called!")
 #define Assert_NotImplemented() Assert(false, "Not implemented yet!")
+
+
+
+template <typename T>
+static constexpr T pi_v = std::numbers::pi_v<T>;
 
 
 

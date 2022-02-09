@@ -265,7 +265,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             const auto calcPosition = [](float p) {
                 float r = (1 - p) * 0.1f + p * 0.2f;
                 float y = p * 1.0f;
-                float angle = 10 * M_PI * p;
+                float angle = 10 * pi_v<float> * p;
                 Shared::CurveVertex v;
                 v.position = float3(r * std::cos(angle),
                                     y,
@@ -280,7 +280,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             constexpr float end1 = 1.0f;
             for (int i = 0; i < numSegments; ++i) {
                 float posp = (float)i / (numSegments - 1);
-                float width = 0.025f * std::sin(M_PI * posp);
+                float width = 0.025f * std::sin(pi_v<float> * posp);
                 for (int j = 0; j < numMotionSteps; ++j) {
                     float tp = (float)j / (numMotionSteps - 1);
                     float begin = (1 - tp) * begin0 + tp * begin1;
@@ -425,7 +425,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: インスタンスを作成する。
     // EN: Create instances.
-    Matrix3x3 bunnyMatSR = rotateY3x3(M_PI / 4) * scale3x3(0.015f);
+    Matrix3x3 bunnyMatSR = rotateY3x3(pi_v<float> / 4) * scale3x3(0.015f);
     float bunnyInstXfm[] = {
         bunnyMatSR.m00, bunnyMatSR.m01, bunnyMatSR.m02, 0,
         bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.2f,
@@ -578,10 +578,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.timeBegin = 0.0f;
     plp.timeEnd = 1.0f;
     plp.numAccumFrames = 0;
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5f);
-    plp.camera.orientation = rotateY3x3(M_PI);
+    plp.camera.orientation = rotateY3x3(pi_v<float>);
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());

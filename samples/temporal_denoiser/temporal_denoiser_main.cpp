@@ -298,7 +298,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     g_cameraDirectionalMovingSpeed = 0.0015f;
     g_cameraTiltSpeed = 0.025f;
     g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(M_PI);
+    g_cameraOrientation = qRotateY(pi_v<float>);
 
     // END: Set up input callbacks.
     // ----------------------------------------------------------------
@@ -756,13 +756,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float yAmp;
 
         void setTransform() {
-            float scale = scaleBase + scaleAmp * std::sin(2 * M_PI * (scale_t / scaleFreq));
+            float scale = scaleBase + scaleAmp * std::sin(2 * pi_v<float> * (scale_t / scaleFreq));
 
-            float angle = 2 * M_PI * (anglularPos_t / angularPosFreq) + angularPosOffset;
+            float angle = 2 * pi_v<float> * (anglularPos_t / angularPosFreq) + angularPosOffset;
             float x = radius * std::cos(angle);
             float z = radius * std::sin(angle);
 
-            float y = yBase + yAmp * std::sin(2 * M_PI * (y_t / yFreq));
+            float y = yBase + yAmp * std::sin(2 * pi_v<float> * (y_t / yFreq));
 
             float bunnyXfm[] = {
                 scale, 0, 0, x,
@@ -816,14 +816,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     std::vector<MovingInstance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
+    const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
-        float angle = std::fmod(GoldenAngle * i, 2 * M_PI);
+        float angle = std::fmod(GoldenAngle * i, 2 * pi_v<float>);
 
         Shared::MaterialData matData;
-        matData.albedo = sRGB_degamma(HSVtoRGB(angle / (2 * M_PI),
+        matData.albedo = sRGB_degamma(HSVtoRGB(angle / (2 * pi_v<float>),
                                                std::sqrt(r / 0.9f),
                                                1.0f));
         bunnyMats[i].setUserData(matData);
@@ -1058,10 +1058,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
     plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
     plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.16f);
-    plp.camera.orientation = rotateY3x3(M_PI);
+    plp.camera.orientation = rotateY3x3(pi_v<float>);
     plp.prevCamera = plp.camera;
     plp.instances = instDataBuffer.getDevicePointer();
 
@@ -1275,13 +1275,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
             static float rollPitchYaw[3];
             g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
-            rollPitchYaw[0] *= 180 / M_PI;
-            rollPitchYaw[1] *= 180 / M_PI;
-            rollPitchYaw[2] *= 180 / M_PI;
-            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw, 3))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * M_PI / 180,
-                                                       rollPitchYaw[1] * M_PI / 180,
-                                                       rollPitchYaw[2] * M_PI / 180);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
+                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
+                                                       rollPitchYaw[1] * pi_v<float> / 180,
+                                                       rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();

@@ -1131,7 +1131,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     g_cameraDirectionalMovingSpeed = 0.0015f;
     g_cameraTiltSpeed = 0.025f;
     g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(M_PI);
+    g_cameraOrientation = qRotateY(pi_v<float>);
 
     // END: Set up input callbacks.
     // ----------------------------------------------------------------
@@ -1292,7 +1292,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = 0;
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     pipeline.setScene(optixEnv.scene);
@@ -1442,13 +1442,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
             static float rollPitchYaw[3];
             g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
-            rollPitchYaw[0] *= 180 / M_PI;
-            rollPitchYaw[1] *= 180 / M_PI;
-            rollPitchYaw[2] *= 180 / M_PI;
-            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw, 3))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * M_PI / 180,
-                                                       rollPitchYaw[1] * M_PI / 180,
-                                                       rollPitchYaw[2] * M_PI / 180);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
+                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
+                                                       rollPitchYaw[1] * pi_v<float> / 180,
+                                                       rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
@@ -1712,9 +1712,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     if (singleGeomInstSelected) {
                         std::copy_n(reinterpret_cast<float*>(&preTransform.scale), 3, instScale);
                         std::copy_n(preTransform.rollPitchYaw, 3, instOrientation);
-                        instOrientation[0] *= 180 / M_PI;
-                        instOrientation[1] *= 180 / M_PI;
-                        instOrientation[2] *= 180 / M_PI;
+                        instOrientation[0] *= 180 / pi_v<float>;
+                        instOrientation[1] *= 180 / pi_v<float>;
+                        instOrientation[2] *= 180 / pi_v<float>;
                         std::copy_n(reinterpret_cast<float*>(&preTransform.position), 3, instPosition);
                     }
                     else {
@@ -1722,14 +1722,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         instOrientation[0] = instOrientation[1] = instOrientation[2] = 0.0f;
                         instPosition[0] = instPosition[1] = instPosition[2] = 0.0f;
                     }
-                    srtUpdated |= ImGui::InputFloat3("Scale", instScale, 5);
-                    srtUpdated |= ImGui::InputFloat3("Roll/Pitch/Yaw", instOrientation, 5);
-                    srtUpdated |= ImGui::InputFloat3("Position", instPosition, 5);
+                    srtUpdated |= ImGui::InputFloat3("Scale", instScale, "%.5f");
+                    srtUpdated |= ImGui::InputFloat3("Roll/Pitch/Yaw", instOrientation, "%.5f");
+                    srtUpdated |= ImGui::InputFloat3("Position", instPosition, "%.5f");
                     if (singleGeomInstSelected && srtUpdated) {
                         preTransform.scale = float3(instScale[0], instScale[1], instScale[2]);
-                        preTransform.rollPitchYaw[0] = instOrientation[0] * M_PI / 180;
-                        preTransform.rollPitchYaw[1] = instOrientation[1] * M_PI / 180;
-                        preTransform.rollPitchYaw[2] = instOrientation[2] * M_PI / 180;
+                        preTransform.rollPitchYaw[0] = instOrientation[0] * pi_v<float> / 180;
+                        preTransform.rollPitchYaw[1] = instOrientation[1] * pi_v<float> / 180;
+                        preTransform.rollPitchYaw[2] = instOrientation[2] * pi_v<float> / 180;
                         preTransform.position = float3(instPosition[0], instPosition[1], instPosition[2]);
 
                         Shared::GASChildData gasChildData = {};
@@ -1850,9 +1850,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     if (singleInstSelected) {
                         std::copy_n(reinterpret_cast<float*>(&selectedInst->scale), 3, instScale);
                         std::copy_n(selectedInst->rollPitchYaw, 3, instOrientation);
-                        instOrientation[0] *= 180 / M_PI;
-                        instOrientation[1] *= 180 / M_PI;
-                        instOrientation[2] *= 180 / M_PI;
+                        instOrientation[0] *= 180 / pi_v<float>;
+                        instOrientation[1] *= 180 / pi_v<float>;
+                        instOrientation[2] *= 180 / pi_v<float>;
                         std::copy_n(reinterpret_cast<float*>(&selectedInst->position), 3, instPosition);
                     }
                     else {
@@ -1860,14 +1860,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         instOrientation[0] = instOrientation[1] = instOrientation[2] = 0.0f;
                         instPosition[0] = instPosition[1] = instPosition[2] = 0.0f;
                     }
-                    srtUpdated |= ImGui::InputFloat3("Scale", instScale, 5);
-                    srtUpdated |= ImGui::InputFloat3("Roll/Pitch/Yaw", instOrientation, 5);
-                    srtUpdated |= ImGui::InputFloat3("Position", instPosition, 5);
+                    srtUpdated |= ImGui::InputFloat3("Scale", instScale, "%.5f");
+                    srtUpdated |= ImGui::InputFloat3("Roll/Pitch/Yaw", instOrientation, "%.5f");
+                    srtUpdated |= ImGui::InputFloat3("Position", instPosition, "%.5f");
                     if (singleInstSelected && srtUpdated) {
                         selectedInst->scale = float3(instScale[0], instScale[1], instScale[2]);
-                        selectedInst->rollPitchYaw[0] = instOrientation[0] * M_PI / 180;
-                        selectedInst->rollPitchYaw[1] = instOrientation[1] * M_PI / 180;
-                        selectedInst->rollPitchYaw[2] = instOrientation[2] * M_PI / 180;
+                        selectedInst->rollPitchYaw[0] = instOrientation[0] * pi_v<float> / 180;
+                        selectedInst->rollPitchYaw[1] = instOrientation[1] * pi_v<float> / 180;
+                        selectedInst->rollPitchYaw[2] = instOrientation[2] * pi_v<float> / 180;
                         selectedInst->position = float3(instPosition[0], instPosition[1], instPosition[2]);
 
                         Matrix3x3 srMat =

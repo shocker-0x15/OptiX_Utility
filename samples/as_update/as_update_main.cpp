@@ -286,7 +286,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     g_cameraDirectionalMovingSpeed = 0.0015f;
     g_cameraTiltSpeed = 0.025f;
     g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(M_PI);
+    g_cameraOrientation = qRotateY(pi_v<float>);
 
     // END: Set up input callbacks.
     // ----------------------------------------------------------------
@@ -589,13 +589,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float yAmp;
 
         void setTransform() {
-            float scale = scaleBase + scaleAmp * std::sin(2 * M_PI * (scale_t / scaleFreq));
+            float scale = scaleBase + scaleAmp * std::sin(2 * pi_v<float> * (scale_t / scaleFreq));
 
-            float angle = 2 * M_PI * (anglularPos_t / angularPosFreq);
+            float angle = 2 * pi_v<float> * (anglularPos_t / angularPosFreq);
             float x = 0.7f * std::cos(angle);
             float z = 0.7f * std::sin(angle);
 
-            float y = yBase + yAmp * std::sin(2 * M_PI * (y_t / yFreq));
+            float y = yBase + yAmp * std::sin(2 * pi_v<float> * (y_t / yFreq));
 
             float bunnyXfm[] = {
                 scale, 0, 0, x,
@@ -769,7 +769,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     pipeline.setScene(scene);
@@ -910,13 +910,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
             static float rollPitchYaw[3];
             g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
-            rollPitchYaw[0] *= 180 / M_PI;
-            rollPitchYaw[1] *= 180 / M_PI;
-            rollPitchYaw[2] *= 180 / M_PI;
-            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw, 3))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * M_PI / 180,
-                                                       rollPitchYaw[1] * M_PI / 180,
-                                                       rollPitchYaw[2] * M_PI / 180);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
+                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
+                                                       rollPitchYaw[1] * pi_v<float> / 180,
+                                                       rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
@@ -929,7 +929,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // EN: Deform bunnys' vertices and update its GAS.
         //     Modify normal vectors as well.
         {
-            float t = 0.5f + 0.5f * std::sin(2 * M_PI * static_cast<float>(frameIndex % 180) / 180);
+            float t = 0.5f + 0.5f * std::sin(2 * pi_v<float> * static_cast<float>(frameIndex % 180) / 180);
             deform(cuStream, deform.calcGridDim(bunnyVertexBuffer.numElements()),
                    bunnyVertexBuffer.getDevicePointer(), deformedBunnyVertexBuffer.getDevicePointer(),
                    bunnyVertexBuffer.numElements(), 20.0f, t);

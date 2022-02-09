@@ -293,7 +293,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     g_cameraDirectionalMovingSpeed = 0.0015f;
     g_cameraTiltSpeed = 0.025f;
     g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(M_PI);
+    g_cameraOrientation = qRotateY(pi_v<float>);
 
     // END: Set up input callbacks.
     // ----------------------------------------------------------------
@@ -792,7 +792,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     std::vector<optixu::Instance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
+    const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
@@ -934,12 +934,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     Shared::PerspectiveCamera perspCamera;
-    perspCamera.fovY = 50 * M_PI / 180;
+    perspCamera.fovY = 50 * pi_v<float> / 180;
     perspCamera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
 
     Shared::EquirectangularCamera equirecCamera;
-    equirecCamera.horizentalExtent = M_PI * (float)renderTargetSizeX / renderTargetSizeY;
-    equirecCamera.verticalExtent = M_PI;
+    equirecCamera.horizentalExtent = pi_v<float> * (float)renderTargetSizeX / renderTargetSizeY;
+    equirecCamera.verticalExtent = pi_v<float>;
     
     Shared::PickPipelineLaunchParameters pickPlp;
     pickPlp.travHandle = travHandle;
@@ -1022,8 +1022,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // EN: update the pipeline parameters.
             perspCamera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
-            equirecCamera.horizentalExtent = M_PI * (float)renderTargetSizeX / renderTargetSizeY;
-            equirecCamera.verticalExtent = M_PI;
+            equirecCamera.horizentalExtent = pi_v<float> * (float)renderTargetSizeX / renderTargetSizeY;
+            equirecCamera.verticalExtent = pi_v<float>;
 
             pickPlp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
             pickPlp.perspCamera = perspCamera;
@@ -1128,13 +1128,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&g_cameraPosition));
             static float rollPitchYaw[3];
             g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
-            rollPitchYaw[0] *= 180 / M_PI;
-            rollPitchYaw[1] *= 180 / M_PI;
-            rollPitchYaw[2] *= 180 / M_PI;
-            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw, 3))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * M_PI / 180,
-                                                       rollPitchYaw[1] * M_PI / 180,
-                                                       rollPitchYaw[2] * M_PI / 180);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
+                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
+                                                       rollPitchYaw[1] * pi_v<float> / 180,
+                                                       rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             if (ImGui::RadioButtonE("Perspective", &cameraType, CameraType::Perspective)) {

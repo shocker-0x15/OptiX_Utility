@@ -434,12 +434,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tr.srts.push_back(srt0);
         Transform::SRT srt1;
         srt1.s = make_float3(0.25f);
-        srt1.o = qRotateX(M_PI / 2);
+        srt1.o = qRotateX(pi_v<float> / 2);
         srt1.t = make_float3(0, -0.5f, 0);
         tr.srts.push_back(srt1);
         Transform::SRT srt2;
         srt2.s = make_float3(0.25f);
-        srt2.o = qRotateX(M_PI);
+        srt2.o = qRotateX(pi_v<float>);
         srt2.t = make_float3(0, -0.5f, 0);
         tr.srts.push_back(srt2);
 
@@ -459,7 +459,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixu::Instance inst = scene.createInstance();
         inst.setChild(tr.optixTransform);
-        Matrix3x3 rotMat = rotate3x3(M_PI / 2, 0, 1, 0);
+        Matrix3x3 rotMat = rotate3x3(pi_v<float> / 2, 0, 1, 0);
         float instXfm[] = {
             rotMat.m00, rotMat.m01, rotMat.m02, 0.5f,
             rotMat.m10, rotMat.m11, rotMat.m12, 0.0f,
@@ -660,10 +660,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.timeBegin = 0.0f;
     plp.timeEnd = 1.0f;
     plp.numAccumFrames = 0;
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 6.0);
-    plp.camera.orientation = rotateY3x3(M_PI);
+    plp.camera.orientation = rotateY3x3(pi_v<float>);
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());

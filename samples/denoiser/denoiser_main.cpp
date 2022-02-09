@@ -442,7 +442,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     std::vector<optixu::Instance> bunnyInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
+    const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
     for (int i = 0; i < NumBunnies; ++i) {
         float t = static_cast<float>(i) / (NumBunnies - 1);
         float r = 0.9f * std::pow(t, 0.5f);
@@ -450,7 +450,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float z = r * std::sin(GoldenAngle * i);
 
         Shared::MaterialData matData;
-        matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * M_PI), 1.0f),
+        matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * pi_v<float>), 1.0f),
                                                std::sqrt(r / 0.9f),
                                                1.0f));
         bunnyMats[i].setUserData(matData);
@@ -648,10 +648,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
     plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
     plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.16f);
-    plp.camera.orientation = rotateY3x3(M_PI);
+    plp.camera.orientation = rotateY3x3(pi_v<float>);
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());

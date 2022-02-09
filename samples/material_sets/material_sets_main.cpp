@@ -233,7 +233,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<uint8_t> matIndices(Ngon);
         vertices[0] = Shared::Vertex{ float3(0, 0, 0), float3(0, 1, 0), float2(0, 0) };
         for (int i = 0; i < Ngon; ++i) {
-            float angle = 2 * M_PI * static_cast<float>(i) / Ngon;
+            float angle = 2 * pi_v<float> * static_cast<float>(i) / Ngon;
             vertices[1 + i] = Shared::Vertex{
                 float3(std::cos(angle), std::sin(angle), 0),
                 float3(0, 1, 0),
@@ -327,7 +327,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     std::vector<optixu::Instance> polygonInsts;
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-    const float GoldenAngle = 2 * M_PI / (GoldenRatio * GoldenRatio);
+    const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
     for (int i = 0; i < NumPolygonInstances; ++i) {
         float t = static_cast<float>(i) / (NumPolygonInstances - 1);
         float x = -0.9f + 1.8f * static_cast<float>(i % 10) / 9;
@@ -335,7 +335,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         for (int j = 0; j < Ngon; ++j) {
             Shared::MaterialData matData;
-            matData.color = HSVtoRGB(static_cast<float>(j) / Ngon + (GoldenAngle * i) / (2 * M_PI),
+            matData.color = HSVtoRGB(static_cast<float>(j) / Ngon + (GoldenAngle * i) / (2 * pi_v<float>),
                                      1.0f, 1 - 0.9f * t);
             polygonMaterials[i][j].setUserData(matData);
         }
@@ -453,10 +453,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.resultBuffer = accumBuffer.getBlockBuffer2D();
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5);
-    plp.camera.orientation = rotateY3x3(M_PI);
+    plp.camera.orientation = rotateY3x3(pi_v<float>);
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());

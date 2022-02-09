@@ -387,7 +387,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     g_cameraDirectionalMovingSpeed = 0.0015f;
     g_cameraTiltSpeed = 0.025f;
     g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(M_PI);
+    g_cameraOrientation = qRotateY(pi_v<float>);
 
     // END: Set up input callbacks.
     // ----------------------------------------------------------------
@@ -1359,7 +1359,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #else
     plp.accumBuffer = accumBuffer.getBlockBuffer2D();
 #endif
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
     plp.matLightIndex = matLightIndex;
     plp.textures = textureObjectBuffer.getDevicePointer();
@@ -1627,7 +1627,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 constexpr uint32_t numTimes = lengthof(times);
                 static uint32_t plotStartPos = -1;
                 plotStartPos = (plotStartPos + 1) % numTimes;
-                times[(plotStartPos + numTimes - 1) % numTimes] = std::sinf(2 * M_PI * (frameIndex % 60) / 60.0f);
+                times[(plotStartPos + numTimes - 1) % numTimes] = std::sinf(2 * pi_v<float> * (frameIndex % 60) / 60.0f);
                 ImGui::PlotLines("Sin Curve", times, numTimes, plotStartPos, nullptr, -1.0f, 1.0f, ImVec2(0, 50));
             }
             if (ImGui::Button("Dump History")) {
@@ -1676,13 +1676,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
             static float rollPitchYaw[3];
             g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
-            rollPitchYaw[0] *= 180 / M_PI;
-            rollPitchYaw[1] *= 180 / M_PI;
-            rollPitchYaw[2] *= 180 / M_PI;
-            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw, 3))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * M_PI / 180,
-                                                       rollPitchYaw[1] * M_PI / 180,
-                                                       rollPitchYaw[2] * M_PI / 180);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
+                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
+                                                       rollPitchYaw[1] * pi_v<float> / 180,
+                                                       rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
@@ -1777,7 +1777,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cudau::dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
             kernelDeform(cuStream, dimDeform,
                          orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
-                         0.5f * std::sinf(2 * M_PI * (animFrameIndex % 690) / 690.0f));
+                         0.5f * std::sinf(2 * pi_v<float> * (animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             cudau::dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
             kernelAccumulateVertexNormals(cuStream, dimAccum,
@@ -1808,26 +1808,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // EN: Transform instances.
 
             Matrix3x3 sr0 =
-                scale3x3(0.075f + 0.06f * std::sinf(2 * M_PI * (animFrameIndex % 660) / 660.0f)) *
-                rotateY3x3(2 * M_PI * (animFrameIndex % 180) / 180.0f) *
-                rotateX3x3(2 * M_PI * (animFrameIndex % 300) / 300.0f) *
-                rotateZ3x3(2 * M_PI * (animFrameIndex % 420) / 420.0f);
+                scale3x3(0.075f + 0.06f * std::sinf(2 * pi_v<float> * (animFrameIndex % 660) / 660.0f)) *
+                rotateY3x3(2 * pi_v<float> * (animFrameIndex % 180) / 180.0f) *
+                rotateX3x3(2 * pi_v<float> * (animFrameIndex % 300) / 300.0f) *
+                rotateZ3x3(2 * pi_v<float> * (animFrameIndex % 420) / 420.0f);
             float tfObject0[] = {
-                sr0.m00, sr0.m10, sr0.m20, 0.75f * std::sinf(2 * M_PI * (animFrameIndex % 360) / 360.0f),
+                sr0.m00, sr0.m10, sr0.m20, 0.75f * std::sinf(2 * pi_v<float> * (animFrameIndex % 360) / 360.0f),
                 sr0.m01, sr0.m11, sr0.m21, 0,
-                sr0.m02, sr0.m12, sr0.m22, 0.75f * std::cosf(2 * M_PI * (animFrameIndex % 360) / 360.0f)
+                sr0.m02, sr0.m12, sr0.m22, 0.75f * std::cosf(2 * pi_v<float> * (animFrameIndex % 360) / 360.0f)
             };
             instObject0.setTransform(tfObject0);
 
             Matrix3x3 sr1 =
-                scale3x3(0.1f + 0.0375f * std::sinf(2 * M_PI * (animFrameIndex % 780) / 780.0f + M_PI / 2)) *
-                rotateY3x3(2 * M_PI * (animFrameIndex % 660) / 660.0f) *
-                rotateX3x3(2 * M_PI * (animFrameIndex % 330) / 330.0f) *
-                rotateZ3x3(2 * M_PI * (animFrameIndex % 570) / 570.0f);
+                scale3x3(0.1f + 0.0375f * std::sinf(2 * pi_v<float> * (animFrameIndex % 780) / 780.0f + pi_v<float> / 2)) *
+                rotateY3x3(2 * pi_v<float> * (animFrameIndex % 660) / 660.0f) *
+                rotateX3x3(2 * pi_v<float> * (animFrameIndex % 330) / 330.0f) *
+                rotateZ3x3(2 * pi_v<float> * (animFrameIndex % 570) / 570.0f);
             float tfObject1[] = {
-                sr1.m00, sr1.m10, sr1.m20, 0.5f * std::sinf(2 * M_PI * (animFrameIndex % 180) / 180.0f + M_PI),
-                sr1.m01, sr1.m11, sr1.m21, 0.25f * std::sinf(2 * M_PI * (animFrameIndex % 90) / 90.0f),
-                sr1.m02, sr1.m12, sr1.m22, 0.5f * std::cosf(2 * M_PI * (animFrameIndex % 180) / 180.0f + M_PI)
+                sr1.m00, sr1.m10, sr1.m20, 0.5f * std::sinf(2 * pi_v<float> * (animFrameIndex % 180) / 180.0f + pi_v<float>),
+                sr1.m01, sr1.m11, sr1.m21, 0.25f * std::sinf(2 * pi_v<float> * (animFrameIndex % 90) / 90.0f),
+                sr1.m02, sr1.m12, sr1.m22, 0.5f * std::cosf(2 * pi_v<float> * (animFrameIndex % 180) / 180.0f + pi_v<float>)
             };
             instObject1.setTransform(tfObject1);
 

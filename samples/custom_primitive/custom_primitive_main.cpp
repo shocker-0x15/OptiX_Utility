@@ -386,10 +386,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.resultBuffer = accumBuffer.getBlockBuffer2D();
-    plp.camera.fovY = 50 * M_PI / 180;
+    plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.5);
-    plp.camera.orientation = rotateY3x3(M_PI);
+    plp.camera.orientation = rotateY3x3(pi_v<float>);
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
