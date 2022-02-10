@@ -85,7 +85,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
             EntryInfo &entryInfo = m_entryInfos[i];
 
             std::string name = entryInfo.is_directory() ? "[D] " : "[F] ";
-            name += entryInfo.path().filename().u8string().c_str();
+            name += entryInfo.path().filename().string();
             if (ImGui::Selectable(name.c_str(), entryInfo.selected, ImGuiSelectableFlags_DontClosePopups)) {
                 if (((m_flags & Flag_DirectorySelection) && entryInfo.is_directory()) ||
                     ((m_flags & Flag_FileSelection) && !entryInfo.is_directory())) {
@@ -207,7 +207,7 @@ void FileDialog::calcEntries(std::vector<std::filesystem::directory_entry>* entr
                 (((m_flags & Flag_FileSelection) == 0) && !entryInfo.is_directory()))
                 continue;
 
-            if (entryInfo.path().filename().u8string() == filter) {
+            if (entryInfo.path().filename().string() == filter) {
                 if (entryInfo.path().is_relative())
                     entries->emplace_back(fs::canonical(m_curDir / entryInfo.path()));
                 else

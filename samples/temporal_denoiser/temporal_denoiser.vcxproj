@@ -18,6 +18,7 @@
     <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_impl_glfw.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
@@ -38,6 +39,7 @@
     <ClInclude Include="..\..\ext\imgui\imgui.h" />
     <ClInclude Include="..\..\ext\imgui\imgui_impl_glfw.h" />
     <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3.h" />
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="..\..\ext\imgui\imgui_internal.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_textedit.h" />

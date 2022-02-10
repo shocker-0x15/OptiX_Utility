@@ -67,6 +67,9 @@
     <ClCompile Include="..\common\obj_loader.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
@@ -135,6 +138,9 @@
     </ClInclude>
     <ClInclude Include="..\..\ext\stb_image_write.h">
       <Filter>non-essentials\ext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3_loader.h">
+      <Filter>non-essentials\ext\imgui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

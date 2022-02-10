@@ -336,26 +336,15 @@ public:
         if (ImGui::BeginTable("##geomInstList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
-                              ImGuiTableFlags_ScrollY |
-                              ImGuiTableFlags_ScrollFreezeTopRow,
+                              ImGuiTableFlags_ScrollY,
                               ImVec2(0, 500))) {
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("#Prims", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
 
-            // Header
-            {
-                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-                uint32_t columnIdx = 0;
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-            }
+            ImGui::TableHeadersRow();
 
             for (const auto &kv : m_optixEnv.geomInstFileGroups) {
                 const GeometryInstanceFileGroup &fileGroup = kv.second;
@@ -369,6 +358,7 @@ public:
                                                 ImGuiTreeNodeFlags_OpenOnArrow);
                 if (allSelected)
                     fileFlags |= ImGuiTreeNodeFlags_Selected;
+                ImGui::TableNextColumn();
                 bool open = ImGui::TreeNodeEx(fileGroup.name.c_str(), fileFlags);
                 bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
                 if (ImGui::IsItemClicked() && !onArrow) {
@@ -397,11 +387,11 @@ public:
                             fileGroupState.selectedIndices.insert(i);
                     }
                 }
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::TextUnformatted("--");
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::TextUnformatted("--");
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::TextUnformatted("--");
                 if (open) {
                     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 1.0f, 0.5f, 0.25f));
@@ -417,6 +407,7 @@ public:
                         if (geomInstSelected)
                             instFlags |= ImGuiTreeNodeFlags_Selected;
                         ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
                         ImGui::TreeNodeEx(geomInst->name.c_str(), instFlags);
                         if (ImGui::IsItemClicked()) {
                             if (!ImGui::GetIO().KeyCtrl) {
@@ -446,11 +437,11 @@ public:
                             else
                                 fileGroupState.selectedIndices.insert(i);
                         }
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", geomInst->serialID);
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", geomInst->triangleBuffer.numElements());
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", geomInst.use_count() - 1);
                     }
                     ImGui::PopStyleColor(3);
@@ -497,26 +488,15 @@ public:
         if (ImGui::BeginTable("##GeomGroupList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
-                              ImGuiTableFlags_ScrollY |
-                              ImGuiTableFlags_ScrollFreezeTopRow,
+                              ImGuiTableFlags_ScrollY,
                               ImVec2(0, 500))) {
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("#GeomInsts", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
 
-            // Header
-            {
-                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-                uint32_t columnIdx = 0;
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-            }
+            ImGui::TableHeadersRow();
 
             for (const auto &kv : m_optixEnv.geomGroups) {
                 const GeometryGroupRef &geomGroup = kv.second;
@@ -527,6 +507,7 @@ public:
                 bool geomGroupSelected = m_selectedGroups.count(geomGroup->serialID) > 0;
                 if (geomGroupSelected)
                     groupFlags |= ImGuiTreeNodeFlags_Selected;
+                ImGui::TableNextColumn();
                 bool open = ImGui::TreeNodeEx(geomGroup->name.c_str(), groupFlags);
                 bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
                 if (ImGui::IsItemClicked() && !onArrow) {
@@ -551,11 +532,11 @@ public:
 
                     *selectionChanged = true;
                 }
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", geomGroup->serialID);
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", static_cast<uint32_t>(kv.second->geomInsts.size()));
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", kv.second.use_count() - 1);
                 if (open) {
                     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 1.0f, 0.5f, 0.25f));
@@ -572,6 +553,7 @@ public:
                         if (geomInstSelected)
                             instFlags |= ImGuiTreeNodeFlags_Selected;
                         ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
                         ImGui::TreeNodeEx(geomInst->name.c_str(), instFlags);
                         if (ImGui::IsItemClicked()) {
                             m_selectedGroups.clear();
@@ -601,11 +583,11 @@ public:
 
                             *selectionChanged = true;
                         }
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", geomInst->serialID);
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::TextUnformatted("--");
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", geomInst.use_count() - 1);
                     }
                     ImGui::PopStyleColor(3);
@@ -661,31 +643,24 @@ public:
         if (ImGui::BeginTable("##InstList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
-                              ImGuiTableFlags_ScrollY |
-                              ImGuiTableFlags_ScrollFreezeTopRow,
+                              ImGuiTableFlags_ScrollY,
                               ImVec2(0, 300))) {
 
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("AS", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
-            {
-                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-                uint32_t columnIdx = 0;
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-            }
+
+            ImGui::TableHeadersRow();
+
             for (const auto &kv : m_optixEnv.insts) {
                 const InstanceRef &inst = kv.second;
 
                 ImGui::TableNextRow();
 
                 bool instSelected = m_selectedItems.count(inst->serialID);
+                ImGui::TableNextColumn();
                 if (ImGui::Selectable(kv.second->name.c_str(), instSelected, ImGuiSelectableFlags_None)) {
                     if (!ImGui::GetIO().KeyCtrl) {
                         // JP: Ctrlを押していない状態でクリックした場合は他のグループの選択を全て解除する。
@@ -707,16 +682,16 @@ public:
                     *selectionChanged = true;
                 }
 
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", kv.first);
 
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 if (inst->geomGroup)
                     ImGui::Text("%s", inst->geomGroup->name.c_str());
                 else if (inst->group)
                     ImGui::Text("%s", inst->group->name.c_str());
 
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", inst.use_count() - 1);
             }
             ImGui::EndTable();
@@ -757,26 +732,15 @@ public:
         if (ImGui::BeginTable("##GroupList", 4,
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_Resizable |
-                              ImGuiTableFlags_ScrollY |
-                              ImGuiTableFlags_ScrollFreezeTopRow,
+                              ImGuiTableFlags_ScrollY,
                               ImVec2(0, 500))) {
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("SID", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("#Insts", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Used", ImGuiTableColumnFlags_WidthFixed);
 
-            // Header
-            {
-                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-                uint32_t columnIdx = 0;
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-                ImGui::TableNextCell();
-                ImGui::TableHeader(ImGui::TableGetColumnName(columnIdx++));
-            }
+            ImGui::TableHeadersRow();
 
             for (const auto &kv : m_optixEnv.groups) {
                 const GroupRef &group = kv.second;
@@ -787,6 +751,7 @@ public:
                 bool groupSelected = m_selectedGroups.count(group->serialID) > 0;
                 if (groupSelected)
                     groupFlags |= ImGuiTreeNodeFlags_Selected;
+                ImGui::TableNextColumn();
                 bool open = ImGui::TreeNodeEx(group->name.c_str(), groupFlags);
                 bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
                 if (ImGui::IsItemClicked() && !onArrow) {
@@ -811,11 +776,11 @@ public:
 
                     *selectionChanged = true;
                 }
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", group->serialID);
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", static_cast<uint32_t>(kv.second->insts.size()));
-                ImGui::TableNextCell();
+                ImGui::TableNextColumn();
                 ImGui::Text("%u", kv.second.use_count() - 1);
                 if (open) {
                     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 1.0f, 0.5f, 0.25f));
@@ -832,6 +797,7 @@ public:
                         if (geomInstSelected)
                             instFlags |= ImGuiTreeNodeFlags_Selected;
                         ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
                         ImGui::TreeNodeEx(inst->name.c_str(), instFlags);
                         if (ImGui::IsItemClicked()) {
                             m_selectedGroups.clear();
@@ -861,11 +827,11 @@ public:
 
                             *selectionChanged = true;
                         }
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", inst->serialID);
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::TextUnformatted("--");
-                        ImGui::TableNextCell();
+                        ImGui::TableNextColumn();
                         ImGui::Text("%u", inst.use_count() - 1);
                     }
                     ImGui::PopStyleColor(3);
@@ -1018,7 +984,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplGlfw_InitForOpenGL(window, false);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Setup style
@@ -1043,7 +1009,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ImFont* fontForFileDialog = nullptr;
     std::filesystem::path fontPath = exeDir / "fonts/RictyDiminished-Regular.ttf";
     if (std::filesystem::exists(fontPath)) {
-        fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.u8string().c_str(), 14.0f, nullptr,
+        fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 14.0f, nullptr,
                                                          io.Fonts->GetGlyphRangesJapanese());
     }
     else {

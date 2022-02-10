@@ -70,6 +70,9 @@
     <ClCompile Include="..\common\gl_util.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp">
+      <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
@@ -141,6 +144,9 @@
     </ClInclude>
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h">
       <Filter>non-essentials\ext\gl3w</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3_loader.h">
+      <Filter>non-essentials\ext\imgui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

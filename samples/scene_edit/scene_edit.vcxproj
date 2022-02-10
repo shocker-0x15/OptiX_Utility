@@ -11,6 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
@@ -29,6 +30,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h" />
+    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
