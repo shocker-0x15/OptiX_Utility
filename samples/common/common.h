@@ -88,11 +88,6 @@ void devPrintf(const char* fmt, ...);
 
 
 
-template <typename T>
-static constexpr T pi_v = std::numbers::pi_v<T>;
-
-
-
 template <typename T, size_t size>
 CUDA_DEVICE_FUNCTION constexpr size_t lengthof(const T (&array)[size]) {
     return size;
@@ -978,6 +973,11 @@ public:
 #else
 #   define hpprintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
+
+template <std::floating_point T>
+static constexpr T pi_v = std::numbers::pi_v<T>;
+
+
 
 template <typename T, typename Deleter, typename ...ArgTypes>
 std::shared_ptr<T> make_shared_with_deleter(const Deleter &deleter, ArgTypes&&... args) {

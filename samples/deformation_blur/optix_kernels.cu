@@ -77,7 +77,6 @@ CUDA_DEVICE_FUNCTION float3 calcCurveSurfaceNormal(const GeometryData &geom, con
         uint32_t baseIndex = geom.segmentIndexBuffer[hpParam.primIndex];
         float stepF = (geom.numMotionSteps - 1) * normTime;
         uint32_t step = static_cast<uint32_t>(stepF);
-        float stepWidth = 1.0f / (geom.numMotionSteps - 1);
         float p = stepF - step;
 #pragma unroll
         for (int i = 0; i < numControlPoints; ++i) {
