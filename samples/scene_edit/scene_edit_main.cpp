@@ -1007,7 +1007,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     io.Fonts->AddFontDefault();
 
     ImFont* fontForFileDialog = nullptr;
-    std::filesystem::path fontPath = exeDir / "fonts/RictyDiminished-Regular.ttf";
+    std::filesystem::path fontPath = exeDir / "fonts/RictyDiminished-Regular-fixed.ttf";
     if (std::filesystem::exists(fontPath)) {
         fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 14.0f, nullptr,
                                                          io.Fonts->GetGlyphRangesJapanese());

@@ -55,7 +55,7 @@ private:
     }
     template <size_t Size>
     static void pathToChars(const std::filesystem::path &path, char (&dst)[Size]) {
-        strncpy_s(dst, path.string().c_str(), Size - 1);
+        strncpy_s(dst, reinterpret_cast<const char*>(path.u8string().c_str()), Size - 1);
         dst[Size - 1] = '\0';
     }
 
@@ -85,7 +85,7 @@ private:
 
         m_curDirBlocks.clear();
         for (auto it = m_curDir.begin(); it != m_curDir.end(); ++it) {
-            std::string str = it->string();
+            std::string str = reinterpret_cast<const char*>(it->u8string().c_str());
             if (strcmp(str.c_str(), "\\") == 0) {
                 continue;
             }
