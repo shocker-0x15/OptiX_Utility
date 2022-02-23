@@ -17,8 +17,8 @@ EN: This sample demonstrates an example of dynamically add, remove and move obje
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
 #include "../common/imgui_file_dialog.h"
 
 #include <assimp/scene.h>

@@ -13,11 +13,11 @@
   <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
+    <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_opengl3.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\..\ext\imgui\imgui_impl_glfw.cpp" />
-    <ClCompile Include="..\..\ext\imgui\imgui_impl_opengl3.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
@@ -35,11 +35,11 @@
     <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h" />
     <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3.h" />
     <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3native.h" />
+    <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_opengl3.h" />
+    <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="..\..\ext\imgui\imconfig.h" />
     <ClInclude Include="..\..\ext\imgui\imgui.h" />
-    <ClInclude Include="..\..\ext\imgui\imgui_impl_glfw.h" />
-    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3.h" />
-    <ClInclude Include="..\..\ext\imgui\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="..\..\ext\imgui\imgui_internal.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_textedit.h" />
@@ -72,9 +72,6 @@
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
     </CopyFileToFolders>
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="..\..\ext\imgui\natvis\imgui.natvis" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
