@@ -15,7 +15,7 @@ def run_command(cmd):
     ret = subprocess.run(cmd, check=True)
 
 def run():
-    msbuild = R'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
+    msbuild = R'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
 
     # ----------------------------------------------------------------
     # Unit tests
