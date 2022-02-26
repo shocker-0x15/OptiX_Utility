@@ -190,6 +190,93 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     // ----------------------------------------------------------------
+    // JP: 入力コールバックの設定。
+    // EN: Set up input callbacks.
+
+    glfwSetMouseButtonCallback(
+        window,
+        [](GLFWwindow* window, int32_t button, int32_t action, int32_t mods) {
+            uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
+
+            switch (button) {
+            case GLFW_MOUSE_BUTTON_MIDDLE: {
+                devPrintf("Mouse Middle\n");
+                g_buttonRotate.recordStateChange(action == GLFW_PRESS, frameIndex);
+                break;
+            }
+            default:
+                break;
+            }
+        });
+    glfwSetCursorPosCallback(
+        window,
+        [](GLFWwindow* window, double x, double y) {
+            g_mouseX = x;
+            g_mouseY = y;
+        });
+    glfwSetKeyCallback(
+        window,
+        [](GLFWwindow* window, int32_t key, int32_t scancode, int32_t action, int32_t mods) {
+            uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
+
+            switch (key) {
+            case GLFW_KEY_W: {
+                g_keyForward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_S: {
+                g_keyBackward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_A: {
+                g_keyLeftward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_D: {
+                g_keyRightward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_R: {
+                g_keyUpward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_F: {
+                g_keyDownward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_Q: {
+                g_keyTiltLeft.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_E: {
+                g_keyTiltRight.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_T: {
+                g_keyFasterPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            case GLFW_KEY_G: {
+                g_keySlowerPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
+                break;
+            }
+            default:
+                break;
+            }
+        });
+
+    g_cameraPositionalMovingSpeed = 0.01f;
+    g_cameraDirectionalMovingSpeed = 0.0015f;
+    g_cameraTiltSpeed = 0.025f;
+    g_cameraPosition = make_float3(0, 0, 3.2f);
+    g_cameraOrientation = qRotateY(pi_v<float>);
+
+    // END: Set up input callbacks.
+    // ----------------------------------------------------------------
+
+
+
+    // ----------------------------------------------------------------
     // JP: ImGuiの初期化。
     // EN: Initialize ImGui.
 
@@ -197,7 +284,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-    ImGui_ImplGlfw_InitForOpenGL(window, false);
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Setup style
@@ -218,89 +305,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ImGui::GetStyle() = guiStyleWithGamma;
 
     // END: Initialize ImGui.
-    // ----------------------------------------------------------------
-
-
-
-    // ----------------------------------------------------------------
-    // JP: 入力コールバックの設定。
-    // EN: Set up input callbacks.
-
-    glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int32_t button, int32_t action, int32_t mods) {
-        uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
-        ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
-
-        switch (button) {
-        case GLFW_MOUSE_BUTTON_MIDDLE: {
-            devPrintf("Mouse Middle\n");
-            g_buttonRotate.recordStateChange(action == GLFW_PRESS, frameIndex);
-            break;
-        }
-        default:
-            break;
-        }
-                               });
-    glfwSetCursorPosCallback(window, [](GLFWwindow* window, double x, double y) {
-        g_mouseX = x;
-        g_mouseY = y;
-                             });
-    glfwSetKeyCallback(window, [](GLFWwindow* window, int32_t key, int32_t scancode, int32_t action, int32_t mods) {
-        uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
-        ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
-
-        switch (key) {
-        case GLFW_KEY_W: {
-            g_keyForward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_S: {
-            g_keyBackward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_A: {
-            g_keyLeftward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_D: {
-            g_keyRightward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_R: {
-            g_keyUpward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_F: {
-            g_keyDownward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_Q: {
-            g_keyTiltLeft.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_E: {
-            g_keyTiltRight.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_T: {
-            g_keyFasterPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        case GLFW_KEY_G: {
-            g_keySlowerPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-            break;
-        }
-        default:
-            break;
-        }
-                       });
-
-    g_cameraPositionalMovingSpeed = 0.01f;
-    g_cameraDirectionalMovingSpeed = 0.0015f;
-    g_cameraTiltSpeed = 0.025f;
-    g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(pi_v<float>);
-
-    // END: Set up input callbacks.
     // ----------------------------------------------------------------
 
 
