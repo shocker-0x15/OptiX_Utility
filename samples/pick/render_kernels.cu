@@ -12,7 +12,7 @@ struct HitPointParameter {
     float b1, b2;
     int32_t primIndex;
 
-    CUDA_DEVICE_FUNCTION static HitPointParameter get() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get() {
         HitPointParameter ret;
         float2 bc = optixGetTriangleBarycentrics();
         ret.b1 = bc.x;
@@ -28,7 +28,7 @@ struct HitGroupSBTRecordData {
     GeometryData geomData;
     MaterialData matData;
 
-    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
 };

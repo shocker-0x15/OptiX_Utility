@@ -5,31 +5,31 @@
 // Based on OptiX SDK/cuda/curve.h
 
 namespace curve {
-    CUDA_DEVICE_FUNCTION float clamp(float x, float minx, float maxx) {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE float clamp(float x, float minx, float maxx) {
         return fminf(fmaxf(x, minx), maxx);
     }
 
 
 
     template <OptixPrimitiveType curveType>
-    CUDA_DEVICE_FUNCTION constexpr uint32_t getNumControlPoints() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints() {
         static_assert(false, "Invalid curve type.");
         return 0;
     }
     template <>
-    CUDA_DEVICE_FUNCTION constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>() {
         return 2;
     }
     template <>
-    CUDA_DEVICE_FUNCTION constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>() {
         return 3;
     }
     template <>
-    CUDA_DEVICE_FUNCTION constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>() {
         return 4;
     }
     template <>
-    CUDA_DEVICE_FUNCTION constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>() {
         return 4;
     }
 

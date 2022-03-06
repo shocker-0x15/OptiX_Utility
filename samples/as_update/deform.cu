@@ -4,8 +4,9 @@
 
 using namespace Shared;
 
-CUDA_DEVICE_KERNEL void deform(const Vertex* originalVertices, Vertex* vertices, uint32_t numVertices,
-                               float amplitude, float t) {
+CUDA_DEVICE_KERNEL void deform(
+    const Vertex* originalVertices, Vertex* vertices, uint32_t numVertices,
+    float amplitude, float t) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
         return;
@@ -27,8 +28,8 @@ CUDA_DEVICE_KERNEL void deform(const Vertex* originalVertices, Vertex* vertices,
     vertices[vIdx].normal = make_float3(0, 0, 0);
 }
 
-CUDA_DEVICE_KERNEL void accumulateVertexNormals(Vertex* vertices,
-                                                Triangle* triangles, uint32_t numTriangles) {
+CUDA_DEVICE_KERNEL void accumulateVertexNormals(
+    Vertex* vertices, Triangle* triangles, uint32_t numTriangles) {
     uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
         return;
@@ -56,7 +57,8 @@ CUDA_DEVICE_KERNEL void accumulateVertexNormals(Vertex* vertices,
     atomicAddNormalAsInt32(&v2.normal, vnInt32);
 }
 
-CUDA_DEVICE_KERNEL void normalizeVertexNormals(Vertex* vertices, uint32_t numVertices) {
+CUDA_DEVICE_KERNEL void normalizeVertexNormals(
+    Vertex* vertices, uint32_t numVertices) {
     uint32_t vIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (vIdx >= numVertices)
         return;

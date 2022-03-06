@@ -76,18 +76,22 @@ typedef unsigned long long CUsurfObject;
 
 
 
-#if defined(__CUDA_ARCH__)
+#if defined(__CUDACC__)
 #   define CUDA_SHARED_MEM __shared__
 #   define CUDA_CONSTANT_MEM __constant__
 #   define CUDA_DEVICE_MEM __device__
 #   define CUDA_DEVICE_KERNEL extern "C" __global__
-#   define CUDA_DEVICE_FUNCTION __device__ __forceinline__
+#   define CUDA_INLINE __forceinline__
+#   define CUDA_DEVICE_FUNCTION __device__
+#   define CUDA_COMMON_FUNCTION __host__ __device__
 #else
 #   define CUDA_SHARED_MEM
 #   define CUDA_CONSTANT_MEM
 #   define CUDA_DEVICE_MEM
 #   define CUDA_DEVICE_KERNEL
+#   define CUDA_INLINE inline
 #   define CUDA_DEVICE_FUNCTION
+#   define CUDA_COMMON_FUNCTION
 #endif
 
 
@@ -236,6 +240,8 @@ namespace cudau {
         CUcontext m_context;
         CUevent m_startEvent;
         CUevent m_endEvent;
+        bool m_startIsValid;
+        bool m_endIsValid;
 
     public:
         void initialize(CUcontext context) {
@@ -243,25 +249,35 @@ namespace cudau {
             CUDADRV_CHECK(cuCtxSetCurrent(m_context));
             CUDADRV_CHECK(cuEventCreate(&m_startEvent, CU_EVENT_BLOCKING_SYNC));
             CUDADRV_CHECK(cuEventCreate(&m_endEvent, CU_EVENT_BLOCKING_SYNC));
+            m_startIsValid = false;
+            m_endIsValid = false;
         }
         void finalize() {
+            m_startIsValid = false;
+            m_endIsValid = false;
             CUDADRV_CHECK(cuCtxSetCurrent(m_context));
             CUDADRV_CHECK(cuEventDestroy(m_endEvent));
             CUDADRV_CHECK(cuEventDestroy(m_startEvent));
             m_context = nullptr;
         }
 
-        void start(CUstream stream) const {
+        void start(CUstream stream) {
             CUDADRV_CHECK(cuEventRecord(m_startEvent, stream));
+            m_startIsValid = true;
         }
-        void stop(CUstream stream) const {
+        void stop(CUstream stream) {
             CUDADRV_CHECK(cuEventRecord(m_endEvent, stream));
+            m_endIsValid = true;
         }
 
-        float report() const {
+        float report() {
             float ret = 0.0f;
-            CUDADRV_CHECK(cuEventSynchronize(m_endEvent));
-            CUDADRV_CHECK(cuEventElapsedTime(&ret, m_startEvent, m_endEvent));
+            if (m_startIsValid && m_endIsValid) {
+                CUDADRV_CHECK(cuEventSynchronize(m_endEvent));
+                CUDADRV_CHECK(cuEventElapsedTime(&ret, m_startEvent, m_endEvent));
+                m_startIsValid = false;
+                m_endIsValid = false;
+            }
             return ret;
         }
     };

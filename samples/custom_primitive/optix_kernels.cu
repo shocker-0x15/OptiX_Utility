@@ -12,7 +12,7 @@ struct HitPointParameter {
     float b1, b2;
     int32_t primIndex;
 
-    CUDA_DEVICE_FUNCTION static HitPointParameter get() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get() {
         HitPointParameter ret;
         OptixPrimitiveType primType = optixGetPrimitiveType();
         // JP: 衝突したプリミティブのタイプを組み込み関数によって取得できる。
@@ -37,7 +37,7 @@ struct HitPointParameter {
 struct HitGroupSBTRecordData {
     GeometryData geomData;
 
-    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
 };

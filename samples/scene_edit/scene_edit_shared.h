@@ -41,7 +41,8 @@ namespace Shared {
         Quaternion orientation;
         float3 translation;
 
-        void setPreTransform(const float3 &_scale, const float _rollPitchYaw[3], const float3 &_trans) {
+        CUDA_COMMON_FUNCTION void setPreTransform(
+            const float3 &_scale, const float _rollPitchYaw[3], const float3 &_trans) {
             scale = _scale;
             orientation = qFromEulerAngles(_rollPitchYaw[0],
                                            _rollPitchYaw[1],
@@ -49,12 +50,10 @@ namespace Shared {
             translation = _trans;
         }
 
-#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION float3 transformNormalFromObjectToWorld(const float3 &n) const {
+        CUDA_COMMON_FUNCTION float3 transformNormalFromObjectToWorld(const float3 &n) const {
             float3 sn = n / scale;
             return orientation.toMatrix3x3() * sn;
         }
-#endif
     };
 
 

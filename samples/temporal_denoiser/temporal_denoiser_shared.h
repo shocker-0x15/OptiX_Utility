@@ -31,11 +31,11 @@ namespace Shared {
         uint64_t state;
 
     public:
-        CUDA_DEVICE_FUNCTION PCG32RNG() {}
+        CUDA_COMMON_FUNCTION PCG32RNG() {}
 
-        void setState(uint32_t _state) { state = _state; }
+        CUDA_COMMON_FUNCTION void setState(uint32_t _state) { state = _state; }
 
-        CUDA_DEVICE_FUNCTION uint32_t operator()() {
+        CUDA_COMMON_FUNCTION uint32_t operator()() {
             uint64_t oldstate = state;
             // Advance internal state
             state = oldstate * 6364136223846793005ULL + 1;
@@ -45,7 +45,7 @@ namespace Shared {
             return (xorshifted >> rot) | (xorshifted << ((-static_cast<int32_t>(rot)) & 31));
         }
 
-        CUDA_DEVICE_FUNCTION float getFloat0cTo1o() {
+        CUDA_COMMON_FUNCTION float getFloat0cTo1o() {
             uint32_t fractionBits = ((*this)() >> 9) | 0x3f800000;
             return *(float*)&fractionBits - 1.0f;
         }
@@ -59,8 +59,7 @@ namespace Shared {
         float3 position;
         Matrix3x3 orientation;
 
-#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION float2 calcScreenPosition(const float3 &posInWorld) const {
+        CUDA_COMMON_FUNCTION float2 calcScreenPosition(const float3 &posInWorld) const {
             Matrix3x3 invOri = inverse(orientation);
             float3 posInView = invOri * (posInWorld - position);
             float2 posAtZ1 = make_float2(posInView.x / posInView.z, posInView.y / posInView.z);
@@ -69,7 +68,6 @@ namespace Shared {
             return make_float2(1 - (posAtZ1.x + 0.5f * w) / w,
                                1 - (posAtZ1.y + 0.5f * h) / h);
         }
-#endif
     };
 
 

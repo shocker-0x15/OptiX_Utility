@@ -12,7 +12,7 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-CUDA_DEVICE_FUNCTION HitPointParameter HitPointParameter::get() {
+CUDA_DEVICE_FUNCTION CUDA_INLINE HitPointParameter HitPointParameter::get() {
     HitPointParameter ret;
     uint32_t primType = optixGetPrimitiveType();
     if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
@@ -39,7 +39,7 @@ struct HitGroupSBTRecordData {
     uint32_t geomInstIndex;
     uint32_t materialIndex;
 
-    CUDA_DEVICE_FUNCTION static const HitGroupSBTRecordData &get() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData &get() {
         return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     }
 };
@@ -158,8 +158,9 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(custom_primitive)() {
 }
 
 template <OptixPrimitiveType curveType>
-CUDA_DEVICE_FUNCTION void calcCurveAttribute(const GeometryData &geom, uint32_t primIndex, float curveParam, const float3 &hp,
-                                             float3* sn, float2* texCoord) {
+CUDA_DEVICE_FUNCTION CUDA_INLINE void calcCurveAttribute(
+    const GeometryData &geom, uint32_t primIndex, float curveParam, const float3 &hp,
+    float3* sn, float2* texCoord) {
     constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
     float4 controlPoints[numControlPoints];
     uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
