@@ -67,5 +67,11 @@
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"]
+    },
+    {
+        "sample": "payload_annotation",
+        "options": "--screen-shot",
+        "image": "output.png",
+        "outputs": ["output.png"]
     }
 ]

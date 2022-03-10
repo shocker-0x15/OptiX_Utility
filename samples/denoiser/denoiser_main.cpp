@@ -715,8 +715,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
-    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, timerRender.report());
-    hpprintf("Denoise: %.3f[ms]\n", timerDenoise.report());
+    float renderTime = timerRender.report();
+    float denoiseTime = timerDenoise.report();
+    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, renderTargetSizeX);
+    hpprintf("Denoise: %.3f[ms]\n", denoiseTime);
 
     timerDenoise.finalize();
     timerRender.finalize();

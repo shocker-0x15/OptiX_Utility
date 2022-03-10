@@ -1352,10 +1352,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-            float cudaFrameTime = frameIndex >= 2 ? curGPUTimer.frame.report() : 0.0f;
-            float updateTime = frameIndex >= 2 ? curGPUTimer.update.report() : 0.0f;
-            float renderTime = frameIndex >= 2 ? curGPUTimer.render.report() : 0.0f;
-            float denoiseTime = frameIndex >= 2 ? curGPUTimer.denoise.report() : 0.0f;
+            float cudaFrameTime = curGPUTimer.frame.report();
+            float updateTime = curGPUTimer.update.report();
+            float renderTime = curGPUTimer.render.report();
+            float denoiseTime = curGPUTimer.denoise.report();
             //ImGui::SetNextItemWidth(100.0f);
             ImGui::Text("CUDA/OptiX GPU %.3f [ms]:", cudaFrameTime);
             ImGui::Text("  Update: %.3f [ms]", updateTime);

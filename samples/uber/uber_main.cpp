@@ -1574,12 +1574,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-            float cudaFrameTime = frameIndex >= 2 ? curGPUTimer.frame.report() : 0.0f;
-            float deformTime = (frameIndex >= 2 && curGPUTimer.animated) ? curGPUTimer.deform.report() : 0.0f;
-            float updateGASTime = (frameIndex >= 2 && curGPUTimer.animated) ? curGPUTimer.updateGAS.report() : 0.0f;
-            float updateIASTime = (frameIndex >= 2 && curGPUTimer.animated) ? curGPUTimer.updateIAS.report() : 0.0f;
-            float renderTime = frameIndex >= 2 ? curGPUTimer.render.report() : 0.0f;
-            float postProcessTime = frameIndex >= 2 ? curGPUTimer.postProcess.report() : 0.0f;
+            float cudaFrameTime = curGPUTimer.frame.report();
+            float deformTime = curGPUTimer.deform.report();
+            float updateGASTime = curGPUTimer.updateGAS.report();
+            float updateIASTime = curGPUTimer.updateIAS.report();
+            float renderTime = curGPUTimer.render.report();
+            float postProcessTime = curGPUTimer.postProcess.report();
             //ImGui::SetNextItemWidth(100.0f);
             ImGui::Text("CUDA/OptiX GPU %.3f [ms]:", cudaFrameTime);
             ImGui::Text("  Deform: %.3f [ms]", deformTime);

@@ -1,9 +1,5 @@
 ﻿/*
 
-※このサンプルコードはドライバー側におそらくバグがあるため現時点では未完成・未検証。
-* This sample is not completed/verified since the driver may have a bug.
-  https://forums.developer.nvidia.com/t/payload-usage-annotation/196380/7
-
 JP: このサンプルはペイロードの使用方法を明示的に指定することでパイプラインの最適化を助ける方法について示します。
     ペイロードのパラメターごとの各シェーダーにおけるアクセスフラグを記述したデータを作成し、
     モジュールやプログラムグループ作成時に指定、併せてカーネル内でも使用するペイロードタイプを指定することで
@@ -691,7 +687,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
-    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, timerRender.report());
+    float renderTime = timerRender.report();
+    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, renderTime);
 
     timerRender.finalize();
 
