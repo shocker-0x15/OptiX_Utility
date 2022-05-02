@@ -195,7 +195,9 @@ TODO:
 #ifdef _DEBUG
 #   define OPTIXU_ENABLE_ASSERT
 #endif
-#define OPTIXU_ENABLE_RUNTIME_ERROR
+#if !defined(OPTIXU_DISABLE_RUNTIME_ERROR)
+#   define OPTIXU_ENABLE_RUNTIME_ERROR
+#endif
 
 #if defined(__CUDACC__)
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
