@@ -153,7 +153,7 @@
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="..\..\ext\assimp\assimp-vc142-mt.dll">
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\assimp-vc143-mt.dll">
       <Filter>non-essentials</Filter>
     </CopyFileToFolders>
     <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
