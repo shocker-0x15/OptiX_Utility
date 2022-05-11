@@ -55,7 +55,7 @@ nvcuda_compile_ptx(
     "-I${OPTIX_INCLUDE_DIR}"
 )
 
-set_common_sources(FALSE)
+set_common_sources(TRUE)
 
 # essentials
 source_group(
