@@ -12,7 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp" />
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="custom_primitive_main.cpp" />
@@ -20,7 +20,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />

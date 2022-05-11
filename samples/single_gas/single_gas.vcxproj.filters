@@ -19,14 +19,14 @@
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="single_gas_main.cpp" />
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
-      <Filter>non-essentials\ext</Filter>
-    </ClCompile>
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
     <ClCompile Include="..\common\obj_loader.cpp">
       <Filter>non-essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -43,9 +43,6 @@
     <ClInclude Include="..\..\ext\stb_image_write.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
-      <Filter>non-essentials\ext</Filter>
-    </ClInclude>
     <ClInclude Include="..\common\common.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
@@ -54,6 +51,9 @@
     </ClInclude>
     <ClInclude Include="..\common\obj_loader.h">
       <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

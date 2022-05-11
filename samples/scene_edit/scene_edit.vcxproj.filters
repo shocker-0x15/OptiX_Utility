@@ -46,9 +46,6 @@
     <ClCompile Include="..\common\imgui_file_dialog.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
-      <Filter>non-essentials\ext</Filter>
-    </ClCompile>
     <ClCompile Include="..\common\gl_util.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
@@ -72,6 +69,9 @@
     </ClCompile>
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp">
       <Filter>non-essentials\ext\imgui\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -112,9 +112,6 @@
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
-      <Filter>non-essentials\ext</Filter>
-    </ClInclude>
     <ClInclude Include="..\common\gl_util.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
@@ -148,6 +145,9 @@
     <ClInclude Include="..\..\ext\imgui\imstb_truetype.h">
       <Filter>non-essentials\ext\imgui\core</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
@@ -156,10 +156,10 @@
     <CopyFileToFolders Include="..\..\ext\assimp\assimp-vc142-mt.dll">
       <Filter>non-essentials</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
       <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.vert">
       <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
   </ItemGroup>

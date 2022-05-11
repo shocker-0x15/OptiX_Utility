@@ -33,9 +33,6 @@
     <ClCompile Include="..\..\ext\gl3w\gl3w.c">
       <Filter>non-essentials\ext\gl3w</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
-      <Filter>non-essentials\ext</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\cuda_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
@@ -76,6 +73,9 @@
     <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_glfw.cpp">
       <Filter>non-essentials\ext\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h">
@@ -91,9 +91,6 @@
       <Filter>non-essentials\ext\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ext\stb_image.h">
-      <Filter>non-essentials\ext</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optix_util.h">
@@ -157,6 +154,9 @@
     <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_opengl3_loader.h">
       <Filter>non-essentials\ext\imgui</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="deform.cu">
@@ -173,16 +173,16 @@
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
       <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.vert">
       <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\scale.frag">
+    <CopyFileToFolders Include="..\common\shaders\scale.frag">
       <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\scale.vert">
+    <CopyFileToFolders Include="..\common\shaders\scale.vert">
       <Filter>non-essentials\shaders</Filter>
     </CopyFileToFolders>
   </ItemGroup>

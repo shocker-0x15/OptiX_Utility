@@ -18,12 +18,12 @@
     <ClCompile Include="..\..\optix_util.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc">
-      <Filter>non-essentials\ext</Filter>
-    </ClCompile>
     <ClCompile Include="material_sets_main.cpp" />
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -39,15 +39,15 @@
     <ClInclude Include="..\..\ext\stb_image_write.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h">
-      <Filter>non-essentials\ext</Filter>
-    </ClInclude>
     <ClInclude Include="material_sets_shared.h" />
     <ClInclude Include="..\common\common.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optixu_on_cudau.h">
       <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

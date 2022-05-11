@@ -18,7 +18,7 @@
     <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
@@ -39,7 +39,7 @@
     <ClInclude Include="..\..\ext\imgui\imstb_textedit.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_truetype.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\..\cuda_util.h" />
@@ -60,12 +60,12 @@
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
       <FileType>Document</FileType>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.vert">
       <FileType>Document</FileType>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.h"
-#include "../../ext/tiny_obj_loader.h"
+#include "../../ext/tinyobjloader/tiny_obj_loader.h"
 
 namespace obj {
     struct Vertex {

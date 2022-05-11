@@ -18,11 +18,11 @@
     <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
-    <ClCompile Include="..\..\ext\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\gl_util.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
@@ -39,6 +39,7 @@
     <ClInclude Include="..\..\ext\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_textedit.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_truetype.h" />
+    <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\curve_evaluator.h" />
@@ -52,7 +53,6 @@
     <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3.h" />
     <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3native.h" />
     <ClInclude Include="..\..\ext\stb_image.h" />
-    <ClInclude Include="..\..\ext\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="uber_shared.h" />
@@ -66,22 +66,22 @@
     <CudaCompile Include="sphere_bounding_box.cu" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.frag">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
       <FileType>Document</FileType>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\drawOptiXResult.vert">
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.vert">
       <FileType>Document</FileType>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\scale.frag">
+    <CopyFileToFolders Include="..\common\shaders\scale.frag">
       <FileType>Document</FileType>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\scale.vert">
+    <CopyFileToFolders Include="..\common\shaders\scale.vert">
       <FileType>Document</FileType>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
