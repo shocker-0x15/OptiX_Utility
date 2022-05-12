@@ -273,7 +273,7 @@ TEST(MaterialTest, MaterialBasic) {
             OPTIX_EXCEPTION_FLAG_DEBUG,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-        const std::string ptx = readTxtFile(getExecutableDirectory() / "ptxes/kernels_0.ptx");
+        const std::string ptx = readTxtFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.ptx");
         optixu::Module moduleOptiX = pipeline0.createModuleFromPTXString(
             ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             OPTIX_COMPILE_OPTIMIZATION_DEFAULT,

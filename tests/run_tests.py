@@ -15,14 +15,16 @@ def run_command(cmd):
     ret = subprocess.run(cmd, check=True)
 
 def run():
+    scriptDir = os.path.dirname(os.path.abspath(__file__))
+
     msbuild = R'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
 
     # ----------------------------------------------------------------
     # Unit tests
 
-    sln = os.path.abspath(R'..\tests\optixu_unit_tests.sln')
+    sln = os.path.abspath(os.path.join(scriptDir, R'..\tests\optixu_unit_tests.sln'))
     config = 'Release'
-    exe = os.path.abspath(os.path.join('x64', config, 'optixu_tests.exe'))
+    exe = os.path.abspath(os.path.join(scriptDir, 'x64', config, 'optixu_tests.exe'))
 
     # Clean
     cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
@@ -46,10 +48,10 @@ def run():
     # ----------------------------------------------------------------
     # Sample image tests
 
-    sln = os.path.abspath(R'..\samples\optixu_samples.sln')
-    refImgDir = os.path.abspath(R'ref_images')
+    sln = os.path.abspath(os.path.join(scriptDir, R'..\samples\optixu_samples.sln'))
+    refImgDir = os.path.abspath(os.path.join(scriptDir, R'ref_images'))
 
-    with open(R'tests.json') as f:
+    with open(os.path.join(scriptDir, R'tests.json')) as f:
         tests = json.load(f)
 
     configs = ['Debug', 'Release']
@@ -70,7 +72,7 @@ def run():
     results = {}
     for config in configs:
         resultsPerConfig = {}
-        outDir = os.path.abspath(os.path.join(R'..\samples\x64', config))
+        outDir = os.path.abspath(os.path.join(scriptDir, R'..\samples\x64', config))
         for test in tests:
             testName = test['sample']
             testDir = test['sample']
@@ -78,7 +80,7 @@ def run():
 
             print('Run ' + testName + ':')
 
-            oldDir = chdir(os.path.join(R'..\samples', testDir))
+            oldDir = chdir(os.path.join(scriptDir, R'..\samples', testDir))
             exe = os.path.join(outDir, exeName)
             cmd = [exe]
             if 'options' in test:

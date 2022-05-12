@@ -2,15 +2,6 @@
 # JP: プロジェクト間で共通のソースコードのリスト作成。
 
 file(
-    GLOB UTIL_SOURCES
-    "${CMAKE_SOURCE_DIR}/cuda_util.h"
-    "${CMAKE_SOURCE_DIR}/cuda_util.cpp"
-    "${CMAKE_SOURCE_DIR}/optix_util.h"
-    "${CMAKE_SOURCE_DIR}/optix_util_private.h"
-    "${CMAKE_SOURCE_DIR}/optix_util.cpp"
-)
-
-file(
     GLOB_RECURSE COMMON_SOURCES
     "common/common.h"
     "common/common.cpp"
@@ -153,6 +144,10 @@ target_compile_options(
     "$<$<AND:$<C_COMPILER_ID:MSVC>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:/MP>"
     "$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:/MP>"
 )
+
+# Windowsはsymlink作成に追加の権限が必要。
+# file(CREATE_LINK "${CMAKE_SOURCE_DIR}/data" "${CMAKE_BINARY_DIR}/data" SYMBOLIC)
+file(COPY "${CMAKE_SOURCE_DIR}/data" DESTINATION "${CMAKE_BINARY_DIR}")
 
 add_subdirectory(single_gas)
 add_subdirectory(single_level_instancing)

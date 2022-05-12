@@ -28,6 +28,23 @@ endif()
 
 
 # ----------------------------------------------------------------
+# JP: プロジェクト間で共通のソースコードのリスト作成。
+
+file(
+    GLOB UTIL_SOURCES
+    "${CMAKE_SOURCE_DIR}/cuda_util.h"
+    "${CMAKE_SOURCE_DIR}/cuda_util.cpp"
+    "${CMAKE_SOURCE_DIR}/optix_util.h"
+    "${CMAKE_SOURCE_DIR}/optix_util_private.h"
+    "${CMAKE_SOURCE_DIR}/optix_util.cpp"
+)
+
+# END:JP: プロジェクト間で共通のソースコードのリスト作成。
+# ----------------------------------------------------------------
+
+
+
+# ----------------------------------------------------------------
 # JP: CMakeLists.txtのあるサブディレクトリ内のターゲット全てにフォルダーを設定する。
 # https://stackoverflow.com/questions/45092198/cmake-how-do-i-change-properties-on-subdirectory-project-targets
 
@@ -67,12 +84,18 @@ endif()
 add_subdirectory(ext/assimp)
 set_project_group("External" "ext/assimp")
 
+# GoogleTest
+option(BUILD_GMOCK "Builds the googlemock subproject" OFF)
+option(INSTALL_GTEST "Enable installation of googletest. (Projects embedding googletest may want to turn this OFF.)" OFF)
+add_subdirectory(ext/googletest)
+set_project_group("External" "ext/googletest")
+
 option(OPTIXU_BUILD_SAMPLES "Build sample projects for OptiX Utility." ON)
 option(OPTIXU_BUILD_TESTS "Build test projects for OptiX Utility." ON)
 
 if(OPTIXU_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
-if(OPTIXU_BUILD_TEST)
-    # add_subdirectory(tests)
+if(OPTIXU_BUILD_TESTS)
+    add_subdirectory(tests/optixu_test)
 endif()

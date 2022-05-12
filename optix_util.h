@@ -115,7 +115,6 @@ EN:
 TODO:
 - ユニットテスト。
 - Linux環境でのテスト。
-- CMake整備。
 - ASのRelocationサポート。
 - AOV Denoiserのサンプル作成。
 - Instance Pointersサポート。

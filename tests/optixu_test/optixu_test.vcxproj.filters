@@ -27,9 +27,15 @@
     <None Include="..\..\optix_util.cpp">
       <Filter>utils</Filter>
     </None>
+    <None Include="..\..\ext\prebuilt\bin\gtest.pdb" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="kernels_0.cu" />
     <CudaCompile Include="kernels_1.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.pdb" />
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.dll" />
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.dll" />
   </ItemGroup>
 </Project>
