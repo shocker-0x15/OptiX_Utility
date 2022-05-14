@@ -10,6 +10,13 @@
 It provides fine-level controllability but requires the user to write troublesome setup code to do anything.
 The purpose of this OptiX Utility is to provide classes and functions which encapsulate parts that tend to be boilerplate code while keeping fine controllability.
 
+## 組込方法 / Integration
+OptiX Utilityを使うプログラムにoptix_util.h, optix_util_private.h, optix_util.cppを追加します。
+オプションとして、プログラムがCUDAのメモリ確保などを実装していない場合はcuda_util.h, cuda_util.cppとoptixu_on_cudau.hも追加します。CUDA UtilityにOpenGL連携機能が必要ない場合はコンパイルオプションとして`CUDA_UTIL_DONT_USE_GL_INTEROP`を定義してください。
+
+Add optix_util.h, optix_util_private.h and optix_util.cpp to your program which uses OptiX Utility.
+Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
+
 ## 機能 / Features
 Currently based on OptiX 7.4.0
 - Traversable types
