@@ -113,7 +113,7 @@ scene.generateShaderBindingTableLayout(&sbtSize);
 pipeline.setShaderBindingTable(sbt, sbt.getMappedPointer());
 
 // Create materials.
-optix::Material defaultMat = optixContext.createMaterial();
+optixu::Material defaultMat = optixContext.createMaterial();
 defaultMat.setHitGroup(RayType::Search, searchRayHitProgramGroup);
 defaultMat.setHitGroup(RayType::Visibility, visibilityRayHitProgramGroup);
 // ...
