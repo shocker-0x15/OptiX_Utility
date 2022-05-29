@@ -1597,18 +1597,8 @@ struct float4;
 struct OptixInvalidRayExceptionDetails;
 struct OptixParameterMismatchExceptionDetails;
 
-void optixGetCatmullRomVertexData(
-    OptixTraversableHandle gas,
-    unsigned int primIdx,
-    unsigned int sbtGASIndex,
-    float time,
-    float4 data[4]);
-void optixGetCubicBSplineVertexData(
-    OptixTraversableHandle gas,
-    unsigned int primIdx,
-    unsigned int sbtGASIndex,
-    float time,
-    float4 data[4]);
+void optixGetCatmullRomVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
+void optixGetCubicBSplineVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
 float optixGetCurveParameter();
 int optixGetExceptionCode();
 OptixInvalidRayExceptionDetails optixGetExceptionInvalidRay();
@@ -1616,51 +1606,29 @@ int optixGetExceptionInvalidSbtOffset();
 OptixTraversableHandle optixGetExceptionInvalidTraversable();
 char* optixGetExceptionLineInfo();
 OptixParameterMismatchExceptionDetails optixGetExceptionParameterMismatch();
-unsigned int optixGetGASMotionStepCount(
-    OptixTraversableHandle gas);
-float optixGetGASMotionTimeBegin(
-    OptixTraversableHandle gas);
-float optixGetGASMotionTimeEnd(
-    OptixTraversableHandle gas);
+unsigned int optixGetGASMotionStepCount(OptixTraversableHandle gas);
+float optixGetGASMotionTimeBegin(OptixTraversableHandle gas);
+float optixGetGASMotionTimeEnd(OptixTraversableHandle gas);
 OptixTraversableHandle optixGetGASTraversableHandle();
 unsigned int optixGetHitKind();
-OptixTraversableHandle optixGetInstanceChildFromHandle(
-    OptixTraversableHandle handle);
+OptixTraversableHandle optixGetInstanceChildFromHandle(OptixTraversableHandle handle);
 unsigned int optixGetInstanceId();
-unsigned int optixGetInstanceIdFromHandle(
-    OptixTraversableHandle handle);
+unsigned int optixGetInstanceIdFromHandle(OptixTraversableHandle handle);
 unsigned int optixGetInstanceIndex();
-const float4* optixGetInstanceInverseTransformFromHandle(
-    OptixTraversableHandle handle);
-const float4* optixGetInstanceTransformFromHandle(
-    OptixTraversableHandle handle);
-OptixTraversableHandle optixGetInstanceTraversableFromIAS(
-    OptixTraversableHandle ias,
-    unsigned int instIdx);
+const float4* optixGetInstanceInverseTransformFromHandle(OptixTraversableHandle handle);
+const float4* optixGetInstanceTransformFromHandle(OptixTraversableHandle handle);
+OptixTraversableHandle optixGetInstanceTraversableFromIAS(OptixTraversableHandle ias, unsigned int instIdx);
 uint3 optixGetLaunchDimensions();
 uint3 optixGetLaunchIndex();
-void optixGetLinearCurveVertexData(
-    OptixTraversableHandle gas,
-    unsigned int primIdx,
-    unsigned int sbtGASIndex,
-    float time,
-    float4 data[2]);
-const OptixMatrixMotionTransform* optixGetMatrixMotionTransformFromHandle(
-    OptixTraversableHandle handle);
+void optixGetLinearCurveVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[2]);
+const OptixMatrixMotionTransform* optixGetMatrixMotionTransformFromHandle(OptixTraversableHandle handle);
 float3 optixGetObjectRayDirection();
 float3 optixGetObjectRayOrigin();
-void optixGetObjectToWorldTransformMatrix(
-    float m[12]);
+void optixGetObjectToWorldTransformMatrix(float m[12]);
 unsigned int optixGetPrimitiveIndex();
-OptixPrimitiveType optixGetPrimitiveType(
-    unsigned int hitKind);
+OptixPrimitiveType optixGetPrimitiveType(unsigned int hitKind);
 OptixPrimitiveType optixGetPrimitiveType();
-void optixGetQuadraticBSplineVertexData(
-    OptixTraversableHandle gas,
-    unsigned int primIdx,
-    unsigned int sbtGASIndex,
-    float time,
-    float4 data[3]);
+void optixGetQuadraticBSplineVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[3]);
 unsigned int optixGetRayFlags();
 float optixGetRayTime();
 float optixGetRayTmax();
@@ -1668,75 +1636,35 @@ float optixGetRayTmin();
 unsigned int optixGetRayVisibilityMask();
 CUdeviceptr optixGetSbtDataPointer();
 unsigned int optixGetSbtGASIndex();
-const OptixSRTMotionTransform* optixGetSRTMotionTransformFromHandle(
-    OptixTraversableHandle handle);
-const OptixStaticTransform* optixGetStaticTransformFromHandle(
-    OptixTraversableHandle handle);
-OptixTraversableHandle optixGetTransformListHandle(
-    unsigned int index);
+const OptixSRTMotionTransform* optixGetSRTMotionTransformFromHandle(OptixTraversableHandle handle);
+const OptixStaticTransform* optixGetStaticTransformFromHandle(OptixTraversableHandle handle);
+OptixTraversableHandle optixGetTransformListHandle(unsigned int index);
 unsigned int optixGetTransformListSize();
-OptixTransformType optixGetTransformTypeFromHandle(
-    OptixTraversableHandle handle);
+OptixTransformType optixGetTransformTypeFromHandle(OptixTraversableHandle handle);
 float2 optixGetTriangleBarycentrics();
-void optixGetTriangleVertexData(
-    OptixTraversableHandle gas,
-    unsigned int primIdx,
-    unsigned int sbtGASIndex,
-    float time,
-    float3 data[3]);
+void optixGetTriangleVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float3 data[3]);
 float3 optixGetWorldRayDirection();
 float3 optixGetWorldRayOrigin();
-void optixGetWorldToObjectTransformMatrix(
-    float m[12]);
+void optixGetWorldToObjectTransformMatrix(float m[12]);
 void optixIgnoreIntersection();
-bool optixIsBackFaceHit(
-    unsigned int hitKind);
+bool optixIsBackFaceHit(unsigned int hitKind);
 bool optixIsBackFaceHit();
 bool optixIsFrontFaceHit(unsigned int hitKind);
 bool optixIsFrontFaceHit();
 bool optixIsTriangleBackFaceHit();
 bool optixIsTriangleFrontFaceHit();
 bool optixIsTriangleHit();
-void optixSetPayloadTypes(
-    unsigned int typeMask);
+void optixSetPayloadTypes(unsigned int typeMask);
 void optixTerminateRay();
-uint4 optixTexFootprint2D(
-    unsigned long long tex,
-    unsigned int texInfo,
-    float x,
-    float y,
-    unsigned int* singleMipLevel);
-uint4 optixTexFootprint2DGrad(
-    unsigned long long tex,
-    unsigned int texInfo,
-    float x,
-    float y,
-    float dPdx_x,
-    float dPdx_y,
-    float dPdy_x,
-    float dPdy_y,
-    bool coarse,
-    unsigned int* singleMipLevel);
-uint4 optixTexFootprint2DLod(
-    unsigned long long tex,
-    unsigned int texInfo,
-    float x,
-    float y,
-    float level,
-    bool coarse,
-    unsigned int* singleMipLevel);
-float3 optixTransformNormalFromObjectToWorldSpace(
-    float3 normal);
-float3 optixTransformNormalFromWorldToObjectSpace(
-    float3 normal);
-float3 optixTransformPointFromObjectToWorldSpace(
-    float3 point);
-float3 optixTransformPointFromWorldToObjectSpace(
-    float3 point);
-float3 optixTransformVectorFromObjectToWorldSpace(
-    float3 vec);
-float3 optixTransformVectorFromWorldToObjectSpace(
-    float3 vec);
+uint4 optixTexFootprint2D(unsigned long long tex, unsigned int texInfo, float x, float y, unsigned int* singleMipLevel);
+uint4 optixTexFootprint2DGrad(unsigned long long tex, unsigned int texInfo, float x, float y, float dPdx_x, float dPdx_y, float dPdy_x, float dPdy_y, bool coarse, unsigned int* singleMipLevel);
+uint4 optixTexFootprint2DLod(unsigned long long tex, unsigned int texInfo, float x, float y, float level, bool coarse, unsigned int* singleMipLevel);
+float3 optixTransformNormalFromObjectToWorldSpace(float3 normal);
+float3 optixTransformNormalFromWorldToObjectSpace(float3 normal);
+float3 optixTransformPointFromObjectToWorldSpace(float3 point);
+float3 optixTransformPointFromWorldToObjectSpace(float3 point);
+float3 optixTransformVectorFromObjectToWorldSpace(float3 vec);
+float3 optixTransformVectorFromWorldToObjectSpace(float3 vec);
 unsigned int optixUndefinedValue();
 
 #endif

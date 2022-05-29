@@ -243,10 +243,12 @@ void Group::propagateMarkDirty() const {
 
 void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* optixEnv) {
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(filepath.string(),
-                                             aiProcess_Triangulate |
-                                             aiProcess_GenNormals | aiProcess_GenSmoothNormals |
-                                             aiProcess_PreTransformVertices);
+    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.0f);
+    const aiScene* scene = importer.ReadFile(
+        filepath.string(),
+        aiProcess_Triangulate |
+        aiProcess_GenSmoothNormals |
+        aiProcess_PreTransformVertices);
     if (!scene) {
         hpprintf("Failed to load %s.\n", filepath.string().c_str());
         return;
