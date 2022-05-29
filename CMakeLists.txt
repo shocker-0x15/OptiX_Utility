@@ -37,6 +37,7 @@ file(
     "${CMAKE_SOURCE_DIR}/optix_util.h"
     "${CMAKE_SOURCE_DIR}/optix_util_private.h"
     "${CMAKE_SOURCE_DIR}/optix_util.cpp"
+    "${CMAKE_SOURCE_DIR}/optixu_on_cudau.h"
 )
 
 # END:JP: プロジェクト間で共通のソースコードのリスト作成。
