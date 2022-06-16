@@ -1,4 +1,4 @@
-/*
+﻿/*
 
    Copyright 2022 Shin Watanabe
 
@@ -45,6 +45,7 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
+#include <filesystem>
 #include "GL/gl3w.h"
 
 
@@ -541,6 +542,16 @@ namespace glu {
                 return static_cast<GLenum>(value);
             }
         };
+
+        struct PreProcessorDefinition {
+            std::string name;
+            std::string value;
+
+            PreProcessorDefinition(const std::string &_name) :
+                name(_name) {}
+            PreProcessorDefinition(const std::string &_name, const std::string &_value) :
+                name(_name), value(_value) {}
+        };
     private:
         GLuint m_handle;
 
@@ -559,6 +570,7 @@ namespace glu {
         Shader &operator=(Shader &&b);
 
         void initialize(Type type, const std::string &source);
+        void initialize(Type type, const std::filesystem::path &filePath);
         void finalize();
 
         GLuint getHandle() const {
@@ -587,6 +599,9 @@ namespace glu {
         GraphicsProgram &operator=(GraphicsProgram &&b);
 
         void initializeVSPS(const std::string &vertexSource, const std::string &fragmentSource);
+        void initializeVSPS(const std::string &glslHead,
+                            const std::filesystem::path &vertexSourcePath,
+                            const std::filesystem::path &fragmentSourcePath);
         void finalize();
 
         GLuint getHandle() const {
@@ -614,10 +629,52 @@ namespace glu {
         ComputeProgram &operator=(ComputeProgram &&b);
 
         void initialize(const std::string &source);
+        void initialize(const std::filesystem::path &filePath);
         void finalize();
 
         GLuint getHandle() const {
             return m_handle;
+        }
+    };
+
+
+
+    class Timer {
+        GLuint m_event;
+        bool m_startIsValid;
+        bool m_endIsValid;
+
+    public:
+        void initialize() {
+            glCreateQueries(GL_TIME_ELAPSED, 1, &m_event);
+            m_startIsValid = false;
+            m_endIsValid = false;
+        }
+        void finalize() {
+            m_startIsValid = false;
+            m_endIsValid = false;
+            glDeleteQueries(1, &m_event);
+        }
+
+        void start() {
+            glBeginQuery(GL_TIME_ELAPSED, m_event);
+            m_startIsValid = true;
+        }
+        void stop() {
+            glEndQuery(GL_TIME_ELAPSED);
+            m_endIsValid = true;
+        }
+
+        float report() {
+            float ret = 0.0f;
+            if (m_startIsValid && m_endIsValid) {
+                GLint64 elapsedTime;
+                glGetQueryObjecti64v(m_event, GL_QUERY_RESULT, &elapsedTime);
+                ret = elapsedTime * 1e-6f;
+                m_startIsValid = false;
+                m_endIsValid = false;
+            }
+            return ret;
         }
     };
 }

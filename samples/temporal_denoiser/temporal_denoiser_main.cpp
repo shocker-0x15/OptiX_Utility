@@ -1033,7 +1033,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
     outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
                                           cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-    outputBufferSurfaceHolder.initialize(&outputArray);
+    outputBufferSurfaceHolder.initialize({ &outputArray });
 
     glu::Sampler outputSampler;
     outputSampler.initialize(glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
@@ -1480,7 +1480,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                  outputBufferSurfaceHolder.getNext(),
                                  uint2(renderTargetSizeX, renderTargetSizeY));
 
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream);
+        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
 
         curGPUTimer.denoise.stop(cuStream);
 

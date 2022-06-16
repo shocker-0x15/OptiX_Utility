@@ -1379,7 +1379,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hpprintf("Render loop.\n");
 
     cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
-    outputBufferSurfaceHolder.initialize(&outputArray);
+    outputBufferSurfaceHolder.initialize({ &outputArray });
     
     StopWatchHiRes<> sw;
     std::mt19937_64 rng(3092384202);
@@ -1878,7 +1878,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #endif
                           renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
                           outputBufferSurfaceHolder.getNext());
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream);
+        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
         curGPUTimer.postProcess.stop(cuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;
         ++plp.numAccumFrames;

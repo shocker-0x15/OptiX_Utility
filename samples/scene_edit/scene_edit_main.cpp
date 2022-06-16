@@ -1240,7 +1240,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
     outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
                                           cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-    outputBufferSurfaceHolder.initialize(&outputArray);
+    outputBufferSurfaceHolder.initialize({ &outputArray });
 
     glu::Sampler outputSampler;
     outputSampler.initialize(glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
@@ -2085,7 +2085,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
         pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
 
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream);
+        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
 
 
 
