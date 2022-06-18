@@ -927,7 +927,7 @@ namespace optixu {
                 if (indexSize)
                     *indexSize = geom.materialIndexSize;
             }
-            if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
+            else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;

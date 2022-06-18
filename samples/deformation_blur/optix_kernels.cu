@@ -10,7 +10,11 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 struct HitPointParameter {
-    float b1, b2;
+    union {
+        float b1;
+        float secondDistance;
+    };
+    float b2;
     int32_t primIndex;
 
     CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get() {
@@ -26,6 +30,11 @@ struct HitPointParameter {
         else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
             ret.b1 = optixGetCurveParameter();
             ret.b2 = NAN;
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_SPHERE) {
+            // When a ray hits a sphere twice, the attribute 0 contains the second distance.
+            uint32_t attr0 = optixGetAttribute_0();
+            ret.secondDistance = __uint_as_float(attr0);
         }
         else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
             // JP: Intersection Programで設定したアトリビュート変数は
@@ -93,9 +102,38 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
     return sn;
 }
 
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcSphereSurfaceNormal(
+    const GeometryData &geom, uint32_t primIndex, float rayTime, const float3 &hp) {
+    float3 center;
+    if constexpr (useEmbeddedVertexData) {
+        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+        uint32_t sbtGasIndex = optixGetSbtGASIndex();
+        float4 centerAndRadius;
+        optixGetSphereData(gasHandle, primIndex, sbtGasIndex, rayTime, &centerAndRadius);
+        center = make_float3(centerAndRadius);
+    }
+    else {
+        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+        float timeBegin = optixGetGASMotionTimeBegin(gasHandle);
+        float timeEnd = optixGetGASMotionTimeEnd(gasHandle);
+        float normTime = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
+
+        float stepF = (geom.numMotionSteps - 1) * normTime;
+        uint32_t step = static_cast<uint32_t>(stepF);
+        float p = stepF - step;
+        const Sphere &sphA = geom.sphereBuffers[step][primIndex];
+        const Sphere &sphB = geom.sphereBuffers[step + 1][primIndex];
+        center = (1 - p) * sphA.center + p * sphB.center;
+    }
+
+    float3 sn = normalize(hp - center);
+
+    return sn;
+}
 
 
-CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
+
+CUDA_DEVICE_KERNEL void RT_IS_NAME(partialSphere)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryData &geom = sbtr.geomData;
     uint32_t primIndex = optixGetPrimitiveIndex();
@@ -104,8 +142,8 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
 
     float3 nDir = normalize(rayDir);
 
-    const SphereParameter &param0 = geom.paramBuffers[0][primIndex];
-    const SphereParameter &param1 = geom.paramBuffers[1][primIndex];
+    const PartialSphereParameter &param0 = geom.partialSphereParamBuffers[0][primIndex];
+    const PartialSphereParameter &param1 = geom.partialSphereParamBuffers[1][primIndex];
 
     OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
     float timeBegin = optixGetGASMotionTimeBegin(gasHandle);
@@ -113,6 +151,10 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
     float time = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
     float3 center = (1 - time) * param0.center + time * param1.center;
     float radius = (1 - time) * param0.radius + time * param1.radius;
+    float minTheta = (1 - time) * param0.minTheta + time * param1.minTheta;
+    float maxTheta = (1 - time) * param0.maxTheta + time * param1.maxTheta;
+    float minPhi = (1 - time) * param0.minPhi + time * param1.minPhi;
+    float maxPhi = (1 - time) * param0.maxPhi + time * param1.maxPhi;
 
     float3 co = rayOrg - center;
     float b = dot(nDir, co);
@@ -124,14 +166,36 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
     float sqrtD = std::sqrt(D);
     float t0 = -b - sqrtD;
     float t1 = -b + sqrtD;
+
+    float3 np0 = normalize(co + t0 * nDir);
+    float theta0 = std::acos(std::fmin(std::fmax(np0.z, -1.0f), 1.0f));
+    float phi0 = std::fmod(std::atan2(np0.y, np0.x) + 2 * Pi, 2 * Pi);
+    if (theta0 < minTheta || theta0 >= maxTheta ||
+        phi0 < minPhi || phi0 >= maxPhi)
+        t0 = -1; // discard
+
+    float3 np1 = normalize(co + t1 * nDir);
+    float theta1 = std::acos(std::fmin(std::fmax(np1.z, -1.0f), 1.0f));
+    float phi1 = std::fmod(std::atan2(np1.y, np1.x) + 2 * Pi, 2 * Pi);
+    if (theta1 < minTheta || theta1 >= maxTheta ||
+        phi1 < minPhi || phi1 >= maxPhi)
+        t1 = -1; // discard
+
     bool isFront = t0 >= 0;
-    float t = isFront ? t0 : t1;
+    float t;
+    float theta, phi;
+    if (isFront) {
+        t = t0;
+        theta = theta0;
+        phi = phi0;
+    }
+    else {
+        t = t1;
+        theta = theta1;
+        phi = phi1;
+    }
     if (t < 0)
         return;
-
-    float3 np = normalize(co + t * nDir);
-    float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
-    float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
 
     // JP: アトリビュートシグネチャー型をテンプレート引数に指定して、
     //     アトリビュートとともに交叉が有効であることを報告する。
@@ -181,6 +245,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     const GeometryData &geom = sbtr.geomData;
     auto hp = HitPointParameter::get();
 
+    float3 pos = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
+    pos = optixTransformPointFromWorldToObjectSpace(pos);
     float rayTime = optixGetRayTime();
 
     float3 sn;
@@ -195,11 +261,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
-        float3 pos = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
-        pos = optixTransformPointFromWorldToObjectSpace(pos);
-
         sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(
             geom, hp, rayTime, pos);
+    }
+    else if (primType == OPTIX_PRIMITIVE_TYPE_SPHERE) {
+        sn = calcSphereSurfaceNormal(geom, hp.primIndex, rayTime, pos);
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
         float theta = hp.b1;

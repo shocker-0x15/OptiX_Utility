@@ -59,12 +59,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
-    // JP: このヒットグループはレイと球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
-    // EN: This is for ray-sphere intersection, so pass a custom intersection program.
+    // JP: このヒットグループはレイと(部分)球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
+    // EN: This is for ray-(partial-)sphere intersection, so pass a custom intersection program.
     optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForCustomIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        moduleOptiX, RT_IS_NAME_STR("intersectSphere"));
+        moduleOptiX, RT_IS_NAME_STR("partialSphere"));
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -200,47 +200,61 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブ用GeometryInstanceは生成時に指定する必要がある。
     // EN: GeometryInstance for custom primitives requires to be specified at the creation.
-    optixu::GeometryInstance spheresGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
-    cudau::TypedBuffer<AABB> spheresAabbBuffer;
-    cudau::TypedBuffer<Shared::SphereParameter> spheresParamBuffer;
+    optixu::GeometryInstance customPrimsGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+    cudau::TypedBuffer<AABB> customPrimsAabbBuffer;
+    cudau::TypedBuffer<Shared::PartialSphereParameter> spheresParamBuffer;
     {
         constexpr uint32_t numPrimitives = 25;
-        spheresAabbBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
+        customPrimsAabbBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
         spheresParamBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
 
         // JP: 各球のパラメターとAABBを設定する。
         //     これらはもちろんCUDAカーネルで設定することも可能。
         // EN: Set the parameters and AABB for each sphere.
         //     Of course, these can be set using a CUDA kernel.
-        AABB* aabbs = spheresAabbBuffer.map();
-        Shared::SphereParameter* params = spheresParamBuffer.map();
+        AABB* aabbs = customPrimsAabbBuffer.map();
+        Shared::PartialSphereParameter* params = spheresParamBuffer.map();
         std::mt19937 rng(1290527201);
         std::uniform_real_distribution u01;
         for (int i = 0; i < numPrimitives; ++i) {
-            Shared::SphereParameter &param = params[i];
+            Shared::PartialSphereParameter &param = params[i];
             float x = -0.8f + 1.6f * (i % 5) / 4.0f;
             float y = -0.8f + 1.6f * u01(rng);
             float z = -0.8f + 1.6f * (i / 5) / 4.0f;
             param.center = make_float3(x, y, z);
             param.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
+            //// Full Sphere
+            //param.minTheta = 0;
+            //param.maxTheta = pi_v<float>;
+            //param.minPhi = 0;
+            //param.maxPhi = 2 * pi_v<float>;
+            // Partial Sphere
+            param.minTheta = pi_v<float> * (0.15f * u01(rng));
+            param.maxTheta = pi_v<float> * (0.85f + 0.15f * u01(rng));
+            param.minPhi = 2 * pi_v<float> * (0.3f * u01(rng));
+            param.maxPhi = 2 * pi_v<float> * (0.7f + 0.3f * u01(rng));
 
+            // JP: 簡単のため完全な球に対するAABBを計算しているが、
+            //     可能であれば実際のジオメトリ(ここでは部分的な球)に対して計算したほうが良い。
+            // EN: Compute AABB for the full sphere for simplicity, but computing
+            //     AABB for the actual geometry (the partial sphere here) is better if possible.
             AABB &aabb = aabbs[i];
             aabb = AABB();
             aabb.unify(param.center - make_float3(param.radius));
             aabb.unify(param.center + make_float3(param.radius));
         }
         spheresParamBuffer.unmap();
-        spheresAabbBuffer.unmap();
+        customPrimsAabbBuffer.unmap();
 
         Shared::GeometryData geomData = {};
-        geomData.aabbBuffer = spheresAabbBuffer.getDevicePointer();
+        geomData.aabbBuffer = customPrimsAabbBuffer.getDevicePointer();
         geomData.paramBuffer = spheresParamBuffer.getDevicePointer();
 
-        spheresGeomInst.setCustomPrimitiveAABBBuffer(spheresAabbBuffer);
-        spheresGeomInst.setNumMaterials(1, optixu::BufferView());
-        spheresGeomInst.setMaterial(0, 0, matForSpheres);
-        spheresGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        spheresGeomInst.setUserData(geomData);
+        customPrimsGeomInst.setCustomPrimitiveAABBBuffer(customPrimsAabbBuffer);
+        customPrimsGeomInst.setNumMaterials(1, optixu::BufferView());
+        customPrimsGeomInst.setMaterial(0, 0, matForSpheres);
+        customPrimsGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        customPrimsGeomInst.setUserData(geomData);
     }
 
 
@@ -272,7 +286,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     customPrimitivesGas.setNumMaterialSets(1);
     customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
-    customPrimitivesGas.addChild(spheresGeomInst);
+    customPrimitivesGas.addChild(customPrimsGeomInst);
     customPrimitivesGas.prepareForBuild(&asMemReqs);
     customPrimitivesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
@@ -430,8 +444,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomGas.destroy();
 
     spheresParamBuffer.finalize();
-    spheresAabbBuffer.finalize();
-    spheresGeomInst.destroy();
+    customPrimsAabbBuffer.finalize();
+    customPrimsGeomInst.destroy();
 
     areaLightTriangleBuffer.finalize();
     areaLightVertexBuffer.finalize();

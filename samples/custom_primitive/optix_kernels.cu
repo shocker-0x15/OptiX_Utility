@@ -46,11 +46,11 @@ struct HitGroupSBTRecordData {
 
 // JP: レイとカスタムプリミティブとの衝突判定はIntersection Programで記述する。
 // EN: Intersection program is used to describe the intersection between a ray vs a custom primitive.
-CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
+CUDA_DEVICE_KERNEL void RT_IS_NAME(partialSphere)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryData &geom = sbtr.geomData;
     uint32_t primIndex = optixGetPrimitiveIndex();
-    const SphereParameter &param = geom.paramBuffer[primIndex];
+    const PartialSphereParameter &param = geom.paramBuffer[primIndex];
     const float3 rayOrg = optixGetObjectRayOrigin();
     const float3 rayDir = optixGetObjectRayDirection();
 
@@ -66,14 +66,36 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(intersectSphere)() {
     float sqrtD = std::sqrt(D);
     float t0 = -b - sqrtD;
     float t1 = -b + sqrtD;
+
+    float3 np0 = normalize(co + t0 * nDir);
+    float theta0 = std::acos(std::fmin(std::fmax(np0.z, -1.0f), 1.0f));
+    float phi0 = std::fmod(std::atan2(np0.y, np0.x) + 2 * Pi, 2 * Pi);
+    if (theta0 < param.minTheta || theta0 >= param.maxTheta ||
+        phi0 < param.minPhi || phi0 >= param.maxPhi)
+        t0 = -1; // discard
+
+    float3 np1 = normalize(co + t1 * nDir);
+    float theta1 = std::acos(std::fmin(std::fmax(np1.z, -1.0f), 1.0f));
+    float phi1 = std::fmod(std::atan2(np1.y, np1.x) + 2 * Pi, 2 * Pi);
+    if (theta1 < param.minTheta || theta1 >= param.maxTheta ||
+        phi1 < param.minPhi || phi1 >= param.maxPhi)
+        t1 = -1; // discard
+
     bool isFront = t0 >= 0;
-    float t = isFront ? t0 : t1;
+    float t;
+    float theta, phi;
+    if (isFront) {
+        t = t0;
+        theta = theta0;
+        phi = phi0;
+    }
+    else {
+        t = t1;
+        theta = theta1;
+        phi = phi1;
+    }
     if (t < 0)
         return;
-
-    float3 np = normalize(co + t * nDir);
-    float theta = std::acos(std::fmin(std::fmax(np.z, -1.0f), 1.0f));
-    float phi = std::fmod(std::atan2(np.y, np.x) + 2 * Pi, 2 * Pi);
 
     // JP: アトリビュートシグネチャー型をテンプレート引数に指定して、
     //     アトリビュートとともに交叉が有効であることを報告する。
@@ -126,7 +148,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         sn = normalize(sn);
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
-        //const SphereParameter &param = geom.paramBuffer[hp.primIndex];
+        //const PartialSphereParameter &param = geom.paramBuffer[hp.primIndex];
         float theta = hp.b1;
         float phi = hp.b2;
         float sinTheta = std::sin(theta);

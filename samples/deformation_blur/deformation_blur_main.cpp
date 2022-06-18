@@ -31,9 +31,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
-    //     カーブ・カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
+    //     カーブ・球・カスタムプリミティブとの衝突判定を使うため
+    //     プリミティブ種別のフラグを適切に設定する必要がある。
     // EN: This sample uses two-level AS (single-level instancing).
-    //     Appropriately setting primitive type flags is required since this sample uses curve and
+    //     Appropriately setting primitive type flags is required since this sample uses curve, sphere and
     //     custom primitive intersection.
     pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
                                 std::max<uint32_t>({
@@ -46,6 +47,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE |
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
     const std::string ptx = readTxtFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.ptx");
@@ -74,12 +76,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
 
-    // JP: このヒットグループはレイと球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
-    // EN: This is for ray-sphere intersection, so pass a custom intersection program.
-    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForCustomIS(
+    constexpr optixu::ASTradeoff sphereASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool sphereASUpdatable = false;
+    constexpr bool sphereASCompactable = true;
+    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        moduleOptiX, RT_IS_NAME_STR("intersectSphere"));
+        sphereASTradeOff, sphereASUpdatable, sphereASCompactable, Shared::useEmbeddedVertexData);
+
+    // JP: このヒットグループはレイと(部分)球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
+    // EN: This is for ray-(partial-)sphere intersection, so pass a custom intersection program.
+    optixu::ProgramGroup hitProgramGroupForPartialSpheres = pipeline.createHitProgramGroupForCustomIS(
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        moduleOptiX, RT_IS_NAME_STR("partialSphere"));
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -113,6 +123,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     matForCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCurves);
     optixu::Material matForSpheres = optixContext.createMaterial();
     matForSpheres.setHitGroup(Shared::RayType_Primary, hitProgramGroupForSpheres);
+    optixu::Material matForPartialSpheres = optixContext.createMaterial();
+    matForPartialSpheres.setHitGroup(Shared::RayType_Primary, hitProgramGroupForPartialSpheres);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -145,11 +157,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cudau::TypedBuffer<const Shared::CurveVertex*> vertexBufferPointerBuffer;
             cudau::TypedBuffer<uint32_t> segmentIndexBuffer;
         };
-        struct CustomPrimitives {
-            std::vector<cudau::TypedBuffer<Shared::SphereParameter>> paramBuffers;
-            cudau::TypedBuffer<const Shared::SphereParameter*> paramBufferPointerBuffer;
+        struct Spheres {
+            std::vector<cudau::TypedBuffer<Shared::Sphere>> sphereBuffers;
+            cudau::TypedBuffer<const Shared::Sphere*> sphereBufferPointerBuffer;
         };
-        std::variant<TriangleMesh, Curves, CustomPrimitives> shape;
+        struct CustomPrimitives {
+            std::vector<cudau::TypedBuffer<Shared::PartialSphereParameter>> partialSphereParamBuffers;
+            cudau::TypedBuffer<const Shared::PartialSphereParameter*> partialSphereParamBufferPointerBuffer;
+        };
+        std::variant<TriangleMesh, Curves, Spheres, CustomPrimitives> shape;
         optixu::GeometryInstance optixGeomInst;
         optixu::GeometryAccelerationStructure optixGas;
         cudau::Buffer gasMem;
@@ -172,11 +188,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 for (int i = geom.vertexBuffers.size() - 1; i >= 0; --i)
                     geom.vertexBuffers[i].finalize();
             }
+            else if (std::holds_alternative<Spheres>(shape)) {
+                auto &geom = std::get<Spheres>(shape);
+                geom.sphereBufferPointerBuffer.finalize();
+                for (int i = geom.sphereBuffers.size() - 1; i >= 0; --i)
+                    geom.sphereBuffers[i].finalize();
+            }
             else {
                 auto &geom = std::get<CustomPrimitives>(shape);
-                geom.paramBufferPointerBuffer.finalize();
-                for (int i = geom.paramBuffers.size() - 1; i >= 0; --i)
-                    geom.paramBuffers[i].finalize();
+                geom.partialSphereParamBufferPointerBuffer.finalize();
+                for (int i = geom.partialSphereParamBuffers.size() - 1; i >= 0; --i)
+                    geom.partialSphereParamBuffers[i].finalize();
             }
             optixGeomInst.destroy();
         }
@@ -209,7 +231,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // JP: 頂点バッファーを2ステップ分作る。
         //     2ステップ目は頂点位置を爆発するようにずらす。
-        // EN: Create vertex buffer for two steps.
+        // EN: Create vertex buffers for two steps.
         //     The second step displaces the positions of vertices like explosion.
         uint32_t numMotionSteps = 2;
         shape.vertexBuffers.resize(numMotionSteps);
@@ -299,7 +321,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         auto &shape = std::get<Geometry::Curves>(curves.shape);
 
         // JP: 頂点バッファーをモーションステップ分作る。
-        // EN: Create vertex buffer for each motion step.
+        // EN: Create vertex buffers for each motion step.
         shape.vertexBuffers.resize(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
             shape.vertexBuffers[i].initialize(cuContext, cudau::BufferType::Device, vertices[i]);
@@ -350,66 +372,71 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Geometry spheres;
     {
-        spheres.shape = Geometry::CustomPrimitives();
-        auto &shape = std::get<Geometry::CustomPrimitives>(spheres.shape);
+        spheres.shape = Geometry::Spheres();
+        auto &shape = std::get<Geometry::Spheres>(spheres.shape);
 
         constexpr uint32_t numPrimitives = 25;
-        std::vector<Shared::SphereParameter> sphereParams0(numPrimitives);
-        std::vector<Shared::SphereParameter> sphereParams1(numPrimitives);
+        std::vector<Shared::Sphere> sphereParams0(numPrimitives);
+        std::vector<Shared::Sphere> sphereParams1(numPrimitives);
 
         std::mt19937 rng(1290527201);
         std::uniform_real_distribution u01;
         for (int i = 0; i < numPrimitives; ++i) {
-            Shared::SphereParameter &param0 = sphereParams0[i];
+            Shared::Sphere &param0 = sphereParams0[i];
             float x = -0.8f + 1.6f * (i % 5) / 4.0f;
-            float y = -1.0f + 0.4f * u01(rng);
+            float y = -0.2f + 0.4f * u01(rng);
             float z = -0.8f + 1.6f * (i / 5) / 4.0f;
             param0.center = float3(x, y, z);
             param0.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
-            param0.aabb = AABB();
-            param0.aabb.unify(param0.center - float3(param0.radius));
-            param0.aabb.unify(param0.center + float3(param0.radius));
 
-            Shared::SphereParameter &param1 = sphereParams1[i];
+            Shared::Sphere &param1 = sphereParams1[i];
             param1 = param0;
             param1.center += 0.4f * float3(u01(rng) - 0.5f,
                                            u01(rng) - 0.5f,
                                            u01(rng) - 0.5f);
             param1.radius *= 0.5f + 1.0f * u01(rng);
-            param1.aabb = AABB();
-            param1.aabb.unify(param1.center - float3(param1.radius));
-            param1.aabb.unify(param1.center + float3(param1.radius));
         }
 
-        // JP: AABBバッファーを2ステップ分作る。
-        // EN: Create AABB buffer for two steps.
+        // JP: 球バッファーを2ステップ分作る。
+        // EN: Create sphere buffers for two steps.
         uint32_t numMotionSteps = 2;
-        shape.paramBuffers.resize(numMotionSteps);
-        shape.paramBuffers[0].initialize(cuContext, cudau::BufferType::Device, sphereParams0);
-        shape.paramBuffers[1].initialize(cuContext, cudau::BufferType::Device, sphereParams1);
-        shape.paramBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
+        shape.sphereBuffers.resize(numMotionSteps);
+        shape.sphereBuffers[0].initialize(cuContext, cudau::BufferType::Device, sphereParams0);
+        shape.sphereBuffers[1].initialize(cuContext, cudau::BufferType::Device, sphereParams1);
+        shape.sphereBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
 
         Shared::GeometryData geomData = {};
-        auto paramBufferPointers = shape.paramBufferPointerBuffer.map();
+        auto paramBufferPointers = shape.sphereBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            paramBufferPointers[i] = shape.paramBuffers[i].getDevicePointer();
-        shape.paramBufferPointerBuffer.unmap();
-        geomData.paramBuffers = shape.paramBufferPointerBuffer.getDevicePointer();
+            paramBufferPointers[i] = shape.sphereBuffers[i].getDevicePointer();
+        shape.sphereBufferPointerBuffer.unmap();
+        geomData.sphereBuffers = shape.sphereBufferPointerBuffer.getDevicePointer();
         geomData.numMotionSteps = numMotionSteps;
 
-        spheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+        spheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::Spheres);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
         spheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
-        for (int i = 0; i < numMotionSteps; ++i)
-            spheres.optixGeomInst.setCustomPrimitiveAABBBuffer(shape.paramBuffers[i], i);
+        for (int i = 0; i < numMotionSteps; ++i) {
+            optixu::BufferView centerView(
+                shape.sphereBuffers[i].getCUdeviceptr() + offsetof(Shared::Sphere, center),
+                shape.sphereBuffers[i].numElements(),
+                shape.sphereBuffers[i].stride());
+            spheres.optixGeomInst.setVertexBuffer(centerView, i);
+            optixu::BufferView radiusView(
+                shape.sphereBuffers[i].getCUdeviceptr() + offsetof(Shared::Sphere, radius),
+                shape.sphereBuffers[i].numElements(),
+                shape.sphereBuffers[i].stride());
+            spheres.optixGeomInst.setRadiusBuffer(radiusView, i);
+        }
         spheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
         spheres.optixGeomInst.setMaterial(0, 0, matForSpheres);
         spheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         spheres.optixGeomInst.setUserData(geomData);
 
-        spheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
-        spheres.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        spheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
+        spheres.optixGas.setConfiguration(sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
+                                          Shared::useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         spheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -421,6 +448,83 @@ int32_t main(int32_t argc, const char* argv[]) try {
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
+    Geometry partialSpheres;
+    {
+        partialSpheres.shape = Geometry::CustomPrimitives();
+        auto &shape = std::get<Geometry::CustomPrimitives>(partialSpheres.shape);
+
+        constexpr uint32_t numPrimitives = 25;
+        std::vector<Shared::PartialSphereParameter> sphereParams0(numPrimitives);
+        std::vector<Shared::PartialSphereParameter> sphereParams1(numPrimitives);
+
+        std::mt19937 rng(1290527201);
+        std::uniform_real_distribution u01;
+        for (int i = 0; i < numPrimitives; ++i) {
+            Shared::PartialSphereParameter &param0 = sphereParams0[i];
+            float x = -0.8f + 1.6f * (i % 5) / 4.0f;
+            float y = -0.2f + 0.4f * u01(rng);
+            float z = -0.8f + 1.6f * (i / 5) / 4.0f;
+            param0.center = float3(x, y, z);
+            param0.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
+            param0.minTheta = pi_v<float> *(0.15f * u01(rng));
+            param0.maxTheta = pi_v<float> *(0.85f + 0.15f * u01(rng));
+            param0.minPhi = 2 * pi_v<float> *(0.3f * u01(rng));
+            param0.maxPhi = 2 * pi_v<float> *(0.7f + 0.3f * u01(rng));
+            param0.aabb = AABB();
+            param0.aabb.unify(param0.center - float3(param0.radius));
+            param0.aabb.unify(param0.center + float3(param0.radius));
+
+            Shared::PartialSphereParameter &param1 = sphereParams1[i];
+            param1 = param0;
+            param1.minPhi -= 0.5f * u01(rng);
+            param1.maxPhi += 0.5f * u01(rng);
+            param1.minTheta = pi_v<float> *(0.15f * u01(rng));
+            param1.maxTheta = pi_v<float> *(0.85f + 0.15f * u01(rng));
+            param1.aabb = AABB();
+            param1.aabb.unify(param1.center - float3(param1.radius));
+            param1.aabb.unify(param1.center + float3(param1.radius));
+        }
+
+        // JP: AABBバッファーを2ステップ分作る。
+        // EN: Create AABB buffers for two steps.
+        uint32_t numMotionSteps = 2;
+        shape.partialSphereParamBuffers.resize(numMotionSteps);
+        shape.partialSphereParamBuffers[0].initialize(cuContext, cudau::BufferType::Device, sphereParams0);
+        shape.partialSphereParamBuffers[1].initialize(cuContext, cudau::BufferType::Device, sphereParams1);
+        shape.partialSphereParamBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
+
+        Shared::GeometryData geomData = {};
+        auto paramBufferPointers = shape.partialSphereParamBufferPointerBuffer.map();
+        for (int i = 0; i < numMotionSteps; ++i)
+            paramBufferPointers[i] = shape.partialSphereParamBuffers[i].getDevicePointer();
+        shape.partialSphereParamBufferPointerBuffer.unmap();
+        geomData.partialSphereParamBuffers = shape.partialSphereParamBufferPointerBuffer.getDevicePointer();
+        geomData.numMotionSteps = numMotionSteps;
+
+        partialSpheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+        // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
+        // EN: Set the number of motion steps then set the vertex buffer for each step.
+        partialSpheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        for (int i = 0; i < numMotionSteps; ++i)
+            partialSpheres.optixGeomInst.setCustomPrimitiveAABBBuffer(shape.partialSphereParamBuffers[i], i);
+        partialSpheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        partialSpheres.optixGeomInst.setMaterial(0, 0, matForPartialSpheres);
+        partialSpheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        partialSpheres.optixGeomInst.setUserData(geomData);
+
+        partialSpheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
+        partialSpheres.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        // JP: GASのモーション設定を行う。
+        // EN: Set the GAS's motion configuration.
+        partialSpheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+        partialSpheres.optixGas.setNumMaterialSets(1);
+        partialSpheres.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        partialSpheres.optixGas.addChild(partialSpheres.optixGeomInst);
+        partialSpheres.optixGas.prepareForBuild(&asMemReqs);
+        partialSpheres.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    }
+
 
 
     // JP: インスタンスを作成する。
@@ -428,7 +532,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     Matrix3x3 bunnyMatSR = rotateY3x3(pi_v<float> / 4) * scale3x3(0.015f);
     float bunnyInstXfm[] = {
         bunnyMatSR.m00, bunnyMatSR.m01, bunnyMatSR.m02, 0,
-        bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.2f,
+        bunnyMatSR.m10, bunnyMatSR.m11, bunnyMatSR.m12, -0.6f,
         bunnyMatSR.m20, bunnyMatSR.m21, bunnyMatSR.m22, 0
     };
     optixu::Instance bunnyInst = scene.createInstance();
@@ -436,8 +540,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunnyInst.setTransform(bunnyInstXfm);
 
     float curveInstAXfm[] = {
-        1, 0, 0, -1.0f,
-        0, 1, 0, 0.0f,
+        1, 0, 0, -1.2f,
+        0, 1, 0, -0.4f,
         0, 0, 1, 0.0f
     };
     optixu::Instance curveInstA = scene.createInstance();
@@ -445,16 +549,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
     curveInstA.setTransform(curveInstAXfm);
 
     float curveInstBXfm[] = {
-        1, 0, 0, 1.0f,
-        0, 1, 0, 0.0f,
+        1, 0, 0, 1.2f,
+        0, 1, 0, -0.4f,
         0, 0, 1, 0.0f
     };
     optixu::Instance curveInstB = scene.createInstance();
     curveInstB.setChild(curves.optixGas);
     curveInstB.setTransform(curveInstBXfm);
 
+    float sphereInstXfm[] = {
+        1, 0, 0, 0.0f,
+        0, 1, 0, 1.0f,
+        0, 0, 1, 0.0f
+    };
     optixu::Instance spheresInst = scene.createInstance();
     spheresInst.setChild(spheres.optixGas);
+    spheresInst.setTransform(sphereInstXfm);
+
+    float partialSphereInstXfm[] = {
+        1, 0, 0, 0.0f,
+        0, 1, 0, -1.0f,
+        0, 0, 1, 0.0f
+    };
+    optixu::Instance partialSpheresInst = scene.createInstance();
+    partialSpheresInst.setChild(partialSpheres.optixGas);
+    partialSpheresInst.setTransform(partialSphereInstXfm);
 
 
 
@@ -468,6 +587,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(curveInstA);
     ias.addChild(curveInstB);
     ias.addChild(spheresInst);
+    ias.addChild(partialSpheresInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -486,6 +606,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
     curves.optixGas.rebuild(cuStream, curves.gasMem, asBuildScratchMem);
     spheres.optixGas.rebuild(cuStream, spheres.gasMem, asBuildScratchMem);
+    partialSpheres.optixGas.rebuild(cuStream, partialSpheres.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     ここではモーションがあることが"動的"を意味しない。頻繁にASのリビルドが必要なものを"動的"、そうでないものを"静的"とする。
@@ -503,6 +624,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         { &bunny, 0, 0 },
         { &curves, 0, 0 },
         { &spheres, 0, 0 },
+        { &partialSpheres, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -580,7 +702,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.numAccumFrames = 0;
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 0, 3.5f);
+    plp.camera.position = make_float3(0, 0, 3.8f);
     plp.camera.orientation = rotateY3x3(pi_v<float>);
 
     pipeline.setScene(scene);
@@ -619,17 +741,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
+    partialSpheresInst.destroy();
     spheresInst.destroy();
     curveInstB.destroy();
     curveInstA.destroy();
     bunnyInst.destroy();
 
+    partialSpheres.finalize();
     spheres.finalize();
     curves.finalize();
     bunny.finalize();
 
     scene.destroy();
 
+    matForPartialSpheres.destroy();
     matForSpheres.destroy();
     matForCurves.destroy();
     matForTriangles.destroy();
@@ -638,6 +763,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
+    hitProgramGroupForPartialSpheres.destroy();
     hitProgramGroupForSpheres.destroy();
     hitProgramGroupForCurves.destroy();
     hitProgramGroupForTriangles.destroy();

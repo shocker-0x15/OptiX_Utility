@@ -31,10 +31,19 @@ namespace Shared {
         float width;
     };
 
-    struct SphereParameter {
+    struct Sphere {
+        float3 center;
+        float radius;
+    };
+
+    struct PartialSphereParameter {
         AABB aabb;
         float3 center;
         float radius;
+        float minPhi;
+        float maxPhi;
+        float minTheta;
+        float maxTheta;
     };
 
 
@@ -85,7 +94,10 @@ namespace Shared {
                 const uint32_t* segmentIndexBuffer;
             };
             struct {
-                const SphereParameter** paramBuffers;
+                const Sphere** sphereBuffers;
+            };
+            struct {
+                const PartialSphereParameter** partialSphereParamBuffers;
             };
         };
         uint32_t numMotionSteps;

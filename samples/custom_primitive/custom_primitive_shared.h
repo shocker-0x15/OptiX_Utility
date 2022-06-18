@@ -24,9 +24,13 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
-    struct SphereParameter {
+    struct PartialSphereParameter {
         float3 center;
         float radius;
+        float minPhi;
+        float maxPhi;
+        float minTheta;
+        float maxTheta;
     };
 
 
@@ -48,7 +52,7 @@ namespace Shared {
             };
             struct {
                 const AABB* aabbBuffer;
-                const SphereParameter* paramBuffer;
+                const PartialSphereParameter* paramBuffer;
             };
         };
     };
