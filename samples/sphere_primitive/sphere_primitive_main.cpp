@@ -1,18 +1,16 @@
 ﻿/*
 
-JP: このサンプルは三角形とカーブ以外のカスタムプリミティブを扱う方法を示します。
-    三角形とレイの交叉判定はOptiXによって内部的に扱われますが、カスタムプリミティブの場合は
-    ユーザーが独自の交叉判定プログラムを記述します。
-    Geometry Acceleration Structureは各プリミティブを囲むAABBの配列に対して構築します。
+JP: このサンプルは球を扱う方法を示します。
+    球とレイの交叉判定はOptiXによって内部的に扱われます。
+    球は級の中心の頂点バッファーと球ごとの半径を表すバッファーから構成されます。
 
-EN: This sample shows how to handle custom primitives other than triangles or curves.
-    Intersection test between a ray and a triangle is handled internally by OptiX
-    but in the case of custom primitives the user writes own program to test intersection.
-    A geometry acceleration structure is built over an array of AABBs, where each encloses a primitive.
+EN: This sample shows how to handle spheres.
+    Intersection test between a ray and a sphere is handled internally by OptiX.
+    Spheres consist of a vertex buffer of sphere centers and a buffer for the radius of each sphere.
 
 */
 
-#include "custom_primitive_shared.h"
+#include "sphere_primitive_shared.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -32,18 +30,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
-    // EN: Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
+    // JP: 球との衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
+    //     球のアトリビュートサイズは1Dword(float)。
+    // EN: Appropriately setting primitive type flags is required since this sample uses sphere intersection.
+    //     The attribute size of spheres is 1 Dword (float).
     pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                std::max<uint32_t>(optixu::calcSumDwords<float2>(),
-                                                   Shared::SphereAttributeSignature::numDwords),
+                                std::max(optixu::calcSumDwords<float2>(),
+                                         optixu::calcSumDwords<float>()),
                                 "plp", sizeof(Shared::PipelineLaunchParameters),
                                 false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
                                 OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                                 DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+                                OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "custom_primitive/ptxes/optix_kernels.ptx");
+    const std::string ptx = readTxtFile(getExecutableDirectory() / "sphere_primitive/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -59,12 +60,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
-    // JP: このヒットグループはレイと球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
-    // EN: This is for ray-sphere intersection, so pass a custom intersection program.
-    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForCustomIS(
+    // JP: 球用のヒットグループを作成する。
+    //     球には三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
+    //     球を含むことになるASと同じビルド設定を予め指定しておく必要がある。
+    // EN: Create a hit group for spheres.
+    //     Sphere uses a built-in intersection program similar to triangle,
+    //     so the user doesn't need to specify it.
+    //     The same build configuration as an AS having the sphere is required.
+    constexpr optixu::ASTradeoff sphereASTradeOff = optixu::ASTradeoff::PreferFastTrace;
+    constexpr bool sphereASUpdatable = false;
+    constexpr bool sphereASCompactable = true;
+    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        moduleOptiX, RT_IS_NAME_STR("intersectSphere"));
+        sphereASTradeOff, sphereASUpdatable, sphereASCompactable, Shared::useEmbeddedVertexData);
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -168,79 +177,50 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomGeomInst.setUserData(geomData);
     }
 
-    optixu::GeometryInstance areaLightGeomInst = scene.createGeometryInstance();
-    cudau::TypedBuffer<Shared::Vertex> areaLightVertexBuffer;
-    cudau::TypedBuffer<Shared::Triangle> areaLightTriangleBuffer;
+    // JP: 球用GeometryInstanceは生成時に指定する必要がある。
+    // EN: GeometryInstance for spheres requires to be specified at the creation.
+
+    // Spheres
+    optixu::GeometryInstance sphereGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::Spheres);
+    cudau::TypedBuffer<Shared::SphereParameter> sphereParamBuffer;
     {
-        Shared::Vertex vertices[] = {
-            { make_float3(-0.25f, 0.75f, -0.25f), make_float3(0, -1, 0), make_float2(0, 0) },
-            { make_float3(-0.25f, 0.75f, 0.25f), make_float3(0, -1, 0), make_float2(0, 1) },
-            { make_float3(0.25f, 0.75f, 0.25f), make_float3(0, -1, 0), make_float2(1, 1) },
-            { make_float3(0.25f, 0.75f, -0.25f), make_float3(0, -1, 0), make_float2(1, 0) },
-        };
+        std::vector<Shared::SphereParameter> params;
+        {
+            std::mt19937 rng(390318410);
+            std::uniform_int_distribution<uint32_t> uSeg(3, 5);
+            std::uniform_real_distribution<float> u01;
 
-        Shared::Triangle triangles[] = {
-            { 0, 1, 2 }, { 0, 2, 3 },
-        };
+            constexpr uint32_t numSpheres = 100;
+            params.resize(numSpheres);
+            for (int sphIdx = 0; sphIdx < numSpheres; ++sphIdx) {
+                Shared::SphereParameter &param = params[sphIdx];
+                param.center = float3(-0.85f + 1.7f * u01(rng),
+                                      -0.85f + 1.7f * u01(rng),
+                                      -0.85f + 1.7f * u01(rng));
+                param.radius = 0.025f + 0.1f * u01(rng);
+            }
 
-        areaLightVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
-        areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
-
-        Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
-
-        areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
-        areaLightGeomInst.setTriangleBuffer(areaLightTriangleBuffer);
-        areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
-        areaLightGeomInst.setMaterial(0, 0, matForTriangles);
-        areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        areaLightGeomInst.setUserData(geomData);
-    }
-
-    // JP: カスタムプリミティブ用GeometryInstanceは生成時に指定する必要がある。
-    // EN: GeometryInstance for custom primitives requires to be specified at the creation.
-    optixu::GeometryInstance spheresGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
-    cudau::TypedBuffer<AABB> spheresAabbBuffer;
-    cudau::TypedBuffer<Shared::SphereParameter> spheresParamBuffer;
-    {
-        constexpr uint32_t numPrimitives = 25;
-        spheresAabbBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
-        spheresParamBuffer.initialize(cuContext, cudau::BufferType::Device, numPrimitives);
-
-        // JP: 各球のパラメターとAABBを設定する。
-        //     これらはもちろんCUDAカーネルで設定することも可能。
-        // EN: Set the parameters and AABB for each sphere.
-        //     Of course, these can be set using a CUDA kernel.
-        AABB* aabbs = spheresAabbBuffer.map();
-        Shared::SphereParameter* params = spheresParamBuffer.map();
-        std::mt19937 rng(1290527201);
-        std::uniform_real_distribution u01;
-        for (int i = 0; i < numPrimitives; ++i) {
-            Shared::SphereParameter &param = params[i];
-            float x = -0.8f + 1.6f * (i % 5) / 4.0f;
-            float y = -0.8f + 1.6f * u01(rng);
-            float z = -0.8f + 1.6f * (i / 5) / 4.0f;
-            param.center = make_float3(x, y, z);
-            param.radius = 0.1f + 0.1f * (u01(rng) - 0.5f);
-
-            AABB &aabb = aabbs[i];
-            aabb = AABB();
-            aabb.unify(param.center - make_float3(param.radius));
-            aabb.unify(param.center + make_float3(param.radius));
+            Shared::SphereParameter param;
+            param.center = float3(0.0f);
+            param.radius = 5.0f;
+            params.push_back(param);
         }
-        spheresParamBuffer.unmap();
-        spheresAabbBuffer.unmap();
+
+        sphereParamBuffer.initialize(cuContext, cudau::BufferType::Device, params);
 
         Shared::GeometryData geomData = {};
-        geomData.aabbBuffer = spheresAabbBuffer.getDevicePointer();
-        geomData.paramBuffer = spheresParamBuffer.getDevicePointer();
+        geomData.sphereParamBuffer = sphereParamBuffer.getDevicePointer();
 
-        spheresGeomInst.setCustomPrimitiveAABBBuffer(spheresAabbBuffer);
-        spheresGeomInst.setNumMaterials(1, optixu::BufferView());
-        spheresGeomInst.setMaterial(0, 0, matForSpheres);
-        spheresGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-        spheresGeomInst.setUserData(geomData);
+        sphereGeomInst.setVertexBuffer(optixu::BufferView(
+            sphereParamBuffer.getCUdeviceptr() + offsetof(Shared::SphereParameter, center),
+            sphereParamBuffer.numElements(), sphereParamBuffer.stride()));
+        sphereGeomInst.setRadiusBuffer(optixu::BufferView(
+            sphereParamBuffer.getCUdeviceptr() + offsetof(Shared::SphereParameter, radius),
+            sphereParamBuffer.numElements(), sphereParamBuffer.stride()));
+        sphereGeomInst.setMaterial(0, 0, matForSpheres);
+        sphereGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        sphereGeomInst.setUserData(geomData);
     }
 
 
@@ -258,23 +238,25 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
-    roomGas.addChild(areaLightGeomInst);
     roomGas.prepareForBuild(&asMemReqs);
     roomGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    // JP: カスタムプリミティブ用のGASは三角形用のGASとは別にする必要がある。
-    //     GAS生成時にカスタムプリミティブ用であることを指定する。
-    // EN: GAS for custom primitives must be created separately with GAS for triangles.
-    //     Specify that the GAS is for custom primitives at the creation.
-    optixu::GeometryAccelerationStructure customPrimitivesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
-    cudau::Buffer customPrimitivesGasMem;
-    customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
-    customPrimitivesGas.setNumMaterialSets(1);
-    customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
-    customPrimitivesGas.addChild(spheresGeomInst);
-    customPrimitivesGas.prepareForBuild(&asMemReqs);
-    customPrimitivesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    // JP: 球用のGASは三角形用のGASとは別にする必要がある。
+    //     GAS生成時に球用であることを指定する。
+    // EN: GAS for spheres must be created separately with GAS for triangles.
+    //     Specify that the GAS is for spheres at the creation.
+
+    optixu::GeometryAccelerationStructure spheresGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
+    cudau::Buffer spheresGasMem;
+    spheresGas.setConfiguration(sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
+                                Shared::useEmbeddedVertexData);
+    spheresGas.setNumMaterialSets(1);
+    spheresGas.setNumRayTypes(0, Shared::NumRayTypes);
+    spheresGas.addChild(sphereGeomInst);
+    spheresGas.prepareForBuild(&asMemReqs);
+    spheresGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 
@@ -284,8 +266,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Instance roomInst = scene.createInstance();
     roomInst.setChild(roomGas);
 
-    optixu::Instance customPrimitivesInst = scene.createInstance();
-    customPrimitivesInst.setChild(customPrimitivesGas);
+    optixu::Instance spheresInst = scene.createInstance();
+    spheresInst.setChild(spheresGas);
 
 
 
@@ -296,7 +278,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
     ias.addChild(roomInst);
-    ias.addChild(customPrimitivesInst);
+    ias.addChild(spheresInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -313,7 +295,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
-    customPrimitivesGas.rebuild(cuStream, customPrimitivesGasMem, asBuildScratchMem);
+    spheresGas.rebuild(cuStream, spheresGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -327,7 +309,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
     CompactedASInfo gasList[] = {
         { roomGas, &roomGasMem, 0, 0 },
-        { customPrimitivesGas, &customPrimitivesGasMem, 0, 0 },
+        { spheresGas, &spheresGasMem, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -422,20 +404,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
-    customPrimitivesInst.destroy();
+    spheresInst.destroy();
     roomInst.destroy();
 
     asBuildScratchMem.finalize();
-    customPrimitivesGas.destroy();
+    spheresGas.destroy();
     roomGas.destroy();
 
-    spheresParamBuffer.finalize();
-    spheresAabbBuffer.finalize();
-    spheresGeomInst.destroy();
-
-    areaLightTriangleBuffer.finalize();
-    areaLightVertexBuffer.finalize();
-    areaLightGeomInst.destroy();
+    sphereParamBuffer.finalize();
+    sphereGeomInst.destroy();
 
     roomTriangleBuffer.finalize();
     roomVertexBuffer.finalize();

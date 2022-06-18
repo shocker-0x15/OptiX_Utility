@@ -18,7 +18,7 @@ Add optix_util.h, optix_util_private.h and optix_util.cpp to your program which 
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
-Currently based on OptiX 7.4.0
+Currently based on OptiX 7.5.0
 - Traversable types
   - Single GAS
   - Single-level instancing
@@ -26,6 +26,7 @@ Currently based on OptiX 7.4.0
 - Primitive types
   - Triangles
   - Curves (Linear Segments, Quadratic, Cubic B-Splines, Catmull-Rom Splines)
+  - Spheres
   - User-defined custom primitives
 - Motion blur types
   - Instance motion blur
@@ -259,8 +260,8 @@ I've confirmed that the program runs correctly in the following environment.
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 11.6
-* OptiX 7.4.0 (requires Maxwell or later generation NVIDIA GPU)
+* CUDA 11.7
+* OptiX 7.5.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))

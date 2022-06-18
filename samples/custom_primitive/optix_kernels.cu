@@ -136,9 +136,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
     // JP: 法線を可視化。
-    //     このサンプルでは単一のGASしか使っていないためオブジェクト空間からワールド空間への変換は無い。
     // EN: Visualize the normal.
-    //     There is no object to world space transform since this sample uses only a single GAS.
     float3 color = 0.5f * sn + make_float3(0.5f);
     PayloadSignature::set(&color);
 }

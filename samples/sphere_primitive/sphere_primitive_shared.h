@@ -26,9 +26,9 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
-    struct CurveVertex {
-        float3 position;
-        float width;
+    struct SphereParameter {
+        float3 center;
+        float radius;
     };
 
 
@@ -74,8 +74,7 @@ namespace Shared {
             const Triangle* triangleBuffer;
         };
         struct {
-            const CurveVertex* curveVertexBuffer;
-            const uint32_t* segmentIndexBuffer;
+            const SphereParameter* sphereParamBuffer;
         };
     };
 

@@ -229,6 +229,7 @@ namespace optixu {
                              geomType == GeometryType::QuadraticBSplines ||
                              geomType == GeometryType::CubicBSplines ||
                              geomType == GeometryType::CatmullRomSplines ||
+                             geomType == GeometryType::Spheres ||
                              geomType == GeometryType::CustomPrimitives,
                              "Invalid geometry type: %u.", static_cast<uint32_t>(geomType));
         return (new _GeometryInstance(m, geomType))->getPublicType();
@@ -240,6 +241,7 @@ namespace optixu {
                              geomType == GeometryType::QuadraticBSplines ||
                              geomType == GeometryType::CubicBSplines ||
                              geomType == GeometryType::CatmullRomSplines ||
+                             geomType == GeometryType::Spheres ||
                              geomType == GeometryType::CustomPrimitives,
                              "Invalid geometry type: %u.", static_cast<uint32_t>(geomType));
         // JP: GASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
@@ -408,6 +410,49 @@ namespace optixu {
 
             curveArray.flag = static_cast<uint32_t>(buildInputFlags[0]);
         }
+        else if (std::holds_alternative<SphereGeometry>(geometry)) {
+            auto &geom = std::get<SphereGeometry>(geometry);
+
+            uint32_t centerStride = geom.centerBuffers[0].stride();
+            uint32_t radiusStride = geom.radiusBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                geom.centerBufferArray[i] = geom.centerBuffers[i].getCUdeviceptr();
+                geom.radiusBufferArray[i] = geom.radiusBuffers[i].getCUdeviceptr();
+                throwRuntimeError(geom.centerBuffers[i].isValid(), "Center buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.centerBuffers[i].numElements() == numElements, "Num elements of the center buffer for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.centerBuffers[i].stride() == centerStride, "Center stride for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.radiusBuffers[i].isValid(), "Radius buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.radiusBuffers[i].numElements() == numElements, "Num elements of the radius buffer for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.radiusBuffers[i].stride() == radiusStride, "Radius stride for motion step %u doesn't match that of 0.", i);
+            }
+
+            input->type = OPTIX_BUILD_INPUT_TYPE_SPHERES;
+            OptixBuildInputSphereArray &sphereArray = input->sphereArray;
+
+            sphereArray.vertexBuffers = geom.centerBufferArray;
+            sphereArray.vertexStrideInBytes = centerStride;
+            sphereArray.radiusBuffers = geom.radiusBufferArray;
+            sphereArray.radiusStrideInBytes = radiusStride;
+            sphereArray.numVertices = numElements;
+            sphereArray.singleRadius = geom.useSingleRadius;
+
+            sphereArray.primitiveIndexOffset = primitiveIndexOffset;
+
+            sphereArray.numSbtRecords = static_cast<uint32_t>(buildInputFlags.size());
+            if (sphereArray.numSbtRecords > 1) {
+                sphereArray.sbtIndexOffsetBuffer = geom.materialIndexBuffer.getCUdeviceptr();
+                sphereArray.sbtIndexOffsetSizeInBytes = geom.materialIndexSize;
+                sphereArray.sbtIndexOffsetStrideInBytes = geom.materialIndexBuffer.stride();
+            }
+            else {
+                sphereArray.sbtIndexOffsetBuffer = 0; // No per-primitive record
+                sphereArray.sbtIndexOffsetSizeInBytes = 0; // No effect
+                sphereArray.sbtIndexOffsetStrideInBytes = 0; // No effect
+            }
+
+            sphereArray.flags = reinterpret_cast<const uint32_t*>(buildInputFlags.data());
+        }
         else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
             auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
 
@@ -497,6 +542,28 @@ namespace optixu {
             curveArray.normalBuffers = 0; // Optix just reserves these fields for future use.
 
             curveArray.indexBuffer = geom.segmentIndexBuffer.getCUdeviceptr();
+        }
+        else if (std::holds_alternative<SphereGeometry>(geometry)) {
+            auto &geom = std::get<SphereGeometry>(geometry);
+
+            uint32_t centerStride = geom.centerBuffers[0].stride();
+            uint32_t radiusStride = geom.radiusBuffers[0].stride();
+            uint32_t numElements = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
+            for (uint32_t i = 0; i < numMotionSteps; ++i) {
+                geom.centerBufferArray[i] = geom.centerBuffers[i].getCUdeviceptr();
+                geom.radiusBufferArray[i] = geom.radiusBuffers[i].getCUdeviceptr();
+                throwRuntimeError(geom.centerBuffers[i].isValid(), "Center buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.centerBuffers[i].numElements() == numElements, "Num elements of the center buffer for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.centerBuffers[i].stride() == centerStride, "Center stride for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.radiusBuffers[i].isValid(), "Radius buffer for motion step %u is not set.", i);
+                throwRuntimeError(geom.radiusBuffers[i].numElements() == numElements, "Num elements of the radius buffer for motion step %u doesn't match that of 0.", i);
+                throwRuntimeError(geom.radiusBuffers[i].stride() == radiusStride, "Radius stride for motion step %u doesn't match that of 0.", i);
+            }
+
+            OptixBuildInputSphereArray &sphereArray = input->sphereArray;
+
+            sphereArray.vertexBuffers = geom.centerBufferArray;
+            sphereArray.radiusBuffers = geom.radiusBufferArray;
         }
         else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
             auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
@@ -598,6 +665,17 @@ namespace optixu {
             geom.widthBufferArray = new CUdeviceptr[n];
             geom.widthBuffers = new BufferView[n];
         }
+        else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
+            auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
+            delete[] geom.radiusBuffers;
+            delete[] geom.radiusBufferArray;
+            delete[] geom.centerBuffers;
+            delete[] geom.centerBufferArray;
+            geom.centerBufferArray = new CUdeviceptr[n];
+            geom.centerBuffers = new BufferView[n];
+            geom.radiusBufferArray = new CUdeviceptr[n];
+            geom.radiusBuffers = new BufferView[n];
+        }
         else if (std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
             delete[] geom.primitiveAabbBuffers;
@@ -631,6 +709,10 @@ namespace optixu {
             auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
             geom.vertexBuffers[motionStep] = vertexBuffer;
         }
+        else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
+            auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
+            geom.centerBuffers[motionStep] = vertexBuffer;
+        }
     }
 
     void GeometryInstance::setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep) const {
@@ -640,6 +722,15 @@ namespace optixu {
                              motionStep, m->numMotionSteps);
         auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
         geom.widthBuffers[motionStep] = widthBuffer;
+    }
+
+    void GeometryInstance::setRadiusBuffer(const BufferView &radiusBuffer, uint32_t motionStep) const {
+        m->throwRuntimeError(std::holds_alternative<Priv::SphereGeometry>(m->geometry),
+                             "This geometry instance was created not for spheres.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
+        auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
+        geom.radiusBuffers[motionStep] = radiusBuffer;
     }
 
     void GeometryInstance::setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format) const {
@@ -662,6 +753,13 @@ namespace optixu {
                              "This geometry instance was created not for curves.");
         auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
         geom.endcapFlags = endcapFlags;
+    }
+
+    void GeometryInstance::setSingleRadius(bool useSingleRadius) const {
+        m->throwRuntimeError(std::holds_alternative<Priv::SphereGeometry>(m->geometry),
+                             "This geometry instance was created not for spheres.");
+        auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
+        geom.useSingleRadius = useSingleRadius;
     }
 
     void GeometryInstance::setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep) const {
@@ -691,6 +789,11 @@ namespace optixu {
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+            geom.materialIndexBuffer = matIndexBuffer;
+            geom.materialIndexSize = indexSize;
+        }
+        else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
+            auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
             geom.materialIndexBuffer = matIndexBuffer;
             geom.materialIndexSize = indexSize;
         }
@@ -777,6 +880,15 @@ namespace optixu {
         return geom.widthBuffers[motionStep];
     }
 
+    BufferView GeometryInstance::getRadiusBuffer(uint32_t motionStep) {
+        m->throwRuntimeError(std::holds_alternative<Priv::SphereGeometry>(m->geometry),
+                             "This geometry instance was created not for spheres.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
+        const auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
+        return geom.radiusBuffers[motionStep];
+    }
+
     BufferView GeometryInstance::getTriangleBuffer(OptixIndicesFormat* format) const {
         m->throwRuntimeError(std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
                              "This geometry instance was created not for triangles.");
@@ -810,6 +922,13 @@ namespace optixu {
         if (matIndexBuffer || indexSize) {
             if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+                if (matIndexBuffer)
+                    *matIndexBuffer = geom.materialIndexBuffer;
+                if (indexSize)
+                    *indexSize = geom.materialIndexSize;
+            }
+            if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
+                const auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
@@ -919,7 +1038,7 @@ namespace optixu {
                                                          bool allowCompaction,
                                                          bool allowRandomVertexAccess) const {
         m->throwRuntimeError(m->geomType != GeometryType::CustomPrimitives || !allowRandomVertexAccess,
-                             "Random vertex access is the feature only for triangle/curve GAS.");
+                             "Random vertex access is the feature only for triangle/curve/sphere GAS.");
         bool changed = false;
         changed |= m->tradeoff != tradeoff;
         m->tradeoff = tradeoff;
@@ -2099,7 +2218,10 @@ namespace optixu {
     OptixModule Pipeline::Priv::getModuleForCurves(
         OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
         ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) {
-        if (curveType == OPTIX_PRIMITIVE_TYPE_TRIANGLE || curveType == OPTIX_PRIMITIVE_TYPE_CUSTOM)
+        if (curveType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR &&
+            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE &&
+            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE &&
+            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
             return nullptr;
 
         KeyForCurveModule key{ curveType, endcapFlags, OPTIX_BUILD_FLAG_NONE };
@@ -2132,6 +2254,39 @@ namespace optixu {
         }
 
         return modulesForCurveIS.at(key)->getRawModule();
+    }
+
+    OptixModule Pipeline::Priv::getModuleForSpheres(
+        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) {
+        KeyForSphereModule key{ OPTIX_BUILD_FLAG_NONE };
+        if (modulesForSphereIS.count(key) == 0) {
+            OptixModuleCompileOptions moduleCompileOptions = {};
+            moduleCompileOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
+
+            OptixBuiltinISOptions builtinISOptions = {};
+            builtinISOptions.builtinISModuleType = OPTIX_PRIMITIVE_TYPE_SPHERE;
+            builtinISOptions.buildFlags = 0;
+            if (tradeoff == ASTradeoff::PreferFastTrace)
+                builtinISOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+            else if (tradeoff == ASTradeoff::PreferFastBuild)
+                builtinISOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+            builtinISOptions.buildFlags |=
+                (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0)
+                | (allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0)
+                | (allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0);
+            builtinISOptions.usesMotionBlur = pipelineCompileOptions.usesMotionBlur;
+
+            OptixModule rawModule;
+            OPTIX_CHECK(optixBuiltinISModuleGet(context->getRawContext(),
+                                                &moduleCompileOptions,
+                                                &pipelineCompileOptions,
+                                                &builtinISOptions,
+                                                &rawModule));
+
+            modulesForSphereIS[key] = new _Module(this, rawModule);
+        }
+
+        return modulesForSphereIS.at(key)->getRawModule();
     }
     
     void Pipeline::Priv::createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group) {
@@ -2388,8 +2543,11 @@ namespace optixu {
         Module module_AH, const char* entryFunctionNameAH,
         ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
         const PayloadType &payloadType) const {
-        m->throwRuntimeError(curveType != OPTIX_PRIMITIVE_TYPE_TRIANGLE && curveType != OPTIX_PRIMITIVE_TYPE_CUSTOM,
-                             "Use the createHitProgramGroupForTriangleIS() or createHitProgramGroupForCustomIS() for triangles or custom primitives respectively.");
+        m->throwRuntimeError(curveType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
+                             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
+                             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
+                             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM,
+                             "This is a hit program group for curves.");
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);
         m->throwRuntimeError((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
@@ -2419,6 +2577,53 @@ namespace optixu {
         }
         desc.hitgroup.moduleIS = m->getModuleForCurves(
             curveType, endcapFlags,
+            tradeoff, allowUpdate, allowCompaction, allowRandomVertexAccess);
+        desc.hitgroup.entryFunctionNameIS = nullptr;
+
+        OptixProgramGroupOptions options = {};
+        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        if (payloadType.numDwords > 0)
+            options.payloadType = &optixPayloadType;
+
+        OptixProgramGroup group;
+        m->createProgram(desc, options, &group);
+
+        return (new _ProgramGroup(m, group))->getPublicType();
+    }
+
+    ProgramGroup Pipeline::createHitProgramGroupForSphereIS(
+        Module module_CH, const char* entryFunctionNameCH,
+        Module module_AH, const char* entryFunctionNameAH,
+        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+        const PayloadType &payloadType) const {
+        _Module* _module_CH = extract(module_CH);
+        _Module* _module_AH = extract(module_AH);
+        m->throwRuntimeError((_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
+                             "Either of CH module or entry function name is not provided.");
+        m->throwRuntimeError((_module_AH != nullptr) == (entryFunctionNameAH != nullptr),
+                             "Either of AH module or entry function name is not provided.");
+        m->throwRuntimeError(entryFunctionNameCH || entryFunctionNameAH,
+                             "Either of CH/AH entry function name must be provided.");
+        if (_module_CH)
+            m->throwRuntimeError(_module_CH->getPipeline() == m,
+                                 "Pipeline mismatch for the given CH module %s.",
+                                 _module_CH->getName().c_str());
+        if (_module_AH)
+            m->throwRuntimeError(_module_AH->getPipeline() == m,
+                                 "Pipeline mismatch for the given AH module %s.",
+                                 _module_AH->getName().c_str());
+
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        if (entryFunctionNameCH && _module_CH) {
+            desc.hitgroup.moduleCH = _module_CH->getRawModule();
+            desc.hitgroup.entryFunctionNameCH = entryFunctionNameCH;
+        }
+        if (entryFunctionNameAH && _module_AH) {
+            desc.hitgroup.moduleAH = _module_AH->getRawModule();
+            desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
+        }
+        desc.hitgroup.moduleIS = m->getModuleForSpheres(
             tradeoff, allowUpdate, allowCompaction, allowRandomVertexAccess);
         desc.hitgroup.entryFunctionNameIS = nullptr;
 
@@ -2725,7 +2930,7 @@ namespace optixu {
 
 
     void Denoiser::Priv::invoke(CUstream stream,
-                                bool denoiseAlpha, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
+                                OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
                                 const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                                 const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
                                 const BufferView &albedo, OptixPixelFormat albedoFormat,
@@ -2733,6 +2938,7 @@ namespace optixu {
                                 const BufferView &flow, OptixPixelFormat flowFormat,
                                 const BufferView &previousDenoisedBeauty,
                                 const BufferView* previousDenoisedAovs,
+                                bool isFirstFrame,
                                 const BufferView &denoisedBeauty,
                                 const BufferView* denoisedAovs,
                                 const DenoisingTask &task) const {
@@ -2753,10 +2959,11 @@ namespace optixu {
             throwRuntimeError(flow.isValid() && previousDenoisedBeauty.isValid(),
                               "Denoiser requires flow buffer and the previous denoised beauty buffer.");
         OptixDenoiserParams params = {};
-        params.denoiseAlpha = denoiseAlpha;
+        params.denoiseAlpha = alphaMode;
         params.hdrIntensity = hdrIntensity;
         params.hdrAverageColor = hdrAverageColor;
         params.blendFactor = blendFactor;
+        params.temporalModeUsePreviousLayers = !isFirstFrame;
 
         _DenoisingTask _task(task);
 
@@ -2996,42 +3203,46 @@ namespace optixu {
     }
 
     void Denoiser::invoke(CUstream stream,
-                          bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
+                          OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, float blendFactor,
                           const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                           const BufferView &albedo, OptixPixelFormat albedoFormat,
                           const BufferView &normal, OptixPixelFormat normalFormat,
                           const BufferView &flow, OptixPixelFormat flowFormat,
                           const BufferView &previousDenoisedBeauty,
+                          bool isFirstFrame,
                           const BufferView &denoisedBeauty,
                           const DenoisingTask &task) const {
         m->invoke(stream,
-                  denoiseAlpha, hdrIntensity, 0, blendFactor,
+                  alphaMode, hdrIntensity, 0, blendFactor,
                   noisyBeauty, beautyFormat, nullptr, nullptr, 0,
                   albedo, albedoFormat,
                   normal, normalFormat,
                   flow, flowFormat,
                   previousDenoisedBeauty, nullptr,
+                  isFirstFrame,
                   denoisedBeauty, nullptr,
                   task);
     }
 
     void Denoiser::invoke(CUstream stream,
-                          bool denoiseAlpha, CUdeviceptr hdrAverageColor, float blendFactor,
+                          OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrAverageColor, float blendFactor,
                           const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                           const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
                           const BufferView &albedo, OptixPixelFormat albedoFormat,
                           const BufferView &normal, OptixPixelFormat normalFormat,
                           const BufferView &flow, OptixPixelFormat flowFormat,
                           const BufferView &previousDenoisedBeauty, const BufferView* previousDenoisedAovs,
+                          bool isFirstFrame,
                           const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
                           const DenoisingTask &task) const {
         m->invoke(stream,
-                  denoiseAlpha, 0, hdrAverageColor, blendFactor,
+                  alphaMode, 0, hdrAverageColor, blendFactor,
                   noisyBeauty, beautyFormat, noisyAovs, aovFormats, numAovs,
                   albedo, albedoFormat,
                   normal, normalFormat,
                   flow, flowFormat,
                   previousDenoisedBeauty, previousDenoisedAovs,
+                  isFirstFrame,
                   denoisedBeauty, denoisedAovs,
                   task);
     }

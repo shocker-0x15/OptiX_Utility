@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29123.88
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32602.215
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "uber", "uber\uber.vcxproj", "{38359F87-43FE-4312-AD65-AF8A77FA75CC}"
 EndProject
@@ -11,17 +11,17 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "01.single_level_instancing"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scene_edit", "scene_edit\scene_edit.vcxproj", "{95A8399F-C511-427E-B39E-34E4F6692064}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "07.multi_level_instancing", "multi_level_instancing\multi_level_instancing.vcxproj", "{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "08.multi_level_instancing", "multi_level_instancing\multi_level_instancing.vcxproj", "{992A1709-4E4E-4CD0-A1B3-E5549BD94A48}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "05.custom_primitive", "custom_primitive\custom_primitive.vcxproj", "{69A22E89-BFE0-40C4-A225-02D33982BEAD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "09.denoiser", "denoiser\denoiser.vcxproj", "{2D96E67E-8C6A-4B87-8B88-93E3921D874A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.denoiser", "denoiser\denoiser.vcxproj", "{2D96E67E-8C6A-4B87-8B88-93E3921D874A}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "03.material_sets", "material_sets\material_sets.vcxproj", "{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "04.as_update", "as_update\as_update.vcxproj", "{B51DBDB9-482C-406E-A2BC-5AADE82C6AF7}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "08.deformation_blur", "deformation_blur\deformation_blur.vcxproj", "{5C54C98D-919C-45A0-8BF1-B5D8349B15B2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "09.deformation_blur", "deformation_blur\deformation_blur.vcxproj", "{5C54C98D-919C-45A0-8BF1-B5D8349B15B2}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02.texture", "texture\texture.vcxproj", "{5B1FC17F-05C0-44C4-BC08-5D012C0D7241}"
 EndProject
@@ -31,9 +31,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "application", "application"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "06.curve_primitive", "curve_primitive\curve_primitive.vcxproj", "{EFADEE83-B8BD-4B30-9869-5117F623D6F6}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.temporal_denoiser", "temporal_denoiser\temporal_denoiser.vcxproj", "{461A4AC3-0084-4A9B-8A92-BF421C0EFA29}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "11.temporal_denoiser", "temporal_denoiser\temporal_denoiser.vcxproj", "{461A4AC3-0084-4A9B-8A92-BF421C0EFA29}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "11.payload_annotation", "payload_annotation\payload_annotation.vcxproj", "{1F481DF3-CA02-431E-8C86-2785366F3487}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "12.payload_annotation", "payload_annotation\payload_annotation.vcxproj", "{1F481DF3-CA02-431E-8C86-2785366F3487}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "07.sphere_primitive", "sphere_primitive\sphere_primitive.vcxproj", "{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -101,6 +103,10 @@ Global
 		{1F481DF3-CA02-431E-8C86-2785366F3487}.Debug|x64.Build.0 = Debug|x64
 		{1F481DF3-CA02-431E-8C86-2785366F3487}.Release|x64.ActiveCfg = Release|x64
 		{1F481DF3-CA02-431E-8C86-2785366F3487}.Release|x64.Build.0 = Release|x64
+		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Debug|x64.ActiveCfg = Debug|x64
+		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Debug|x64.Build.0 = Debug|x64
+		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Release|x64.ActiveCfg = Release|x64
+		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

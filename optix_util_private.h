@@ -459,7 +459,7 @@ namespace optixu {
             OptixVertexFormat vertexFormat;
             OptixIndicesFormat indexFormat;
             BufferView materialIndexBuffer;
-            uint32_t materialIndexSize;
+            unsigned int materialIndexSize : 3;
         };
         struct CurveGeometry {
             CUdeviceptr* vertexBufferArray;
@@ -469,15 +469,25 @@ namespace optixu {
             BufferView segmentIndexBuffer;
             OptixCurveEndcapFlags endcapFlags;
         };
+        struct SphereGeometry {
+            CUdeviceptr* centerBufferArray;
+            CUdeviceptr* radiusBufferArray;
+            BufferView* centerBuffers;
+            BufferView* radiusBuffers;
+            BufferView materialIndexBuffer;
+            unsigned int materialIndexSize : 3;
+            unsigned int useSingleRadius : 1;
+        };
         struct CustomPrimitiveGeometry {
             CUdeviceptr* primitiveAabbBufferArray;
             BufferView* primitiveAabbBuffers;
             BufferView materialIndexBuffer;
-            uint32_t materialIndexSize;
+            unsigned int materialIndexSize : 3;
         };
         std::variant<
             TriangleGeometry,
             CurveGeometry,
+            SphereGeometry,
             CustomPrimitiveGeometry
         > geometry;
         GeometryType geomType;
@@ -529,6 +539,20 @@ namespace optixu {
                 geom.segmentIndexBuffer = BufferView();
                 geom.endcapFlags = OPTIX_CURVE_ENDCAP_DEFAULT;
             }
+            else if (geomType == GeometryType::Spheres) {
+                geometry = SphereGeometry{};
+                auto &geom = std::get<SphereGeometry>(geometry);
+                geom.centerBufferArray = new CUdeviceptr[numMotionSteps];
+                geom.centerBufferArray[0] = 0;
+                geom.centerBuffers = new BufferView[numMotionSteps];
+                geom.centerBuffers[0] = BufferView();
+                geom.radiusBufferArray = new CUdeviceptr[numMotionSteps];
+                geom.radiusBufferArray[0] = 0;
+                geom.radiusBuffers = new BufferView[numMotionSteps];
+                geom.radiusBuffers[0] = BufferView();
+                geom.materialIndexSize = 0;
+                geom.useSingleRadius = false;
+            }
             else if (geomType == GeometryType::CustomPrimitives) {
                 geometry = CustomPrimitiveGeometry{};
                 auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
@@ -554,6 +578,13 @@ namespace optixu {
                 delete[] geom.widthBufferArray;
                 delete[] geom.vertexBuffers;
                 delete[] geom.vertexBufferArray;
+            }
+            else if (std::holds_alternative<SphereGeometry>(geometry)) {
+                auto &geom = std::get<SphereGeometry>(geometry);
+                delete[] geom.radiusBuffers;
+                delete[] geom.radiusBufferArray;
+                delete[] geom.centerBuffers;
+                delete[] geom.centerBufferArray;
             }
             else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
                 auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
@@ -995,6 +1026,31 @@ namespace optixu {
                     buildFlags == rKey.buildFlags;
             }
         };
+        struct KeyForSphereModule {
+            OptixBuildFlags buildFlags;
+
+            bool operator<(const KeyForSphereModule &rKey) const {
+                if (buildFlags < rKey.buildFlags)
+                    return true;
+                else if (buildFlags > rKey.buildFlags)
+                    return false;
+                return false;
+            }
+
+            struct Hash {
+                typedef std::size_t result_type;
+
+                std::size_t operator()(const KeyForSphereModule& key) const {
+                    size_t seed = 0;
+                    auto hash0 = std::hash<OptixBuildFlags>()(key.buildFlags);
+                    seed ^= hash0 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+                    return seed;
+                }
+            };
+            bool operator==(const KeyForSphereModule &rKey) const {
+                return buildFlags == rKey.buildFlags;
+            }
+        };
 
         _Context* context;
         OptixPipeline rawPipeline;
@@ -1009,6 +1065,7 @@ namespace optixu {
         size_t sbtSize;
 
         std::unordered_map<KeyForCurveModule, _Module*, KeyForCurveModule::Hash> modulesForCurveIS;
+        std::unordered_map<KeyForSphereModule, _Module*, KeyForSphereModule::Hash> modulesForSphereIS;
         _ProgramGroup* rayGenProgram;
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
@@ -1055,6 +1112,8 @@ namespace optixu {
         void markDirty();
         OptixModule getModuleForCurves(
             OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
+            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
+        OptixModule getModuleForSpheres(
             ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
         void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
         void destroyProgram(OptixProgramGroup group);
@@ -1198,7 +1257,7 @@ namespace optixu {
         };
 
         void invoke(CUstream stream,
-                    bool denoiseAlpha, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
+                    OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
                     const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                     const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
                     const BufferView &albedo, OptixPixelFormat albedoFormat,
@@ -1206,6 +1265,7 @@ namespace optixu {
                     const BufferView &flow, OptixPixelFormat flowFormat,
                     const BufferView &previousDenoisedBeauty,
                     const BufferView* previousDenoisedAovs,
+                    bool isFirstFrame,
                     const BufferView &denoisedBeauty,
                     const BufferView* denoisedAovs,
                     const DenoisingTask &task) const;

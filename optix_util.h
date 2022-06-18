@@ -889,6 +889,7 @@ namespace optixu {
         QuadraticBSplines,
         CubicBSplines,
         CatmullRomSplines,
+        Spheres,
         CustomPrimitives,
     };
 
@@ -1073,9 +1074,11 @@ private: \
         void setVertexFormat(OptixVertexFormat format) const;
         void setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep = 0) const;
         void setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep = 0) const;
+        void setRadiusBuffer(const BufferView &radiusBuffer, uint32_t motionStep = 0) const;
         void setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
+        void setSingleRadius(bool useSingleRadius) const;
         void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(uint32_t numMaterials, const BufferView &matIndexBuffer, uint32_t indexSize = sizeof(uint32_t)) const;
@@ -1100,6 +1103,7 @@ private: \
         OptixVertexFormat getVertexFormat() const;
         BufferView getVertexBuffer(uint32_t motionStep = 0);
         BufferView getWidthBuffer(uint32_t motionStep = 0);
+        BufferView getRadiusBuffer(uint32_t motionStep = 0);
         BufferView getTriangleBuffer(OptixIndicesFormat* format = nullptr) const;
         BufferView getSegmentIndexBuffer() const;
         BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
@@ -1425,6 +1429,12 @@ private: \
             ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
+        ProgramGroup createHitProgramGroupForSphereIS(
+            Module module_CH, const char* entryFunctionNameCH,
+            Module module_AH, const char* entryFunctionNameAH,
+            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+            const PayloadType &payloadType = PayloadType()) const;
+        [[nodiscard]]
         ProgramGroup createHitProgramGroupForCustomIS(
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
@@ -1543,24 +1553,26 @@ private: \
                                  const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                                  const BufferView &scratchBuffer, CUdeviceptr outputAverageColor) const;
         void invoke(CUstream stream,
-                    bool denoiseAlpha, CUdeviceptr hdrIntensity, float blendFactor,
+                    OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, float blendFactor,
                     const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                     const BufferView &albedo, OptixPixelFormat albedoFormat,
                     const BufferView &normal, OptixPixelFormat normalFormat,
                     const BufferView &flow, OptixPixelFormat flowFormat,
                     const BufferView &previousDenoisedBeauty,
+                    bool isFirstFrame,
                     const BufferView &denoisedBeauty,
                     const DenoisingTask &task) const;
         // JP: AOVデノイザー用。
         // EN: For AOV denoiser.
         void invoke(CUstream stream,
-                    bool denoiseAlpha, CUdeviceptr hdrAverageColor, float blendFactor,
+                    OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrAverageColor, float blendFactor,
                     const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
                     const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
                     const BufferView &albedo, OptixPixelFormat albedoFormat,
                     const BufferView &normal, OptixPixelFormat normalFormat,
                     const BufferView &flow, OptixPixelFormat flowFormat,
                     const BufferView &previousDenoisedBeauty, const BufferView* previousDenoisedAovs,
+                    bool isFirstFrame,
                     const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
                     const DenoisingTask &task) const;
     };
@@ -1636,6 +1648,7 @@ float optixGetRayTmin();
 unsigned int optixGetRayVisibilityMask();
 CUdeviceptr optixGetSbtDataPointer();
 unsigned int optixGetSbtGASIndex();
+void optixGetSphereData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[1]);
 const OptixSRTMotionTransform* optixGetSRTMotionTransformFromHandle(OptixTraversableHandle handle);
 const OptixStaticTransform* optixGetStaticTransformFromHandle(OptixTraversableHandle handle);
 OptixTraversableHandle optixGetTransformListHandle(unsigned int index);

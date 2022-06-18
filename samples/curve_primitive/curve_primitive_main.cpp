@@ -468,8 +468,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
     optixu::Instance floorInst = scene.createInstance();
-
     floorInst.setChild(floorGas);
+
     float linearCurvesInstXfm[] = {
         1.0f, 0.0f, 0.0f, -3.0f / 4.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
@@ -603,20 +603,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
-    optixu::HostBlockBuffer2D<Shared::PCG32RNG, 4> rngBuffer;
-    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
-    {
-        std::mt19937 rng(50932423);
-
-        rngBuffer.map();
-        for (int y = 0; y < renderTargetSizeY; ++y) {
-            for (int x = 0; x < renderTargetSizeX; ++x) {
-                rngBuffer(x, y).setState(rng());
-            }
-        }
-        rngBuffer.unmap();
-    }
-
     optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
     accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
 
@@ -626,8 +612,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.travHandle = travHandle;
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
-    plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-    plp.accumBuffer = accumBuffer.getBlockBuffer2D();
+    plp.resultBuffer = accumBuffer.getBlockBuffer2D();
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 1.0f, 3.0f);
@@ -643,11 +628,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    for (int frameIndex = 0; frameIndex < 1024; ++frameIndex) {
-        plp.numAccumFrames = frameIndex;
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-    }
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+    pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     saveImage("output.png", accumBuffer, false, false);
@@ -659,7 +641,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     accumBuffer.finalize();
-    rngBuffer.finalize();
 
 
 

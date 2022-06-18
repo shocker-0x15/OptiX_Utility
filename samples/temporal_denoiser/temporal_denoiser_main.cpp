@@ -1439,12 +1439,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //printf("%g\n", hdrIntensityOnHost);
         for (int i = 0; i < denoisingTasks.size(); ++i)
             denoiser.invoke(cuStream,
-                            false, hdrIntensity, 0.0f,
+                            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensity, 0.0f,
                             linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                             linearFlowBuffer, OPTIX_PIXEL_FORMAT_FLOAT2,
                             resetFlowBuffer ? linearBeautyBuffer : linearDenoisedBeautyBuffer,
+                            resetFlowBuffer,
                             linearDenoisedBeautyBuffer,
                             denoisingTasks[i]);
 

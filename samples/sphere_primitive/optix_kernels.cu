@@ -1,7 +1,6 @@
 ﻿#pragma once
 
-#include "curve_primitive_shared.h"
-#include "../common/curve_evaluator.h"
+#include "sphere_primitive_shared.h"
 
 using namespace Shared;
 
@@ -10,14 +9,26 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 
 struct HitPointParameter {
-    float b1, b2;
+    union {
+        float b1;
+        float secondDistance;
+    };
+    float b2;
     int32_t primIndex;
 
     CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get() {
         HitPointParameter ret;
-        float2 bc = optixGetTriangleBarycentrics();
-        ret.b1 = bc.x;
-        ret.b2 = bc.y;
+        OptixPrimitiveType primType = optixGetPrimitiveType();
+        if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
+            float2 bc = optixGetTriangleBarycentrics();
+            ret.b1 = bc.x;
+            ret.b2 = bc.y;
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_SPHERE) {
+            // When a ray hits a sphere twice, the attribute 0 contains the second distance.
+            uint32_t attr0 = optixGetAttribute_0();
+            ret.secondDistance = __uint_as_float(attr0);
+        }
         ret.primIndex = optixGetPrimitiveIndex();
         return ret;
     }
@@ -33,34 +44,22 @@ struct HitGroupSBTRecordData {
 
 
 
-template <OptixPrimitiveType curveType>
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
-    const GeometryData &geom, uint32_t primIndex, float curveParam, const float3 &hp) {
-    constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
-    float4 controlPoints[numControlPoints];
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcSphereSurfaceNormal(
+    const GeometryData &geom, uint32_t primIndex, const float3 &hp) {
+    float3 center;
     if constexpr (useEmbeddedVertexData) {
         OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
         uint32_t sbtGasIndex = optixGetSbtGASIndex();
-        if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-            optixGetLinearCurveVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
-        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-            optixGetQuadraticBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
-        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-            optixGetCubicBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
-        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
-            optixGetCatmullRomVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+        float4 centerAndRadius;
+        optixGetSphereData(gasHandle, primIndex, sbtGasIndex, 0.0f, &centerAndRadius);
+        center = make_float3(centerAndRadius);
     }
     else {
-        uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
-#pragma unroll
-        for (int i = 0; i < numControlPoints; ++i) {
-            const CurveVertex &v = geom.curveVertexBuffer[baseIndex + i];
-            controlPoints[i] = make_float4(v.position, v.width);
-        }
+        const SphereParameter &param = geom.sphereParamBuffer[primIndex];
+        center = param.center;
     }
 
-    curve::Evaluator<curveType> ce(controlPoints);
-    float3 sn = ce.calcNormal(curveParam, hp);
+    float3 sn = normalize(hp - center);
 
     return sn;
 }
@@ -97,32 +96,25 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryData &geom = sbtr.geomData;
 
+    auto hpParam = HitPointParameter::get();
+
     float3 sn;
     OptixPrimitiveType primType = optixGetPrimitiveType();
     if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
-        auto hp = HitPointParameter::get();
-        const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
+        const Triangle &triangle = geom.triangleBuffer[hpParam.primIndex];
         const Vertex &v0 = geom.vertexBuffer[triangle.index0];
         const Vertex &v1 = geom.vertexBuffer[triangle.index1];
         const Vertex &v2 = geom.vertexBuffer[triangle.index2];
 
-        float b0 = 1 - (hp.b1 + hp.b2);
-        sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
+        float b0 = 1 - (hpParam.b1 + hpParam.b2);
+        sn = b0 * v0.normal + hpParam.b1 * v1.normal + hpParam.b2 * v2.normal;
     }
     else {
         uint32_t primIndex = optixGetPrimitiveIndex();
-        float curveParam = optixGetCurveParameter();
         float3 hp = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
         hp = optixTransformPointFromWorldToObjectSpace(hp);
 
-        if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(geom, primIndex, curveParam, hp);
+        sn = calcSphereSurfaceNormal(geom, primIndex, hp);
     }
 
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));

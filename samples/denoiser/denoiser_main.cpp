@@ -703,12 +703,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                               denoiserScratchBuffer, hdrIntensity);
     for (int i = 0; i < denoisingTasks.size(); ++i)
         denoiser.invoke(cuStream,
-                        false, hdrIntensity, 0.0f,
+                        OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensity, 0.0f,
                         linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                         linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                         linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
                         optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,
                         optixu::BufferView(),
+                        true,
                         linearOutputBuffer,
                         denoisingTasks[i]);
     timerDenoise.stop(cuStream);

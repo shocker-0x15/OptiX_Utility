@@ -27,7 +27,6 @@ namespace Shared {
     struct SphereParameter {
         float3 center;
         float radius;
-        float texCoordMultiplier;
     };
 
 
