@@ -22,12 +22,12 @@ function(NVCUDA_COMPILE_PTX)
   set(multiValueArgs NVCC_OPTIONS SOURCES DEPENDENCIES)
 
   CMAKE_PARSE_ARGUMENTS(NVCUDA_COMPILE_PTX "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-  
+
   if(NOT WIN32) # Do not create a folder with the name ${ConfigurationName} under Windows.
-    # Under Linux make sure the target directory exists. 
+    # Under Linux make sure the target directory exists.
     file(MAKE_DIRECTORY ${NVCUDA_COMPILE_PTX_TARGET_PATH})
   endif()
-  
+
   # Custom build rule to generate ptx files from cuda files
   foreach(input ${NVCUDA_COMPILE_PTX_SOURCES})
     get_filename_component(input_we "${input}" NAME_WE)
@@ -45,4 +45,41 @@ function(NVCUDA_COMPILE_PTX)
   endforeach()
 
   set(${NVCUDA_COMPILE_PTX_GENERATED_FILES} ${PTX_FILES} PARENT_SCOPE)
+endfunction()
+
+
+
+function(NVCUDA_COMPILE_OPTIX_IR)
+  if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "ERROR: Only 64-bit programs supported.")
+  endif()
+
+  set(options "")
+  set(oneValueArgs TARGET_PATH GENERATED_FILES FILENAME_SUFFIX)
+  set(multiValueArgs NVCC_OPTIONS SOURCES DEPENDENCIES)
+
+  CMAKE_PARSE_ARGUMENTS(NVCUDA_COMPILE_OPTIX_IR "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  if(NOT WIN32) # Do not create a folder with the name ${ConfigurationName} under Windows.
+    # Under Linux make sure the target directory exists.
+    file(MAKE_DIRECTORY ${NVCUDA_COMPILE_OPTIX_IR_TARGET_PATH})
+  endif()
+
+  # Custom build rule to generate optixir files from cuda files
+  foreach(input ${NVCUDA_COMPILE_OPTIX_IR_SOURCES})
+    get_filename_component(input_we "${input}" NAME_WE)
+
+    set(output "${NVCUDA_COMPILE_OPTIX_IR_TARGET_PATH}/${input_we}${NVCUDA_COMPILE_OPTIX_IR_FILENAME_SUFFIX}.optixir")
+
+    list(APPEND OPTIXIR_FILES "${output}")
+
+    add_custom_command(
+      OUTPUT  "${output}"
+      MAIN_DEPENDENCY "${input}"
+      DEPENDS ${NVCUDA_COMPILE_OPTIX_IR_DEPENDENCIES}
+      COMMAND ${CUDAToolkit_NVCC_EXECUTABLE} --machine=64 --optix-ir ${NVCUDA_COMPILE_OPTIX_IR_NVCC_OPTIONS} "${input}" -o "${output}" WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+  endforeach()
+
+  set(${NVCUDA_COMPILE_OPTIX_IR_GENERATED_FILES} ${OPTIXIR_FILES} PARENT_SCOPE)
 endfunction()

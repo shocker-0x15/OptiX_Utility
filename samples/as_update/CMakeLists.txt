@@ -38,13 +38,13 @@ nvcuda_compile_ptx(
     "-I${OPTIX_INCLUDE_DIR}"
 )
 
-nvcuda_compile_ptx(
+nvcuda_compile_optix_ir(
     SOURCES ${OPTIX_KERNELS}
     DEPENDENCIES ${GPU_KERNEL_DEPENDENCIES}
     TARGET_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_CFG_INTDIR}/${TARGET_NAME}/ptxes"
     GENERATED_FILES OPTIX_PTXES
     NVCC_OPTIONS
-    "$<$<CONFIG:Debug>:-lineinfo>"
+    "$<$<CONFIG:Debug>:-G>"
     "--gpu-architecture=compute_52"
     "-std=c++17"
     "-cudart" "shared"
