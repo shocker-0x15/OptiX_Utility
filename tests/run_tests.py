@@ -89,14 +89,19 @@ def run():
 
             # RGBAでdiffをとると差が無いことになってしまう。
             testImgPath = test['image']
-            img = Image.open(testImgPath).convert('RGB')
-            refImg = Image.open(os.path.join(refImgDir, testDir, 'reference.png')).convert('RGB')
-            diffImg = ImageChops.difference(img, refImg)
-            diffBBox = diffImg.getbbox()
-            if diffBBox is None:
-                numDiffPixels = 0
+            refImgPath = os.path.join(refImgDir, testDir, 'reference.png')
+
+            if os.path.exists(testImgPath) and os.path.exists(refImgPath):
+                img = Image.open(testImgPath).convert('RGB')
+                refImg = Image.open(refImgPath).convert('RGB')
+                diffImg = ImageChops.difference(img, refImg)
+                diffBBox = diffImg.getbbox()
+                if diffBBox is None:
+                    numDiffPixels = 0
+                else:
+                    numDiffPixels = sum(x != (0, 0, 0) for x in diffImg.crop(diffBBox).getdata())
             else:
-                numDiffPixels = sum(x != (0, 0, 0) for x in diffImg.crop(diffBBox).getdata())
+                numDiffPixels = -1
 
             resultsPerConfig[testName] = {
                 "success": numDiffPixels == 0,
@@ -104,7 +109,9 @@ def run():
             }
 
             for output in test['outputs']:
-                if config == 'Release' and output == testImgPath and numDiffPixels > 0:
+                if not os.path.exists(output):
+                    continue
+                if config == 'Release' and output == testImgPath and numDiffPixels != 0:
                     shutil.move(testImgPath, os.path.join(refImgDir, testDir))
                 else:
                     os.remove(output)
