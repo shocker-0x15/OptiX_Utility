@@ -66,7 +66,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
     // EN: Trace call with payloads.
     //     Passing a payload signature type as the template argument is required.
     //     The maximum number of payloads is 32 dwords in total.
-    optixu::trace<PayloadSignature>(
+    PayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,

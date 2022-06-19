@@ -59,8 +59,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
         constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
             OPTIX_PAYLOAD_TYPE_ID_0 :
             OPTIX_PAYLOAD_TYPE_DEFAULT;
-        optixu::trace<SearchRayPayloadSignature>(
-            payloadTypeID,
+        SearchRayPayloadSignature::trace<payloadTypeID>(
             plp.travHandle, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
@@ -89,10 +88,13 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
         optixSetPayloadTypes(OPTIX_PAYLOAD_TYPE_ID_0);
 
     PathFlags flags;
-    SearchRayPayloadSignature::get(nullptr, nullptr, nullptr, nullptr, nullptr, &flags);
+    //SearchRayPayloadSignature::get(nullptr, nullptr, nullptr, nullptr, nullptr, &flags);
+    SearchRayPayloadSignature::getAt<5>(&flags);
     float3 contribution = make_float3(0.01f, 0.01f, 0.01f);
     flags.terminate = true;
-    SearchRayPayloadSignature::set(nullptr, nullptr, &contribution, nullptr, nullptr, &flags);
+    //SearchRayPayloadSignature::set(nullptr, nullptr, &contribution, nullptr, nullptr, &flags);
+    SearchRayPayloadSignature::setAt<2>(contribution);
+    SearchRayPayloadSignature::setAt<5>(flags);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
@@ -107,7 +109,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
     PCG32RNG rng;
     PathFlags flags;
-    SearchRayPayloadSignature::get(&rng, nullptr, nullptr, nullptr, nullptr, &flags);
+    //SearchRayPayloadSignature::get(&rng, nullptr, nullptr, nullptr, nullptr, &flags);
+    SearchRayPayloadSignature::getAt<0>(&rng);
+    SearchRayPayloadSignature::getAt<5>(&flags);
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -170,8 +174,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         constexpr OptixPayloadTypeID payloadTypeID = usePayloadAnnotation ?
             OPTIX_PAYLOAD_TYPE_ID_1 :
             OPTIX_PAYLOAD_TYPE_DEFAULT;
-        optixu::trace<VisibilityRayPayloadSignature>(
-            payloadTypeID,
+        VisibilityRayPayloadSignature::trace<payloadTypeID>(
             plp.travHandle, p, shadowRayDir,
             0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Visibility, NumRayTypes, RayType_Visibility,

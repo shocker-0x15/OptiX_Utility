@@ -52,7 +52,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");
+    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.optixir");
     optixu::PayloadType payloadTypes[2];
     if constexpr (Shared::usePayloadAnnotation) {
         // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
@@ -112,8 +112,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
     // JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
     // EN: Pass payload types to module creation when using payload annotation.
-    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
-        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+    optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+        optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE),
         nullptr, 0,

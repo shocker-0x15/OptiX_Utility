@@ -74,7 +74,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
         // EN: Trace call with payloads.
         //     The maximum number of payloads is 8 dwords in total (in OptiX 7.3.0).
         //     However pass the third payload as pointer because its direct size cannot fit in.
-        optixu::trace<SearchRayPayloadSignature>(
+        SearchRayPayloadSignature::trace(
             traversable, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
@@ -283,7 +283,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
         float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
         float visibility = 1.0f;
-        optixu::trace<VisibilityRayPayloadSignature>(
+        VisibilityRayPayloadSignature::trace(
             traversable, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Visibility, NumRayTypes, RayType_Visibility,
             visibility);

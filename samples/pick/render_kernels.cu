@@ -47,7 +47,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
     float3 direction = normalize(plp.orientation * make_float3(vw * (0.5f - x), vh * (y - 0.5f), 1));
 
     float3 color;
-    optixu::trace<RenderPayloadSignature>(
+    RenderPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
@@ -71,7 +71,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
                                              std::sin(phi) * std::sin(theta)));
 
     float3 color;
-    optixu::trace<RenderPayloadSignature>(
+    RenderPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,

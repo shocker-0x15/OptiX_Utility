@@ -985,12 +985,12 @@ namespace optixu {
 
 
     class Pipeline::Priv {
-        struct KeyForCurveModule {
+        struct KeyForBuiltinISModule {
             OptixPrimitiveType curveType;
             OptixCurveEndcapFlags endcapFlags;
             OptixBuildFlags buildFlags;
 
-            bool operator<(const KeyForCurveModule &rKey) const {
+            bool operator<(const KeyForBuiltinISModule &rKey) const {
                 if (curveType < rKey.curveType)
                     return true;
                 else if (curveType > rKey.curveType)
@@ -1009,7 +1009,7 @@ namespace optixu {
             struct Hash {
                 typedef std::size_t result_type;
 
-                std::size_t operator()(const KeyForCurveModule& key) const {
+                std::size_t operator()(const KeyForBuiltinISModule& key) const {
                     size_t seed = 0;
                     auto hash0 = std::hash<OptixPrimitiveType>()(key.curveType);
                     auto hash1 = std::hash<OptixCurveEndcapFlags>()(key.endcapFlags);
@@ -1020,35 +1020,10 @@ namespace optixu {
                     return seed;
                 }
             };
-            bool operator==(const KeyForCurveModule &rKey) const {
+            bool operator==(const KeyForBuiltinISModule &rKey) const {
                 return curveType == rKey.curveType &&
                     endcapFlags == rKey.endcapFlags &&
                     buildFlags == rKey.buildFlags;
-            }
-        };
-        struct KeyForSphereModule {
-            OptixBuildFlags buildFlags;
-
-            bool operator<(const KeyForSphereModule &rKey) const {
-                if (buildFlags < rKey.buildFlags)
-                    return true;
-                else if (buildFlags > rKey.buildFlags)
-                    return false;
-                return false;
-            }
-
-            struct Hash {
-                typedef std::size_t result_type;
-
-                std::size_t operator()(const KeyForSphereModule& key) const {
-                    size_t seed = 0;
-                    auto hash0 = std::hash<OptixBuildFlags>()(key.buildFlags);
-                    seed ^= hash0 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-                    return seed;
-                }
-            };
-            bool operator==(const KeyForSphereModule &rKey) const {
-                return buildFlags == rKey.buildFlags;
             }
         };
 
@@ -1064,8 +1039,7 @@ namespace optixu {
         uint32_t numCallablePrograms;
         size_t sbtSize;
 
-        std::unordered_map<KeyForCurveModule, _Module*, KeyForCurveModule::Hash> modulesForCurveIS;
-        std::unordered_map<KeyForSphereModule, _Module*, KeyForSphereModule::Hash> modulesForSphereIS;
+        std::unordered_map<KeyForBuiltinISModule, _Module*, KeyForBuiltinISModule::Hash> modulesForBuiltinIS;
         _ProgramGroup* rayGenProgram;
         _ProgramGroup* exceptionProgram;
         std::vector<_ProgramGroup*> missPrograms;
@@ -1082,6 +1056,15 @@ namespace optixu {
             unsigned int sbtIsUpToDate : 1;
             unsigned int hitGroupSbtIsUpToDate : 1;
         };
+
+        Module createModule(const char* data, size_t size,
+                            int32_t maxRegisterCount,
+                            OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+                            OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
+                            const PayloadType* payloadTypes, uint32_t numPayloadTypes);
+        OptixModule getModuleForBuiltin(
+            OptixPrimitiveType primType, OptixCurveEndcapFlags endcapFlags,
+            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
 
         void setupShaderBindingTable(CUstream stream);
 
@@ -1110,11 +1093,6 @@ namespace optixu {
 
 
         void markDirty();
-        OptixModule getModuleForCurves(
-            OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
-            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
-        OptixModule getModuleForSpheres(
-            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
         void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
         void destroyProgram(OptixProgramGroup group);
     };

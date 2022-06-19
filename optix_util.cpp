@@ -2203,9 +2203,9 @@ namespace optixu {
     Pipeline::Priv::~Priv() {
         if (pipelineLinked)
             optixPipelineDestroy(rawPipeline);
-        for (auto it = modulesForCurveIS.begin(); it != modulesForCurveIS.end(); ++it)
+        for (auto it = modulesForBuiltinIS.begin(); it != modulesForBuiltinIS.end(); ++it)
             it->second->getPublicType().destroy();
-        modulesForCurveIS.clear();
+        modulesForBuiltinIS.clear();
         context->unregisterName(this);
     }
     
@@ -2215,22 +2215,55 @@ namespace optixu {
         pipelineLinked = false;
     }
 
-    OptixModule Pipeline::Priv::getModuleForCurves(
-        OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
+    Module Pipeline::Priv::createModule(const char* data, size_t size,
+                                        int32_t maxRegisterCount,
+                                        OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+                                        OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
+                                        const PayloadType* payloadTypes, uint32_t numPayloadTypes) {
+        std::vector<OptixPayloadType> optixPayloadTypes(numPayloadTypes);
+        for (uint32_t i = 0; i < numPayloadTypes; ++i)
+            optixPayloadTypes[i] = payloadTypes[i].getRawType();
+
+        OptixModuleCompileOptions moduleCompileOptions = {};
+        moduleCompileOptions.maxRegisterCount = maxRegisterCount;
+        moduleCompileOptions.optLevel = optLevel;
+        moduleCompileOptions.debugLevel = debugLevel;
+        moduleCompileOptions.boundValues = boundValues;
+        moduleCompileOptions.numBoundValues = numBoundValues;
+        moduleCompileOptions.payloadTypes = numPayloadTypes ? optixPayloadTypes.data() : nullptr;
+        moduleCompileOptions.numPayloadTypes = numPayloadTypes;
+
+        OptixModule rawModule;
+
+        char log[4096];
+        size_t logSize = sizeof(log);
+        OPTIX_CHECK_LOG(optixModuleCreateFromPTX(getRawContext(),
+                                                 &moduleCompileOptions,
+                                                 &pipelineCompileOptions,
+                                                 data, size,
+                                                 log, &logSize,
+                                                 &rawModule));
+
+        return (new _Module(this, rawModule))->getPublicType();
+    }
+
+    OptixModule Pipeline::Priv::getModuleForBuiltin(
+        OptixPrimitiveType primType, OptixCurveEndcapFlags endcapFlags,
         ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) {
-        if (curveType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR &&
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE &&
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE &&
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
+        if (primType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM &&
+            primType != OPTIX_PRIMITIVE_TYPE_SPHERE)
             return nullptr;
 
-        KeyForCurveModule key{ curveType, endcapFlags, OPTIX_BUILD_FLAG_NONE };
-        if (modulesForCurveIS.count(key) == 0) {
+        KeyForBuiltinISModule key{ primType, endcapFlags, OPTIX_BUILD_FLAG_NONE };
+        if (modulesForBuiltinIS.count(key) == 0) {
             OptixModuleCompileOptions moduleCompileOptions = {};
             moduleCompileOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
 
             OptixBuiltinISOptions builtinISOptions = {};
-            builtinISOptions.builtinISModuleType = curveType;
+            builtinISOptions.builtinISModuleType = primType;
             builtinISOptions.curveEndcapFlags = endcapFlags;
             builtinISOptions.buildFlags = 0;
             if (tradeoff == ASTradeoff::PreferFastTrace)
@@ -2250,43 +2283,10 @@ namespace optixu {
                                                 &builtinISOptions,
                                                 &rawModule));
 
-            modulesForCurveIS[key] = new _Module(this, rawModule);
+            modulesForBuiltinIS[key] = new _Module(this, rawModule);
         }
 
-        return modulesForCurveIS.at(key)->getRawModule();
-    }
-
-    OptixModule Pipeline::Priv::getModuleForSpheres(
-        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) {
-        KeyForSphereModule key{ OPTIX_BUILD_FLAG_NONE };
-        if (modulesForSphereIS.count(key) == 0) {
-            OptixModuleCompileOptions moduleCompileOptions = {};
-            moduleCompileOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
-
-            OptixBuiltinISOptions builtinISOptions = {};
-            builtinISOptions.builtinISModuleType = OPTIX_PRIMITIVE_TYPE_SPHERE;
-            builtinISOptions.buildFlags = 0;
-            if (tradeoff == ASTradeoff::PreferFastTrace)
-                builtinISOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
-            else if (tradeoff == ASTradeoff::PreferFastBuild)
-                builtinISOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-            builtinISOptions.buildFlags |=
-                (allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0)
-                | (allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0)
-                | (allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0);
-            builtinISOptions.usesMotionBlur = pipelineCompileOptions.usesMotionBlur;
-
-            OptixModule rawModule;
-            OPTIX_CHECK(optixBuiltinISModuleGet(context->getRawContext(),
-                                                &moduleCompileOptions,
-                                                &pipelineCompileOptions,
-                                                &builtinISOptions,
-                                                &rawModule));
-
-            modulesForSphereIS[key] = new _Module(this, rawModule);
-        }
-
-        return modulesForSphereIS.at(key)->getRawModule();
+        return modulesForBuiltinIS.at(key)->getRawModule();
     }
     
     void Pipeline::Priv::createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group) {
@@ -2400,31 +2400,23 @@ namespace optixu {
                                                OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
                                                OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
                                                const PayloadType* payloadTypes, uint32_t numPayloadTypes) const {
-        std::vector<OptixPayloadType> optixPayloadTypes(numPayloadTypes);
-        for (uint32_t i = 0; i < numPayloadTypes; ++i)
-            optixPayloadTypes[i] = payloadTypes[i].getRawType();
+        return m->createModule(ptxString.c_str(), ptxString.size(),
+                               maxRegisterCount,
+                               optLevel, debugLevel,
+                               boundValues, numBoundValues,
+                               payloadTypes, numPayloadTypes);
+    }
 
-        OptixModuleCompileOptions moduleCompileOptions = {};
-        moduleCompileOptions.maxRegisterCount = maxRegisterCount;
-        moduleCompileOptions.optLevel = optLevel;
-        moduleCompileOptions.debugLevel = debugLevel;
-        moduleCompileOptions.boundValues = boundValues;
-        moduleCompileOptions.numBoundValues = numBoundValues;
-        moduleCompileOptions.payloadTypes = numPayloadTypes ? optixPayloadTypes.data() : nullptr;
-        moduleCompileOptions.numPayloadTypes = numPayloadTypes;
-
-        OptixModule rawModule;
-
-        char log[4096];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixModuleCreateFromPTX(m->getRawContext(),
-                                                 &moduleCompileOptions,
-                                                 &m->pipelineCompileOptions,
-                                                 ptxString.c_str(), ptxString.size(),
-                                                 log, &logSize,
-                                                 &rawModule));
-
-        return (new _Module(m, rawModule))->getPublicType();
+    [[nodiscard]]
+    Module Pipeline::createModuleFromOptixIR(const std::vector<char> &irBin, int32_t maxRegisterCount,
+                                             OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+                                             OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
+                                             const PayloadType* payloadTypes, uint32_t numPayloadTypes) const {
+        return m->createModule(irBin.data(), irBin.size(),
+                               maxRegisterCount,
+                               optLevel, debugLevel,
+                               boundValues, numBoundValues,
+                               payloadTypes, numPayloadTypes);
     }
 
     ProgramGroup Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
@@ -2575,7 +2567,7 @@ namespace optixu {
             desc.hitgroup.moduleAH = _module_AH->getRawModule();
             desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
         }
-        desc.hitgroup.moduleIS = m->getModuleForCurves(
+        desc.hitgroup.moduleIS = m->getModuleForBuiltin(
             curveType, endcapFlags,
             tradeoff, allowUpdate, allowCompaction, allowRandomVertexAccess);
         desc.hitgroup.entryFunctionNameIS = nullptr;
@@ -2623,7 +2615,8 @@ namespace optixu {
             desc.hitgroup.moduleAH = _module_AH->getRawModule();
             desc.hitgroup.entryFunctionNameAH = entryFunctionNameAH;
         }
-        desc.hitgroup.moduleIS = m->getModuleForSpheres(
+        desc.hitgroup.moduleIS = m->getModuleForBuiltin(
+            OPTIX_PRIMITIVE_TYPE_SPHERE, OPTIX_CURVE_ENDCAP_DEFAULT,
             tradeoff, allowUpdate, allowCompaction, allowRandomVertexAccess);
         desc.hitgroup.entryFunctionNameIS = nullptr;
 

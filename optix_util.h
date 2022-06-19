@@ -31,6 +31,10 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- !!BREAKING
+  JP: - OptiX 7.5.0をサポート。
+  EN: - Supported OptiX 7.5.0.
+
 - !!BREAKING??
   JP: - RT_DEVICE_FUNCTIONからinline属性を削除。RT_INLINEを新設。
         __CUDACC__と__CUDA_ARCH__の使い分けを明確に。
@@ -183,6 +187,7 @@ TODO:
 #include <cstdint>
 #include <cfloat>
 #include <string>
+#include <vector>
 #include <initializer_list>
 #endif
 #include <optix.h>
@@ -235,20 +240,20 @@ TODO:
 
 
 #define OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(Type) \
-    RT_COMMON_FUNCTION RT_INLINE Type operator~(Type a) { \
+    RT_COMMON_FUNCTION RT_INLINE constexpr Type operator~(Type a) { \
         return static_cast<Type>(~static_cast<uint32_t>(a)); \
     } \
-    RT_COMMON_FUNCTION RT_INLINE Type operator|(Type a, Type b) { \
+    RT_COMMON_FUNCTION RT_INLINE constexpr Type operator|(Type a, Type b) { \
         return static_cast<Type>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b)); \
     } \
-    RT_COMMON_FUNCTION RT_INLINE Type &operator|=(Type &a, Type b) { \
+    RT_COMMON_FUNCTION RT_INLINE constexpr Type &operator|=(Type &a, Type b) { \
         a = static_cast<Type>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b)); \
         return a; \
     } \
-    RT_COMMON_FUNCTION RT_INLINE Type operator&(Type a, Type b) { \
+    RT_COMMON_FUNCTION RT_INLINE constexpr Type operator&(Type a, Type b) { \
         return static_cast<Type>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b)); \
     } \
-    RT_COMMON_FUNCTION RT_INLINE Type &operator&=(Type &a, Type b) { \
+    RT_COMMON_FUNCTION RT_INLINE constexpr Type &operator&=(Type &a, Type b) { \
         a = static_cast<Type>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b)); \
         return a; \
     }
@@ -264,6 +269,10 @@ OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixPayloadSemantics);
 OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixPayloadTypeID);
 
 #undef OPTIXU_DEFINE_OPERATORS_FOR_FLAGS
+
+#if defined(OPTIXU_Platform_CodeCompletion)
+struct float3;
+#endif
 
 
 
@@ -381,8 +390,19 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION static void get(PayloadTypes*... payloads);
-        RT_DEVICE_FUNCTION static void set(const PayloadTypes*... payloads);
+        template <OptixPayloadTypeID payloadTypeID = OPTIX_PAYLOAD_TYPE_DEFAULT>
+        RT_DEVICE_FUNCTION RT_INLINE static void trace(OptixTraversableHandle handle,
+                                                       const float3 &origin, const float3 &direction,
+                                                       float tmin, float tmax, float rayTime,
+                                                       OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
+                                                       uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
+                                                       PayloadTypes &... payloads);
+        RT_DEVICE_FUNCTION RT_INLINE static void get(PayloadTypes*... payloads);
+        RT_DEVICE_FUNCTION RT_INLINE static void set(const PayloadTypes*... payloads);
+        template <uint32_t index>
+        RT_DEVICE_FUNCTION RT_INLINE static void getAt(TypeAt<index>* payload);
+        template <uint32_t index>
+        RT_DEVICE_FUNCTION RT_INLINE static void setAt(const TypeAt<index> &payload);
 #endif
     };
 
@@ -398,7 +418,7 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION static void get(AttributeTypes*... attributes);
+        RT_DEVICE_FUNCTION RT_INLINE static void get(AttributeTypes*... attributes);
 #endif
     };
 
@@ -414,7 +434,7 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION static void get(ExceptionDetailTypes*... exDetails);
+        RT_DEVICE_FUNCTION RT_INLINE static void get(ExceptionDetailTypes*... exDetails);
 #endif
     };
 
@@ -430,6 +450,14 @@ namespace optixu {
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
     namespace detail {
+        template <uint32_t index, size_t N>
+        RT_DEVICE_FUNCTION RT_INLINE constexpr uint32_t calcOffset(const uint32_t (&sizes)[N]) {
+            if constexpr (index == 0)
+                return 0;
+            else
+                return sizes[index - 1] + calcOffset<index - 1>(sizes);
+        }
+
         template <uint32_t start, typename HeadType, typename... TailTypes>
         RT_DEVICE_FUNCTION RT_INLINE void packToUInts(
             uint32_t* v, const HeadType &head, const TailTypes &... tails) {
@@ -496,9 +524,8 @@ namespace optixu {
                 traceSetPayloads<startSlot + numDwords>(p, tailPayloads...);
         }
 
-        template <size_t... I>
+        template <OptixPayloadTypeID payloadTypeID, size_t... I>
         RT_DEVICE_FUNCTION RT_INLINE void trace(
-            OptixPayloadTypeID payloadTypeID,
             OptixTraversableHandle handle,
             const float3 &origin, const float3 &direction,
             float tmin, float tmax, float rayTime,
@@ -652,18 +679,15 @@ namespace optixu {
     // EN: Taking payloads as rvalue reference makes it possible to take rvalue while reflecting value changes.
     //     However take them as normal reference to ease consistency check of template arguments and for
     //     conforming optixTrace.
-    template <typename PayloadSignatureType, typename... PayloadTypes>
-    RT_DEVICE_FUNCTION RT_INLINE void trace(
-        OptixPayloadTypeID payloadTypeID,
-        OptixTraversableHandle handle,
-        const float3 &origin, const float3 &direction,
-        float tmin, float tmax, float rayTime,
-        OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
-        uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
-        PayloadTypes &... payloads) {
-        static_assert(std::is_same_v<PayloadSignatureType, PayloadSignature<PayloadTypes...>>,
-                      "Payload types are inconsistent with the signature.");
-        constexpr size_t numDwords = PayloadSignatureType::numDwords;
+    template <typename... PayloadTypes>
+    template <OptixPayloadTypeID payloadTypeID>
+    RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
+        trace(OptixTraversableHandle handle,
+              const float3 &origin, const float3 &direction,
+              float tmin, float tmax, float rayTime,
+              OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
+              uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
+              PayloadTypes &... payloads) {
         static_assert(numDwords <= detail::maxNumPayloadsInDwords,
                       "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         if constexpr (numDwords == 0) {
@@ -677,32 +701,13 @@ namespace optixu {
         else {
             uint32_t* p[numDwords];
             detail::traceSetPayloads<0>(p, payloads...);
-            detail::trace(payloadTypeID,
-                          handle,
-                          origin, direction,
-                          tmin, tmax, rayTime,
-                          visibilityMask, rayFlags,
-                          SBToffset, SBTstride, missSBTIndex,
-                          p, std::make_index_sequence<numDwords>{});
+            detail::trace<payloadTypeID>(handle,
+                                         origin, direction,
+                                         tmin, tmax, rayTime,
+                                         visibilityMask, rayFlags,
+                                         SBToffset, SBTstride, missSBTIndex,
+                                         p, std::make_index_sequence<numDwords>{});
         }
-    }
-
-    template <typename PayloadSignatureType, typename... PayloadTypes>
-    RT_DEVICE_FUNCTION RT_INLINE void trace(
-        OptixTraversableHandle handle,
-        const float3 &origin, const float3 &direction,
-        float tmin, float tmax, float rayTime,
-        OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
-        uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
-        PayloadTypes &... payloads) {
-        trace<PayloadSignatureType>(
-            OPTIX_PAYLOAD_TYPE_DEFAULT,
-            handle,
-            origin, direction,
-            tmin, tmax, rayTime,
-            visibilityMask, rayFlags,
-            SBToffset, SBTstride, missSBTIndex,
-            payloads...);
     }
 
     template <typename... PayloadTypes>
@@ -723,6 +728,22 @@ namespace optixu {
         static_assert(numDwords > 0, "Calling this function for this signature has no effect.");
         if constexpr (numDwords > 0)
             detail::setValues<detail::PayloadFunc, 0>(payloads...);
+    }
+
+    template <typename... PayloadTypes>
+    template <uint32_t index>
+    RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
+        getAt(TypeAt<index>* payload) {
+        constexpr uint32_t offsetInDwords = detail::calcOffset<index>(sizesInDwords);
+        detail::getValue<detail::PayloadFunc, TypeAt<index>, 0, offsetInDwords>(payload);
+    }
+
+    template <typename... PayloadTypes>
+    template <uint32_t index>
+    RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
+        setAt(const TypeAt<index> &payload) {
+        constexpr uint32_t offsetInDwords = detail::calcOffset<index>(sizesInDwords);
+        detail::setValue<detail::PayloadFunc, TypeAt<index>, 0, offsetInDwords>(&payload);
     }
 
 
@@ -1407,6 +1428,11 @@ private: \
                                          OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
                                          OptixModuleCompileBoundValueEntry* boundValues = nullptr, uint32_t numBoundValues = 0,
                                          const PayloadType* payloadTypes = nullptr, uint32_t numPayloadTypes = 0) const;
+        [[nodiscard]]
+        Module createModuleFromOptixIR(const std::vector<char> &irBin, int32_t maxRegisterCount,
+                                       OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+                                       OptixModuleCompileBoundValueEntry* boundValues = nullptr, uint32_t numBoundValues = 0,
+                                       const PayloadType* payloadTypes = nullptr, uint32_t numPayloadTypes = 0) const;
 
         [[nodiscard]]
         ProgramGroup createRayGenProgram(Module module, const char* entryFunctionName) const;

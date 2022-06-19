@@ -44,7 +44,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (y - 0.5f), 1));
 
     float3 color;
-    optixu::trace<PayloadSignature>(
+    PayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,

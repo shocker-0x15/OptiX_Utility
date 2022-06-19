@@ -50,6 +50,23 @@ std::string readTxtFile(const std::filesystem::path& filepath) {
     return std::string(sstream.str());
 }
 
+std::vector<char> readBinaryFile(const std::filesystem::path &filepath) {
+    std::vector<char> ret;
+
+    std::ifstream ifs;
+    ifs.open(filepath, std::ios::in | std::ios::binary | std::ios::ate);
+    if (ifs.fail())
+        return std::move(ret);
+
+    std::streamsize fileSize = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+
+    ret.resize(fileSize);
+    ifs.read(ret.data(), fileSize);
+
+    return std::move(ret);
+}
+
 
 
 void SlotFinder::initialize(uint32_t numSlots) {

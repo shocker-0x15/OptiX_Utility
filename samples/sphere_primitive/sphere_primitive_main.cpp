@@ -44,9 +44,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
                                 OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE);
 
-    const std::string ptx = readTxtFile(getExecutableDirectory() / "sphere_primitive/ptxes/optix_kernels.ptx");
-    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
-        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "sphere_primitive/ptxes/optix_kernels.optixir");
+    optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+        optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 

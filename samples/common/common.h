@@ -982,7 +982,9 @@ std::shared_ptr<T> make_shared_with_deleter(const Deleter &deleter, ArgTypes&&..
 
 std::filesystem::path getExecutableDirectory();
 
-std::string readTxtFile(const std::filesystem::path& filepath);
+std::string readTxtFile(const std::filesystem::path &filepath);
+
+std::vector<char> readBinaryFile(const std::filesystem::path &filepath);
 
 
 

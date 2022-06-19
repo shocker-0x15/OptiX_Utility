@@ -59,7 +59,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(perspectiveRaygen)() {
     float3 direction = normalize(plp.orientation * make_float3(vw * (0.5f - x), vh * (y - 0.5f), 1));
 
     PickInfo info;
-    optixu::trace<PickPayloadSignature>(
+    PickPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         PickRayType_Primary, NumPickRayTypes, PickRayType_Primary,
@@ -84,7 +84,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(equirectangularRaygen)() {
                                              std::sin(phi) * std::sin(theta)));
 
     PickInfo info;
-    optixu::trace<PickPayloadSignature>(
+    PickPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         PickRayType_Primary, NumPickRayTypes, PickRayType_Primary,

@@ -57,7 +57,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     denoiserData.firstHitNormal = make_float3(0.0f, 0.0f, 0.0f);
     DenoiserData* denoiserDataPtr = &denoiserData;
     while (true) {
-        optixu::trace<SearchRayPayloadSignature>(
+        SearchRayPayloadSignature::trace(
             plp.travHandle, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
@@ -187,7 +187,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float3 Le = cosLight > 0 ? LightRadiance : make_float3(0, 0, 0);
 
         float visibility = 1.0f;
-        optixu::trace<VisibilityRayPayloadSignature>(
+        VisibilityRayPayloadSignature::trace(
             plp.travHandle, p, shadowRayDir,
             0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Visibility, NumRayTypes, RayType_Visibility,

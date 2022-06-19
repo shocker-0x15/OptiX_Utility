@@ -131,6 +131,23 @@ static std::string readTxtFile(const std::filesystem::path& filepath) {
     return std::string(sstream.str());
 }
 
+std::vector<char> readBinaryFile(const std::filesystem::path &filepath) {
+    std::vector<char> ret;
+
+    std::ifstream ifs;
+    ifs.open(filepath, std::ios::in | std::ios::binary | std::ios::ate);
+    if (ifs.fail())
+        return std::move(ret);
+
+    std::streamsize fileSize = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+
+    ret.resize(fileSize);
+    ifs.read(ret.data(), fileSize);
+
+    return std::move(ret);
+}
+
 
 
 static CUcontext cuContext;
@@ -273,11 +290,11 @@ TEST(MaterialTest, MaterialBasic) {
             OPTIX_EXCEPTION_FLAG_DEBUG,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-        const std::string ptx = readTxtFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.ptx");
-        optixu::Module moduleOptiX = pipeline0.createModuleFromPTXString(
-            ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-            OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-            OPTIX_COMPILE_DEBUG_LEVEL_NONE);
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline0.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
         optixu::Module emptyModule;
 
