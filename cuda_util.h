@@ -242,7 +242,10 @@ namespace cudau {
 
         template <typename... ArgTypes>
         void operator()(CUstream stream, const dim3 &gridDim, ArgTypes&&... args) const {
-            callKernel(stream, m_kernel, gridDim, m_blockDim, m_sharedMemSize, std::forward<ArgTypes>(args)...);
+            callKernel(
+                stream, m_kernel,
+                gridDim, m_blockDim, m_sharedMemSize,
+                std::forward<ArgTypes>(args)...);
         }
     };
 
@@ -337,8 +340,9 @@ namespace cudau {
         Buffer(const Buffer &) = delete;
         Buffer &operator=(const Buffer &) = delete;
 
-        void initialize(CUcontext context, BufferType type,
-                        uint32_t numElements, uint32_t stride, uint32_t glBufferID);
+        void initialize(
+            CUcontext context, BufferType type,
+            uint32_t numElements, uint32_t stride, uint32_t glBufferID);
 
     public:
         Buffer();
@@ -350,8 +354,9 @@ namespace cudau {
         template <typename T>
         inline operator T() const;
 
-        void initialize(CUcontext context, BufferType type,
-                        uint32_t numElements, uint32_t stride) {
+        void initialize(
+            CUcontext context, BufferType type,
+            uint32_t numElements, uint32_t stride) {
             initialize(context, type, numElements, stride, 0);
         }
         void initializeFromGLBuffer(CUcontext context, uint32_t stride, uint32_t glBufferID) {
@@ -500,16 +505,25 @@ namespace cudau {
         void initialize(CUcontext context, BufferType type, uint32_t numElements) {
             Buffer::initialize(context, type, numElements, sizeof(T));
         }
-        void initialize(CUcontext context, BufferType type, uint32_t numElements, const T &value, CUstream stream = 0) {
+        void initialize(
+            CUcontext context, BufferType type,
+            uint32_t numElements, const T &value,
+            CUstream stream = 0) {
             std::vector<T> values(numElements, value);
             initialize(context, type, static_cast<uint32_t>(values.size()));
             CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), values.data(), values.size() * sizeof(T), stream));
         }
-        void initialize(CUcontext context, BufferType type, const T* v, uint32_t numElements, CUstream stream = 0) {
+        void initialize(
+            CUcontext context, BufferType type,
+            const T* v, uint32_t numElements,
+            CUstream stream = 0) {
             initialize(context, type, numElements);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), v, numElements * sizeof(T), stream));
         }
-        void initialize(CUcontext context, BufferType type, const std::vector<T> &v, CUstream stream = 0) {
+        void initialize(
+            CUcontext context, BufferType type,
+            const std::vector<T> &v,
+            CUstream stream = 0) {
             initialize(context, type, static_cast<uint32_t>(v.size()));
             CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), v.data(), v.size() * sizeof(T), stream));
         }
@@ -802,10 +816,15 @@ namespace cudau {
         void beginCUDAAccess(CUstream stream, uint32_t mipmapLevel);
         void endCUDAAccess(CUstream stream, uint32_t mipmapLevel);
 
-        void* map(uint32_t mipmapLevel = 0, CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite);
+        void* map(
+            uint32_t mipmapLevel = 0,
+            CUstream stream = 0,
+            BufferMapFlag flag = BufferMapFlag::ReadWrite);
         template <typename T>
         T* map(
-            uint32_t mipmapLevel = 0, CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite) {
+            uint32_t mipmapLevel = 0,
+            CUstream stream = 0,
+            BufferMapFlag flag = BufferMapFlag::ReadWrite) {
             return reinterpret_cast<T*>(map(mipmapLevel, stream, flag));
         }
         void unmap(uint32_t mipmapLevel = 0, CUstream stream = 0);

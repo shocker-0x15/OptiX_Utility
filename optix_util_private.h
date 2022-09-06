@@ -211,10 +211,12 @@ namespace optixu {
                 OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL :
                 OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF;
             OPTIX_CHECK(optixDeviceContextCreate(cuContext, &options, &rawContext));
-            OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
-                                                      &maxInstanceID, sizeof(maxInstanceID)));
-            OPTIX_CHECK(optixDeviceContextGetProperty(rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK,
-                                                      &numVisibilityMaskBits, sizeof(numVisibilityMaskBits)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
+                &maxInstanceID, sizeof(maxInstanceID)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK,
+                &numVisibilityMaskBits, sizeof(numVisibilityMaskBits)));
         }
         ~Priv() {
             optixDeviceContextDestroy(rawContext);
@@ -343,7 +345,8 @@ namespace optixu {
         SizeAlign getUserDataSizeAlign() const {
             return userDataSizeAlign;
         }
-        void setRecordHeader(const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const;
+        void setRecordHeader(
+            const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const;
         void setRecordData(uint8_t* record, SizeAlign* curSizeAlign) const;
     };
 
@@ -620,14 +623,16 @@ namespace optixu {
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
 
-        void calcSBTRequirements(uint32_t gasMatSetIdx,
-                                 const SizeAlign &gasUserDataSizeAlign,
-                                 const SizeAlign &gasChildUserDataSizeAlign,
-                                 SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
-        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t gasMatSetIdx,
-                                const void* gasUserData, const SizeAlign &gasUserDataSizeAlign,
-                                const void* gasChildUserData, const SizeAlign &gasChildUserDataSizeAlign,
-                                uint32_t numRayTypes, uint8_t* records) const;
+        void calcSBTRequirements(
+            uint32_t gasMatSetIdx,
+            const SizeAlign &gasUserDataSizeAlign,
+            const SizeAlign &gasChildUserDataSizeAlign,
+            SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+        uint32_t fillSBTRecords(
+            const _Pipeline* pipeline, uint32_t gasMatSetIdx,
+            const void* gasUserData, const SizeAlign &gasUserDataSizeAlign,
+            const void* gasChildUserData, const SizeAlign &gasChildUserDataSizeAlign,
+            uint32_t numRayTypes, uint8_t* records) const;
     };
 
 
@@ -697,8 +702,8 @@ namespace optixu {
 
             buildOptions = {};
 
-            CUDADRV_CHECK(cuEventCreate(&finishEvent,
-                                        CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
+            CUDADRV_CHECK(cuEventCreate(
+                &finishEvent, CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
             CUDADRV_CHECK(cuMemAlloc(&compactedSizeOnDevice, sizeof(size_t)));
 
             propertyCompactedSize = OptixAccelEmitDesc{};
@@ -738,7 +743,8 @@ namespace optixu {
             return numRayTypesPerMaterialSet[matSetIdx];
         }
 
-        void calcSBTRequirements(uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+        void calcSBTRequirements(
+            uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const;
         bool hasMotion() const {
             return buildOptions.motionOptions.numKeys >= 2;
@@ -1057,11 +1063,12 @@ namespace optixu {
             unsigned int hitGroupSbtIsUpToDate : 1;
         };
 
-        Module createModule(const char* data, size_t size,
-                            int32_t maxRegisterCount,
-                            OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
-                            OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
-                            const PayloadType* payloadTypes, uint32_t numPayloadTypes);
+        Module createModule(
+            const char* data, size_t size,
+            int32_t maxRegisterCount,
+            OptixCompileOptimizationLevel optLevel, OptixCompileDebugLevel debugLevel,
+            OptixModuleCompileBoundValueEntry* boundValues, uint32_t numBoundValues,
+            const PayloadType* payloadTypes, uint32_t numPayloadTypes);
         OptixModule getModuleForBuiltin(
             OptixPrimitiveType primType, OptixCurveEndcapFlags endcapFlags,
             ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess);
@@ -1076,7 +1083,8 @@ namespace optixu {
             sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
             rayGenProgram(nullptr), exceptionProgram(nullptr),
-            pipelineLinked(false), sbtLayoutIsUpToDate(false), sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
+            pipelineLinked(false), sbtLayoutIsUpToDate(false),
+            sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
             sbtParams = {};
         }
         ~Priv();
@@ -1093,7 +1101,9 @@ namespace optixu {
 
 
         void markDirty();
-        void createProgram(const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options, OptixProgramGroup* group);
+        void createProgram(
+            const OptixProgramGroupDesc &desc, const OptixProgramGroupOptions &options,
+            OptixProgramGroup* group);
         void destroyProgram(OptixProgramGroup group);
     };
 
@@ -1234,19 +1244,20 @@ namespace optixu {
             unsigned int stateIsReady : 1;
         };
 
-        void invoke(CUstream stream,
-                    OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
-                    const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-                    const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
-                    const BufferView &albedo, OptixPixelFormat albedoFormat,
-                    const BufferView &normal, OptixPixelFormat normalFormat,
-                    const BufferView &flow, OptixPixelFormat flowFormat,
-                    const BufferView &previousDenoisedBeauty,
-                    const BufferView* previousDenoisedAovs,
-                    bool isFirstFrame,
-                    const BufferView &denoisedBeauty,
-                    const BufferView* denoisedAovs,
-                    const DenoisingTask &task) const;
+        void invoke(
+            CUstream stream,
+            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
+            const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
+            const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
+            const BufferView &albedo, OptixPixelFormat albedoFormat,
+            const BufferView &normal, OptixPixelFormat normalFormat,
+            const BufferView &flow, OptixPixelFormat flowFormat,
+            const BufferView &previousDenoisedBeauty,
+            const BufferView* previousDenoisedAovs,
+            bool isFirstFrame,
+            const BufferView &denoisedBeauty,
+            const BufferView* denoisedAovs,
+            const DenoisingTask &task) const;
 
     public:
         OPTIXU_OPAQUE_BRIDGE(Denoiser);
