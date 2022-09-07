@@ -50,6 +50,7 @@ Currently based on OptiX 7.5.0
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
+- (Temporal) Upscaling Denoiser
 - Parallel Module Compilation
 - AS Relocation
 - Test AOV denoisers
@@ -86,15 +87,18 @@ optixu::Context optixContext = optixu::Context::create(cuContext);
 
 // Create a pipeline and associated programs (groups) then link the pipeline.
 optixu::Pipeline pipeline = optixContext.createPipeline();
-pipeline.setPipelineOptions(optixu::calcSumDwords<PayloadSignature>(),
-                            optixu::calcSumDwords<AttributeSignature>(),
-                            "plp", sizeof(PipelineLaunchParameters),
-                            false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                            OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                            OPTIX_EXCEPTION_FLAG_DEBUG,
-                            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-optixu::Module mainModule = pipeline.createModuleFromPTXString(ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-                                                               OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
+pipeline.setPipelineOptions(
+    optixu::calcSumDwords<PayloadSignature>(),
+    optixu::calcSumDwords<AttributeSignature>(),
+    "plp", sizeof(PipelineLaunchParameters),
+    false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+    OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+    OPTIX_EXCEPTION_FLAG_DEBUG,
+    OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+optixu::Module mainModule =
+    pipeline.createModuleFromPTXString(
+        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
 optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
 optixu::ProgramGroup searchRayHitProgramGroup =
@@ -202,6 +206,7 @@ OptiX Utilityはペイロードのパッキングを簡単にしたりカーネ�
 
 OptiX utility provides template wrapper for device-side built-in functions to ease packing of payloads and to avoid type inconsistency for inter-kernel communications.
 ```cpp
+// Define payload signatures.
 using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, SearchRayPayload*>;
 using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 // ...
@@ -210,7 +215,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
     SearchRayPayload* payloadPtr = &payload;
     while (true) {
         // ...
-        optixu::trace<SearchRayPayloadSignature>(
+        SearchRayPayloadSignature::trace(
             traversable, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
@@ -230,7 +235,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     {
         // ...
         float visibility = 1.0f;
-        optixu::trace<VisibilityRayPayloadSignature>(
+        VisibilityRayPayloadSignature::trace(
             traversable, p, shadowRayDir, 0.0f, dist * 0.999f, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Visibility, NumRayTypes, RayType_Visibility,
             visibility);
@@ -253,9 +258,9 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 10 (21H2) & Visual Studio Community 2022 (17.2.4)
+* Windows 10 (21H2) & Visual Studio Community 2022 (17.3.3)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 516.40
+* NVIDIA Driver 516.94
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
