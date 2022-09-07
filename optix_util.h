@@ -33,7 +33,11 @@ EN:
 変更履歴 / Update History:
 - !!BREAKING
   JP: - OptiX 7.5.0をサポート。
+        Upscaling Denoiserは未対応。
+      - trace()関数をシグネチャー型のメンバー関数に変更。
   EN: - Supported OptiX 7.5.0.
+        Does not support upscaling denoiser yet.
+      - Changed the trace() fuction to a member function of the signature type.
 
 - !!BREAKING??
   JP: - RT_DEVICE_FUNCTIONからinline属性を削除。RT_INLINEを新設。
