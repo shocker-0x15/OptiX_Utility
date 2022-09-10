@@ -37,14 +37,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
-    pipeline.setPipelineOptions(std::max(Shared::SearchRayPayloadSignature::numDwords,
-                                         Shared::VisibilityRayPayloadSignature::numDwords),
-                                optixu::calcSumDwords<float2>(),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    pipeline.setPipelineOptions(
+        std::max(Shared::SearchRayPayloadSignature::numDwords,
+                 Shared::VisibilityRayPayloadSignature::numDwords),
+        optixu::calcSumDwords<float2>(),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     // JP: Debug構成だとOptiX-IRを使うと何故か動作しない。
     //     質問中:
@@ -58,7 +59,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 #else
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "denoiser/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "denoiser/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -67,7 +69,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup pathTracingRayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
+    optixu::ProgramGroup pathTracingRayGenProgram =
+        pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
     optixu::ProgramGroup emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
@@ -82,7 +85,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(pathTracingRayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, missProgram);
@@ -130,12 +134,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS",
-                                          &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load(
+                "../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS",
+                &width, &height, &mipCount, &sizes, &format);
 
-            farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                          cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                          width, height, 1/*mipCount*/);
+            farSideWallArray.initialize2D(
+                cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1/*mipCount*/);
             for (int i = 0; i < farSideWallArray.getNumMipmapLevels(); ++i)
                 farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
@@ -143,11 +149,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         else {
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
-                                                 &width, &height, &n, 4);
-            farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                          cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                          width, height, 1);
+            uint8_t* linearImageData = stbi_load(
+                "../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
+                &width, &height, &n, 4);
+            farSideWallArray.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
             farSideWallArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
         }
@@ -185,12 +193,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS",
-                                          &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load(
+                "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS",
+                &width, &height, &mipCount, &sizes, &format);
 
-            floorArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1/*mipCount*/);
+            floorArray.initialize2D(
+                cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1/*mipCount*/);
             for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
                 floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
@@ -198,11 +208,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         else {
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
-                                                 &width, &height, &n, 4);
-            floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1);
+            uint8_t* linearImageData = stbi_load(
+                "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
+                &width, &height, &n, 4);
+            floorArray.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
             floorArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
         }
@@ -406,8 +418,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                           "Assume triangle formats are the same.");
             triangles.resize(objTriangles.size());
             std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
-                        triangles.size(),
-                        triangles.data());
+                        triangles.size(), triangles.data());
         }
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -463,9 +474,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float z = r * std::sin(GoldenAngle * i);
 
         Shared::MaterialData matData;
-        matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * pi_v<float>), 1.0f),
-                                               std::sqrt(r / 0.9f),
-                                               1.0f));
+        matData.albedo = sRGB_degamma(HSVtoRGB(
+            std::fmod((GoldenAngle * i) / (2 * pi_v<float>), 1.0f),
+            std::sqrt(r / 0.9f),
+            1.0f));
         bunnyMats[i].setUserData(matData);
 
         float tt = std::pow(t, 0.25f);
@@ -575,27 +587,34 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array colorAccumBuffer;
     cudau::Array albedoAccumBuffer;
     cudau::Array normalAccumBuffer;
-    colorAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
-                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                                  renderTargetSizeX, renderTargetSizeY, 1);
-    albedoAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
-                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                                   renderTargetSizeX, renderTargetSizeY, 1);
-    normalAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
-                                   cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                                   renderTargetSizeX, renderTargetSizeY, 1);
+    colorAccumBuffer.initialize2D(
+        cuContext, cudau::ArrayElementType::Float32, 4,
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+        renderTargetSizeX, renderTargetSizeY, 1);
+    albedoAccumBuffer.initialize2D(
+        cuContext, cudau::ArrayElementType::Float32, 4,
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+        renderTargetSizeX, renderTargetSizeY, 1);
+    normalAccumBuffer.initialize2D(
+        cuContext, cudau::ArrayElementType::Float32, 4,
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+        renderTargetSizeX, renderTargetSizeY, 1);
     cudau::TypedBuffer<float4> linearColorBuffer;
     cudau::TypedBuffer<float4> linearAlbedoBuffer;
     cudau::TypedBuffer<float4> linearNormalBuffer;
     cudau::TypedBuffer<float4> linearOutputBuffer;
-    linearColorBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                 renderTargetSizeX * renderTargetSizeY);
-    linearAlbedoBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                  renderTargetSizeX * renderTargetSizeY);
-    linearNormalBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                  renderTargetSizeX * renderTargetSizeY);
-    linearOutputBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                  renderTargetSizeX * renderTargetSizeY);
+    linearColorBuffer.initialize(
+        cuContext, cudau::BufferType::Device,
+        renderTargetSizeX * renderTargetSizeY);
+    linearAlbedoBuffer.initialize(
+        cuContext, cudau::BufferType::Device,
+        renderTargetSizeX * renderTargetSizeY);
+    linearNormalBuffer.initialize(
+        cuContext, cudau::BufferType::Device,
+        renderTargetSizeX * renderTargetSizeY);
+    linearOutputBuffer.initialize(
+        cuContext, cudau::BufferType::Device,
+        renderTargetSizeX * renderTargetSizeY);
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
     rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
@@ -623,9 +642,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t scratchSize;
     size_t scratchSizeForComputeIntensity;
     uint32_t numTasks;
-    denoiser.prepare(renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-                     &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-                     &numTasks);
+    denoiser.prepare(
+        renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
+        &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
+        &numTasks);
     hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
     hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
     hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
@@ -692,14 +712,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
     // EN: Copy the results to the linear buffers (and normalize normals).
     cudau::dim3 dimCopyBuffers = kernelCopyBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
-    kernelCopyBuffers(cuStream, dimCopyBuffers,
-                      colorAccumBuffer.getSurfaceObject(0),
-                      albedoAccumBuffer.getSurfaceObject(0),
-                      normalAccumBuffer.getSurfaceObject(0),
-                      linearColorBuffer.getDevicePointer(),
-                      linearAlbedoBuffer.getDevicePointer(),
-                      linearNormalBuffer.getDevicePointer(),
-                      uint2(renderTargetSizeX, renderTargetSizeY));
+    kernelCopyBuffers(
+        cuStream, dimCopyBuffers,
+        colorAccumBuffer.getSurfaceObject(0),
+        albedoAccumBuffer.getSurfaceObject(0),
+        normalAccumBuffer.getSurfaceObject(0),
+        linearColorBuffer.getDevicePointer(),
+        linearAlbedoBuffer.getDevicePointer(),
+        linearNormalBuffer.getDevicePointer(),
+        uint2(renderTargetSizeX, renderTargetSizeY));
     timerRender.stop(cuStream);
 
     // JP: パストレーシング結果のデノイズ。
@@ -711,20 +732,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     You can also create a custom computeIntensity().
     //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
     timerDenoise.start(cuStream);
-    denoiser.computeIntensity(cuStream,
-                              linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                              denoiserScratchBuffer, hdrIntensity);
+    denoiser.computeIntensity(
+        cuStream,
+        linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+        denoiserScratchBuffer, hdrIntensity);
     for (int i = 0; i < denoisingTasks.size(); ++i)
-        denoiser.invoke(cuStream,
-                        OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensity, 0.0f,
-                        linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                        linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                        linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                        optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,
-                        optixu::BufferView(),
-                        true,
-                        linearOutputBuffer,
-                        denoisingTasks[i]);
+        denoiser.invoke(
+            cuStream,
+            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensity, 0.0f,
+            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,
+            optixu::BufferView(),
+            true,
+            linearOutputBuffer,
+            denoisingTasks[i]);
     timerDenoise.stop(cuStream);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));

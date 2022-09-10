@@ -448,19 +448,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    pipeline.setPipelineOptions(std::max(Shared::SearchRayPayloadSignature::numDwords,
-                                         Shared::VisibilityRayPayloadSignature::numDwords),
-                                std::max<uint32_t>(optixu::calcSumDwords<float2>(),
-                                                   Shared::SphereAttributeSignature::numDwords),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                                DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
-                                              OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                              OPTIX_EXCEPTION_FLAG_DEBUG),
-                                             OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+    pipeline.setPipelineOptions(
+        std::max(Shared::SearchRayPayloadSignature::numDwords,
+                 Shared::VisibilityRayPayloadSignature::numDwords),
+        std::max<uint32_t>(optixu::calcSumDwords<float2>(),
+                           Shared::SphereAttributeSignature::numDwords),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
+                      OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+                      OPTIX_EXCEPTION_FLAG_DEBUG),
+                     OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
     // JP: Debug構成だとOptiX-IRを使うと何故か動作しない。
     //     質問中:
@@ -594,18 +595,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 2);
 
     CUmodule modulePostProcess;
-    CUDADRV_CHECK(cuModuleLoad(&modulePostProcess, (getExecutableDirectory() / "uber/ptxes/post_process.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(
+        &modulePostProcess, (getExecutableDirectory() / "uber/ptxes/post_process.ptx").string().c_str()));
     cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", cudau::dim3(8, 8), 0);
 
     CUmodule moduleDeform;
-    CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "uber/ptxes/deform.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(
+        &moduleDeform, (getExecutableDirectory() / "uber/ptxes/deform.ptx").string().c_str()));
     cudau::Kernel kernelDeform(moduleDeform, "deform", cudau::dim3(32), 0);
     cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", cudau::dim3(32), 0);
     cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", cudau::dim3(32), 0);
 
     CUmodule moduleBoundingBoxProgram;
-    CUDADRV_CHECK(cuModuleLoad(&moduleBoundingBoxProgram, (getExecutableDirectory() / "uber/ptxes/sphere_bounding_box.ptx").string().c_str()));
-    cudau::Kernel kernelCalculateBoundingBoxesForSpheres(moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", cudau::dim3(32), 0);
+    CUDADRV_CHECK(cuModuleLoad(
+        &moduleBoundingBoxProgram,
+        (getExecutableDirectory() / "uber/ptxes/sphere_bounding_box.ptx").string().c_str()));
+    cudau::Kernel kernelCalculateBoundingBoxesForSpheres(
+        moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", cudau::dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -637,11 +643,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         int32_t width, height, mipCount;
         size_t* sizes;
         dds::Format format;
-        uint8_t** ddsData = dds::load("../../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
+        uint8_t** ddsData = dds::load(
+            "../../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
 
-        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                       cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                       width, height, 1/*mipCount*/);
+        arrayCheckerBoard.initialize2D(
+            cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+            width, height, 1/*mipCount*/);
         for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
             arrayCheckerBoard.write<uint8_t>(ddsData[i], sizes[i], i);
 
@@ -649,10 +657,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
     else {
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("../../data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                       cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                       width, height, 1);
+        uint8_t* linearImageData = stbi_load(
+            "../../data/checkerboard_line.png", &width, &height, &n, 4);
+        arrayCheckerBoard.initialize2D(
+            cuContext, cudau::ArrayElementType::UInt8, 4,
+            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
         arrayCheckerBoard.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
     }
@@ -664,11 +674,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         int32_t width, height, mipCount;
         size_t* sizes;
         dds::Format format;
-        uint8_t** ddsData = dds::load("../../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
+        uint8_t** ddsData = dds::load(
+            "../../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
 
-        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                               width, height, 1/*mipCount*/);
+        arrayGrid.initialize2D(
+            cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+            width, height, 1/*mipCount*/);
         for (int i = 0; i < arrayGrid.getNumMipmapLevels(); ++i)
             arrayGrid.write<uint8_t>(ddsData[i], sizes[i], i);
 
@@ -676,10 +688,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
     else {
         int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load("../../data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                               width, height, 1);
+        uint8_t* linearImageData = stbi_load(
+            "../../data/grid.png", &width, &height, &n, 4);
+        arrayGrid.initialize2D(
+            cuContext, cudau::ArrayElementType::UInt8, 4,
+            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
         arrayGrid.write<uint8_t>(linearImageData, width * height * 4);
         stbi_image_free(linearImageData);
     }
@@ -889,11 +903,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         meshAreaLight.addMaterialGroup(triangles + 0, 2, matLight);
     }
 
-    const auto generateCurves = [](std::vector<Shared::CurveVertex>* vertices,
-                                   std::vector<uint32_t>* indices,
-                                   float xStart, float xEnd, uint32_t numX,
-                                   float zStart, float zEnd, uint32_t numZ,
-                                   float baseWidth, float tipWidth, float height, uint32_t curveDegree)
+    const auto generateCurves = []
+    (std::vector<Shared::CurveVertex>* vertices,
+     std::vector<uint32_t>* indices,
+     float xStart, float xEnd, uint32_t numX,
+     float zStart, float zEnd, uint32_t numZ,
+     float baseWidth, float tipWidth, float height, uint32_t curveDegree)
     {
         std::mt19937 rng(390318410);
         std::uniform_int_distribution<uint32_t> uSeg(3, 5);
@@ -982,10 +997,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(&vertices, &indices,
-                       -1.0f + 0.005f, 1.0f - 0.005f, numX,
-                       -1.0f + 0.005f, 1.0f - 0.005f, numZ,
-                       baseWidth, tipWidth, height, 3);
+        generateCurves(
+            &vertices, &indices,
+            -1.0f + 0.005f, 1.0f - 0.005f, numX,
+            -1.0f + 0.005f, 1.0f - 0.005f, numZ,
+            baseWidth, tipWidth, height, 3);
 
         floorFiberVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         floorFiberSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -1126,8 +1142,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure gasFloorFiber = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer gasFloorFiberMem;
     cudau::Buffer gasFloorFiberCompactedMem;
-    gasFloorFiber.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
-                                   curveASAllowRandomVertexAccess);
+    gasFloorFiber.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        curveASAllowRandomVertexAccess);
     gasFloorFiber.setNumMaterialSets(1);
     gasFloorFiber.setNumRayTypes(0, Shared::NumRayTypes);
     gasFloorFiber.addChild(floorFiberGeomInst);
@@ -1145,8 +1162,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
     gasObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer,
-                                      std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
+    maxSizeOfScratchBuffer =
+        std::max(maxSizeOfScratchBuffer,
+                 std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
     // JP: カスタムプリミティブ用のGASを作成する。
     // EN: Create a GAS for custom primitives.
@@ -1159,14 +1177,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCustomPrimObject.addChild(customPrimInstance);
     gasCustomPrimObject.prepareForBuild(&asMemReqs);
     gasCustomPrimObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer,
-                                      std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
+    maxSizeOfScratchBuffer =
+        std::max(maxSizeOfScratchBuffer,
+                 std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
     // JP: カスタムプリミティブのAABBを計算するカーネルを実行。
     // EN: Execute a kernel to compute AABBs of custom primitives.
     cudau::dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
-    kernelCalculateBoundingBoxesForSpheres(cuStream, dimBB,
-                                           customPrimParameters.getDevicePointer(), customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
+    kernelCalculateBoundingBoxesForSpheres(
+        cuStream, dimBB,
+        customPrimParameters.getDevicePointer(),
+        customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
 
     // JP: Geometry Acceleration Structureをビルドする。
     //     スクラッチバッファーは共用する。
@@ -1288,8 +1309,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     glu::Texture2D outputTexture;
     cudau::Array outputArray;
     outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                          cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+    outputArray.initializeFromGLTexture2D(
+        cuContext, outputTexture.getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
 
     
@@ -1298,9 +1320,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     glu::FrameBuffer frameBuffer;
     GLenum colorFormats[] = { GL_SRGB8 };
     GLenum depthFormat = GL_DEPTH_COMPONENT32;
-    frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, 1,
-                           colorFormats, 0b0, lengthof(colorFormats),
-                           &depthFormat, false);
+    frameBuffer.initialize(
+        renderTargetSizeX, renderTargetSizeY, 1,
+        colorFormats, 0b0, lengthof(colorFormats),
+        &depthFormat, false);
     // sRGB8を指定しないとなぜか精度問題が発生したが、むしろRGB8が本来なら正しい気がする。
 
 
@@ -1315,24 +1338,27 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
     glu::GraphicsProgram drawOptiXResultShader;
-    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "uber/shaders/drawOptiXResult.vert"),
-                                         readTxtFile(exeDir / "uber/shaders/drawOptiXResult.frag"));
+    drawOptiXResultShader.initializeVSPS(
+        readTxtFile(exeDir / "uber/shaders/drawOptiXResult.vert"),
+        readTxtFile(exeDir / "uber/shaders/drawOptiXResult.frag"));
 
     // JP: アップスケール用のシェーダー。
     // EN: Shader for upscale.
     glu::GraphicsProgram scaleShader;
-    scaleShader.initializeVSPS(readTxtFile(exeDir / "uber/shaders/scale.vert"),
-                               readTxtFile(exeDir / "uber/shaders/scale.frag"));
+    scaleShader.initializeVSPS(
+        readTxtFile(exeDir / "uber/shaders/scale.vert"),
+        readTxtFile(exeDir / "uber/shaders/scale.frag"));
 
     // JP: アップスケール用のサンプラー。
     //     texelFetch()を使う場合には設定値は無関係。だがバインドは必要な様子。
     // EN: Sampler for upscaling.
     //     It seems to require to bind a sampler even when using texelFetch() which is independent from the sampler settings.
     glu::Sampler scaleSampler;
-    scaleSampler.initialize(glu::Sampler::MinFilter::Nearest,
-                            glu::Sampler::MagFilter::Nearest,
-                            glu::Sampler::WrapMode::Repeat,
-                            glu::Sampler::WrapMode::Repeat);
+    scaleSampler.initialize(
+        glu::Sampler::MinFilter::Nearest,
+        glu::Sampler::MagFilter::Nearest,
+        glu::Sampler::WrapMode::Repeat,
+        glu::Sampler::WrapMode::Repeat);
 
 
 
@@ -1454,13 +1480,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             outputTexture.finalize();
             outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+            outputArray.initializeFromGLTexture2D(
+                cuContext, outputTexture.getHandle(),
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             frameBuffer.finalize();
-            frameBuffer.initialize(renderTargetSizeX, renderTargetSizeY, 1,
-                                   colorFormats, 0b0, lengthof(colorFormats),
-                                   &depthFormat, false);
+            frameBuffer.initialize(
+                renderTargetSizeX, renderTargetSizeY, 1,
+                colorFormats, 0b0, lengthof(colorFormats),
+                &depthFormat, false);
 
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
             arrayAccumBuffer.resize(renderTargetSizeX, renderTargetSizeY);
@@ -1697,9 +1725,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             rollPitchYaw[1] *= 180 / pi_v<float>;
             rollPitchYaw[2] *= 180 / pi_v<float>;
             if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
-                                                       rollPitchYaw[1] * pi_v<float> / 180,
-                                                       rollPitchYaw[2] * pi_v<float> / 180);
+                g_cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
@@ -1727,50 +1756,56 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (ImGui::ColorEdit3("Left Wall", reinterpret_cast<float*>(&matLeftWallData.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
                                   ImGuiColorEditFlags_Float)) {
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matLeftWallIndex),
-                                                &matLeftWallData, sizeof(matLeftWallData),
-                                                cuStream));
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                    materialDataBuffer.getCUdeviceptrAt(matLeftWallIndex),
+                    &matLeftWallData, sizeof(matLeftWallData),
+                    cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Right Wall", reinterpret_cast<float*>(&matRightWallData.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
                                   ImGuiColorEditFlags_Float)) {
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matRightWallIndex),
-                                                &matRightWallData, sizeof(matRightWallData),
-                                                cuStream));
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                    materialDataBuffer.getCUdeviceptrAt(matRightWallIndex),
+                    &matRightWallData, sizeof(matRightWallData),
+                    cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Other Walls", reinterpret_cast<float*>(&matGrayWallData.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
                                   ImGuiColorEditFlags_Float)) {
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matGrayWallIndex),
-                                                &matGrayWallData, sizeof(matGrayWallData),
-                                                cuStream));
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                    materialDataBuffer.getCUdeviceptrAt(matGrayWallIndex),
+                    &matGrayWallData, sizeof(matGrayWallData),
+                    cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Object 0", reinterpret_cast<float*>(&matObject0Data.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
                                   ImGuiColorEditFlags_Float)) {
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matObject0Index),
-                                                &matObject0Data, sizeof(matObject0Data),
-                                                cuStream));
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                    materialDataBuffer.getCUdeviceptrAt(matObject0Index),
+                    &matObject0Data, sizeof(matObject0Data),
+                    cuStream));
                 sceneEdited = true;
             }
             if (ImGui::ColorEdit3("Object 1", reinterpret_cast<float*>(&matObject1Data.albedo),
                                   ImGuiColorEditFlags_DisplayHSV |
                                   ImGuiColorEditFlags_Float)) {
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matObject1Index),
-                                                &matObject1Data, sizeof(matObject1Data),
-                                                cuStream));
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                    materialDataBuffer.getCUdeviceptrAt(matObject1Index),
+                    &matObject1Data, sizeof(matObject1Data),
+                    cuStream));
                 sceneEdited = true;
             }
             static int32_t floorTexID;
             floorTexID = matFloorData.texID;
             if (ImGui::Combo("Floor", &floorTexID, textureNames, lengthof(textureNames))) {
                 matFloorData.texID = floorTexID;
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(materialDataBuffer.getCUdeviceptrAt(matFloorIndex),
-                                                &matFloorData, sizeof(matFloorData),
-                                                cuStream));
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                    materialDataBuffer.getCUdeviceptrAt(matFloorIndex),
+                    &matFloorData, sizeof(matFloorData),
+                    cuStream));
                 sceneEdited = true;
             }
 
@@ -1792,16 +1827,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(cuStream);
             cudau::dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
-            kernelDeform(cuStream, dimDeform,
-                         orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
-                         0.5f * std::sinf(2 * pi_v<float> * (animFrameIndex % 690) / 690.0f));
+            kernelDeform(
+                cuStream, dimDeform,
+                orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
+                0.5f * std::sinf(2 * pi_v<float> *(animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             cudau::dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
-            kernelAccumulateVertexNormals(cuStream, dimAccum,
-                                          meshObject.getVertexBuffer().getDevicePointer(),
-                                          triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
-            kernelNormalizeVertexNormals(cuStream, dimDeform,
-                                         meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
+            kernelAccumulateVertexNormals(
+                cuStream, dimAccum,
+                meshObject.getVertexBuffer().getDevicePointer(),
+                triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
+            kernelNormalizeVertexNormals(
+                cuStream, dimDeform,
+                meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(cuStream);
 
             // JP: 変形したジオメトリを基にGASをアップデート。
@@ -1817,9 +1855,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             else
                 gasObject.update(cuStream, asBuildScratchMem);
             curGPUTimer.updateGAS.stop(cuStream);
-            CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
-                                            &gasHandle, sizeof(gasHandle),
-                                            cuStream));
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                travHandleBuffer.getCUdeviceptrAt(gasObjectIndex),
+                &gasHandle, sizeof(gasHandle),
+                cuStream));
 
             // JP: インスタンスのトランスフォーム。
             // EN: Transform instances.
@@ -1857,9 +1896,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             else
                 iasScene.update(cuStream, asBuildScratchMem);
             curGPUTimer.updateIAS.stop(cuStream);
-            CUDADRV_CHECK(cuMemcpyHtoDAsync(travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
-                                            &iasHandle, sizeof(iasHandle),
-                                            cuStream));
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                travHandleBuffer.getCUdeviceptrAt(iasSceneIndex),
+                &iasHandle, sizeof(iasHandle),
+                cuStream));
 
             ++animFrameIndex;
         }
@@ -1883,14 +1923,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         curGPUTimer.postProcess.start(cuStream);
         cudau::dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
-        kernelPostProcess(cuStream, dimPostProcess,
+        kernelPostProcess(
+            cuStream, dimPostProcess,
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
-                          arrayAccumBuffer.getSurfaceObject(0),
+            arrayAccumBuffer.getSurfaceObject(0),
 #else
-                          accumBuffer.getBlockBuffer2D(),
+            accumBuffer.getBlockBuffer2D(),
 #endif
-                          renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
-                          outputBufferSurfaceHolder.getNext());
+            renderTargetSizeX, renderTargetSizeY, plp.numAccumFrames,
+            outputBufferSurfaceHolder.getNext());
         outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
         curGPUTimer.postProcess.stop(cuStream);
         cpuTimeRecord.postProcessCmdTime = sw.getMeasurement(sw.stop(), StopWatchDurationType::Microseconds) * 1e-3f;

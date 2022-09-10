@@ -34,17 +34,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     球のアトリビュートサイズは1Dword(float)。
     // EN: Appropriately setting primitive type flags is required since this sample uses sphere intersection.
     //     The attribute size of spheres is 1 Dword (float).
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                std::max(optixu::calcSumDwords<float2>(),
-                                         optixu::calcSumDwords<float>()),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        std::max(optixu::calcSumDwords<float2>(),
+                 optixu::calcSumDwords<float>()),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE);
 
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "sphere_primitive/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "sphere_primitive/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -80,7 +82,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
@@ -195,9 +198,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             params.resize(numSpheres);
             for (int sphIdx = 0; sphIdx < numSpheres; ++sphIdx) {
                 Shared::SphereParameter &param = params[sphIdx];
-                param.center = float3(-0.85f + 1.7f * u01(rng),
-                                      -0.85f + 1.7f * u01(rng),
-                                      -0.85f + 1.7f * u01(rng));
+                param.center = float3(
+                    -0.85f + 1.7f * u01(rng),
+                    -0.85f + 1.7f * u01(rng),
+                    -0.85f + 1.7f * u01(rng));
                 param.radius = 0.025f + 0.1f * u01(rng);
             }
 
@@ -250,8 +254,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure spheresGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
     cudau::Buffer spheresGasMem;
-    spheresGas.setConfiguration(sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
-                                Shared::useEmbeddedVertexData);
+    spheresGas.setConfiguration(
+        sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
+        Shared::useEmbeddedVertexData);
     spheresGas.setNumMaterialSets(1);
     spheresGas.setNumRayTypes(0, Shared::NumRayTypes);
     spheresGas.addChild(sphereGeomInst);
@@ -323,8 +328,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.gas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,

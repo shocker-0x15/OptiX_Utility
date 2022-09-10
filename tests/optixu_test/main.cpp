@@ -451,19 +451,23 @@ TEST(SceneTest, SceneBasic) {
             EXPECT_NE(geomInstTri, optixu::GeometryInstance());
             geomInstTri.destroy();
 
-            optixu::GeometryInstance geomInstLinear = scene0.createGeometryInstance(optixu::GeometryType::LinearSegments);
+            optixu::GeometryInstance geomInstLinear =
+                scene0.createGeometryInstance(optixu::GeometryType::LinearSegments);
             EXPECT_NE(geomInstLinear, optixu::GeometryInstance());
             geomInstLinear.destroy();
 
-            optixu::GeometryInstance geomInstQuadratic = scene0.createGeometryInstance(optixu::GeometryType::QuadraticBSplines);
+            optixu::GeometryInstance geomInstQuadratic =
+                scene0.createGeometryInstance(optixu::GeometryType::QuadraticBSplines);
             EXPECT_NE(geomInstQuadratic, optixu::GeometryInstance());
             geomInstQuadratic.destroy();
 
-            optixu::GeometryInstance geomInstCubic = scene0.createGeometryInstance(optixu::GeometryType::CubicBSplines);
+            optixu::GeometryInstance geomInstCubic =
+                scene0.createGeometryInstance(optixu::GeometryType::CubicBSplines);
             EXPECT_NE(geomInstCubic, optixu::GeometryInstance());
             geomInstCubic.destroy();
 
-            optixu::GeometryInstance geomInstCustom = scene0.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+            optixu::GeometryInstance geomInstCustom =
+                scene0.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
             EXPECT_NE(geomInstCustom, optixu::GeometryInstance());
             geomInstCustom.destroy();
 
@@ -473,19 +477,23 @@ TEST(SceneTest, SceneBasic) {
             EXPECT_NE(gasTri, optixu::GeometryAccelerationStructure());
             gasTri.destroy();
 
-            optixu::GeometryAccelerationStructure gasLinear = scene0.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
+            optixu::GeometryAccelerationStructure gasLinear =
+                scene0.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
             EXPECT_NE(gasLinear, optixu::GeometryAccelerationStructure());
             gasLinear.destroy();
 
-            optixu::GeometryAccelerationStructure gasQuadratic = scene0.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
+            optixu::GeometryAccelerationStructure gasQuadratic =
+                scene0.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
             EXPECT_NE(gasQuadratic, optixu::GeometryAccelerationStructure());
             gasQuadratic.destroy();
 
-            optixu::GeometryAccelerationStructure gasCubic = scene0.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
+            optixu::GeometryAccelerationStructure gasCubic =
+                scene0.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
             EXPECT_NE(gasCubic, optixu::GeometryAccelerationStructure());
             gasCubic.destroy();
 
-            optixu::GeometryAccelerationStructure gasCustom = scene0.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
+            optixu::GeometryAccelerationStructure gasCustom =
+                scene0.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
             EXPECT_NE(gasCustom, optixu::GeometryAccelerationStructure());
             gasCustom.destroy();
 
@@ -536,10 +544,14 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
         optixu::Scene scene = context.createScene();
 
         optixu::GeometryInstance geomInstTri = scene.createGeometryInstance();
-        optixu::GeometryInstance geomInstLinear = scene.createGeometryInstance(optixu::GeometryType::LinearSegments);
-        optixu::GeometryInstance geomInstQuadratic = scene.createGeometryInstance(optixu::GeometryType::QuadraticBSplines);
-        optixu::GeometryInstance geomInstCubic = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
-        optixu::GeometryInstance geomInstCustom = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+        optixu::GeometryInstance geomInstLinear =
+            scene.createGeometryInstance(optixu::GeometryType::LinearSegments);
+        optixu::GeometryInstance geomInstQuadratic =
+            scene.createGeometryInstance(optixu::GeometryType::QuadraticBSplines);
+        optixu::GeometryInstance geomInstCubic =
+            scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
+        optixu::GeometryInstance geomInstCustom =
+            scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
 
         // JP: 共通処理。
         {
@@ -600,8 +612,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             std::vector<optixu::BufferView> vertexBuffers(numMotionSteps);
             uint32_t numVertices = 512;
             for (int step = 0; step < numMotionSteps; ++step) {
-                vertexBuffers[step] = optixu::BufferView(static_cast<CUdeviceptr>(step),
-                                                         numVertices, sizeof(Vertex));
+                vertexBuffers[step] =
+                    optixu::BufferView(static_cast<CUdeviceptr>(step), numVertices, sizeof(Vertex));
                 geomInst.setVertexBuffer(vertexBuffers[step], step);
                 EXPECT_EQ(geomInst.getVertexBuffer(step), vertexBuffers[step]);
             }
@@ -612,12 +624,14 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
             uint32_t numPrimitives = 128;
             optixu::BufferView triangleBuffer;
-            triangleBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t) * 3);
+            triangleBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t) * 3);
             geomInst.setTriangleBuffer(triangleBuffer);
             EXPECT_EQ(geomInst.getTriangleBuffer(&retIndicesFormat), triangleBuffer);
             EXPECT_EQ(retIndicesFormat, OPTIX_INDICES_FORMAT_UNSIGNED_INT3);
 
-            triangleBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t) * 3);
+            triangleBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t) * 3);
             geomInst.setTriangleBuffer(triangleBuffer, OPTIX_INDICES_FORMAT_UNSIGNED_SHORT3);
             EXPECT_EQ(geomInst.getTriangleBuffer(&retIndicesFormat), triangleBuffer);
             EXPECT_EQ(retIndicesFormat, OPTIX_INDICES_FORMAT_UNSIGNED_SHORT3);
@@ -633,28 +647,32 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             optixu::BufferView matIndexBuffer;
             uint32_t matIndexSize;
             matIndexSize = sizeof(4);
-            matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
+            matIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = sizeof(2);
-            matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
+            matIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = sizeof(4);
-            matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
+            matIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
             EXPECT_EXCEPTION(geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize));
 
             for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
                 geomInst.setGeometryFlags(matIdx, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
                 EXPECT_EQ(geomInst.getGeometryFlags(matIdx), OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
             }
-            EXPECT_EXCEPTION(geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
+            EXPECT_EXCEPTION(
+                geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
             EXPECT_EXCEPTION(geomInst.getGeometryFlags(numMaterials));
 
             // JP: ユーザーデータ関連。
@@ -743,10 +761,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             std::vector<optixu::BufferView> widthBuffers(numMotionSteps);
             uint32_t numVertices = 512;
             for (int step = 0; step < numMotionSteps; ++step) {
-                vertexBuffers[step] = optixu::BufferView(static_cast<CUdeviceptr>(step),
-                                                         numVertices, sizeof(Vertex));
-                widthBuffers[step] = optixu::BufferView(static_cast<CUdeviceptr>(step),
-                                                        numVertices, sizeof(float));
+                vertexBuffers[step] =
+                    optixu::BufferView(static_cast<CUdeviceptr>(step), numVertices, sizeof(Vertex));
+                widthBuffers[step] =
+                    optixu::BufferView(static_cast<CUdeviceptr>(step), numVertices, sizeof(float));
                 geomInst.setVertexBuffer(vertexBuffers[step], step);
                 geomInst.setWidthBuffer(widthBuffers[step], step);
                 EXPECT_EQ(geomInst.getVertexBuffer(step), vertexBuffers[step]);
@@ -761,7 +779,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
             uint32_t numSegments = 128;
             optixu::BufferView segmentIndexBuffer;
-            segmentIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numSegments, sizeof(uint32_t));
+            segmentIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numSegments, sizeof(uint32_t));
             geomInst.setSegmentIndexBuffer(segmentIndexBuffer);
             EXPECT_EQ(geomInst.getSegmentIndexBuffer(), segmentIndexBuffer);
 
@@ -782,7 +801,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
                 geomInst.setGeometryFlags(matIdx, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
                 EXPECT_EQ(geomInst.getGeometryFlags(matIdx), OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
             }
-            EXPECT_EXCEPTION(geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
+            EXPECT_EXCEPTION(
+                geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
             EXPECT_EXCEPTION(geomInst.getGeometryFlags(numMaterials));
 
             // JP: ユーザーデータ関連。
@@ -871,8 +891,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             uint32_t numPrimitives = 128;
             std::vector<optixu::BufferView> aabbBuffers(numMotionSteps);
             for (int step = 0; step < numMotionSteps; ++step) {
-                aabbBuffers[step] = optixu::BufferView(static_cast<CUdeviceptr>(step),
-                                                       numPrimitives, sizeof(Primitive));
+                aabbBuffers[step] =
+                    optixu::BufferView(static_cast<CUdeviceptr>(step), numPrimitives, sizeof(Primitive));
                 geomInst.setCustomPrimitiveAABBBuffer(aabbBuffers[step], step);
                 EXPECT_EQ(geomInst.getCustomPrimitiveAABBBuffer(step), aabbBuffers[step]);
             }
@@ -885,28 +905,32 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             optixu::BufferView matIndexBuffer;
             uint32_t matIndexSize;
             matIndexSize = sizeof(4);
-            matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
+            matIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = sizeof(2);
-            matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
+            matIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = sizeof(4);
-            matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
+            matIndexBuffer =
+                optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
             EXPECT_EXCEPTION(geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize));
 
             for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
                 geomInst.setGeometryFlags(matIdx, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
                 EXPECT_EQ(geomInst.getGeometryFlags(matIdx), OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
             }
-            EXPECT_EXCEPTION(geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
+            EXPECT_EXCEPTION(
+                geomInst.setGeometryFlags(numMaterials, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL));
             EXPECT_EXCEPTION(geomInst.getGeometryFlags(numMaterials));
 
             // JP: ユーザーデータ関連。

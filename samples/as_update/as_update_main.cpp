@@ -138,9 +138,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     float contentScaleX, contentScaleY;
     glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
     float UIScaling = contentScaleX;
-    GLFWwindow* window = glfwCreateWindow(static_cast<int32_t>(renderTargetSizeX * UIScaling),
-                                          static_cast<int32_t>(renderTargetSizeY * UIScaling),
-                                          "OptiX Utility - AS Update", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(
+        static_cast<int32_t>(renderTargetSizeX * UIScaling),
+        static_cast<int32_t>(renderTargetSizeY * UIScaling),
+        "OptiX Utility - AS Update", NULL, NULL);
     glfwSetWindowUserPointer(window, nullptr);
     if (!window) {
         hpprintf("Failed to create a GLFW window.\n");
@@ -316,15 +317,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                optixu::calcSumDwords<float2>(),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        optixu::calcSumDwords<float2>(),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "as_update/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "as_update/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -345,7 +348,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
@@ -362,7 +366,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: 頂点変異・法線計算カーネルを準備する。
     // EN: Prepare kernels for vertex displacement and recalculate normals.
     CUmodule moduleDeform;
-    CUDADRV_CHECK(cuModuleLoad(&moduleDeform, (getExecutableDirectory() / "as_update/ptxes/deform.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(
+        &moduleDeform, (getExecutableDirectory() / "as_update/ptxes/deform.ptx").string().c_str()));
     cudau::Kernel deform(moduleDeform, "deform", cudau::dim3(32), 0);
     cudau::Kernel accumulateVertexNormals(moduleDeform, "accumulateVertexNormals", cudau::dim3(32), 0);
     cudau::Kernel normalizeVertexNormals(moduleDeform, "normalizeVertexNormals", cudau::dim3(32), 0);
@@ -501,8 +506,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                           "Assume triangle formats are the same.");
             triangles.resize(objTriangles.size());
             std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
-                        triangles.size(),
-                        triangles.data());
+                        triangles.size(), triangles.data());
         }
 
         bunnyVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -560,8 +564,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunnyGas.addChild(bunnyGeomInst);
     bunnyGas.prepareForBuild(&asMemReqs);
     bunnyGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, std::max(asMemReqs.tempSizeInBytes,
-                                                                       asMemReqs.tempUpdateSizeInBytes));
+    maxSizeOfScratchBuffer =
+        std::max(maxSizeOfScratchBuffer,
+                 std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
 
 
@@ -609,9 +614,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             inst.setTransform(bunnyXfm);
         }
 
-        void initializeState(float initScale_t, float _scaleBase, float _scaleFreq, float _scaleAmp,
-                             float initAnglularPos_t, float _angularPosFreq,
-                             float initY_t, float _yBase, float _yFreq, float _yAmp) {
+        void initializeState(
+            float initScale_t, float _scaleBase, float _scaleFreq, float _scaleAmp,
+            float initAnglularPos_t, float _angularPosFreq,
+            float initY_t, float _yBase, float _yFreq, float _yAmp) {
             scale_t = initScale_t;
             scaleBase = _scaleBase;
             scaleFreq = _scaleFreq;
@@ -666,8 +672,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, std::max(asMemReqs.tempSizeInBytes,
-                                                                       asMemReqs.tempUpdateSizeInBytes));
+    maxSizeOfScratchBuffer =
+        std::max(maxSizeOfScratchBuffer,
+                 std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes));
 
 
 
@@ -709,8 +716,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.gas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
@@ -747,13 +755,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array outputArray;
     cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
     outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                          cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+    outputArray.initializeFromGLTexture2D(
+        cuContext, outputTexture.getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
     outputBufferSurfaceHolder.initialize({ &outputArray });
 
     glu::Sampler outputSampler;
-    outputSampler.initialize(glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
-                             glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
+    outputSampler.initialize(
+        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
+        glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
 
 
 
@@ -765,8 +775,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
     glu::GraphicsProgram drawOptiXResultShader;
-    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "as_update/shaders/drawOptiXResult.vert"),
-                                         readTxtFile(exeDir / "as_update/shaders/drawOptiXResult.frag"));
+    drawOptiXResultShader.initializeVSPS(
+        readTxtFile(exeDir / "as_update/shaders/drawOptiXResult.vert"),
+        readTxtFile(exeDir / "as_update/shaders/drawOptiXResult.frag"));
 
 
 
@@ -810,8 +821,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             outputTexture.finalize();
             outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+            outputArray.initializeFromGLTexture2D(
+                cuContext, outputTexture.getHandle(),
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             outputArray.resize(renderTargetSizeX, renderTargetSizeY);
 
@@ -918,9 +930,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             rollPitchYaw[1] *= 180 / pi_v<float>;
             rollPitchYaw[2] *= 180 / pi_v<float>;
             if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
-                                                       rollPitchYaw[1] * pi_v<float> / 180,
-                                                       rollPitchYaw[2] * pi_v<float> / 180);
+                g_cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
@@ -934,15 +947,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     Modify normal vectors as well.
         {
             float t = 0.5f + 0.5f * std::sin(2 * pi_v<float> * static_cast<float>(frameIndex % 180) / 180);
-            deform(cuStream, deform.calcGridDim(bunnyVertexBuffer.numElements()),
-                   bunnyVertexBuffer.getDevicePointer(), deformedBunnyVertexBuffer.getDevicePointer(),
-                   bunnyVertexBuffer.numElements(), 20.0f, t);
-            accumulateVertexNormals(cuStream, accumulateVertexNormals.calcGridDim(bunnyTriangleBuffer.numElements()),
-                                    deformedBunnyVertexBuffer.getDevicePointer(), bunnyTriangleBuffer.getDevicePointer(),
-                                    bunnyTriangleBuffer.numElements());
-            normalizeVertexNormals(cuStream, normalizeVertexNormals.calcGridDim(bunnyVertexBuffer.numElements()),
-                                   deformedBunnyVertexBuffer.getDevicePointer(),
-                                   bunnyVertexBuffer.numElements());
+            deform(
+                cuStream, deform.calcGridDim(bunnyVertexBuffer.numElements()),
+                bunnyVertexBuffer.getDevicePointer(), deformedBunnyVertexBuffer.getDevicePointer(),
+                bunnyVertexBuffer.numElements(), 20.0f, t);
+            accumulateVertexNormals(
+                cuStream, accumulateVertexNormals.calcGridDim(bunnyTriangleBuffer.numElements()),
+                deformedBunnyVertexBuffer.getDevicePointer(), bunnyTriangleBuffer.getDevicePointer(),
+                bunnyTriangleBuffer.numElements());
+            normalizeVertexNormals(
+                cuStream, normalizeVertexNormals.calcGridDim(bunnyVertexBuffer.numElements()),
+                deformedBunnyVertexBuffer.getDevicePointer(),
+                bunnyVertexBuffer.numElements());
             bunnyGas.update(cuStream, asBuildScratchMem);
         }
 

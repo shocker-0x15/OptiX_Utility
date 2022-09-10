@@ -44,13 +44,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr uint32_t payloadSizeInDwords = Shared::usePayloadAnnotation ? 0 :
         std::max(Shared::SearchRayPayloadSignature::numDwords,
                  Shared::VisibilityRayPayloadSignature::numDwords);
-    pipeline.setPipelineOptions(payloadSizeInDwords,
-                                optixu::calcSumDwords<float2>(),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    pipeline.setPipelineOptions(
+        payloadSizeInDwords,
+        optixu::calcSumDwords<float2>(),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     optixu::PayloadType payloadTypes[2];
     if constexpr (Shared::usePayloadAnnotation) {
@@ -117,7 +118,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     ongoing question:
     // https://forums.developer.nvidia.com/t/optix-7-5-payload-type-mismatch-errors-when-using-optix-ir/218138
 #if 1
-    const std::string optixPtx = readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");
+    const std::string optixPtx =
+        readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         optixPtx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -125,7 +127,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         nullptr, 0,
         payloadTypes, Shared::usePayloadAnnotation ? lengthof(payloadTypes) : 0);
 #else
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -136,7 +139,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup pathTracingRayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
+    optixu::ProgramGroup pathTracingRayGenProgram =
+        pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
 
     // JP: Miss Programで使用されているペイロードタイプ情報を渡す。
@@ -160,7 +164,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(pathTracingRayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, missProgram);
@@ -208,12 +213,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS",
-                                          &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load(
+                "../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS",
+                &width, &height, &mipCount, &sizes, &format);
 
-            farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                          cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                          width, height, 1/*mipCount*/);
+            farSideWallArray.initialize2D(
+                cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1/*mipCount*/);
             for (int i = 0; i < farSideWallArray.getNumMipmapLevels(); ++i)
                 farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
@@ -221,11 +228,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         else {
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
-                                                 &width, &height, &n, 4);
-            farSideWallArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                          cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                          width, height, 1);
+            uint8_t* linearImageData = stbi_load(
+                "../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
+                &width, &height, &n, 4);
+            farSideWallArray.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
             farSideWallArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
         }
@@ -263,12 +272,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS",
-                                          &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load(
+                "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS",
+                &width, &height, &mipCount, &sizes, &format);
 
-            floorArray.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1/*mipCount*/);
+            floorArray.initialize2D(
+                cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1/*mipCount*/);
             for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
                 floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
@@ -276,11 +287,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         else {
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load("../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
-                                                 &width, &height, &n, 4);
-            floorArray.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                                    width, height, 1);
+            uint8_t* linearImageData = stbi_load(
+                "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
+                &width, &height, &n, 4);
+            floorArray.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
             floorArray.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
         }
@@ -480,8 +493,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                           "Assume triangle formats are the same.");
             triangles.resize(objTriangles.size());
             std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
-                        triangles.size(),
-                        triangles.data());
+                        triangles.size(), triangles.data());
         }
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -537,9 +549,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float z = r * std::sin(GoldenAngle * i);
 
         Shared::MaterialData matData;
-        matData.albedo = sRGB_degamma(HSVtoRGB(std::fmod((GoldenAngle * i) / (2 * pi_v<float>), 1.0f),
-                                               std::sqrt(r / 0.9f),
-                                               1.0f));
+        matData.albedo = sRGB_degamma(HSVtoRGB(
+            std::fmod((GoldenAngle * i) / (2 * pi_v<float>), 1.0f),
+            std::sqrt(r / 0.9f),
+            1.0f));
         bunnyMats[i].setUserData(matData);
 
         float tt = std::pow(t, 0.25f);
@@ -612,8 +625,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.geom->optixGas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.geom->optixGas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
@@ -647,9 +661,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
     cudau::Array colorAccumBuffer;
-    colorAccumBuffer.initialize2D(cuContext, cudau::ArrayElementType::Float32, 4,
-                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                                  renderTargetSizeX, renderTargetSizeY, 1);
+    colorAccumBuffer.initialize2D(
+        cuContext, cudau::ArrayElementType::Float32, 4,
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+        renderTargetSizeX, renderTargetSizeY, 1);
 
     cudau::Array rngBuffer;
     rngBuffer.initialize2D(

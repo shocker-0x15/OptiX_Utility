@@ -36,21 +36,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: This sample uses two-level AS (single-level instancing).
     //     Appropriately setting primitive type flags is required since this sample uses curve, sphere and
     //     custom primitive intersection.
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                std::max<uint32_t>({
-                                    optixu::calcSumDwords<float2>(),
-                                    optixu::calcSumDwords<float>(),
-                                    Shared::SphereAttributeSignature::numDwords }),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        std::max<uint32_t>({
+            optixu::calcSumDwords<float2>(),
+            optixu::calcSumDwords<float>(),
+            Shared::SphereAttributeSignature::numDwords }),
+            "plp", sizeof(Shared::PipelineLaunchParameters),
+            true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+            OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+            DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -96,7 +98,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
@@ -222,8 +225,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                           "Assume triangle formats are the same.");
             triangles.resize(objTriangles.size());
             std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
-                        triangles.size(),
-                        triangles.data());
+                        triangles.size(), triangles.data());
         }
 
         bunny.shape = Geometry::TriangleMesh();
@@ -289,9 +291,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 float y = p * 1.0f;
                 float angle = 10 * pi_v<float> * p;
                 Shared::CurveVertex v;
-                v.position = float3(r * std::cos(angle),
-                                    y,
-                                    r * std::sin(angle));
+                v.position = float3(
+                    r * std::cos(angle),
+                    y,
+                    r * std::sin(angle));
                 return v;
             };
 
@@ -357,8 +360,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         curves.optixGeomInst.setUserData(geomData);
 
         curves.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
-        curves.optixGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
-                                         Shared::useEmbeddedVertexData);
+        curves.optixGas.setConfiguration(
+            curveASTradeOff, curveASUpdatable, curveASCompactable,
+            Shared::useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -435,8 +439,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         spheres.optixGeomInst.setUserData(geomData);
 
         spheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
-        spheres.optixGas.setConfiguration(sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
-                                          Shared::useEmbeddedVertexData);
+        spheres.optixGas.setConfiguration(
+            sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
+            Shared::useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         spheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -491,7 +496,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         shape.partialSphereParamBuffers.resize(numMotionSteps);
         shape.partialSphereParamBuffers[0].initialize(cuContext, cudau::BufferType::Device, sphereParams0);
         shape.partialSphereParamBuffers[1].initialize(cuContext, cudau::BufferType::Device, sphereParams1);
-        shape.partialSphereParamBufferPointerBuffer.initialize(cuContext, cudau::BufferType::Device, numMotionSteps);
+        shape.partialSphereParamBufferPointerBuffer.initialize(
+            cuContext, cudau::BufferType::Device, numMotionSteps);
 
         Shared::GeometryData geomData = {};
         auto paramBufferPointers = shape.partialSphereParamBufferPointerBuffer.map();
@@ -512,7 +518,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         partialSpheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         partialSpheres.optixGeomInst.setUserData(geomData);
 
-        partialSpheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
+        partialSpheres.optixGas =
+            scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
         partialSpheres.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.

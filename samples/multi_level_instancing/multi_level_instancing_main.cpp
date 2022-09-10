@@ -42,15 +42,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このサンプルでは多段階のASとトランスフォームを使用する。
     // EN: This sample uses multi-level AS and transforms.
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                optixu::calcSumDwords<float2>(),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        optixu::calcSumDwords<float2>(),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "multi_level_instancing/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "multi_level_instancing/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -71,7 +73,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
@@ -277,8 +280,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                           "Assume triangle formats are the same.");
             triangles.resize(objTriangles.size());
             std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
-                        triangles.size(),
-                        triangles.data());
+                        triangles.size(), triangles.data());
         }
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -411,10 +413,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tr.optixTransform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
         tr.optixTransform.setChild(bunny.optixGas);
         for (int keyIdx = 0; keyIdx < tr.srts.size(); ++keyIdx)
-            tr.optixTransform.setSRTMotionKey(keyIdx,
-                                              reinterpret_cast<float*>(&tr.srts[keyIdx].s),
-                                              reinterpret_cast<float*>(&tr.srts[keyIdx].o),
-                                              reinterpret_cast<float*>(&tr.srts[keyIdx].t));
+            tr.optixTransform.setSRTMotionKey(
+                keyIdx,
+                reinterpret_cast<float*>(&tr.srts[keyIdx].s),
+                reinterpret_cast<float*>(&tr.srts[keyIdx].o),
+                reinterpret_cast<float*>(&tr.srts[keyIdx].t));
         tr.deviceMem = new cudau::Buffer;
         tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
         objectTransforms.push_back(tr);
@@ -449,10 +452,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tr.optixTransform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
         tr.optixTransform.setChild(cube.optixGas);
         for (int keyIdx = 0; keyIdx < tr.srts.size(); ++keyIdx)
-            tr.optixTransform.setSRTMotionKey(keyIdx,
-                                              reinterpret_cast<float*>(&tr.srts[keyIdx].s),
-                                              reinterpret_cast<float*>(&tr.srts[keyIdx].o),
-                                              reinterpret_cast<float*>(&tr.srts[keyIdx].t));
+            tr.optixTransform.setSRTMotionKey(
+                keyIdx,
+                reinterpret_cast<float*>(&tr.srts[keyIdx].s),
+                reinterpret_cast<float*>(&tr.srts[keyIdx].o),
+                reinterpret_cast<float*>(&tr.srts[keyIdx].t));
         tr.deviceMem = new cudau::Buffer;
         tr.deviceMem->initialize(cuContext, cudau::BufferType::Device, trMemSize, 1);
         objectTransforms.push_back(tr);
@@ -587,8 +591,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.geom->optixGas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.geom->optixGas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,

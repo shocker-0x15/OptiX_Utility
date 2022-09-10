@@ -38,20 +38,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Appropriately setting primitive type flags is required since this sample uses curve intersection.
     //     There are multiple curve types and the sample use all of them.
     //     The attribute size of curves is 1 Dword (float).
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                std::max(optixu::calcSumDwords<float2>(),
-                                         optixu::calcSumDwords<float>()),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        std::max(optixu::calcSumDwords<float2>(),
+                 optixu::calcSumDwords<float>()),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM);
 
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -104,7 +106,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
@@ -177,11 +180,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         floorGeomInst.setUserData(geomData);
     }
 
-    const auto generateCurves = [](std::vector<Shared::CurveVertex>* vertices,
-                                   std::vector<uint32_t>* indices,
-                                   float xStart, float xEnd, uint32_t numX,
-                                   float zStart, float zEnd, uint32_t numZ,
-                                   float baseWidth, uint32_t curveDegree)
+    const auto generateCurves = []
+    (std::vector<Shared::CurveVertex>* vertices,
+     std::vector<uint32_t>* indices,
+     float xStart, float xEnd, uint32_t numX,
+     float zStart, float zEnd, uint32_t numZ,
+     float baseWidth, uint32_t curveDegree)
     {
         std::mt19937 rng(390318410);
         std::uniform_int_distribution<uint32_t> uSeg(3, 5);
@@ -267,10 +271,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(&vertices, &indices,
-                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-                       -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-                       baseWidth, 1);
+        generateCurves(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            baseWidth, 1);
 
         linearCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         linearCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -299,10 +304,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(&vertices, &indices,
-                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-                       -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-                       baseWidth, 2);
+        generateCurves(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            baseWidth, 2);
 
         quadraticCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         quadraticCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -332,10 +338,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(&vertices, &indices,
-                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-                       -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-                       baseWidth, 3);
+        generateCurves(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            baseWidth, 3);
 
         cubicCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         cubicCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -365,10 +372,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(&vertices, &indices,
-                       -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-                       -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-                       baseWidth, 3);
+        generateCurves(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            baseWidth, 3);
 
         catmullRomCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         catmullRomCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -418,8 +426,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure linearCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
     cudau::Buffer linearCurvesGasMem;
-    linearCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
-                                     Shared::useEmbeddedVertexData);
+    linearCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        Shared::useEmbeddedVertexData);
     linearCurvesGas.setNumMaterialSets(1);
     linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     linearCurvesGas.addChild(linearCurveGeomInst);
@@ -430,8 +439,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure quadraticCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
     cudau::Buffer quadraticCurvesGasMem;
-    quadraticCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
-                                        Shared::useEmbeddedVertexData);
+    quadraticCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        Shared::useEmbeddedVertexData);
     quadraticCurvesGas.setNumMaterialSets(1);
     quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     quadraticCurvesGas.addChild(quadraticCurveGeomInst);
@@ -442,8 +452,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure cubicCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer cubicCurvesGasMem;
-    cubicCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
-                                    Shared::useEmbeddedVertexData);
+    cubicCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        Shared::useEmbeddedVertexData);
     cubicCurvesGas.setNumMaterialSets(1);
     cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     cubicCurvesGas.addChild(cubicCurveGeomInst);
@@ -454,8 +465,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure catmullRomCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CatmullRomSplines);
     cudau::Buffer catmullRomCurvesGasMem;
-    catmullRomCurvesGas.setConfiguration(curveASTradeOff, curveASUpdatable, curveASCompactable,
-                                         Shared::useEmbeddedVertexData);
+    catmullRomCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        Shared::useEmbeddedVertexData);
     catmullRomCurvesGas.setNumMaterialSets(1);
     catmullRomCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     catmullRomCurvesGas.addChild(catmullRomCurveGeomInst);
@@ -569,8 +581,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.gas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,

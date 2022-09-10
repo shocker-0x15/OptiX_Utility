@@ -145,9 +145,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     float contentScaleX, contentScaleY;
     glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
     float UIScaling = contentScaleX;
-    GLFWwindow* window = glfwCreateWindow(static_cast<int32_t>(renderTargetSizeX * UIScaling),
-                                          static_cast<int32_t>(renderTargetSizeY * UIScaling),
-                                          "OptiX Utility - Pick", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(
+        static_cast<int32_t>(renderTargetSizeX * UIScaling),
+        static_cast<int32_t>(renderTargetSizeY * UIScaling),
+        "OptiX Utility - Pick", NULL, NULL);
     glfwSetWindowUserPointer(window, nullptr);
     if (!window) {
         hpprintf("Failed to create a GLFW window.\n");
@@ -357,14 +358,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "pick/ptxes/pick_kernels.optixir");
+        const std::vector<char> optixIr =
+            readBinaryFile(getExecutableDirectory() / "pick/ptxes/pick_kernels.optixir");
         p.module = optixPipeline.createModuleFromOptixIR(
             optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
             DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
-        p.rayGenPrograms["perspective"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("perspectiveRaygen"));
-        p.rayGenPrograms["equirectangular"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("equirectangularRaygen"));
+        p.rayGenPrograms["perspective"] =
+            optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("perspectiveRaygen"));
+        p.rayGenPrograms["equirectangular"] =
+            optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("equirectangularRaygen"));
 
         p.missProgram = optixPipeline.createMissProgram(p.module, RT_MS_NAME_STR("miss"));
 
@@ -399,14 +403,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "pick/ptxes/render_kernels.optixir");
+        const std::vector<char> optixIr =
+            readBinaryFile(getExecutableDirectory() / "pick/ptxes/render_kernels.optixir");
         p.module = optixPipeline.createModuleFromOptixIR(
             optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
             DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
-        p.rayGenPrograms["perspective"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("perspectiveRaygen"));
-        p.rayGenPrograms["equirectangular"] = optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("equirectangularRaygen"));
+        p.rayGenPrograms["perspective"] =
+            optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("perspectiveRaygen"));
+        p.rayGenPrograms["equirectangular"] =
+            optixPipeline.createRayGenProgram(p.module, RT_RG_NAME_STR("equirectangularRaygen"));
 
         p.missProgram = optixPipeline.createMissProgram(p.module, RT_MS_NAME_STR("miss"));
 
@@ -702,8 +709,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                           "Assume triangle formats are the same.");
             triangles.resize(objTriangles.size());
             std::copy_n(reinterpret_cast<Shared::Triangle*>(objTriangles.data()),
-                        triangles.size(),
-                        triangles.data());
+                        triangles.size(), triangles.data());
         }
 
         bunny.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -914,13 +920,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array outputArray;
     cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
     outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                          cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+    outputArray.initializeFromGLTexture2D(
+        cuContext, outputTexture.getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
     outputBufferSurfaceHolder.initialize({ &outputArray });
 
     glu::Sampler outputSampler;
-    outputSampler.initialize(glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
-                             glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
+    outputSampler.initialize(
+        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
+        glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
 
 
 
@@ -932,8 +940,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
     glu::GraphicsProgram drawOptiXResultShader;
-    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "pick/shaders/drawOptiXResult.vert"),
-                                         readTxtFile(exeDir / "pick/shaders/drawOptiXResult.frag"));
+    drawOptiXResultShader.initializeVSPS(
+        readTxtFile(exeDir / "pick/shaders/drawOptiXResult.vert"),
+        readTxtFile(exeDir / "pick/shaders/drawOptiXResult.frag"));
 
 
 
@@ -968,11 +977,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     pickPipeline.pipeline.setScene(scene);
-    pickPipeline.pipeline.setHitGroupShaderBindingTable(pickPipeline.hitGroupShaderBindingTable,
-                                                        pickPipeline.hitGroupShaderBindingTable.getMappedPointer());
+    pickPipeline.pipeline.setHitGroupShaderBindingTable(
+        pickPipeline.hitGroupShaderBindingTable,
+        pickPipeline.hitGroupShaderBindingTable.getMappedPointer());
     renderPipeline.pipeline.setScene(scene);
-    renderPipeline.pipeline.setHitGroupShaderBindingTable(renderPipeline.hitGroupShaderBindingTable,
-                                                          renderPipeline.hitGroupShaderBindingTable.getMappedPointer());
+    renderPipeline.pipeline.setHitGroupShaderBindingTable(
+        renderPipeline.hitGroupShaderBindingTable,
+        renderPipeline.hitGroupShaderBindingTable.getMappedPointer());
 
     CUdeviceptr pickPlpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&pickPlpOnDevice, sizeof(pickPlp)));
@@ -1019,8 +1030,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             outputTexture.finalize();
             outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+            outputArray.initializeFromGLTexture2D(
+                cuContext, outputTexture.getHandle(),
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             outputArray.resize(renderTargetSizeX, renderTargetSizeY);
 
@@ -1100,8 +1112,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 axis = make_float3(1, 0, 0);
 
             g_cameraOrientation = g_cameraOrientation * qRotateZ(g_cameraTiltSpeed * tiltZ);
-            g_tempCameraOrientation = g_cameraOrientation * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
-            g_cameraPosition += g_tempCameraOrientation.toMatrix3x3() * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
+            g_tempCameraOrientation =
+                g_cameraOrientation
+                * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
+            g_cameraPosition +=
+                g_tempCameraOrientation.toMatrix3x3()
+                * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
             if (g_buttonRotate.getState() == false && g_buttonRotate.getTime() == frameIndex) {
                 g_cameraOrientation = g_tempCameraOrientation;
                 deltaX = 0;
@@ -1136,18 +1152,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
             rollPitchYaw[1] *= 180 / pi_v<float>;
             rollPitchYaw[2] *= 180 / pi_v<float>;
             if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
-                                                       rollPitchYaw[1] * pi_v<float> / 180,
-                                                       rollPitchYaw[2] * pi_v<float> / 180);
+                g_cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             if (ImGui::RadioButtonE("Perspective", &cameraType, CameraType::Perspective)) {
-                pickPipeline.pipeline.setRayGenerationProgram(pickPipeline.rayGenPrograms.at("perspective"));
-                renderPipeline.pipeline.setRayGenerationProgram(renderPipeline.rayGenPrograms.at("perspective"));
+                pickPipeline.pipeline.setRayGenerationProgram(
+                    pickPipeline.rayGenPrograms.at("perspective"));
+                renderPipeline.pipeline.setRayGenerationProgram(
+                    renderPipeline.rayGenPrograms.at("perspective"));
             }
             if (ImGui::RadioButtonE("Equirectangular", &cameraType, CameraType::Equirectangular)) {
-                pickPipeline.pipeline.setRayGenerationProgram(pickPipeline.rayGenPrograms.at("equirectangular"));
-                renderPipeline.pipeline.setRayGenerationProgram(renderPipeline.rayGenPrograms.at("equirectangular"));
+                pickPipeline.pipeline.setRayGenerationProgram(
+                    pickPipeline.rayGenPrograms.at("equirectangular"));
+                renderPipeline.pipeline.setRayGenerationProgram(
+                    renderPipeline.rayGenPrograms.at("equirectangular"));
             }
 
             ImGui::Separator();

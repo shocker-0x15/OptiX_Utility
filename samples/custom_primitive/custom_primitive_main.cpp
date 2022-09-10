@@ -34,16 +34,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                std::max<uint32_t>(optixu::calcSumDwords<float2>(),
-                                                   Shared::SphereAttributeSignature::numDwords),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-                                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        std::max<uint32_t>(optixu::calcSumDwords<float2>(),
+                           Shared::SphereAttributeSignature::numDwords),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
 
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "custom_primitive/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr =
+        readBinaryFile(getExecutableDirectory() / "custom_primitive/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -71,7 +73,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     pipeline.setRayGenerationProgram(rayGenProgram);
-    // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
+    // If an exception program is not set but exception flags are set,
+    // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
@@ -200,7 +203,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブ用GeometryInstanceは生成時に指定する必要がある。
     // EN: GeometryInstance for custom primitives requires to be specified at the creation.
-    optixu::GeometryInstance customPrimsGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+    optixu::GeometryInstance customPrimsGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
     cudau::TypedBuffer<AABB> customPrimsAabbBuffer;
     cudau::TypedBuffer<Shared::PartialSphereParameter> spheresParamBuffer;
     {
@@ -281,7 +285,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     GAS生成時にカスタムプリミティブ用であることを指定する。
     // EN: GAS for custom primitives must be created separately with GAS for triangles.
     //     Specify that the GAS is for custom primitives at the creation.
-    optixu::GeometryAccelerationStructure customPrimitivesGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
+    optixu::GeometryAccelerationStructure customPrimitivesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
     cudau::Buffer customPrimitivesGasMem;
     customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
     customPrimitivesGas.setNumMaterialSets(1);
@@ -355,8 +360,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.gas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.gas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,

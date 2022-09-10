@@ -362,7 +362,8 @@ public:
                     fileFlags |= ImGuiTreeNodeFlags_Selected;
                 ImGui::TableNextColumn();
                 bool open = ImGui::TreeNodeEx(fileGroup.name.c_str(), fileFlags);
-                bool onArrow = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
+                bool onArrow =
+                    (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) < ImGui::GetTreeNodeToLabelSpacing();
                 if (ImGui::IsItemClicked() && !onArrow) {
                     if (!ImGui::GetIO().KeyCtrl) {
                         // JP: Ctrlを押していない状態でクリックした場合は他のファイルの選択を全て解除する。
@@ -401,10 +402,11 @@ public:
                     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 1.0f, 0.5f, 0.75f));
                     for (int i = 0; i < fileGroup.geomInsts.size(); ++i) {
                         const GeometryInstanceRef &geomInst = fileGroup.geomInsts[i];
-                        ImGuiTreeNodeFlags instFlags = (ImGuiTreeNodeFlags_Leaf |
-                                                        ImGuiTreeNodeFlags_Bullet |
-                                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                                        ImGuiTreeNodeFlags_SpanFullWidth);
+                        ImGuiTreeNodeFlags instFlags =
+                            (ImGuiTreeNodeFlags_Leaf |
+                             ImGuiTreeNodeFlags_Bullet |
+                             ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                             ImGuiTreeNodeFlags_SpanFullWidth);
                         bool geomInstSelected = fileGroupState.selectedIndices.count(i) > 0;
                         if (geomInstSelected)
                             instFlags |= ImGuiTreeNodeFlags_Selected;
@@ -504,8 +506,9 @@ public:
                 const GeometryGroupRef &geomGroup = kv.second;
 
                 ImGui::TableNextRow();
-                ImGuiTreeNodeFlags groupFlags = (ImGuiTreeNodeFlags_SpanFullWidth |
-                                                 ImGuiTreeNodeFlags_OpenOnArrow);
+                ImGuiTreeNodeFlags groupFlags =
+                    (ImGuiTreeNodeFlags_SpanFullWidth |
+                     ImGuiTreeNodeFlags_OpenOnArrow);
                 bool geomGroupSelected = m_selectedGroups.count(geomGroup->serialID) > 0;
                 if (geomGroupSelected)
                     groupFlags |= ImGuiTreeNodeFlags_Selected;
@@ -546,10 +549,11 @@ public:
                     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 1.0f, 0.5f, 0.75f));
                     for (int geomInstIdx = 0; geomInstIdx < geomGroup->geomInsts.size(); ++geomInstIdx) {
                         const GeometryInstanceRef &geomInst = geomGroup->geomInsts[geomInstIdx];
-                        ImGuiTreeNodeFlags instFlags = (ImGuiTreeNodeFlags_Leaf |
-                                                        ImGuiTreeNodeFlags_Bullet |
-                                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                                        ImGuiTreeNodeFlags_SpanFullWidth);
+                        ImGuiTreeNodeFlags instFlags =
+                            (ImGuiTreeNodeFlags_Leaf |
+                             ImGuiTreeNodeFlags_Bullet |
+                             ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                             ImGuiTreeNodeFlags_SpanFullWidth);
                         bool geomInstSelected = geomGroup->serialID == m_activeGroupSerialID &&
                             m_selectedIndicesForActiveGroup.count(geomInstIdx) > 0;
                         if (geomInstSelected)
@@ -622,7 +626,8 @@ public:
             return m_optixEnv.geomGroups.at(m_activeGroupSerialID);
         return nullptr;
     }
-    void callForActiveGeomGroup(const std::function<void(const GeometryGroupRef &, const std::set<uint32_t> &)> &func) {
+    void callForActiveGeomGroup(
+        const std::function<void(const GeometryGroupRef &, const std::set<uint32_t> &)> &func) {
         const GeometryGroupRef &activeGeomGroup = m_optixEnv.geomGroups.at(m_activeGroupSerialID);
         func(activeGeomGroup, m_selectedIndicesForActiveGroup);
     }
@@ -790,10 +795,11 @@ public:
                     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 1.0f, 0.5f, 0.75f));
                     for (int instIdx = 0; instIdx < group->insts.size(); ++instIdx) {
                         const InstanceRef &inst = group->insts[instIdx];
-                        ImGuiTreeNodeFlags instFlags = (ImGuiTreeNodeFlags_Leaf |
-                                                        ImGuiTreeNodeFlags_Bullet |
-                                                        ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                                        ImGuiTreeNodeFlags_SpanFullWidth);
+                        ImGuiTreeNodeFlags instFlags =
+                            (ImGuiTreeNodeFlags_Leaf |
+                             ImGuiTreeNodeFlags_Bullet |
+                             ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                             ImGuiTreeNodeFlags_SpanFullWidth);
                         bool geomInstSelected = group->serialID == m_activeGroupSerialID &&
                             m_selectedIndicesForActiveGroup.count(instIdx) > 0;
                         if (geomInstSelected)
@@ -939,9 +945,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     float contentScaleX, contentScaleY;
     glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
     float UIScaling = contentScaleX;
-    GLFWwindow* window = glfwCreateWindow(static_cast<int32_t>(renderTargetSizeX * UIScaling),
-                                          static_cast<int32_t>(renderTargetSizeY * UIScaling),
-                                          "OptiX Utility - Scene Edit", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(
+        static_cast<int32_t>(renderTargetSizeX * UIScaling),
+        static_cast<int32_t>(renderTargetSizeY * UIScaling),
+        "OptiX Utility - Scene Edit", NULL, NULL);
     glfwSetWindowUserPointer(window, nullptr);
     if (!window) {
         hpprintf("Failed to create a GLFW window.\n");
@@ -1127,16 +1134,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    pipeline.setPipelineOptions(Shared::PayloadSignature::numDwords,
-                                optixu::calcSumDwords<float2>(),
-                                "plp", sizeof(Shared::PipelineLaunchParameters),
-                                false,
-                                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-                                DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
-                                              OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                                              OPTIX_EXCEPTION_FLAG_DEBUG),
-                                             OPTIX_EXCEPTION_FLAG_NONE),
-                                OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    pipeline.setPipelineOptions(
+        Shared::PayloadSignature::numDwords,
+        optixu::calcSumDwords<float2>(),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        false,
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
+                      OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+                      OPTIX_EXCEPTION_FLAG_DEBUG),
+                     OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     const std::vector<char> optixIr = readBinaryFile(exeDir / "scene_edit/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
@@ -1238,13 +1246,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array outputArray;
     cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
     outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
-    outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                          cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+    outputArray.initializeFromGLTexture2D(
+        cuContext, outputTexture.getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
     outputBufferSurfaceHolder.initialize({ &outputArray });
 
     glu::Sampler outputSampler;
-    outputSampler.initialize(glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
-                             glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
+    outputSampler.initialize(
+        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
+        glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
 
 
 
@@ -1256,8 +1266,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
     glu::GraphicsProgram drawOptiXResultShader;
-    drawOptiXResultShader.initializeVSPS(readTxtFile(exeDir / "scene_edit/shaders/drawOptiXResult.vert"),
-                                         readTxtFile(exeDir / "scene_edit/shaders/drawOptiXResult.frag"));
+    drawOptiXResultShader.initializeVSPS(
+        readTxtFile(exeDir / "scene_edit/shaders/drawOptiXResult.vert"),
+        readTxtFile(exeDir / "scene_edit/shaders/drawOptiXResult.frag"));
 
 
 
@@ -1310,8 +1321,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             outputTexture.finalize();
             outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
             outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(cuContext, outputTexture.getHandle(),
-                                                  cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+            outputArray.initializeFromGLTexture2D(
+                cuContext, outputTexture.getHandle(),
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
             outputArray.resize(renderTargetSizeX, renderTargetSizeY);
 
@@ -1378,9 +1390,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (deltaAngle == 0.0f)
                 axis = make_float3(1, 0, 0);
 
-            g_cameraOrientation = g_cameraOrientation * qRotateZ(g_cameraTiltSpeed * tiltZ);
-            g_tempCameraOrientation = g_cameraOrientation * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
-            g_cameraPosition += g_tempCameraOrientation.toMatrix3x3() * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
+            g_cameraOrientation =
+                g_cameraOrientation *
+                qRotateZ(g_cameraTiltSpeed * tiltZ);
+            g_tempCameraOrientation =
+                g_cameraOrientation
+                * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
+            g_cameraPosition +=
+                g_tempCameraOrientation.toMatrix3x3()
+                * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
             if (g_buttonRotate.getState() == false && g_buttonRotate.getTime() == frameIndex) {
                 g_cameraOrientation = g_tempCameraOrientation;
                 deltaX = 0;
@@ -1418,9 +1436,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             rollPitchYaw[1] *= 180 / pi_v<float>;
             rollPitchYaw[2] *= 180 / pi_v<float>;
             if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
-                g_cameraOrientation = qFromEulerAngles(rollPitchYaw[0] * pi_v<float> / 180,
-                                                       rollPitchYaw[1] * pi_v<float> / 180,
-                                                       rollPitchYaw[2] * pi_v<float> / 180);
+                g_cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
             ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
 
             ImGui::End();
@@ -1463,7 +1482,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     bool geomInstsSelected = numSelectedGeomInsts > 0;
                     bool allUnused = numSelectedGeomInsts > 0;
                     geomInstList.loopForSelected(
-                        [&optixEnv, &allUnused](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                        [&optixEnv, &allUnused]
+                    (uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
                             const GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
                             for (uint32_t index : indices) {
                                 allUnused &= fileGroup.geomInsts[index].use_count() == 1;
@@ -1476,29 +1496,34 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                     if (ImGui::Button("Create a GAS", geomInstsSelected)) {
                         uint32_t serialID = optixEnv.gasSerialID++;
-                        GeometryGroupRef geomGroup = make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
+                        GeometryGroupRef geomGroup =
+                            make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
                         char name[256];
                         sprintf_s(name, "GAS-%u", serialID);
                         geomGroup->optixEnv = &optixEnv;
                         geomGroup->serialID = serialID;
                         geomGroup->name = name;
                         geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
-                        geomGroup->optixGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+                        geomGroup->optixGAS.setConfiguration(
+                            optixu::ASTradeoff::PreferFastTrace, false, false, false);
                         geomGroup->optixGAS.setNumMaterialSets(1);
                         geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
                         geomGroup->preTransforms.resize(numSelectedGeomInsts);
-                        geomGroup->preTransformBuffer.initialize(optixEnv.cuContext, g_bufferType, numSelectedGeomInsts);
+                        geomGroup->preTransformBuffer.initialize(
+                            optixEnv.cuContext, g_bufferType, numSelectedGeomInsts);
 
                         std::array<float, 12>* preTransforms = geomGroup->preTransformBuffer.map(cuStream);
                         geomInstList.loopForSelected(
-                            [&optixEnv, &geomGroup, &preTransforms, &cuStream](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                            [&optixEnv, &geomGroup, &preTransforms, &cuStream]
+                        (uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
                                 const GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
                                 for (uint32_t index : indices) {
                                     const GeometryInstanceRef &geomInst = fileGroup.geomInsts[index];
                                     geomGroup->geomInsts.push_back(geomInst);
                                     uint32_t indexInGAS = geomGroup->geomInsts.size() - 1;
 
-                                    GeometryInstancePreTransform &preTransform = geomGroup->preTransforms[indexInGAS];
+                                    GeometryInstancePreTransform &preTransform =
+                                        geomGroup->preTransforms[indexInGAS];
                                     preTransform.scale = float3(1.0f, 1.0f, 1.0f);
                                     preTransform.rollPitchYaw[0] = 0.0f;
                                     preTransform.rollPitchYaw[1] = 0.0f;
@@ -1506,18 +1531,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                     preTransform.position = float3(0.0f, 0.0f, 0.0f);
 
                                     Shared::GASChildData gasChildData;
-                                    gasChildData.setPreTransform(preTransform.scale,
-                                                                 preTransform.rollPitchYaw,
-                                                                 preTransform.position);
+                                    gasChildData.setPreTransform(
+                                        preTransform.scale,
+                                        preTransform.rollPitchYaw,
+                                        preTransform.position);
 
                                     float* raw = preTransforms[indexInGAS].data();
-                                    Matrix3x3 matSR = gasChildData.orientation.toMatrix3x3() * scale3x3(gasChildData.scale);
+                                    Matrix3x3 matSR =
+                                        gasChildData.orientation.toMatrix3x3()
+                                        * scale3x3(gasChildData.scale);
                                     raw[0] = matSR.m00; raw[1] = matSR.m01; raw[2] = matSR.m02; raw[3] = gasChildData.translation.x;
                                     raw[4] = matSR.m10; raw[5] = matSR.m11; raw[6] = matSR.m12; raw[7] = gasChildData.translation.y;
                                     raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = gasChildData.translation.z;
-                                    CUdeviceptr preTransformPtr = geomGroup->preTransformBuffer.getCUdeviceptrAt(indexInGAS);
+                                    CUdeviceptr preTransformPtr =
+                                        geomGroup->preTransformBuffer.getCUdeviceptrAt(indexInGAS);
 
-                                    geomGroup->optixGAS.addChild(geomInst->optixGeomInst, preTransformPtr, gasChildData);
+                                    geomGroup->optixGAS.addChild(
+                                        geomInst->optixGeomInst, preTransformPtr, gasChildData);
                                 }
                                 return true;
                             });
@@ -1531,8 +1561,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     ImGui::SameLine();
                     if (ImGui::Button("Remove", selectedGeomInstsRemovable)) {
                         geomInstList.loopForSelected(
-                            [&optixEnv](uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
-                                GeometryInstanceFileGroup &fileGroup = optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
+                            [&optixEnv]
+                        (uint32_t geomInstFileGroupSerialID, const std::set<uint32_t> &indices) {
+                                GeometryInstanceFileGroup &fileGroup =
+                                    optixEnv.geomInstFileGroups.at(geomInstFileGroupSerialID);
                                 // JP: serialIDに基づいているためまず安全。
                                 for (auto it = indices.crbegin(); it != indices.crend(); ++it)
                                     fileGroup.geomInsts.erase(fileGroup.geomInsts.cbegin() + *it);
@@ -1628,7 +1660,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         else if (geomInstsSelected) {
                             const GeometryGroupRef &geomGroup = geomGroupList.getActiveGeometryGroup();
                             geomGroupList.callForActiveGeomGroup(
-                                [&optixEnv](const GeometryGroupRef &geomGroup, const std::set<uint32_t> &selectedIndices) {
+                                [&optixEnv]
+                            (const GeometryGroupRef &geomGroup, const std::set<uint32_t> &selectedIndices) {
                                     // JP: serialIDに基づいているためまず安全。
                                     for (auto it = selectedIndices.crbegin(); it != selectedIndices.crend(); ++it) {
                                         uint32_t geomInstIdx = *it;
@@ -1705,9 +1738,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         preTransform.position = float3(instPosition[0], instPosition[1], instPosition[2]);
 
                         Shared::GASChildData gasChildData = {};
-                        gasChildData.setPreTransform(preTransform.scale,
-                                                     preTransform.rollPitchYaw,
-                                                     preTransform.position);
+                        gasChildData.setPreTransform(
+                            preTransform.scale,
+                            preTransform.rollPitchYaw,
+                            preTransform.position);
                         activeGroup->optixGAS.setChildUserData(selectedGeomInstIndex, gasChildData);
 
                         std::array<float, 12> dstPreTransform;
@@ -1716,10 +1750,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         raw[0] = matSR.m00; raw[1] = matSR.m01; raw[2] = matSR.m02; raw[3] = gasChildData.translation.x;
                         raw[4] = matSR.m10; raw[5] = matSR.m11; raw[6] = matSR.m12; raw[7] = gasChildData.translation.y;
                         raw[8] = matSR.m20; raw[9] = matSR.m21; raw[10] = matSR.m22; raw[11] = gasChildData.translation.z;
-                        CUDADRV_CHECK(cuMemcpyHtoDAsync(activeGroup->preTransformBuffer.getCUdeviceptrAt(selectedGeomInstIndex),
-                                                        &dstPreTransform,
-                                                        sizeof(dstPreTransform),
-                                                        cuStream));
+                        CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                            activeGroup->preTransformBuffer.getCUdeviceptrAt(selectedGeomInstIndex),
+                            &dstPreTransform,
+                            sizeof(dstPreTransform),
+                            cuStream));
 
                         activeGroup->optixGAS.markDirty();
                         activeGroup->propagateMarkDirty();
