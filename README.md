@@ -43,18 +43,18 @@ Currently based on OptiX 7.5.0
 - OptiX AI denoiser
   - LDR
   - HDR
-  - HDR AOV (Not tested)
+  - HDR + AOVs (Not tested)
   - HDR Temporal
-  - HDR Temporal AOV (Not tested)
+  - HDR Temporal + AOVs (Not tested)
+  - HDR + AOVs + Upscaling 2x (AOV Output Not tested)
+  - HDR Temporal + AOVs + Upscaling 2x (AOV Output Not tested)
 - Automatic payload/attribute value packing in kernel code
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
-- (Temporal) Upscaling Denoiser
 - Parallel Module Compilation
 - AS Relocation
 - Test AOV denoisers
-- Denoiser with User-provided Model
 - Test Linux Environment
 - Multi-GPU
 

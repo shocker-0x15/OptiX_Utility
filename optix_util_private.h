@@ -1246,7 +1246,7 @@ namespace optixu {
 
         void invoke(
             CUstream stream,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, CUdeviceptr hdrAverageColor, float blendFactor,
+            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensityOrAverageColor, float blendFactor,
             const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
             const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
             const BufferView &albedo, OptixPixelFormat albedoFormat,

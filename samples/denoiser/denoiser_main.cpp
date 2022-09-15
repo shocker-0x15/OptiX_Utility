@@ -18,6 +18,33 @@ EN: This sample shows how to use the denoiser.
 #include "../../ext/stb_image.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
+    uint32_t tileWidth = 0;
+    uint32_t tileHeight = 0;
+    bool useKernelPredictionMode = false;
+    bool performUpscale = false;
+
+    uint32_t argIdx = 1;
+    while (argIdx < argc) {
+        std::string_view arg = argv[argIdx];
+        if (arg == "--tiling") {
+            if (argIdx + 2 >= argc)
+                throw std::runtime_error("Argument for --tiling is not complete.");
+            tileWidth = static_cast<uint32_t>(atoi(argv[argIdx + 1]));
+            tileHeight = static_cast<uint32_t>(atoi(argv[argIdx + 2]));
+            argIdx += 2;
+        }
+        else if (arg == "--kp")
+            useKernelPredictionMode = true;
+        else if (arg == "--upscale")
+            performUpscale = true;
+        else
+            throw std::runtime_error("Unknown command line argument.");
+        ++argIdx;
+    }
+
+    if (performUpscale)
+        useKernelPredictionMode = true;
+
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
@@ -584,6 +611,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     constexpr uint32_t renderTargetSizeX = 1024;
     constexpr uint32_t renderTargetSizeY = 1024;
+    uint32_t outputSizeX = renderTargetSizeX;
+    uint32_t outputSizeY = renderTargetSizeY;
+    if (performUpscale) {
+        outputSizeX *= 2;
+        outputSizeY *= 2;
+    }
     cudau::Array colorAccumBuffer;
     cudau::Array albedoAccumBuffer;
     cudau::Array normalAccumBuffer;
@@ -614,7 +647,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         renderTargetSizeX * renderTargetSizeY);
     linearOutputBuffer.initialize(
         cuContext, cudau::BufferType::Device,
-        renderTargetSizeX * renderTargetSizeY);
+        outputSizeX * outputSizeY);
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
     rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
@@ -634,10 +667,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: デノイザーのセットアップ。
     // EN: Setup a denoiser.
 
-    constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
-    constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
-    constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
-    optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_MODEL_KIND_HDR, true, true);
+    OptixDenoiserModelKind denoiserModel = OPTIX_DENOISER_MODEL_KIND_HDR;
+    if (performUpscale)
+        denoiserModel = OPTIX_DENOISER_MODEL_KIND_UPSCALE2X;
+    // Use kernel prediction model (AOV denoiser) even if this sample doesn't give any AOV inputs.
+    else if (useKernelPredictionMode)
+        denoiserModel = OPTIX_DENOISER_MODEL_KIND_AOV;
+
+    optixu::Denoiser denoiser = optixContext.createDenoiser(denoiserModel, true, true);
     size_t stateSize;
     size_t scratchSize;
     size_t scratchSizeForComputeIntensity;
@@ -652,8 +689,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer denoiserStateBuffer;
     cudau::Buffer denoiserScratchBuffer;
     denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateSize, 1);
-    denoiserScratchBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                     std::max(scratchSize, scratchSizeForComputeIntensity), 1);
+    denoiserScratchBuffer.initialize(
+        cuContext, cudau::BufferType::Device,
+        std::max(scratchSize, scratchSizeForComputeIntensity), 1);
 
     std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
     denoiser.getTasks(denoisingTasks.data());
@@ -663,11 +701,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
     CUmodule moduleCopyBuffers;
-    CUDADRV_CHECK(cuModuleLoad(&moduleCopyBuffers, (getExecutableDirectory() / "denoiser/ptxes/copy_buffers.ptx").string().c_str()));
+    CUDADRV_CHECK(cuModuleLoad(
+        &moduleCopyBuffers, (getExecutableDirectory() / "denoiser/ptxes/copy_buffers.ptx").string().c_str()));
     cudau::Kernel kernelCopyBuffers(moduleCopyBuffers, "copyBuffers", cudau::dim3(8, 8), 0);
 
-    CUdeviceptr hdrIntensity;
-    CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
+    CUdeviceptr hdrIntensityOrAvgColor;
+    CUDADRV_CHECK(cuMemAlloc(
+        &hdrIntensityOrAvgColor, (useKernelPredictionMode ? 3 : 1) * sizeof(float)));
 
     // END: Setup a denoiser.
     // ----------------------------------------------------------------
@@ -724,7 +764,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     timerRender.stop(cuStream);
 
     // JP: パストレーシング結果のデノイズ。
-    //     毎フレーム呼ぶ必要があるのはcomputeIntensity()とinvoke()。
+    //     毎フレーム呼ぶ必要があるのはcomputeAverageColor()/computeIntensity()とinvoke()。
     //     computeIntensity()は自作することもできる。
     //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
     // EN: Denoise the path tracing result.
@@ -732,21 +772,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     You can also create a custom computeIntensity().
     //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
     timerDenoise.start(cuStream);
-    denoiser.computeIntensity(
-        cuStream,
-        linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-        denoiserScratchBuffer, hdrIntensity);
+    if (useKernelPredictionMode)
+        denoiser.computeAverageColor(
+            cuStream,
+            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            denoiserScratchBuffer, hdrIntensityOrAvgColor);
+    else
+        denoiser.computeIntensity(
+            cuStream,
+            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            denoiserScratchBuffer, hdrIntensityOrAvgColor);
     for (int i = 0; i < denoisingTasks.size(); ++i)
         denoiser.invoke(
             cuStream,
-            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensity, 0.0f,
+            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensityOrAvgColor, 0.0f,
             linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            nullptr, nullptr, 0, // no AOV inputs
             linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
             linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-            optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4,
-            optixu::BufferView(),
+            optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4, // no flow buffer
+            optixu::BufferView(), // no previous denoised beauty
+            nullptr, // no AOV inputs
             true,
             linearOutputBuffer,
+            nullptr, // no AOV outputs
             denoisingTasks[i]);
     timerDenoise.stop(cuStream);
 
@@ -754,7 +803,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     float renderTime = timerRender.report();
     float denoiseTime = timerDenoise.report();
-    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, renderTargetSizeX);
+    hpprintf("Render %u [spp]: %.3f[ms]\n", numSamples, renderTime);
     hpprintf("Denoise: %.3f[ms]\n", denoiseTime);
 
     timerDenoise.finalize();
@@ -783,7 +832,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     saveImage("color.png", colorAccumBuffer, true, true);
     saveImage("albedo.png", albedoAccumBuffer, false, false);
     saveImage("normal.png", renderTargetSizeX, renderTargetSizeY, normalImageData.data());
-    saveImage("color_denoised.png", renderTargetSizeX, linearOutputBuffer, true, true);
+    saveImage("color_denoised.png", outputSizeX, linearOutputBuffer, true, true);
 
 
 
@@ -791,7 +840,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     
-    CUDADRV_CHECK(cuMemFree(hdrIntensity));
+    CUDADRV_CHECK(cuMemFree(hdrIntensityOrAvgColor));
 
     CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
     

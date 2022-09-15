@@ -1626,20 +1626,7 @@ private: \
             const BufferView &scratchBuffer, CUdeviceptr outputAverageColor) const;
         void invoke(
             CUstream stream,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensity, float blendFactor,
-            const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-            const BufferView &albedo, OptixPixelFormat albedoFormat,
-            const BufferView &normal, OptixPixelFormat normalFormat,
-            const BufferView &flow, OptixPixelFormat flowFormat,
-            const BufferView &previousDenoisedBeauty,
-            bool isFirstFrame,
-            const BufferView &denoisedBeauty,
-            const DenoisingTask &task) const;
-        // JP: AOVデノイザー用。
-        // EN: For AOV denoiser.
-        void invoke(
-            CUstream stream,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrAverageColor, float blendFactor,
+            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensityOrAverageColor, float blendFactor,
             const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
             const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
             const BufferView &albedo, OptixPixelFormat albedoFormat,
