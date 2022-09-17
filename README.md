@@ -41,13 +41,13 @@ Currently based on OptiX 7.5.0
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX AI denoiser
-  - LDR
+  - LDR (Not Tested)
   - HDR
-  - HDR + AOVs (Not tested)
+  - HDR with Kernel Prediction Model (AOV Output Not Tested)
   - HDR Temporal
-  - HDR Temporal + AOVs (Not tested)
-  - HDR + AOVs + Upscaling 2x (AOV Output Not tested)
-  - HDR Temporal + AOVs + Upscaling 2x (AOV Output Not tested)
+  - HDR Temporal with Kernel Prediction Model (Not Tested)
+  - HDR Upscaling 2x (AOV Output Not Tested)
+  - HDR Temporal + Upscaling 2x (AOV Output Not Tested)
 - Automatic payload/attribute value packing in kernel code
 - Payload usage annotation to reduce register consumption in complex pipelines
 
@@ -258,7 +258,7 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 10 (21H2) & Visual Studio Community 2022 (17.3.3)
+* Windows 10 (21H2) & Visual Studio Community 2022 (17.3.4)
 * Core i9-9900K, 32GB, RTX 3080 10GB
 * NVIDIA Driver 516.94
 
