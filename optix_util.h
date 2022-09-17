@@ -32,6 +32,12 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+  JP: - Upscaling Denoiserをサポート。
+      - Denoiserクラスのインターフェースをいくらか変更。
+  EN: - Supported upscaling denoisers.
+      - Changed some interfaces of Denoiser class.
+
+- !!BREAKING
   JP: - OptiX 7.5.0をサポート。
         Upscaling Denoiserは未対応。
       - trace()関数をシグネチャー型のメンバー関数に変更。
