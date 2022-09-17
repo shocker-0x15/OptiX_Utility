@@ -1228,10 +1228,7 @@ namespace optixu {
         int32_t overlapWidth;
         uint32_t maxInputWidth;
         uint32_t maxInputHeight;
-        size_t stateSize;
-        size_t scratchSize;
-        size_t scratchSizeForComputeIntensity;
-        size_t scratchSizeForComputeAverageColor;
+        DenoiserSizes sizes;
 
         BufferView stateBuffer;
         BufferView scratchBuffer;
@@ -1245,19 +1242,11 @@ namespace optixu {
         };
 
         void invoke(
-            CUstream stream,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensityOrAverageColor, float blendFactor,
-            const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-            const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
-            const BufferView &albedo, OptixPixelFormat albedoFormat,
-            const BufferView &normal, OptixPixelFormat normalFormat,
-            const BufferView &flow, OptixPixelFormat flowFormat,
-            const BufferView &previousDenoisedBeauty,
-            const BufferView* previousDenoisedAovs,
-            bool isFirstFrame,
-            const BufferView &denoisedBeauty,
-            const BufferView* denoisedAovs,
-            const DenoisingTask &task) const;
+            CUstream stream, const DenoisingTask &task,
+            const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
+            OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
+            const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
+            const BufferView &internalGuideLayerForNextFrame) const;
 
     public:
         OPTIXU_OPAQUE_BRIDGE(Denoiser);
@@ -1266,8 +1255,7 @@ namespace optixu {
             context(ctxt),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
             overlapWidth(0), maxInputWidth(0), maxInputHeight(0),
-            stateSize(0), scratchSize(0),
-            scratchSizeForComputeIntensity(0), scratchSizeForComputeAverageColor(0),
+            sizes{ 0, 0, 0, 0, 0 },
             modelKind(_modelKind), guideAlbedo(_guideAlbedo), guideNormal(_guideNormal),
             useTiling(false), imageSizeSet(false), stateIsReady(false) {
             OptixDenoiserOptions options = {};

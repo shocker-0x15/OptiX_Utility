@@ -102,12 +102,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path exeDir = getExecutableDirectory();
 
     bool takeScreenShot = false;
+    bool useKernelPredictionMode = false;
+    bool performUpscale = false;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
         std::string_view arg = argv[argIdx];
         if (arg == "--screen-shot")
             takeScreenShot = true;
+        else if (arg == "--kp")
+            useKernelPredictionMode = true;
+        else if (arg == "--upscale")
+            performUpscale = true;
         else
             throw std::runtime_error("Unknown command line argument.");
         ++argIdx;
@@ -1012,38 +1018,55 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
     constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
     constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
-    optixu::Denoiser denoiser = optixContext.createDenoiser(OPTIX_DENOISER_MODEL_KIND_TEMPORAL, true, true);
-    size_t stateSize;
-    size_t scratchSize;
-    size_t scratchSizeForComputeIntensity;
+    OptixDenoiserModelKind denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
+    if (performUpscale)
+        denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
+    // Use kernel prediction model (AOV denoiser) even if this sample doesn't give any AOV inputs.
+    else if (useKernelPredictionMode)
+        denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV;
+
+    optixu::Denoiser denoiser = optixContext.createDenoiser(denoiserModel, true, true);
+    optixu::DenoiserSizes denoiserSizes;
     uint32_t numTasks;
     denoiser.prepare(
         renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-        &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-        &numTasks);
-    hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
-    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
-    hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
+        &denoiserSizes, &numTasks);
+    hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
+    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
+    hpprintf("Compute Normalizer Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSizeForComputeNormalizer);
     cudau::Buffer denoiserStateBuffer;
     cudau::Buffer denoiserScratchBuffer;
-    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateSize, 1);
-    denoiserScratchBuffer.initialize(cuContext, cudau::BufferType::Device,
-                                     std::max(scratchSize, scratchSizeForComputeIntensity), 1);
+    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.stateSize, 1);
+    denoiserScratchBuffer.initialize(
+        cuContext, cudau::BufferType::Device,
+        std::max(denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
 
     std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
     denoiser.getTasks(denoisingTasks.data());
 
     denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
 
+    cudau::Buffer internalGuideLayers[2];
+    if (denoiserSizes.internalGuideLayerPixelSize > 0) {
+        for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
+            internalGuideLayers[bufIdx].initialize(
+                cuContext, cudau::BufferType::Device,
+                renderTargetSizeX * renderTargetSizeY, denoiserSizes.internalGuideLayerPixelSize);
+    }
+
+    cudau::Buffer hdrNormalizer;
+    hdrNormalizer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.normalizerSize, 1);
+
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
     CUmodule moduleCopyBuffers;
-    CUDADRV_CHECK(cuModuleLoad(&moduleCopyBuffers, (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_buffers.ptx").string().c_str()));
-    cudau::Kernel kernelCopyToLinearBuffers(moduleCopyBuffers, "copyToLinearBuffers", cudau::dim3(8, 8), 0);
-    cudau::Kernel kernelVisualizeToOutputBuffer(moduleCopyBuffers, "visualizeToOutputBuffer", cudau::dim3(8, 8), 0);
-
-    CUdeviceptr hdrIntensity;
-    CUDADRV_CHECK(cuMemAlloc(&hdrIntensity, sizeof(float)));
+    CUDADRV_CHECK(cuModuleLoad(
+        &moduleCopyBuffers,
+        (getExecutableDirectory() / "temporal_denoiser/ptxes/copy_buffers.ptx").string().c_str()));
+    cudau::Kernel kernelCopyToLinearBuffers(
+        moduleCopyBuffers, "copyToLinearBuffers", cudau::dim3(8, 8), 0);
+    cudau::Kernel kernelVisualizeToOutputBuffer(
+        moduleCopyBuffers, "visualizeToOutputBuffer", cudau::dim3(8, 8), 0);
 
     // END: Setup a denoiser.
     // ----------------------------------------------------------------
@@ -1104,6 +1127,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
 
 
+
+    optixu::DenoiserInputBuffers inputBuffers = {};
+    inputBuffers.noisyBeauty = linearBeautyBuffer;
+    inputBuffers.albedo = linearAlbedoBuffer;
+    inputBuffers.normal = linearNormalBuffer;
+    inputBuffers.flow = linearFlowBuffer;
+    inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputBuffers.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;
 
     struct GPUTimer {
         cudau::Timer frame;
@@ -1182,25 +1215,39 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
 
             {
-                size_t stateSize;
-                size_t scratchSize;
-                size_t scratchSizeForComputeIntensity;
-                uint32_t numTasks;
                 denoiser.prepare(
                     renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-                    &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-                    &numTasks);
-                hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
-                hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
-                hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
-                denoiserStateBuffer.resize(stateSize, 1);
-                denoiserScratchBuffer.resize(std::max(scratchSize, scratchSizeForComputeIntensity), 1);
+                    &denoiserSizes, &numTasks);
+                hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
+                hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
+                hpprintf(
+                    "Compute Normalizer Scratch Buffer: %llu bytes\n",
+                    denoiserSizes.scratchSizeForComputeNormalizer);
+                denoiserStateBuffer.resize(denoiserSizes.stateSize, 1);
+                denoiserScratchBuffer.resize(std::max(
+                    denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
 
                 denoisingTasks.resize(numTasks);
                 denoiser.getTasks(denoisingTasks.data());
 
                 denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+
+                for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
+                    internalGuideLayers[bufIdx].finalize();
+                if (denoiserSizes.internalGuideLayerPixelSize > 0) {
+                    for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
+                        internalGuideLayers[bufIdx].initialize(
+                            cuContext, cudau::BufferType::Device,
+                            renderTargetSizeX * renderTargetSizeY, denoiserSizes.internalGuideLayerPixelSize);
+                }
+
+                hdrNormalizer.resize(denoiserSizes.normalizerSize, 1);
             }
+
+            inputBuffers.noisyBeauty = linearBeautyBuffer;
+            inputBuffers.albedo = linearAlbedoBuffer;
+            inputBuffers.normal = linearNormalBuffer;
+            inputBuffers.flow = linearFlowBuffer;
 
             outputTexture.finalize();
             outputArray.finalize();
@@ -1328,6 +1375,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static float motionVectorScale = -1.0f;
         static bool animate = true;
         bool lastFrameWasAnimated = false;
+        bool denoiserModelChanged = false;
         {
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -1337,33 +1385,55 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 animate = !animate;
             }
 
-            if (ImGui::Checkbox("Temporal Denoiser", &useTemporalDenosier)) {
+            if (ImGui::Checkbox("Temporal Denoiser", &useTemporalDenosier))
+                denoiserModelChanged = true;
+            if (ImGui::Checkbox("Kernel Prediction", &useKernelPredictionMode))
+                denoiserModelChanged = true;
+
+            if (denoiserModelChanged) {
                 CUDADRV_CHECK(cuStreamSynchronize(cuStream));
                 denoiser.destroy();
 
-                OptixDenoiserModelKind modelKind = useTemporalDenosier ?
-                    OPTIX_DENOISER_MODEL_KIND_TEMPORAL :
-                    OPTIX_DENOISER_MODEL_KIND_HDR;
+                OptixDenoiserModelKind modelKind;
+                if (useTemporalDenosier) {
+                    modelKind = useKernelPredictionMode ?
+                        OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV :
+                        OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
+                }
+                else {
+                    modelKind = useKernelPredictionMode ?
+                        OPTIX_DENOISER_MODEL_KIND_AOV :
+                        OPTIX_DENOISER_MODEL_KIND_HDR;
+                }
                 denoiser = optixContext.createDenoiser(modelKind, true, true);
 
-                size_t stateSize;
-                size_t scratchSize;
-                size_t scratchSizeForComputeIntensity;
-                uint32_t numTasks;
                 denoiser.prepare(
                     renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-                    &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-                    &numTasks);
-                hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
-                hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
-                hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
-                denoiserStateBuffer.resize(stateSize, 1);
-                denoiserScratchBuffer.resize(std::max(scratchSize, scratchSizeForComputeIntensity), 1);
+                    &denoiserSizes, &numTasks);
+                hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
+                hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
+                hpprintf(
+                    "Compute Normalizer Scratch Buffer: %llu bytes\n",
+                    denoiserSizes.scratchSizeForComputeNormalizer);
+                denoiserStateBuffer.resize(denoiserSizes.stateSize, 1);
+                denoiserScratchBuffer.resize(std::max(
+                    denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
 
                 denoisingTasks.resize(numTasks);
                 denoiser.getTasks(denoisingTasks.data());
 
                 denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+
+                for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
+                    internalGuideLayers[bufIdx].finalize();
+                if (denoiserSizes.internalGuideLayerPixelSize > 0) {
+                    for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
+                        internalGuideLayers[bufIdx].initialize(
+                            cuContext, cudau::BufferType::Device,
+                            renderTargetSizeX * renderTargetSizeY, denoiserSizes.internalGuideLayerPixelSize);
+                }
+
+                hdrNormalizer.resize(denoiserSizes.normalizerSize, 1);
             }
 
             ImGui::Checkbox("Jittering", &enableJittering);
@@ -1428,7 +1498,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Render
         bool firstAccumFrame = animate || cameraIsActuallyMoving || resized || frameIndex == 0;
-        bool resetFlowBuffer = resized || frameIndex == 0;
+        bool resetFlowBuffer = resized || frameIndex == 0 || denoiserModelChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
             numAccumFrames = 0;
@@ -1457,32 +1527,38 @@ int32_t main(int32_t argc, const char* argv[]) try {
             linearNormalBuffer.getDevicePointer(),
             uint2(renderTargetSizeX, renderTargetSizeY));
 
+        inputBuffers.previousDenoisedBeauty = resetFlowBuffer ?
+            linearBeautyBuffer :
+            linearDenoisedBeautyBuffer;
+        optixu::BufferView internalGuideLayerForNextFrame;
+        if (useTemporalDenosier && useKernelPredictionMode) {
+            inputBuffers.previousInternalGuideLayer = internalGuideLayers[(bufferIndex + 1) % 2];
+            internalGuideLayerForNextFrame = internalGuideLayers[bufferIndex];
+
+            if (resetFlowBuffer)
+                CUDADRV_CHECK(cuMemsetD8Async(
+                    inputBuffers.previousInternalGuideLayer.getCUdeviceptr(), 0,
+                    inputBuffers.previousInternalGuideLayer.sizeInBytes(), cuStream));
+        }
+
         // JP: パストレーシング結果のデノイズ。
-        //     毎フレーム呼ぶ必要があるのはcomputeIntensity()とinvoke()。
-        //     computeIntensity()は自作することもできる。
-        //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
+        //     毎フレーム呼ぶ必要があるのはcomputeNormalizer()とinvoke()。
+        //     サイズが足りていればcomputeNormalizer()のスクラッチバッファーとしてデノイザーのものが再利用できる。
         // EN: Denoise the path tracing result.
-        //     computeIntensity() and invoke() should be calld every frame.
-        //     You can also create a custom computeIntensity().
-        //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
-        denoiser.computeIntensity(cuStream,
-                                  linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                                  denoiserScratchBuffer, hdrIntensity);
-        //float hdrIntensityOnHost;
-        //CUDADRV_CHECK(cuMemcpyDtoH(&hdrIntensityOnHost, hdrIntensity, sizeof(hdrIntensityOnHost)));
-        //printf("%g\n", hdrIntensityOnHost);
+        //     computeNormalizer() and invoke() should be calld every frame.
+        //     Reusing the scratch buffer for denoising for computeNormalizer() is possible if its size is enough.
+        denoiser.computeNormalizer(
+            cuStream,
+            linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+            denoiserScratchBuffer, hdrNormalizer.getCUdeviceptr());
         for (int i = 0; i < denoisingTasks.size(); ++i)
             denoiser.invoke(
-                cuStream,
-                OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensity, 0.0f,
-                linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                linearFlowBuffer, OPTIX_PIXEL_FORMAT_FLOAT2,
-                resetFlowBuffer ? linearBeautyBuffer : linearDenoisedBeautyBuffer,
-                resetFlowBuffer,
+                cuStream, denoisingTasks[i],
+                inputBuffers, resetFlowBuffer,
+                OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer.getCUdeviceptr(), 0.0f,
                 linearDenoisedBeautyBuffer,
-                denoisingTasks[i]);
+                nullptr, // no AOV outputs
+                internalGuideLayerForNextFrame);
 
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
 
@@ -1594,16 +1670,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     outputTexture.finalize();
 
 
-    
-    CUDADRV_CHECK(cuMemFree(hdrIntensity));
 
     CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
+
+    for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
+        internalGuideLayers[bufIdx].finalize();
+
+    hdrNormalizer.finalize();
     
     denoiserScratchBuffer.finalize();
     denoiserStateBuffer.finalize();
-    
+
     denoiser.destroy();
-    
+
     rngBuffer.finalize();
 
     linearDenoisedBeautyBuffer.finalize();

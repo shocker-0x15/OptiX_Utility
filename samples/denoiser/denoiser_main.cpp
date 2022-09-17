@@ -675,28 +675,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_AOV;
 
     optixu::Denoiser denoiser = optixContext.createDenoiser(denoiserModel, true, true);
-    size_t stateSize;
-    size_t scratchSize;
-    size_t scratchSizeForComputeIntensity;
+    optixu::DenoiserSizes denoiserSizes;
     uint32_t numTasks;
     denoiser.prepare(
         renderTargetSizeX, renderTargetSizeY, tileWidth, tileHeight,
-        &stateSize, &scratchSize, &scratchSizeForComputeIntensity,
-        &numTasks);
-    hpprintf("Denoiser State Buffer: %llu bytes\n", stateSize);
-    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", scratchSize);
-    hpprintf("Compute Intensity Scratch Buffer: %llu bytes\n", scratchSizeForComputeIntensity);
+        &denoiserSizes, &numTasks);
+    hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
+    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
+    hpprintf("Compute Normalizer Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSizeForComputeNormalizer);
     cudau::Buffer denoiserStateBuffer;
     cudau::Buffer denoiserScratchBuffer;
-    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, stateSize, 1);
+    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.stateSize, 1);
     denoiserScratchBuffer.initialize(
         cuContext, cudau::BufferType::Device,
-        std::max(scratchSize, scratchSizeForComputeIntensity), 1);
+        std::max(denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
 
     std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
     denoiser.getTasks(denoisingTasks.data());
 
     denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+
+    CUdeviceptr hdrNormalizer;
+    CUDADRV_CHECK(cuMemAlloc(&hdrNormalizer, denoiserSizes.normalizerSize));
 
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
@@ -704,10 +704,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuModuleLoad(
         &moduleCopyBuffers, (getExecutableDirectory() / "denoiser/ptxes/copy_buffers.ptx").string().c_str()));
     cudau::Kernel kernelCopyBuffers(moduleCopyBuffers, "copyBuffers", cudau::dim3(8, 8), 0);
-
-    CUdeviceptr hdrIntensityOrAvgColor;
-    CUDADRV_CHECK(cuMemAlloc(
-        &hdrIntensityOrAvgColor, (useKernelPredictionMode ? 3 : 1) * sizeof(float)));
 
     // END: Setup a denoiser.
     // ----------------------------------------------------------------
@@ -763,40 +759,32 @@ int32_t main(int32_t argc, const char* argv[]) try {
         uint2(renderTargetSizeX, renderTargetSizeY));
     timerRender.stop(cuStream);
 
+    optixu::DenoiserInputBuffers inputBuffers = {};
+    inputBuffers.noisyBeauty = linearColorBuffer;
+    inputBuffers.albedo = linearAlbedoBuffer;
+    inputBuffers.normal = linearNormalBuffer;
+    inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+
     // JP: パストレーシング結果のデノイズ。
-    //     毎フレーム呼ぶ必要があるのはcomputeAverageColor()/computeIntensity()とinvoke()。
-    //     computeIntensity()は自作することもできる。
-    //     サイズが足りていればcomputeIntensity()のスクラッチバッファーとしてデノイザーのものが再利用できる。
+    //     毎フレーム呼ぶ必要があるのはcomputeNormalizer()とinvoke()。
+    //     サイズが足りていればcomputeNormalizer()のスクラッチバッファーとしてデノイザーのものが再利用できる。
     // EN: Denoise the path tracing result.
-    //     computeIntensity() and invoke() should be calld every frame.
-    //     You can also create a custom computeIntensity().
-    //     Reusing the scratch buffer for denoising for computeIntensity() is possible if its size is enough.
+    //     computeNormalizer() and invoke() should be calld every frame.
+    //     Reusing the scratch buffer for denoising for computeNormalizer() is possible if its size is enough.
     timerDenoise.start(cuStream);
-    if (useKernelPredictionMode)
-        denoiser.computeAverageColor(
-            cuStream,
-            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-            denoiserScratchBuffer, hdrIntensityOrAvgColor);
-    else
-        denoiser.computeIntensity(
-            cuStream,
-            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-            denoiserScratchBuffer, hdrIntensityOrAvgColor);
+    denoiser.computeNormalizer(
+        cuStream,
+        linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+        denoiserScratchBuffer, hdrNormalizer);
     for (int i = 0; i < denoisingTasks.size(); ++i)
         denoiser.invoke(
-            cuStream,
-            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrIntensityOrAvgColor, 0.0f,
-            linearColorBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-            nullptr, nullptr, 0, // no AOV inputs
-            linearAlbedoBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-            linearNormalBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-            optixu::BufferView(), OPTIX_PIXEL_FORMAT_FLOAT4, // no flow buffer
-            optixu::BufferView(), // no previous denoised beauty
-            nullptr, // no AOV inputs
-            true,
+            cuStream, denoisingTasks[i],
+            inputBuffers, true,
+            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer, 0.0f,
             linearOutputBuffer,
-            nullptr, // no AOV outputs
-            denoisingTasks[i]);
+            nullptr, optixu::BufferView()); // no AOV outputs, no internal guide layer for the next frame
     timerDenoise.stop(cuStream);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
@@ -839,16 +827,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
 
 
-    
-    CUDADRV_CHECK(cuMemFree(hdrIntensityOrAvgColor));
 
     CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
-    
+
+    CUDADRV_CHECK(cuMemFree(hdrNormalizer));
+
     denoiserScratchBuffer.finalize();
     denoiserStateBuffer.finalize();
-    
+
     denoiser.destroy();
-    
+
     rngBuffer.finalize();
 
     linearOutputBuffer.finalize();

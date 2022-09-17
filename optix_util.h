@@ -1602,6 +1602,31 @@ private: \
         // TODO: ? implement a function to query required window (tile + overlap).
     };
 
+    struct DenoiserSizes {
+        size_t stateSize;
+        size_t scratchSize;
+        size_t normalizerSize;
+        size_t scratchSizeForComputeNormalizer;
+        size_t internalGuideLayerPixelSize;
+    };
+
+    struct DenoiserInputBuffers {
+        BufferView noisyBeauty;
+        BufferView albedo;
+        BufferView normal;
+        BufferView flow;
+        BufferView previousDenoisedBeauty;
+        BufferView previousInternalGuideLayer;
+        BufferView* noisyAovs;
+        BufferView* previousDenoisedAovs;
+        OptixPixelFormat beautyFormat;
+        OptixPixelFormat albedoFormat;
+        OptixPixelFormat normalFormat;
+        OptixPixelFormat flowFormat;
+        OptixPixelFormat* aovFormats;
+        uint32_t numAovs;
+    };
+
     class Denoiser {
         OPTIXU_PIMPL();
 
@@ -1611,31 +1636,20 @@ private: \
 
         void prepare(
             uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
-            size_t* stateBufferSize, size_t* scratchBufferSize, size_t* scratchBufferSizeForComputeIntensity,
-            uint32_t* numTasks) const;
+            DenoiserSizes* sizes, uint32_t* numTasks) const;
         void getTasks(DenoisingTask* tasks) const;
         void setupState(CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const;
 
-        void computeIntensity(
+        void computeNormalizer(
             CUstream stream,
             const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-            const BufferView &scratchBuffer, CUdeviceptr outputIntensity) const;
-        void computeAverageColor(
-            CUstream stream,
-            const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-            const BufferView &scratchBuffer, CUdeviceptr outputAverageColor) const;
+            const BufferView &scratchBuffer, CUdeviceptr normalizer) const;
         void invoke(
-            CUstream stream,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr hdrIntensityOrAverageColor, float blendFactor,
-            const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-            const BufferView* noisyAovs, OptixPixelFormat* aovFormats, uint32_t numAovs,
-            const BufferView &albedo, OptixPixelFormat albedoFormat,
-            const BufferView &normal, OptixPixelFormat normalFormat,
-            const BufferView &flow, OptixPixelFormat flowFormat,
-            const BufferView &previousDenoisedBeauty, const BufferView* previousDenoisedAovs,
-            bool isFirstFrame,
+            CUstream stream, const DenoisingTask &task,
+            const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
+            OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
             const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
-            const DenoisingTask &task) const;
+            const BufferView &internalGuideLayerForNextFrame) const;
     };
 
 
