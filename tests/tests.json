@@ -1,82 +1,144 @@
 [
     {
+        "name": "single_gas",
         "sample": "single_gas",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "single_level_instancing",
         "sample": "single_level_instancing",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "texture",
         "sample": "texture",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "material_sets",
         "sample": "material_sets",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "as_update",
         "sample": "as_update",
         "options": "--screen-shot",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "custom_primitive",
         "sample": "custom_primitive",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "curve_primitive",
         "sample": "curve_primitive",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "sphere_primitive",
         "sample": "sphere_primitive",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "multi_level_instancing",
         "sample": "multi_level_instancing",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "deformation_blur",
         "sample": "deformation_blur",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "denoiser",
         "sample": "denoiser",
         "image": "color_denoised.png",
-        "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"]
+        "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "denoiser kp",
+        "sample": "denoiser",
+        "options": "--kp",
+        "image": "color_denoised.png",
+        "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"],
+        "reference": "reference_kp.png"
+    },
+    {
+        "name": "denoiser upscale",
+        "sample": "denoiser",
+        "options": "--upscale",
+        "image": "color_denoised.png",
+        "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"],
+        "reference": "reference_upscale.png"
+    },
+    {
+        "name": "temporal_denoiser",
         "sample": "temporal_denoiser",
         "options": "--screen-shot",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "temporal_denoiser kp",
+        "sample": "temporal_denoiser",
+        "options": "--screen-shot --kp",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_kp.png"
+    },
+    {
+        "name": "temporal_denoiser upscale",
+        "sample": "temporal_denoiser",
+        "options": "--screen-shot --upscale",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_upscale.png"
+    },
+    {
+        "name": "pick",
         "sample": "pick",
         "options": "--screen-shot",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "uber",
         "sample": "uber",
         "options": "--screen-shot",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     },
     {
+        "name": "payload_annotation",
         "sample": "payload_annotation",
         "options": "--screen-shot",
         "image": "output.png",
-        "outputs": ["output.png"]
+        "outputs": ["output.png"],
+        "reference": "reference.png"
     }
 ]

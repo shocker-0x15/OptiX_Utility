@@ -1,6 +1,8 @@
+import sys
 import os
 import shutil
-import sys
+import pathlib
+from pathlib import Path
 import subprocess
 import json
 from PIL import Image, ImageChops
@@ -15,29 +17,29 @@ def run_command(cmd):
     ret = subprocess.run(cmd, check=True)
 
 def run():
-    scriptDir = os.path.dirname(os.path.abspath(__file__))
+    scriptDir = Path(__file__).parent
 
     msbuild = R'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
 
     # ----------------------------------------------------------------
     # Unit tests
 
-    sln = os.path.abspath(os.path.join(scriptDir, R'..\tests\optixu_unit_tests.sln'))
+    sln = scriptDir / R'optixu_unit_tests.sln'
     config = 'Release'
-    exe = os.path.abspath(os.path.join(scriptDir, 'x64', config, 'optixu_tests.exe'))
+    exe = scriptDir / 'x64' / config / 'optixu_tests.exe'
 
     # Clean
     cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
-    cmd += [sln]
+    cmd += [str(sln)]
     run_command(cmd)
 
     # Build
     cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
-    cmd += [sln]
+    cmd += [str(sln)]
     run_command(cmd)
 
     print('Run unit tests')
-    cmd = [exe]
+    cmd = [str(exe)]
     run_command(cmd)
 
     # END: Unit tests
@@ -48,10 +50,10 @@ def run():
     # ----------------------------------------------------------------
     # Sample image tests
 
-    sln = os.path.abspath(os.path.join(scriptDir, R'..\samples\optixu_samples.sln'))
-    refImgDir = os.path.abspath(os.path.join(scriptDir, R'ref_images'))
+    sln = (scriptDir / R'..\samples\optixu_samples.sln').resolve()
+    refImgDir = scriptDir / R'ref_images'
 
-    with open(os.path.join(scriptDir, R'tests.json')) as f:
+    with open(scriptDir / R'tests.json') as f:
         tests = json.load(f)
 
     configs = ['Debug', 'Release']
@@ -60,38 +62,38 @@ def run():
     for config in configs:
         # Clean
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
-        cmd += [sln]
+        cmd += [str(sln)]
         run_command(cmd)
 
         # Build
         cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
-        cmd += [sln]
+        cmd += [str(sln)]
         run_command(cmd)
 
     # Run tests
     results = {}
     for config in configs:
         resultsPerConfig = {}
-        outDir = os.path.abspath(os.path.join(scriptDir, R'..\samples\x64', config))
+        outDir = (scriptDir / R'..\samples\x64' / config).resolve()
         for test in tests:
-            testName = test['sample']
-            testDir = test['sample']
-            exeName = test['sample'] + '.exe'
+            testName = test['name']
+            testDir = Path(test['sample'])
+            exeName = Path(test['sample'] + '.exe')
 
             print('Run ' + testName + ':')
 
-            oldDir = chdir(os.path.join(scriptDir, R'..\samples', testDir))
-            exe = os.path.join(outDir, exeName)
-            cmd = [exe]
+            oldDir = chdir(scriptDir / R'..\samples' / testDir)
+            exe = outDir / exeName
+            cmd = [str(exe)]
             if 'options' in test:
-                cmd.append(test['options'])
+                cmd.extend(test['options'].split())
             run_command(cmd)
 
             # RGBAでdiffをとると差が無いことになってしまう。
-            testImgPath = test['image']
-            refImgPath = os.path.join(refImgDir, testDir, 'reference.png')
+            testImgPath = Path(test['image'])
+            refImgPath = refImgDir / testDir / test['reference']
 
-            if os.path.exists(testImgPath) and os.path.exists(refImgPath):
+            if testImgPath.exists() and refImgPath.exists():
                 img = Image.open(testImgPath).convert('RGB')
                 refImg = Image.open(refImgPath).convert('RGB')
                 diffImg = ImageChops.difference(img, refImg)
@@ -108,13 +110,19 @@ def run():
                 "numDiffPixels": numDiffPixels
             }
 
+            # 出力されたファイルを削除する。
+            # リファレンスとの相違があった場合やリファレンスが存在しない新テストに関しては出力画像を移動する。
             for output in test['outputs']:
-                if not os.path.exists(output):
+                output = Path(output)
+                if not output.exists():
                     continue
                 if config == 'Release' and output == testImgPath and numDiffPixels != 0:
-                    shutil.move(testImgPath, os.path.join(refImgDir, testDir))
+                    newRefImgPath = refImgPath
+                    if newRefImgPath.exists():
+                        newRefImgPath = newRefImgPath.parent / (newRefImgPath.stem + '_new' + newRefImgPath.suffix)
+                    testImgPath.rename(newRefImgPath)
                 else:
-                    os.remove(output)
+                    output.unlink()
 
             chdir(oldDir)
         
