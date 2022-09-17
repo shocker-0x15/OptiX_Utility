@@ -699,11 +699,14 @@ namespace optixu {
         };
     }
 
-    // JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
-    //     が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするためただの参照で受け取る。
-    // EN: Taking payloads as rvalue reference makes it possible to take rvalue while reflecting value changes.
-    //     However take them as normal reference to ease consistency check of template arguments and for
-    //     conforming optixTrace.
+    /*
+    JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
+        が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするため、
+        ただの参照で受け取る。
+    EN: Taking payloads as rvalue reference makes it possible to take rvalue while reflecting value changes.
+        However take them as normal reference to ease consistency check of template arguments and for
+        conforming optixTrace.
+    */
     template <typename... PayloadTypes>
     template <OptixPayloadTypeID payloadTypeID>
     RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
@@ -1110,35 +1113,43 @@ private: \
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(GeometryInstance);
 
-        // JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
-        //     (頂点/Width/AABBバッファーの変更のみの場合は、markDirty()を呼ばずにGASのアップデートだけでも良い。)
-        // EN: Calling markDirty() of a GAS to which the geometry instance belongs is
-        //     required when calling the following APIs.
-        //     (It is okay to use update instead of calling markDirty() when changing only vertex/width/AABB buffer.)
+        /*
+        JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
+            (頂点/Width/AABBバッファーの変更のみの場合は、markDirty()を呼ばずにGASのアップデートだけでも良い。)
+        EN: Calling markDirty() of a GAS to which the geometry instance belongs is
+            required when calling the following APIs.
+            (It is okay to only use update instead of calling markDirty()
+            when changing only vertex/width/AABB buffer.)
+        */
         void setNumMotionSteps(uint32_t n) const;
         void setVertexFormat(OptixVertexFormat format) const;
         void setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep = 0) const;
         void setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep = 0) const;
         void setRadiusBuffer(const BufferView &radiusBuffer, uint32_t motionStep = 0) const;
-        void setTriangleBuffer(const BufferView &triangleBuffer, OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
+        void setTriangleBuffer(
+            const BufferView &triangleBuffer,
+            OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setSingleRadius(bool useSingleRadius) const;
-        void setCustomPrimitiveAABBBuffer(const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
+        void setCustomPrimitiveAABBBuffer(
+            const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(
             uint32_t numMaterials, const BufferView &matIndexBuffer,
             uint32_t indexSize = sizeof(uint32_t)) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
 
-        // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
-        //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
-        //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
-        //     アラインメントを変更する場合レイアウトが自動で無効化される。
-        // EN: Updating a shader binding table is required when calling the following APIs.
-        //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
-        //     In the case where user data size and/or alignment changes again after generating the layout of
-        //     a shader binding table, the layout is automatically invalidated.
+        /*
+        JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+            パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+            シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+            アラインメントを変更する場合レイアウトが自動で無効化される。
+        EN: Updating a shader binding table is required when calling the following APIs.
+            Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+            In the case where user data size and/or alignment changes again after generating the layout of
+            a shader binding table, the layout is automatically invalidated.
+        */
         void setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -1199,7 +1210,8 @@ private: \
         //     Invalidate the shader binding table layout of hit group as well.
         void markDirty() const;
 
-        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウトが自動で無効化される。
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウト
+        //     が自動で無効化される。
         // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
         void setNumMaterialSets(uint32_t numMatSets) const;
         void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
@@ -1209,7 +1221,8 @@ private: \
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which this GAS (indirectly) belongs
         //     is required when performing rebuild / compact.
         void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
-        OptixTraversableHandle rebuild(CUstream stream, const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
+        OptixTraversableHandle rebuild(
+            CUstream stream, const BufferView &accelBuffer, const BufferView &scratchBuffer) const;
         // JP: リビルドが完了するのをホスト側で待つ。
         // EN: Wait on the host until rebuild operation finishes.
         void prepareForCompact(size_t* compactedAccelBufferSize) const;
@@ -1224,14 +1237,16 @@ private: \
         //     is required when performing update.
         void update(CUstream stream, const BufferView &scratchBuffer) const;
 
-        // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
-        //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
-        //     シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
-        //     アラインメントを変更する場合レイアウトが自動で無効化される。
-        // EN: Updating a shader binding table is required when calling the following APIs.
-        //     Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
-        //     In the case where user data size and/or alignment changes again after generating the layout of
-        //     a shader binding table, the layout is automatically invalidated.
+        /*
+        JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+            パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+            シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+            アラインメントを変更する場合レイアウトが自動で無効化される。
+        EN: Updating a shader binding table is required when calling the following APIs.
+            Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+            In the case where user data size and/or alignment changes again after generating the layout of
+            a shader binding table, the layout is automatically invalidated.
+        */
         void setChildUserData(uint32_t index, const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
         void setChildUserData(uint32_t index, const T &data) const {
@@ -1257,7 +1272,8 @@ private: \
         uint32_t getNumRayTypes(uint32_t matSetIdx) const;
         void getChildUserData(uint32_t index, void* data, uint32_t* size, uint32_t* alignment) const;
         template <typename T>
-        void getChildUserData(uint32_t index, T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+        void getChildUserData(
+            uint32_t index, T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
             getChildUserData(index, reinterpret_cast<void*>(data), size, alignment);
         }
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
@@ -1352,13 +1368,16 @@ private: \
 
 
 
-    // TODO: インスタンスバッファーもユーザー管理にしたいため、rebuild()が今の形になっているが微妙かもしれない。
-    //       インスタンスバッファーを内部で1つ持つようにすると、
-    //       あるフレームでIASをビルド、次のフレームでインスタンスの追加がありリビルドの必要が生じた場合に
-    //       1フレーム目のGPU処理の終了を待たないと危険という状況になってしまう。
-    //       OptiX的にはASのビルド完了後にはインスタンスバッファーは不要となるが、
-    //       アップデート処理はリビルド時に書かれたインスタンスバッファーの内容を期待しているため、
-    //       基本的にインスタンスバッファーとASのメモリ(コンパクション版にもなり得る)は同じ寿命で扱ったほうが良さそう。
+    /*
+    TODO: インスタンスバッファーもユーザー管理にしたいため、rebuild()が今の形になっているが微妙かもしれない。
+          インスタンスバッファーを内部で1つ持つようにすると、
+          あるフレームでIASをビルド、次のフレームでインスタンスの追加がありリビルドの必要が生じた場合に
+          1フレーム目のGPU処理の終了を待たないと危険という状況になってしまう。
+          OptiX的にはASのビルド完了後にはインスタンスバッファーは不要となるが、
+          アップデート処理はリビルド時に書かれたインスタンスバッファーの内容を期待しているため、
+          基本的にインスタンスバッファーとASのメモリ(コンパクション版にもなり得る)
+          は同じ寿命で扱ったほうが良さそう。
+    */
     class InstanceAccelerationStructure {
         OPTIXU_PIMPL();
 
@@ -1528,37 +1547,43 @@ private: \
 
         void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
 
-        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが自動で無効化される。
-        // EN: Calling the following APIs automatically invalidates the (non-hit group) shader binding table layout.
+        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが
+        //     自動で無効化される。
+        // EN: Calling the following APIs automatically invalidates
+        //     the (non-hit group) shader binding table layout.
         void setNumMissRayTypes(uint32_t numMissRayTypes) const;
         void setNumCallablePrograms(uint32_t numCallablePrograms) const;
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
-        // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルが自動でdirty状態になり
-        //     ローンチ時に再セットアップされる。
-        //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
-        //     非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
-        // EN: Calling the following API automatically marks the (non-hit group) shader binding table dirty
-        //     then triggers re-setup of the table at launch.
-        //     However note that the setup in the launch involves the change of the SBT buffer's contents
-        //     and transfer, so double buffered SBT is required for safety
-        //     in the case performing asynchronous update.
+        /*
+        JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルが自動でdirty状態になり
+            ローンチ時に再セットアップされる。
+            ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
+            非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
+        EN: Calling the following API automatically marks the (non-hit group) shader binding table dirty
+            then triggers re-setup of the table at launch.
+            However note that the setup in the launch involves the change of the SBT buffer's contents
+            and transfer, so double buffered SBT is required for safety
+            in the case performing asynchronous update.
+        */
         void setRayGenerationProgram(ProgramGroup program) const;
         void setExceptionProgram(ProgramGroup program) const;
         void setMissProgram(uint32_t rayType, ProgramGroup program) const;
         void setCallableProgram(uint32_t index, ProgramGroup program) const;
         void setShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const;
 
-        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルが自動でdirty状態になり
-        //     ローンチ時に再セットアップされる。
-        //     ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
-        //     非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
-        // EN: Calling the following APIs automatically marks the hit group's shader binding table dirty,
-        //     then triggers re-setup of the table at launch.
-        //     However note that the setup in the launch involves the change of the SBT buffer's contents
-        //     and transfer, so double buffered SBT is required for safety
-        //     in the case performing asynchronous update.
+        /*
+        JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルが自動でdirty状態になり
+            ローンチ時に再セットアップされる。
+            ただしローンチ時のセットアップはSBTバッファーの内容変更・転送を伴うので、
+            非同期書き換えを行う場合は安全のためにはSBTバッファーをダブルバッファリングする必要がある。
+        EN: Calling the following APIs automatically marks the hit group's shader binding table dirty,
+            then triggers re-setup of the table at launch.
+            However note that the setup in the launch involves the change of the SBT buffer's contents
+            and transfer, so double buffered SBT is required for safety
+            in the case performing asynchronous update.
+        */
         void setScene(const Scene &scene) const;
         void setHitGroupShaderBindingTable(const BufferView &shaderBindingTable, void* hostMem) const;
 
