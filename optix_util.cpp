@@ -3036,9 +3036,7 @@ namespace optixu {
 
         const auto setUpInputLayer = [&]
         (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
-            uint32_t pixelStride = format == OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER ?
-                sizes.internalGuideLayerPixelSize :
-                getPixelSize(format);
+            uint32_t pixelStride = getPixelSize(format);
             *layer = {};
             layer->rowStrideInBytes = imageWidth * pixelStride;
             layer->pixelStrideInBytes = pixelStride;
@@ -3053,7 +3051,9 @@ namespace optixu {
         const auto setUpOutputLayer = [&]
         (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
             uint32_t scale = performUpscale ? 2 : 1;
-            uint32_t pixelStride = getPixelSize(format);
+            uint32_t pixelStride = format == OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER ?
+                sizes.internalGuideLayerPixelSize :
+                getPixelSize(format);
             *layer = {};
             layer->rowStrideInBytes = scale * imageWidth * pixelStride;
             layer->pixelStrideInBytes = pixelStride;
@@ -3075,12 +3075,12 @@ namespace optixu {
             setUpInputLayer(inputBuffers.normalFormat, inputBuffers.normal.getCUdeviceptr(), &guideLayer.normal);
         if (isTemporal)
             setUpInputLayer(inputBuffers.flowFormat, inputBuffers.flow.getCUdeviceptr(), &guideLayer.flow);
-        if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV) {
-            setUpInputLayer(
+        if (requireInternalGuideLayer) {
+            setUpOutputLayer(
                 OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER,
                 inputBuffers.previousInternalGuideLayer.getCUdeviceptr(),
                 &guideLayer.previousOutputInternalGuideLayer);
-            setUpInputLayer(
+            setUpOutputLayer(
                 OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER,
                 internalGuideLayerForNextFrame.getCUdeviceptr(),
                 &guideLayer.outputInternalGuideLayer);

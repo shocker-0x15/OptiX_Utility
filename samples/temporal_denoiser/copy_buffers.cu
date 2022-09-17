@@ -19,9 +19,9 @@ CUDA_DEVICE_KERNEL void copyToLinearBuffers(
     uint32_t linearIndex = launchIndex.y * imageSize.x + launchIndex.x;
     linearColorBuffer[linearIndex] = colorAccumBuffer.read(launchIndex);
     linearAlbedoBuffer[linearIndex] = albedoAccumBuffer.read(launchIndex);
-    float3 normal = getXYZ(normalAccumBuffer.read(launchIndex));
-    if (normal.x != 0 || normal.y != 0 || normal.z != 0)
-        normal = normalize(normal);
+    float3 normal = normalize(getXYZ(normalAccumBuffer.read(launchIndex)));
+    if (!allFinite(normal))
+        normal = make_float3(0, 0, 0);
     linearNormalBuffer[linearIndex] = make_float4(normal, 1.0f);
 }
 
@@ -30,14 +30,18 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     BufferToDisplay bufferTypeToDisplay,
     float motionVectorOffset, float motionVectorScale,
     optixu::NativeBlockBuffer2D<float4> outputBuffer,
-    uint2 imageSize) {
+    uint2 imageSize, bool performUpscale) {
     uint2 launchIndex = make_uint2(blockDim.x * blockIdx.x + threadIdx.x,
                                    blockDim.y * blockIdx.y + threadIdx.y);
     if (launchIndex.x >= imageSize.x ||
         launchIndex.y >= imageSize.y)
         return;
 
-    uint32_t linearIndex = launchIndex.y * imageSize.x + launchIndex.x;
+    uint32_t linearIndex;
+    if (!performUpscale || bufferTypeToDisplay == BufferToDisplay::DenoisedBeauty)
+        linearIndex = launchIndex.y * imageSize.x + launchIndex.x;
+    else
+        linearIndex = (launchIndex.y / 2) * (imageSize.x / 2) + (launchIndex.x / 2);
     float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     switch (bufferTypeToDisplay) {
     case BufferToDisplay::NoisyBeauty:

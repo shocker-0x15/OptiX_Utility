@@ -92,12 +92,13 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
     plp.albedoAccumBuffer.write(launchIndex, make_float4(albedoResult, 1.0f));
     plp.normalAccumBuffer.write(launchIndex, make_float4(normalResult, 1.0f));
 
+    // TODO: ジッタリングを正しく扱うにはフローは別パスで計算したほうが良いかも。
     float2 curRasterPos = make_float2(x, y);
     float2 prevRasterPos = plp.prevCamera.calcScreenPosition(denoiserData.firstHitPrevPositionInWorld);
     float2 flow = (curRasterPos - prevRasterPos) * make_float2(plp.imageSize.x, plp.imageSize.y);
     //if (launchIndex.x == 511 && launchIndex.y == 511)
     //    printf("%.3f, %.3f\n", flow.x, flow.y);
-    if (plp.resetFlowBuffer || isnan(denoiserData.firstHitPrevPositionInWorld.x))
+    if (plp.resetFlowBuffer || isnan(flow.x) || isnan(flow.y))
         flow = make_float2(0.0f, 0.0f);
     plp.linearFlowBuffer[launchIndex.y * plp.imageSize.x + launchIndex.x] = make_float2(flow.x, flow.y/*, 0.0f, 0.0f*/);
 }
