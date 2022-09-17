@@ -78,9 +78,9 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen0)() {
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss0)() {
     float3 color = make_float3(0, 0, 0.1f);
 
-    // JP: optixu::trace()に対応するペイロードシグネチャー型を通してペイロードをセットする。
+    // JP: PayloadSignature<...>::trace() と同じペイロードシグネチャー型を通じて返すペイロードをセットする。
     //     書き換えていないペイロードに関してはnullポインターを渡しても良い。
-    // EN: Set payloads via a payload signature type corresponding to optixu::trace().
+    // EN: Set the returning payloads via the same payload signature type as PayloadSignature<...>::trace().
     //     Passing the null pointers is possible for the payloads which were read only.
     PayloadSignature::set(&color);
 }
@@ -116,9 +116,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
     //     There is no object to world space transform since this sample uses only a single GAS.
     float3 color = 0.5f * sn + make_float3(0.5f);
 
-    // JP: optixu::trace()に対応するペイロードシグネチャー型を通してペイロードをセットする。
+    // JP: PayloadSignature<...>::trace() と同じペイロードシグネチャー型を通じて返すペイロードをセットする。
     //     書き換えていないペイロードに関してはnullポインターを渡しても良い。
-    // EN: Set payloads via a payload signature type corresponding to optixu::trace().
+    // EN: Set the returning payloads via the same payload signature type as PayloadSignature<...>::trace().
     //     Passing the null pointers is possible for the payloads which were read only.
     PayloadSignature::set(&color);
 }

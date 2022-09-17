@@ -41,7 +41,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::max<uint32_t>({
             optixu::calcSumDwords<float2>(),
             optixu::calcSumDwords<float>(),
-            Shared::SphereAttributeSignature::numDwords }),
+            Shared::PartialSphereAttributeSignature::numDwords }),
             "plp", sizeof(Shared::PipelineLaunchParameters),
             true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |

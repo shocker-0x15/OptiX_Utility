@@ -37,11 +37,11 @@ struct HitPointParameter {
             ret.secondDistance = __uint_as_float(attr0);
         }
         else if (primType == OPTIX_PRIMITIVE_TYPE_CUSTOM) {
-            // JP: Intersection Programで設定したアトリビュート変数は
-            //     optixu::reportIntersection() に対応するアトリビュートシグネチャー型を通じて取得できる。
-            // EN: Attribute variables set in the intersection program can be obtained using
-            //     an attribute signature type corresponding to optixu::reportIntersection().
-            SphereAttributeSignature::get(&ret.b1, &ret.b2);
+            // JP: Intersection Programでアトリビュートシグネチャー型を通じて設定したアトリビュート変数は
+            //     対応する AttributeSignature<...>::reportIntersection() を通じて取得できる。
+            // EN: Attribute variables set via an attribute signature type in the intersection program
+            //     can be obtained using the corresponding AttributeSignature<...>::reportIntersection().
+            PartialSphereAttributeSignature::get(&ret.b1, &ret.b2);
         }
         else {
             optixuAssert_ShouldNotBeCalled();
@@ -197,11 +197,9 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(partialSphere)() {
     if (t < 0)
         return;
 
-    // JP: アトリビュートシグネチャー型をテンプレート引数に指定して、
-    //     アトリビュートとともに交叉が有効であることを報告する。
-    // EN: Specify an attribute signature type as the template argument and
-    //     report that the intersection is valid with attributes.
-    optixu::reportIntersection<SphereAttributeSignature>(t, isFront ? 0 : 1, theta, phi);
+    // JP: アトリビュートシグネチャー型を通じて、アトリビュートとともに交叉が有効であることを報告する。
+    // EN: report that the intersection is valid with attributes via the attribute signature type.
+    PartialSphereAttributeSignature::reportIntersection(t, isFront ? 0 : 1, theta, phi);
 }
 
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {

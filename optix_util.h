@@ -34,8 +34,12 @@ EN:
 - !!BREAKING
   JP: - Upscaling Denoiserをサポート。
       - Denoiserクラスのインターフェースをいくらか変更。
+      - reportIntersection(), throwException()を削除。
+        代わりに対応するシグネチャー型経由で値の取得・設定を行う。
   EN: - Supported upscaling denoisers.
       - Changed some interfaces of Denoiser class.
+      - Removed reportIntersection(), throwException().
+        Set or get values via corresponding signature types instead.
 
 - !!BREAKING
   JP: - OptiX 7.5.0をサポート。
@@ -432,6 +436,9 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+        RT_DEVICE_FUNCTION RT_INLINE static void reportIntersection(
+            float hitT, uint32_t hitKind,
+            const AttributeTypes &... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void get(AttributeTypes*... attributes);
 #endif
     };
@@ -449,6 +456,9 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+        RT_DEVICE_FUNCTION RT_INLINE static void throwException(
+            int32_t exceptionCode,
+            const ExceptionDetailTypes &... exDetails);
         RT_DEVICE_FUNCTION RT_INLINE static void get(ExceptionDetailTypes*... exDetails);
 #endif
     };
@@ -766,13 +776,11 @@ namespace optixu {
 
 
 
-    template <typename AttributeSignatureType, typename... AttributeTypes>
-    RT_DEVICE_FUNCTION RT_INLINE void reportIntersection(
-        float hitT, uint32_t hitKind,
-        const AttributeTypes &... attributes) {
-        static_assert(std::is_same_v<AttributeSignatureType, AttributeSignature<AttributeTypes...>>,
-                      "Attribute types are inconsistent with the signature.");
-        constexpr size_t numDwords = detail::calcSumDwords<AttributeTypes...>();
+    template <typename... AttributeTypes>
+    RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
+        reportIntersection(
+            float hitT, uint32_t hitKind,
+            const AttributeTypes &... attributes) {
         static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         if constexpr (numDwords == 0) {
             optixReportIntersection(hitT, hitKind);
@@ -795,13 +803,11 @@ namespace optixu {
 
 
 
-    template <typename ExceptionDetailSignatureType, typename... ExceptionDetailTypes>
-    RT_DEVICE_FUNCTION RT_INLINE void throwException(
-        int32_t exceptionCode,
-        const ExceptionDetailTypes &... exDetails) {
-        static_assert(std::is_same_v<ExceptionDetailSignatureType, ExceptionDetailSignature<ExceptionDetailTypes...>>,
-                      "Exception detail types are inconsistent with the signature.");
-        constexpr size_t numDwords = detail::calcSumDwords<ExceptionDetailTypes...>();
+    template <typename... ExceptionDetailTypes>
+    RT_DEVICE_FUNCTION RT_INLINE void ExceptionDetailSignature<ExceptionDetailTypes...>::
+        throwException(
+            int32_t exceptionCode,
+            const ExceptionDetailTypes &... exDetails) {
         static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
         if constexpr (numDwords == 0) {
             optixThrowException(exceptionCode);

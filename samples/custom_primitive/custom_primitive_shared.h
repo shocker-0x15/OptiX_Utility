@@ -67,6 +67,6 @@ namespace Shared {
         PerspectiveCamera camera;
     };
 
-    using SphereAttributeSignature = optixu::AttributeSignature<float, float>;
+    using PartialSphereAttributeSignature = optixu::AttributeSignature<float, float>;
     using PayloadSignature = optixu::PayloadSignature<float3>;
 }
