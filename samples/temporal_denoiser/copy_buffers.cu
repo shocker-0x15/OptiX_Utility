@@ -52,7 +52,7 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     case BufferToDisplay::NoisyBeauty:
     case BufferToDisplay::DenoisedBeauty: {
         auto typedLinearBuffer = reinterpret_cast<float4*>(linearBuffer);
-        if (bufferTypeToDisplay == BufferToDisplay::DenoisedBeauty && !performUpscale) {
+        if (bufferTypeToDisplay == BufferToDisplay::DenoisedBeauty && !performUpscale && useLowResRendering) {
             float xInP = (launchIndex.x % 2 + 0.5f) / 2;
             float yInP = (launchIndex.y % 2 + 0.5f) / 2;
             int32_t npx = shared::clamp(pixel.x + ((xInP - 0.5f) > 0 ? 1 : -1), 0, srcImageWidth - 1);
