@@ -340,6 +340,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Prepare a degamma-ed style to have the identical UI appearance on gamma-corrected render target.
     ImGuiStyle guiStyle, guiStyleWithGamma;
     ImGui::StyleColorsDark(&guiStyle);
+    guiStyle.DisabledAlpha = 0.1f;
     guiStyleWithGamma = guiStyle;
     const auto degamma = [](const ImVec4 &color) {
         return ImVec4(sRGB_degamma_s(color.x),
@@ -1446,6 +1447,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     lastFrameWasAnimated = true;
                 animate = !animate;
             }
+
+            ImGui::Text("Resolution:");
+            ImGui::Text("Render in: %4d x %4d", renderTargetWidth, renderTargetWidth);
+            ImGui::Text("Output in: %4d x %4d", denoisedOutputWidth, denoisedOutputHeight);
 
             if (ImGui::Checkbox("Temporal Denoiser", &useTemporalDenosier))
                 denoiserModelChanged = true;
