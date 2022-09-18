@@ -40,13 +40,15 @@ Currently based on OptiX 7.5.0
   - Memory management is still under user control
 - Geometry instancing with different material sets
 - Callable programs
+- OptiX-IR support for better debugging\
+  \* but fow now (7.5.0 and the 516.94 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser
   - LDR (Not Tested)
   - HDR
   - HDR with Kernel Prediction Model (AOV Output Not Tested)
+  - HDR Upscaling 2x (AOV Output Not Tested)
   - HDR Temporal
   - HDR Temporal with Kernel Prediction Model (Not Tested)
-  - HDR Upscaling 2x (AOV Output Not Tested)
   - HDR Temporal + Upscaling 2x (AOV Output Not Tested)
 - Automatic payload/attribute value packing in kernel code
 - Payload usage annotation to reduce register consumption in complex pipelines
