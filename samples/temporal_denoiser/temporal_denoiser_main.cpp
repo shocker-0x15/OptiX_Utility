@@ -132,6 +132,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bool takeScreenShot = false;
     bool useKernelPredictionMode = false;
     bool performUpscale = false;
+    bool useLowResRendering;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -149,6 +150,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     if (performUpscale)
         useKernelPredictionMode = true;
+    useLowResRendering = performUpscale;
 
     // ----------------------------------------------------------------
     // JP: OpenGL, GLFWの初期化。
@@ -181,13 +183,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     int32_t contentHeight = 1024;
     int32_t renderTargetWidth = contentWidth;
     int32_t renderTargetHeight = contentHeight;
-    int32_t denoisedOutputWidth = renderTargetWidth;
-    int32_t denoisedOutputHeight = renderTargetHeight;
-    if (performUpscale) {
+    if (useLowResRendering) {
         renderTargetWidth = contentWidth / 2;
         renderTargetHeight = contentHeight / 2;
-        denoisedOutputWidth = renderTargetWidth * 2;
-        denoisedOutputHeight = renderTargetHeight * 2;
     }
 
     // JP: ウインドウの初期化。
@@ -1017,101 +1015,47 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array beautyAccumBuffer;
     cudau::Array albedoAccumBuffer;
     cudau::Array normalAccumBuffer;
-    beautyAccumBuffer.initialize2D(
-        cuContext, cudau::ArrayElementType::Float32, 4,
-        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-        renderTargetWidth, renderTargetHeight, 1);
-    albedoAccumBuffer.initialize2D(
-        cuContext, cudau::ArrayElementType::Float32, 4,
-        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-        renderTargetWidth, renderTargetHeight, 1);
-    normalAccumBuffer.initialize2D(
-        cuContext, cudau::ArrayElementType::Float32, 4,
-        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-        renderTargetWidth, renderTargetHeight, 1);
     cudau::TypedBuffer<float4> linearBeautyBuffer;
     cudau::TypedBuffer<float4> linearAlbedoBuffer;
     cudau::TypedBuffer<float4> linearNormalBuffer;
     cudau::TypedBuffer<float2> linearFlowBuffer;
     cudau::TypedBuffer<float4> linearDenoisedBeautyBuffers[2];
-    linearBeautyBuffer.initialize(
-        cuContext, cudau::BufferType::Device,
-        renderTargetWidth * renderTargetHeight);
-    linearAlbedoBuffer.initialize(
-        cuContext, cudau::BufferType::Device,
-        renderTargetWidth * renderTargetHeight);
-    linearNormalBuffer.initialize(
-        cuContext, cudau::BufferType::Device,
-        renderTargetWidth * renderTargetHeight);
-    linearFlowBuffer.initialize(
-        cuContext, cudau::BufferType::Device,
-        renderTargetWidth * renderTargetHeight);
-    for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
-        linearDenoisedBeautyBuffers[bufIdx].initialize(
-            cuContext, cudau::BufferType::Device,
-            denoisedOutputWidth * denoisedOutputHeight);
 
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 1> rngBuffer;
-    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetWidth, renderTargetHeight);
-    {
-        std::mt19937_64 rng(591842031321323413);
 
-        rngBuffer.map();
-        for (int y = 0; y < renderTargetHeight; ++y)
-            for (int x = 0; x < renderTargetWidth; ++x)
-                rngBuffer(x, y).setState(rng());
-        rngBuffer.unmap();
-    };
+    // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
+    // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
+    glu::Texture2D outputTexture;
+    cudau::Array outputArray;
+    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
+    outputBufferSurfaceHolder.initialize({ &outputArray });
+
+    glu::Sampler outputSampler;
+    outputSampler.initialize(
+        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
+        glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
 
 
-
-    // ----------------------------------------------------------------
-    // JP: デノイザーのセットアップ。
-    //     Temporalデノイザーを使用する。
-    // EN: Setup a denoiser.
-    //     Use the temporal denoiser.
 
     constexpr bool useTiledDenoising = false; // Change this to true to use tiled denoising.
     constexpr uint32_t tileWidth = useTiledDenoising ? 256 : 0;
     constexpr uint32_t tileHeight = useTiledDenoising ? 256 : 0;
-    OptixDenoiserModelKind denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
+    OptixDenoiserModelKind denoiserModel;
+    optixu::Denoiser denoiser;
+    optixu::DenoiserSizes denoiserSizes;
+    uint32_t numTasks;
+    std::vector<optixu::DenoisingTask> denoisingTasks;
+    cudau::Buffer denoiserStateBuffer;
+    cudau::Buffer denoiserScratchBuffer;
+    cudau::Buffer internalGuideLayers[2];
+    cudau::Buffer hdrNormalizer;
+
+    denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
     if (performUpscale)
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
     // Use kernel prediction model (AOV denoiser) even if this sample doesn't give any AOV inputs.
     else if (useKernelPredictionMode)
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV;
-
-    optixu::Denoiser denoiser = optixContext.createDenoiser(denoiserModel, true, true);
-    optixu::DenoiserSizes denoiserSizes;
-    uint32_t numTasks;
-    denoiser.prepare(
-        renderTargetWidth, renderTargetHeight, tileWidth, tileHeight,
-        &denoiserSizes, &numTasks);
-    hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
-    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
-    hpprintf("Compute Normalizer Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSizeForComputeNormalizer);
-    cudau::Buffer denoiserStateBuffer;
-    cudau::Buffer denoiserScratchBuffer;
-    denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.stateSize, 1);
-    denoiserScratchBuffer.initialize(
-        cuContext, cudau::BufferType::Device,
-        std::max(denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
-
-    std::vector<optixu::DenoisingTask> denoisingTasks(numTasks);
-    denoiser.getTasks(denoisingTasks.data());
-
-    denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
-
-    cudau::Buffer internalGuideLayers[2];
-    if (denoiserSizes.internalGuideLayerPixelSize > 0) {
-        for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
-            internalGuideLayers[bufIdx].initialize(
-                cuContext, cudau::BufferType::Device,
-                denoisedOutputWidth * denoisedOutputHeight, denoiserSizes.internalGuideLayerPixelSize);
-    }
-
-    cudau::Buffer hdrNormalizer;
-    hdrNormalizer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.normalizerSize, 1);
 
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
@@ -1123,27 +1067,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleCopyBuffers, "copyToLinearBuffers", cudau::dim3(8, 8), 0);
     cudau::Kernel kernelVisualizeToOutputBuffer(
         moduleCopyBuffers, "visualizeToOutputBuffer", cudau::dim3(8, 8), 0);
-
-    // END: Setup a denoiser.
-    // ----------------------------------------------------------------
-
-
-
-    // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
-    // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
-    glu::Texture2D outputTexture;
-    cudau::Array outputArray;
-    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
-    outputTexture.initialize(GL_RGBA32F, contentWidth, contentHeight, 1);
-    outputArray.initializeFromGLTexture2D(
-        cuContext, outputTexture.getHandle(),
-        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-    outputBufferSurfaceHolder.initialize({ &outputArray });
-
-    glu::Sampler outputSampler;
-    outputSampler.initialize(
-        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
-        glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
 
 
 
@@ -1163,14 +1086,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.imageSize = int2(renderTargetWidth, renderTargetHeight);
-    plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-    plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
-    plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
-    plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
-    plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
     plp.camera.fovY = 50 * pi_v<float> / 180;
-    plp.camera.aspect = static_cast<float>(renderTargetWidth) / renderTargetHeight;
     plp.camera.position = g_cameraPosition;
     plp.camera.orientation = g_cameraOrientation.toMatrix3x3();
     plp.prevCamera = plp.camera;
@@ -1185,14 +1101,232 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     optixu::DenoiserInputBuffers inputBuffers = {};
-    inputBuffers.noisyBeauty = linearBeautyBuffer;
-    inputBuffers.albedo = linearAlbedoBuffer;
-    inputBuffers.normal = linearNormalBuffer;
-    inputBuffers.flow = linearFlowBuffer;
     inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
     inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
     inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
     inputBuffers.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;
+
+
+
+    const auto initializeRenderingResResources = [&]
+    (int32_t width, int32_t height, bool useLowRes) {
+        beautyAccumBuffer.initialize2D(
+            cuContext, cudau::ArrayElementType::Float32, 4,
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
+        albedoAccumBuffer.initialize2D(
+            cuContext, cudau::ArrayElementType::Float32, 4,
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
+        normalAccumBuffer.initialize2D(
+            cuContext, cudau::ArrayElementType::Float32, 4,
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
+
+        linearBeautyBuffer.initialize(
+            cuContext, cudau::BufferType::Device,
+            width * height);
+        linearAlbedoBuffer.initialize(
+            cuContext, cudau::BufferType::Device,
+            width * height);
+        linearNormalBuffer.initialize(
+            cuContext, cudau::BufferType::Device,
+            width * height);
+        linearFlowBuffer.initialize(
+            cuContext, cudau::BufferType::Device,
+            width * height);
+
+        rngBuffer.initialize(cuContext, cudau::BufferType::Device, width, height);
+        {
+            std::mt19937_64 rng(591842031321323413);
+
+            rngBuffer.map();
+            for (int y = 0; y < height; ++y)
+                for (int x = 0; x < width; ++x)
+                    rngBuffer(x, y).setState(rng());
+            rngBuffer.unmap();
+        };
+
+        plp.imageSize = int2(width, height);
+        plp.rngBuffer = rngBuffer.getBlockBuffer2D();
+        plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
+        plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
+        plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
+        plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
+        plp.camera.aspect = static_cast<float>(width) / height;
+
+        inputBuffers.noisyBeauty = linearBeautyBuffer;
+        inputBuffers.albedo = linearAlbedoBuffer;
+        inputBuffers.normal = linearNormalBuffer;
+        inputBuffers.flow = linearFlowBuffer;
+
+        int32_t outputScale = useLowRes ? 2 : 1;
+        int32_t outputWidth = outputScale * width;
+        int32_t outputHeight = outputScale * height;
+        outputTexture.initialize(GL_RGBA32F, outputWidth, outputHeight, 1);
+        outputArray.initializeFromGLTexture2D(
+            cuContext, outputTexture.getHandle(),
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+    };
+
+    const auto initializeDenoiser = [&]
+    (int32_t width, int32_t height, bool withUpscaleDenoiser) {
+        int32_t denoiserScale = withUpscaleDenoiser ? 2 : 1;
+        int32_t denoisedWidth = denoiserScale * width;
+        int32_t denoisedHeight = denoiserScale * height;
+
+        denoiser = optixContext.createDenoiser(denoiserModel, true, true);
+        denoiser.prepare(
+            width, height, tileWidth, tileHeight,
+            &denoiserSizes, &numTasks);
+        hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
+        hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
+        hpprintf("Compute Normalizer Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSizeForComputeNormalizer);
+        denoiserStateBuffer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.stateSize, 1);
+        denoiserScratchBuffer.initialize(
+            cuContext, cudau::BufferType::Device,
+            std::max(denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
+
+        denoisingTasks.resize(numTasks);
+        denoiser.getTasks(denoisingTasks.data());
+
+        denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+
+        if (denoiserSizes.internalGuideLayerPixelSize > 0) {
+            for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
+                internalGuideLayers[bufIdx].initialize(
+                    cuContext, cudau::BufferType::Device,
+                    denoisedWidth * denoisedHeight, denoiserSizes.internalGuideLayerPixelSize);
+        }
+
+        for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
+            linearDenoisedBeautyBuffers[bufIdx].initialize(
+                cuContext, cudau::BufferType::Device,
+                denoisedWidth * denoisedHeight);
+
+        hdrNormalizer.initialize(cuContext, cudau::BufferType::Device, denoiserSizes.normalizerSize, 1);
+    };
+
+    const auto resizeRenderingResResources = [&]
+    (int32_t width, int32_t height, bool useLowRes) {
+        beautyAccumBuffer.resize(width, height);
+        albedoAccumBuffer.resize(width, height);
+        normalAccumBuffer.resize(width, height);
+
+        linearBeautyBuffer.resize(width * height);
+        linearAlbedoBuffer.resize(width * height);
+        linearNormalBuffer.resize(width * height);
+        linearFlowBuffer.resize(width * height);
+
+        rngBuffer.resize(width, height);
+        {
+            std::mt19937_64 rng(591842031321323413);
+
+            rngBuffer.map();
+            for (int y = 0; y < height; ++y)
+                for (int x = 0; x < width; ++x)
+                    rngBuffer(x, y).setState(rng());
+            rngBuffer.unmap();
+        };
+
+        plp.imageSize = int2(width, height);
+        plp.rngBuffer = rngBuffer.getBlockBuffer2D();
+        plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
+        plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
+        plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
+        plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
+        plp.camera.aspect = static_cast<float>(width) / height;
+
+        inputBuffers.noisyBeauty = linearBeautyBuffer;
+        inputBuffers.albedo = linearAlbedoBuffer;
+        inputBuffers.normal = linearNormalBuffer;
+        inputBuffers.flow = linearFlowBuffer;
+
+        int32_t outputScale = useLowRes ? 2 : 1;
+        int32_t outputWidth = outputScale * width;
+        int32_t outputHeight = outputScale * height;
+        outputArray.finalize();
+        outputTexture.finalize();
+        outputTexture.initialize(GL_RGBA32F, outputWidth, outputHeight, 1);
+        outputArray.initializeFromGLTexture2D(
+            cuContext, outputTexture.getHandle(),
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+    };
+
+    const auto resizeDenoiser = [&]
+    (int32_t width, int32_t height, bool withUpscaleDenoiser) {
+        int32_t denoiserScale = withUpscaleDenoiser ? 2 : 1;
+        int32_t denoisedWidth = denoiserScale * width;
+        int32_t denoisedHeight = denoiserScale * height;
+
+        denoiser.prepare(
+            width, height, tileWidth, tileHeight,
+            &denoiserSizes, &numTasks);
+        hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
+        hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
+        hpprintf("Compute Normalizer Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSizeForComputeNormalizer);
+        denoiserStateBuffer.resize(denoiserSizes.stateSize, 1);
+        denoiserScratchBuffer.resize(
+            std::max(denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
+
+        denoisingTasks.resize(numTasks);
+        denoiser.getTasks(denoisingTasks.data());
+
+        denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+
+        if (denoiserSizes.internalGuideLayerPixelSize > 0) {
+            for (int bufIdx = 0; bufIdx < 2; ++bufIdx) {
+                if (internalGuideLayers[bufIdx].isInitialized())
+                    internalGuideLayers[bufIdx].resize(
+                        denoisedWidth * denoisedHeight, denoiserSizes.internalGuideLayerPixelSize);
+                else
+                    internalGuideLayers[bufIdx].initialize(
+                        cuContext, cudau::BufferType::Device,
+                        denoisedWidth * denoisedHeight, denoiserSizes.internalGuideLayerPixelSize);
+            }
+        }
+
+        for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
+            linearDenoisedBeautyBuffers[bufIdx].resize(denoisedWidth * denoisedHeight);
+
+        hdrNormalizer.resize(denoiserSizes.normalizerSize, 1);
+    };
+
+    const auto finalizeRenderingResResources = [&]
+    () {
+        outputArray.finalize();
+        outputTexture.finalize();
+
+        rngBuffer.finalize();
+
+        linearFlowBuffer.finalize();
+        linearNormalBuffer.finalize();
+        linearAlbedoBuffer.finalize();
+        linearBeautyBuffer.finalize();
+
+        normalAccumBuffer.finalize();
+        albedoAccumBuffer.finalize();
+        beautyAccumBuffer.finalize();
+    };
+
+    const auto finalizeDenoiser = [&]
+    () {
+        for (int bufIdx = 1; bufIdx >= 0; --bufIdx) {
+            linearDenoisedBeautyBuffers[bufIdx].finalize();
+            internalGuideLayers[bufIdx].finalize();
+        }
+
+        hdrNormalizer.finalize();
+
+        denoiserScratchBuffer.finalize();
+        denoiserStateBuffer.finalize();
+        denoiser.destroy();
+    };
+
+    initializeRenderingResResources(renderTargetWidth, renderTargetHeight, useLowResRendering);
+    initializeDenoiser(renderTargetWidth, renderTargetHeight, performUpscale);
+
+
 
     struct GPUTimer {
         cudau::Timer frame;
@@ -1235,91 +1369,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
         int32_t newFBHeight;
         glfwGetFramebufferSize(window, &newFBWidth, &newFBHeight);
         if (newFBWidth != curFBWidth || newFBHeight != curFBHeight) {
+            newFBWidth = (newFBWidth + 1) / 2 * 2;
+            newFBHeight = (newFBHeight + 1) / 2 * 2;
+            glfwSetWindowSize(window, newFBWidth, newFBHeight);
             curFBWidth = newFBWidth;
             curFBHeight = newFBHeight;
 
             contentWidth = curFBWidth / UIScaling;
             contentHeight = curFBHeight / UIScaling;
-            if (performUpscale) {
+
+            renderTargetWidth = contentWidth;
+            renderTargetHeight = contentHeight;
+            if (useLowResRendering) {
                 renderTargetWidth = contentWidth / 2;
                 renderTargetHeight = contentHeight / 2;
-                denoisedOutputWidth = renderTargetWidth * 2;
-                denoisedOutputHeight = renderTargetHeight * 2;
             }
 
-            beautyAccumBuffer.resize(renderTargetWidth, renderTargetHeight);
-            albedoAccumBuffer.resize(renderTargetWidth, renderTargetHeight);
-            normalAccumBuffer.resize(renderTargetWidth, renderTargetHeight);
-            linearBeautyBuffer.resize(renderTargetWidth * renderTargetHeight);
-            linearAlbedoBuffer.resize(renderTargetWidth * renderTargetHeight);
-            linearNormalBuffer.resize(renderTargetWidth * renderTargetHeight);
-            linearFlowBuffer.resize(renderTargetWidth * renderTargetHeight);
-            for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
-                linearDenoisedBeautyBuffers[bufIdx].resize(denoisedOutputWidth * denoisedOutputHeight);
-
-            rngBuffer.resize(renderTargetWidth, renderTargetHeight);
-            {
-                std::mt19937_64 rng(591842031321323413);
-
-                rngBuffer.map();
-                for (int y = 0; y < renderTargetHeight; ++y)
-                    for (int x = 0; x < renderTargetWidth; ++x)
-                        rngBuffer(x, y).setState(rng());
-                rngBuffer.unmap();
-            };
-
-            plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-            plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
-            plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
-            plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
-            plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
-
-            {
-                denoiser.prepare(
-                    renderTargetWidth, renderTargetHeight, tileWidth, tileHeight,
-                    &denoiserSizes, &numTasks);
-                hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
-                hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
-                hpprintf(
-                    "Compute Normalizer Scratch Buffer: %llu bytes\n",
-                    denoiserSizes.scratchSizeForComputeNormalizer);
-                denoiserStateBuffer.resize(denoiserSizes.stateSize, 1);
-                denoiserScratchBuffer.resize(std::max(
-                    denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
-
-                denoisingTasks.resize(numTasks);
-                denoiser.getTasks(denoisingTasks.data());
-
-                denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
-
-                for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
-                    internalGuideLayers[bufIdx].finalize();
-                if (denoiserSizes.internalGuideLayerPixelSize > 0) {
-                    for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
-                        internalGuideLayers[bufIdx].initialize(
-                            cuContext, cudau::BufferType::Device,
-                            denoisedOutputWidth * denoisedOutputHeight,
-                            denoiserSizes.internalGuideLayerPixelSize);
-                }
-
-                hdrNormalizer.resize(denoiserSizes.normalizerSize, 1);
-            }
-
-            inputBuffers.noisyBeauty = linearBeautyBuffer;
-            inputBuffers.albedo = linearAlbedoBuffer;
-            inputBuffers.normal = linearNormalBuffer;
-            inputBuffers.flow = linearFlowBuffer;
-
-            outputTexture.finalize();
-            outputArray.finalize();
-            outputTexture.initialize(GL_RGBA32F, contentWidth, contentHeight, 1);
-            outputArray.initializeFromGLTexture2D(
-                cuContext, outputTexture.getHandle(),
-                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-
-            // EN: update the pipeline parameters.
-            plp.imageSize = int2(renderTargetWidth, renderTargetHeight);
-            plp.camera.aspect = (float)renderTargetWidth / renderTargetHeight;
+            resizeRenderingResResources(renderTargetWidth, renderTargetHeight, useLowResRendering);
+            resizeDenoiser(renderTargetWidth, renderTargetHeight, performUpscale);
 
             resized = true;
         }
@@ -1381,8 +1448,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 axis = make_float3(1, 0, 0);
 
             g_cameraOrientation = g_cameraOrientation * qRotateZ(g_cameraTiltSpeed * tiltZ);
-            g_tempCameraOrientation = g_cameraOrientation * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
-            g_cameraPosition += g_tempCameraOrientation.toMatrix3x3() * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
+            g_tempCameraOrientation = g_cameraOrientation *
+                qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
+            g_cameraPosition += g_tempCameraOrientation.toMatrix3x3() *
+                (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
             if (g_buttonRotate.getState() == false && g_buttonRotate.getTime() == frameIndex) {
                 g_cameraOrientation = g_tempCameraOrientation;
                 deltaX = 0;
@@ -1430,14 +1499,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::End();
         }
 
-        static bool useTemporalDenosier = true;
         static bool enableJittering = false;
+        static bool animate = true;
+        static bool useTemporalDenosier = true;
+        static int32_t log2NumSamplesPerFrame = 0;
         static Shared::BufferToDisplay bufferTypeToDisplay = Shared::BufferToDisplay::DenoisedBeauty;
         static float motionVectorScale = -1.0f;
-        static bool animate = true;
-        static int32_t log2NumSamplesPerFrame = 0;
         bool lastFrameWasAnimated = false;
-        bool oldPerformUpscale = performUpscale;
+        bool oldUseLowResRendering = useLowResRendering;
         bool denoiserModelChanged = false;
         {
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -1449,15 +1518,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
             }
 
             ImGui::Text("Resolution:");
-            ImGui::Text("Render in: %4d x %4d", renderTargetWidth, renderTargetWidth);
-            ImGui::Text("Output in: %4d x %4d", denoisedOutputWidth, denoisedOutputHeight);
+            ImGui::Text("Rendering in: %4d x %4d", renderTargetWidth, renderTargetHeight);
+            int32_t denoisedScale = performUpscale ? 2 : 1;
+            ImGui::Text("Denoised output: %4d x %4d",
+                        denoisedScale * renderTargetWidth, denoisedScale * renderTargetHeight);
+            if (ImGui::Checkbox("Low Res Rendering", &useLowResRendering)) {
+                if (!useLowResRendering)
+                    performUpscale = false;
+                denoiserModelChanged = true;
+            }
 
             if (ImGui::Checkbox("Temporal Denoiser", &useTemporalDenosier))
                 denoiserModelChanged = true;
+
+            ImGui::BeginDisabled(!useLowResRendering);
             if (ImGui::Checkbox("with Upscaling", &performUpscale))
                 denoiserModelChanged = true;
             if (performUpscale)
                 useKernelPredictionMode = true;
+            ImGui::EndDisabled();
+
             ImGui::BeginDisabled(performUpscale);
             if (ImGui::Checkbox("Use Kernel Prediction Model", &useKernelPredictionMode))
                 denoiserModelChanged = true;
@@ -1466,112 +1546,37 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (denoiserModelChanged) {
                 glFinish();
                 CUDADRV_CHECK(cuStreamSynchronize(cuStream));
-                denoiser.destroy();
 
-                OptixDenoiserModelKind modelKind;
+                Assert(!performUpscale || useLowResRendering, "Invalid configuration.");
+
                 if (performUpscale) {
-                    modelKind = useTemporalDenosier ?
+                    denoiserModel = useTemporalDenosier ?
                         OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X :
                         OPTIX_DENOISER_MODEL_KIND_UPSCALE2X;
                 }
                 else {
                     if (useTemporalDenosier) {
-                        modelKind = useKernelPredictionMode ?
+                        denoiserModel = useKernelPredictionMode ?
                             OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV :
                             OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
                     }
                     else {
-                        modelKind = useKernelPredictionMode ?
+                        denoiserModel = useKernelPredictionMode ?
                             OPTIX_DENOISER_MODEL_KIND_AOV :
                             OPTIX_DENOISER_MODEL_KIND_HDR;
                     }
                 }
-                denoiser = optixContext.createDenoiser(modelKind, true, true);
 
                 renderTargetWidth = contentWidth;
                 renderTargetHeight = contentHeight;
-                denoisedOutputWidth = renderTargetWidth;
-                denoisedOutputHeight = renderTargetHeight;
-                if (performUpscale) {
+                if (useLowResRendering) {
                     renderTargetWidth = contentWidth / 2;
                     renderTargetHeight = contentHeight / 2;
-                    denoisedOutputWidth = renderTargetWidth * 2;
-                    denoisedOutputHeight = renderTargetHeight * 2;
                 }
 
-                beautyAccumBuffer.resize(renderTargetWidth, renderTargetHeight);
-                albedoAccumBuffer.resize(renderTargetWidth, renderTargetHeight);
-                normalAccumBuffer.resize(renderTargetWidth, renderTargetHeight);
-                linearBeautyBuffer.resize(renderTargetWidth * renderTargetHeight);
-                linearAlbedoBuffer.resize(renderTargetWidth * renderTargetHeight);
-                linearNormalBuffer.resize(renderTargetWidth * renderTargetHeight);
-                linearFlowBuffer.resize(renderTargetWidth * renderTargetHeight);
-                for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
-                    linearDenoisedBeautyBuffers[bufIdx].resize(denoisedOutputWidth * denoisedOutputHeight);
-
-                rngBuffer.resize(renderTargetWidth, renderTargetHeight);
-                {
-                    std::mt19937_64 rng(591842031321323413);
-
-                    rngBuffer.map();
-                    for (int y = 0; y < renderTargetHeight; ++y)
-                        for (int x = 0; x < renderTargetWidth; ++x)
-                            rngBuffer(x, y).setState(rng());
-                    rngBuffer.unmap();
-                };
-
-                plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-                plp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
-                plp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
-                plp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
-                plp.linearFlowBuffer = linearFlowBuffer.getDevicePointer();
-
-                {
-                    denoiser.prepare(
-                        renderTargetWidth, renderTargetHeight, tileWidth, tileHeight,
-                        &denoiserSizes, &numTasks);
-                    hpprintf("Denoiser State Buffer: %llu bytes\n", denoiserSizes.stateSize);
-                    hpprintf("Denoiser Scratch Buffer: %llu bytes\n", denoiserSizes.scratchSize);
-                    hpprintf(
-                        "Compute Normalizer Scratch Buffer: %llu bytes\n",
-                        denoiserSizes.scratchSizeForComputeNormalizer);
-                    denoiserStateBuffer.resize(denoiserSizes.stateSize, 1);
-                    denoiserScratchBuffer.resize(std::max(
-                        denoiserSizes.scratchSize, denoiserSizes.scratchSizeForComputeNormalizer), 1);
-
-                    denoisingTasks.resize(numTasks);
-                    denoiser.getTasks(denoisingTasks.data());
-
-                    denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
-
-                    for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
-                        internalGuideLayers[bufIdx].finalize();
-                    if (denoiserSizes.internalGuideLayerPixelSize > 0) {
-                        for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
-                            internalGuideLayers[bufIdx].initialize(
-                                cuContext, cudau::BufferType::Device,
-                                denoisedOutputWidth * denoisedOutputHeight,
-                                denoiserSizes.internalGuideLayerPixelSize);
-                    }
-
-                    hdrNormalizer.resize(denoiserSizes.normalizerSize, 1);
-                }
-
-                inputBuffers.noisyBeauty = linearBeautyBuffer;
-                inputBuffers.albedo = linearAlbedoBuffer;
-                inputBuffers.normal = linearNormalBuffer;
-                inputBuffers.flow = linearFlowBuffer;
-
-                outputTexture.finalize();
-                outputArray.finalize();
-                outputTexture.initialize(GL_RGBA32F, contentWidth, contentHeight, 1);
-                outputArray.initializeFromGLTexture2D(
-                    cuContext, outputTexture.getHandle(),
-                    cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-
-                // EN: update the pipeline parameters.
-                plp.imageSize = int2(renderTargetWidth, renderTargetHeight);
-                plp.camera.aspect = (float)renderTargetWidth / renderTargetHeight;
+                resizeRenderingResResources(renderTargetWidth, renderTargetHeight, useLowResRendering);
+                finalizeDenoiser();
+                initializeDenoiser(renderTargetWidth, renderTargetHeight, performUpscale);
             }
 
             //ImGui::Checkbox("Jittering", &enableJittering);
@@ -1636,19 +1641,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
         curGPUTimer.update.stop(cuStream);
 
-        // Render
         bool firstAccumFrame =
             animate ||
             cameraIsActuallyMoving ||
             resized ||
             frameIndex == 0 ||
-            (oldPerformUpscale != performUpscale);
+            (oldUseLowResRendering != useLowResRendering);
         bool isNewSequence = resized || frameIndex == 0 || denoiserModelChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
             numAccumFrames = 0;
         plp.enableJittering = enableJittering;
         plp.resetFlowBuffer = isNewSequence;
+
+        // Render
         curGPUTimer.render.start(cuStream);
         uint32_t sppPerFrame = 1 << log2NumSamplesPerFrame;
         for (int smpIdx = 0; smpIdx < sppPerFrame; ++smpIdx) {
@@ -1735,12 +1741,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             break;
         }
         kernelVisualizeToOutputBuffer(
-            cuStream, kernelVisualizeToOutputBuffer.calcGridDim(denoisedOutputWidth, denoisedOutputHeight),
+            cuStream, kernelVisualizeToOutputBuffer.calcGridDim(contentWidth, contentHeight),
             bufferToDisplay,
             bufferTypeToDisplay,
             0.5f, std::pow(10.0f, motionVectorScale),
             outputBufferSurfaceHolder.getNext(),
-            uint2(denoisedOutputWidth, denoisedOutputHeight), performUpscale);
+            int2(contentWidth, contentHeight), performUpscale, useLowResRendering);
 
         outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
 
@@ -1750,13 +1756,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         if (takeScreenShot && frameIndex + 1 == 60) {
             CUDADRV_CHECK(cuStreamSynchronize(cuStream));
-            auto rawImage = new float4[denoisedOutputWidth * denoisedOutputHeight];
+            auto rawImage = new float4[contentWidth * contentHeight];
             glGetTextureSubImage(
                 outputTexture.getHandle(), 0,
-                0, 0, 0, denoisedOutputWidth, denoisedOutputHeight, 1,
-                GL_RGBA, GL_FLOAT, sizeof(float4) * denoisedOutputWidth * denoisedOutputHeight, rawImage);
-            saveImage("output.png", denoisedOutputWidth, denoisedOutputHeight, rawImage,
-                      false, true);
+                0, 0, 0, contentWidth, contentHeight, 1,
+                GL_RGBA, GL_FLOAT, sizeof(float4) * contentWidth * contentHeight, rawImage);
+            saveImage("output.png", contentWidth, contentHeight, rawImage, false, true);
             delete[] rawImage;
             break;
         }
@@ -1808,42 +1813,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    finalizeDenoiser();
+    finalizeRenderingResResources();
+
+
+
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
+
+
 
     drawOptiXResultShader.finalize();
     vertexArrayForFullScreen.finalize();
 
     outputSampler.finalize();
     outputBufferSurfaceHolder.finalize();
-    outputArray.finalize();
-    outputTexture.finalize();
 
 
 
     CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers));
-
-    for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
-        internalGuideLayers[bufIdx].finalize();
-
-    hdrNormalizer.finalize();
-    
-    denoiserScratchBuffer.finalize();
-    denoiserStateBuffer.finalize();
-
-    denoiser.destroy();
-
-    rngBuffer.finalize();
-
-    for (int bufIdx = 1; bufIdx >= 0; --bufIdx)
-        linearDenoisedBeautyBuffers[bufIdx].finalize();
-    linearFlowBuffer.finalize();
-    linearNormalBuffer.finalize();
-    linearAlbedoBuffer.finalize();
-    linearBeautyBuffer.finalize();
-
-    normalAccumBuffer.finalize();
-    albedoAccumBuffer.finalize();
-    beautyAccumBuffer.finalize();
 
 
 

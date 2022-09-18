@@ -87,6 +87,21 @@ CUDA_COMMON_FUNCTION CUDA_INLINE constexpr size_t lengthof(const T (&array)[size
     return size;
 }
 
+namespace shared {
+    template <typename T>
+    CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T min(const T &a, const T &b) {
+        return b < a ? b : a;
+    }
+    template <typename T>
+    CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T max(const T &a, const T &b) {
+        return b > a ? b : a;
+    }
+    template <typename T>
+    CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T clamp(const T &v, const T &minv, const T &maxv) {
+        return min(max(v, minv), maxv);
+    }
+}
+
 
 
 template <typename T>
@@ -282,191 +297,445 @@ inline constexpr float4 make_float4(float x, float y, float z, float w) {
 }
 #endif
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 getXYZ(const float4 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 getXYZ(const float4 &v) {
     return make_float3(v.x, v.y, v.z);
 }
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 make_float2(float v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 make_int2(const float2 &v) {
+    return make_int2(static_cast<int32_t>(v.x), static_cast<int32_t>(v.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 make_int2(const int3 &v) {
+    return make_int2(v.x, v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 make_int2(const uint3 &v) {
+    return make_int2(static_cast<int32_t>(v.x), static_cast<int32_t>(v.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const int2 &v0, const int2 &v1) {
+    return v0.x == v1.x && v0.y == v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const int2 &v0, const int2 &v1) {
+    return v0.x != v1.x || v0.y != v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const int2 &v0, const uint2 &v1) {
+    return v0.x == v1.x && v0.y == v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const int2 &v0, const uint2 &v1) {
+    return v0.x != v1.x || v0.y != v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator+(const int2 &v0, const uint2 &v1) {
+    return make_uint2(v0.x + v1.x, v0.y + v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 operator+(const int2 &v0, const int2 &v1) {
+    return make_int2(v0.x + v1.x, v0.y + v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 operator*(const int2 &v0, const int2 &v1) {
+    return make_int2(v0.x * v1.x, v0.y * v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 operator*(uint32_t s, const int2 &v) {
+    return make_int2(s * v.x, s * v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 operator*(const int2 &v, uint32_t s) {
+    return make_int2(s * v.x, s * v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 &operator*=(int2 &v0, const int2 &v1) {
+    v0.x *= v1.x;
+    v0.y *= v1.y;
+    return v0;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 &operator*=(int2 &v, uint32_t s) {
+    v.x *= s;
+    v.y *= s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 operator/(const int2 &v0, const int2 &v1) {
+    return make_int2(v0.x / v1.x, v0.y / v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 operator/(const int2 &v, uint32_t s) {
+    return make_int2(v.x / s, v.y / s);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator/(const int2 &v0, const uint2 &v1) {
+    return make_uint2(v0.x / v1.x, v0.y / v1.y);
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 make_uint2(const float2 &v) {
+    return make_uint2(static_cast<uint32_t>(v.x), static_cast<uint32_t>(v.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 make_uint2(const int3 &v) {
+    return make_uint2(static_cast<uint32_t>(v.x), static_cast<uint32_t>(v.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 make_uint2(const uint3 &v) {
+    return make_uint2(v.x, v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const uint2 &v0, const uint2 &v1) {
+    return v0.x == v1.x && v0.y == v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const uint2 &v0, const uint2 &v1) {
+    return v0.x != v1.x || v0.y != v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const uint2 &v0, const int2 &v1) {
+    return v0.x == v1.x && v0.y == v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const uint2 &v0, const int2 &v1) {
+    return v0.x != v1.x || v0.y != v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator+(const uint2 &v0, const uint2 &v1) {
+    return make_uint2(v0.x + v1.x, v0.y + v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator+=(uint2 &v, uint32_t s) {
+    v.x += s;
+    v.y += s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator-(const uint2 &v, uint32_t s) {
+    return make_uint2(v.x - s, v.y - s);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator-=(uint2 &v, uint32_t s) {
+    v.x -= s;
+    v.y -= s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator*(const uint2 &v0, const uint2 &v1) {
+    return make_uint2(v0.x * v1.x, v0.y * v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator*(float s, const uint2 &v) {
+    return make_uint2(s * v.x, s * v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator*(const uint2 &v, float s) {
+    return make_uint2(s * v.x, s * v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator*=(uint2 &v0, const uint2 &v1) {
+    v0.x *= v1.x;
+    v0.y *= v1.y;
+    return v0;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator*=(uint2 &v, uint32_t s) {
+    v.x *= s;
+    v.y *= s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator/(const uint2 &v0, const uint2 &v1) {
+    return make_uint2(v0.x / v1.x, v0.y / v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator/(const uint2 &v0, const int2 &v1) {
+    return make_uint2(v0.x / v1.x, v0.y / v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator/(const uint2 &v, uint32_t s) {
+    return make_uint2(v.x / s, v.y / s);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator/=(uint2 &v, uint32_t s) {
+    v.x /= s;
+    v.y /= s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator%(const uint2 &v0, const uint2 &v1) {
+    return make_uint2(v0.x % v1.x, v0.y % v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator<<(const uint2 &v, uint32_t s) {
+    return make_uint2(v.x << s, v.y << s);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator<<=(uint2 &v, uint32_t s) {
+    v = v << s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator>>(const uint2 &v, uint32_t s) {
+    return make_uint2(v.x >> s, v.y >> s);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator>>=(uint2 &v, uint32_t s) {
+    v = v >> s;
+    return v;
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 make_float2(float v) {
     return make_float2(v, v);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator-(const float2 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 make_float2(const int2 &v) {
+    return make_float2(v.x, v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 make_float2(const uint2 &v) {
+    return make_float2(v.x, v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const float2 &v0, const float2 &v1) {
+    return v0.x == v1.x && v0.y == v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const float2 &v0, const float2 &v1) {
+    return v0.x != v1.x || v0.y != v1.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator-(const float2 &v) {
     return make_float2(-v.x, -v.y);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator+(const float2 &v0, const float2 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator+(const float2 &v0, const float2 &v1) {
     return make_float2(v0.x + v1.x, v0.y + v1.y);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator-(const float2 &v0, const float2 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator-(const float2 &v0, const float2 &v1) {
     return make_float2(v0.x - v1.x, v0.y - v1.y);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator*(const float2 &v0, const float2 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator*(const float2 &v0, const float2 &v1) {
     return make_float2(v0.x * v1.x, v0.y * v1.y);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator*(float s, const float2 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator*(float s, const float2 &v) {
     return make_float2(s * v.x, s * v.y);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator*(const float2 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator*(const float2 &v, float s) {
     return make_float2(s * v.x, s * v.y);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float2 operator/(const float2 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 &operator*=(float2 &v, float s) {
+    v = v * s;
+    return v;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator*(const int2 &v0, const float2 &v1) {
+    return make_float2(v0.x * v1.x, v0.y * v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator*(const float2 &v0, const int2 &v1) {
+    return make_float2(v0.x * v1.x, v0.y * v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator/(const float2 &v0, const float2 &v1) {
+    return make_float2(v0.x / v1.x, v0.y / v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator/(const float2 &v0, const int2 &v1) {
+    return make_float2(v0.x / v1.x, v0.y / v1.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 operator/(const float2 &v, float s) {
     float r = 1 / s;
     return r * v;
 }
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 &operator/=(float2 &v, float s) {
+    v = v / s;
+    return v;
+}
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 make_float3(float v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 make_float3(float v) {
     return make_float3(v, v, v);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 make_float3(const float4 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 make_float3(const float4 &v) {
     return make_float3(v.x, v.y, v.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator-(const float3 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const float3 &v0, const float3 &v1) {
+    return v0.x == v1.x && v0.y == v1.y && v0.z == v1.z;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const float3 &v0, const float3 &v1) {
+    return v0.x != v1.x || v0.y != v1.y || v0.z != v1.z;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator-(const float3 &v) {
     return make_float3(-v.x, -v.y, -v.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator+(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator+(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 &operator+=(float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 &operator+=(float3 &v0, const float3 &v1) {
     v0.x += v1.x;
     v0.y += v1.y;
     v0.z += v1.z;
     return v0;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator-(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator-(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 &operator-=(float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 &operator-=(float3 &v0, const float3 &v1) {
     v0.x -= v1.x;
     v0.y -= v1.y;
     v0.z -= v1.z;
     return v0;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator*(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator*(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator*(float s, const float3 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator*(float s, const float3 &v) {
     return make_float3(s * v.x, s * v.y, s * v.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator*(const float3 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator*(const float3 &v, float s) {
     return make_float3(s * v.x, s * v.y, s * v.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 &operator*=(float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 &operator*=(float3 &v0, const float3 &v1) {
     v0.x *= v1.x;
     v0.y *= v1.y;
     v0.z *= v1.z;
     return v0;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 &operator*=(float3 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 &operator*=(float3 &v, float s) {
     v.x *= s;
     v.y *= s;
     v.z *= s;
     return v;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator/(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator/(const float3 &v0, const float3 &v1) {
     return make_float3(v0.x / v1.x, v0.y / v1.y, v0.z / v1.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 operator/(const float3 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 operator/(const float3 &v, float s) {
     float r = 1 / s;
     return r * v;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 &operator/=(float3 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 safeDivide(const float3 &v0, const float3 &v1) {
+    return make_float3(
+        v1.x != 0.0f ? v0.x / v1.x : 0.0f,
+        v1.y != 0.0f ? v0.y / v1.y : 0.0f,
+        v1.z != 0.0f ? v0.z / v1.z : 0.0f);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 safeDivide(const float3 &v, float d) {
+    return d != 0.0f ? (v / d) : make_float3(0.0f);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 &operator/=(float3 &v, float s) {
     float r = 1 / s;
     return v *= r;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE bool allFinite(const float3 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE bool allFinite(const float3 &v) {
 #if !defined(__CUDA_ARCH__)
     using std::isfinite;
 #endif
     return isfinite(v.x) && isfinite(v.y) && isfinite(v.z);
 }
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 make_float4(float v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 make_float4(float v) {
     return make_float4(v, v, v, v);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 make_float4(const float3 &v, float w) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 make_float4(const float3 &v) {
+    return make_float4(v.x, v.y, v.z, 0.0f);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 make_float4(const float3 &v, float w) {
     return make_float4(v.x, v.y, v.z, w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator-(const float4 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const float4 &v0, const float4 &v1) {
+    return v0.x == v1.x && v0.y == v1.y && v0.z == v1.z && v0.w == v1.w;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE bool operator!=(const float4 &v0, const float4 &v1) {
+    return v0.x != v1.x || v0.y != v1.y || v0.z != v1.z || v0.w != v1.w;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator-(const float4 &v) {
     return make_float4(-v.x, -v.y, -v.z, -v.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator+(const float4 &v0, const float4 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator+(const float4 &v0, const float4 &v1) {
     return make_float4(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z, v0.w + v1.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 &operator+=(float4 &v0, const float4 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 &operator+=(float4 &v0, const float4 &v1) {
     v0.x += v1.x;
     v0.y += v1.y;
     v0.z += v1.z;
     v0.w += v1.w;
     return v0;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator-(const float4 &v0, const float4 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator-(const float4 &v0, const float4 &v1) {
     return make_float4(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z, v0.w - v1.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 &operator-=(float4 &v0, const float4 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 &operator-=(float4 &v0, const float4 &v1) {
     v0.x -= v1.x;
     v0.y -= v1.y;
     v0.z -= v1.z;
     v0.w -= v1.w;
     return v0;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator*(const float4 &v0, const float4 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator*(const float4 &v0, const float4 &v1) {
     return make_float4(v0.x * v1.x, v0.y * v1.y, v0.z * v1.z, v0.w * v1.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator*(float s, const float4 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator*(float s, const float4 &v) {
     return make_float4(s * v.x, s * v.y, s * v.z, s * v.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator*(const float4 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator*(const float4 &v, float s) {
     return make_float4(s * v.x, s * v.y, s * v.z, s * v.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 &operator*=(float4 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 &operator*=(float4 &v0, const float4 &v1) {
+    v0.x *= v1.x;
+    v0.y *= v1.y;
+    v0.z *= v1.z;
+    v0.w *= v1.w;
+    return v0;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 &operator*=(float4 &v, float s) {
     v.x *= s;
     v.y *= s;
     v.z *= s;
     v.w *= s;
     return v;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator/(const float4 &v0, const float4 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator/(const float4 &v0, const float4 &v1) {
     return make_float4(v0.x / v1.x, v0.y / v1.y, v0.z / v1.z, v0.w / v1.w);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 operator/(const float4 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 operator/(const float4 &v, float s) {
     float r = 1 / s;
     return r * v;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float4 &operator/=(float4 &v, float s) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 &operator/=(float4 &v, float s) {
     float r = 1 / s;
     return v *= r;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE bool allFinite(const float4 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE bool allFinite(const float4 &v) {
 #if !defined(__CUDA_ARCH__)
     using std::isfinite;
 #endif
     return isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w);
 }
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 min(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 min(const int2 &v0, const int2 &v1) {
+    return make_int2(shared::min(v0.x, v1.x),
+                     shared::min(v0.y, v1.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE int2 max(const int2 &v0, const int2 &v1) {
+    return make_int2(shared::max(v0.x, v1.x),
+                     shared::max(v0.y, v1.y));
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 min(const uint2 &v0, const uint2 &v1) {
+    return make_uint2(shared::min(v0.x, v1.x),
+                      shared::min(v0.y, v1.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE uint2 max(const uint2 &v0, const uint2 &v1) {
+    return make_uint2(shared::max(v0.x, v1.x),
+                      shared::max(v0.y, v1.y));
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 min(const float2 &v0, const float2 &v1) {
+    return make_float2(shared::min(v0.x, v1.x),
+                       shared::min(v0.y, v1.y));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 max(const float2 &v0, const float2 &v1) {
+    return make_float2(shared::max(v0.x, v1.x),
+                       shared::max(v0.y, v1.y));
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 min(const float3 &v0, const float3 &v1) {
     return make_float3(std::fmin(v0.x, v1.x),
                        std::fmin(v0.y, v1.y),
                        std::fmin(v0.z, v1.z));
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 max(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 max(const float3 &v0, const float3 &v1) {
     return make_float3(std::fmax(v0.x, v1.x),
                        std::fmax(v0.y, v1.y),
                        std::fmax(v0.z, v1.z));
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float dot(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float dot(const float3 &v0, const float3 &v1) {
     return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 cross(const float3 &v0, const float3 &v1) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 cross(const float3 &v0, const float3 &v1) {
     return make_float3(v0.y * v1.z - v0.z * v1.y,
                        v0.z * v1.x - v0.x * v1.z,
                        v0.x * v1.y - v0.y * v1.x);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float length(const float3 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float squaredDistance(const float3 &p0, const float3 &p1) {
+    float3 d = p1 - p0;
+    return dot(d, d);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float length(const float3 &v) {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float sqLength(const float3 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float sqLength(const float3 &v) {
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 normalize(const float3 &v) {
+CUDA_COMMON_FUNCTION CUDA_INLINE float3 normalize(const float3 &v) {
     return v / length(v);
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 min(const float4 &v0, const float4 &v1) {
+    return make_float4(std::fmin(v0.x, v1.x),
+                       std::fmin(v0.y, v1.y),
+                       std::fmin(v0.z, v1.z),
+                       std::fmin(v0.w, v1.w));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float4 max(const float4 &v0, const float4 &v1) {
+    return make_float4(std::fmax(v0.x, v1.x),
+                       std::fmax(v0.y, v1.y),
+                       std::fmax(v0.z, v1.z),
+                       std::fmax(v0.w, v1.w));
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float dot(const float4 &v0, const float4 &v1) {
+    return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z + v0.w * v1.w;
 }
 
 
