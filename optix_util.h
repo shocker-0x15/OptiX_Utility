@@ -36,10 +36,13 @@ EN:
       - Denoiserクラスのインターフェースをいくらか変更。
       - reportIntersection(), throwException()を削除。
         代わりに対応するシグネチャー型経由で値の取得・設定を行う。
+      - PayloadType::create()を削除、対応するシグネチャー型のstaticメンバー関数として実装。
   EN: - Supported upscaling denoisers.
       - Changed some interfaces of Denoiser class.
       - Removed reportIntersection(), throwException().
         Set or get values via corresponding signature types instead.
+      - Removed PayloadType::create(), implemented as a static member function of
+        the corresponding signature type instead.
 
 - !!BREAKING
   JP: - OptiX 7.5.0をサポート。
@@ -347,6 +350,27 @@ namespace optixu {
 
 
 
+#if !defined(__CUDA_ARCH__)
+    struct PayloadType {
+        OptixPayloadSemantics semantics[detail::maxNumPayloadsInDwords];
+        uint32_t numDwords;
+
+        PayloadType() : numDwords(0) {
+            for (uint32_t i = 0; i < detail::maxNumPayloadsInDwords; ++i)
+                semantics[i] = static_cast<OptixPayloadSemantics>(0);
+        }
+
+        OptixPayloadType getRawType() const {
+            OptixPayloadType ret;
+            ret.numPayloadValues = numDwords;
+            ret.payloadSemantics = reinterpret_cast<const uint32_t*>(semantics);
+            return ret;
+        }
+    };
+#endif
+
+
+
     // ----------------------------------------------------------------
     // JP: ホスト・デバイス共有のクラス定義
     // EN: Definitions of Host-/Device-shared classes
@@ -420,6 +444,23 @@ namespace optixu {
         RT_DEVICE_FUNCTION RT_INLINE static void getAt(TypeAt<index>* payload);
         template <uint32_t index>
         RT_DEVICE_FUNCTION RT_INLINE static void setAt(const TypeAt<index> &payload);
+#endif
+
+#if !defined(__CUDA_ARCH__)
+        static PayloadType createPayloadType(const OptixPayloadSemantics (&varSemantics)[numParameters]) {
+            PayloadType ret;
+            ret.numDwords = numDwords;
+            uint32_t offset = 0;
+            for (uint32_t varIdx = 0; varIdx < numParameters; ++varIdx) {
+                const uint32_t sizeInDwords = sizesInDwords[varIdx];
+                OptixPayloadSemantics varSem = varSemantics[varIdx];
+                for (uint32_t dwIdx = 0; dwIdx < sizeInDwords; ++dwIdx)
+                    ret.semantics[offset + dwIdx] = varSem;
+                offset += sizeInDwords;
+            }
+
+            return ret;
+        }
 #endif
     };
 
@@ -1436,43 +1477,6 @@ private: \
         uint32_t getNumChildren() const;
         uint32_t findChildIndex(Instance instance) const;
         Instance getChild(uint32_t index) const;
-    };
-
-
-
-    struct PayloadType {
-        OptixPayloadSemantics semantics[detail::maxNumPayloadsInDwords];
-        uint32_t numDwords;
-
-        PayloadType() : numDwords(0) {
-            for (uint32_t i = 0; i < detail::maxNumPayloadsInDwords; ++i)
-                semantics[i] = static_cast<OptixPayloadSemantics>(0);
-        }
-
-        OptixPayloadType getRawType() const {
-            OptixPayloadType ret;
-            ret.numPayloadValues = numDwords;
-            ret.payloadSemantics = reinterpret_cast<const uint32_t*>(semantics);
-            return ret;
-        }
-
-        template <typename PayloadSignatureType, uint32_t N>
-        static PayloadType create(const OptixPayloadSemantics (&varSemantics)[N]) {
-            static_assert(PayloadSignatureType::numParameters == N,
-                          "Number of semantics does not match to that of the signature.");
-            PayloadType ret;
-            ret.numDwords = PayloadSignatureType::numDwords;
-            uint32_t offset = 0;
-            for (uint32_t varIdx = 0; varIdx < PayloadSignatureType::numParameters; ++varIdx) {
-                const uint32_t sizeInDwords = PayloadSignatureType::sizesInDwords[varIdx];
-                OptixPayloadSemantics varSem = varSemantics[varIdx];
-                for (uint32_t dwIdx = 0; dwIdx < sizeInDwords; ++dwIdx)
-                    ret.semantics[offset + dwIdx] = varSem;
-                offset += sizeInDwords;
-            }
-
-            return ret;
-        }
     };
 
 

@@ -57,7 +57,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if constexpr (Shared::usePayloadAnnotation) {
         // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
         // EN: Create payload types for two ray types.
-        payloadTypes[0] = optixu::PayloadType::create<Shared::SearchRayPayloadSignature>(
+        payloadTypes[0] = Shared::SearchRayPayloadSignature::createPayloadType(
             {
                 // rng
                 (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
@@ -100,7 +100,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                  OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
                  OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
             });
-        payloadTypes[1] = optixu::PayloadType::create<Shared::VisibilityRayPayloadSignature>(
+        payloadTypes[1] = Shared::VisibilityRayPayloadSignature::createPayloadType(
             {
                 // visibility
                 (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
