@@ -735,7 +735,7 @@ namespace optixu {
         uint32_t getSerialID() const {
             return serialID;
         }
-        
+
         uint32_t getNumMaterialSets() const {
             return static_cast<uint32_t>(numRayTypesPerMaterialSet.size());
         }
@@ -1226,8 +1226,8 @@ namespace optixu {
         uint32_t tileWidth;
         uint32_t tileHeight;
         int32_t overlapWidth;
-        uint32_t maxInputWidth;
-        uint32_t maxInputHeight;
+        uint32_t inputWidth;
+        uint32_t inputHeight;
         DenoiserSizes sizes;
 
         BufferView stateBuffer;
@@ -1238,15 +1238,9 @@ namespace optixu {
 
             unsigned int useTiling : 1;
             unsigned int imageSizeSet : 1;
+            unsigned int tasksAreReady : 1;
             unsigned int stateIsReady : 1;
         };
-
-        void invoke(
-            CUstream stream, const DenoisingTask &task,
-            const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
-            const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
-            const BufferView &internalGuideLayerForNextFrame) const;
 
     public:
         OPTIXU_OPAQUE_BRIDGE(Denoiser);
@@ -1254,7 +1248,7 @@ namespace optixu {
         Priv(_Context* ctxt, OptixDenoiserModelKind _modelKind, bool _guideAlbedo, bool _guideNormal) :
             context(ctxt),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
-            overlapWidth(0), maxInputWidth(0), maxInputHeight(0),
+            overlapWidth(0), inputWidth(0), inputHeight(0),
             sizes{ 0, 0, 0, 0, 0 },
             modelKind(_modelKind), guideAlbedo(_guideAlbedo), guideNormal(_guideNormal),
             useTiling(false), imageSizeSet(false), stateIsReady(false) {

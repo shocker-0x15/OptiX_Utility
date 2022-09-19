@@ -153,7 +153,7 @@ namespace cudau {
     void devPrintf(const char* fmt, ...);
 
 
-    
+
     struct dim3 {
         uint32_t x, y, z;
         dim3(uint32_t xx = 1, uint32_t yy = 1, uint32_t zz = 1) : x(xx), y(yy), z(zz) {}
@@ -162,7 +162,7 @@ namespace cudau {
 
 
     using ConstVoidPtr = const void*;
-    
+
     inline void addArgPointer(ConstVoidPtr* pointer) {}
 
     template <typename HeadType, typename... TailTypes>
@@ -641,7 +641,7 @@ namespace cudau {
                 elemType == cudau::ArrayElementType::BC6H_SF16 ||
                 elemType == cudau::ArrayElementType::BC7_UNorm);
     }
-    
+
     class Array {
         CUcontext m_cuContext;
 
@@ -974,7 +974,7 @@ namespace cudau {
         NormalizedFloat,
         NormalizedFloat_sRGB
     };
-    
+
     class TextureSampler {
         CUDA_TEXTURE_DESC m_texDesc;
 

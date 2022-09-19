@@ -872,21 +872,21 @@ namespace optixu {
     | GAS 0 - MS 0 | GAS 0 - MS 1 | ... | GAS 0 - MS * | GAS 1 - MS 0 | GAS 1 - MS 1 | ...
     GAS: Geometry Acceleration Structure
     MS: Material Set
-   
+
     Per-GAS, Per-Material Set SBT Layout
     | GAS * - MS *                               |
     | GeomInst 0 | GeomInst 1 | ... | GeomInst * |
     GeomInst: Geometry Instance
-   
+
     Per-Geometry Instance SBT Layout
     | GeomInst *                                 |
     | Material 0 | Material 1 | ... | Material * |
-   
+
     Per-Material SBT Layout
     | Material *                                 |
     | Ray Type 0 | Ray Type 1 | ... | Ray Type * |
     | SBT Record | SBT Record |     | SBT Record |
-   
+
     SBT Record
     <-- SBT Record Stride (Globally Common) --------------------------->
     | Header | GAS       | GAS Child | GeomInst  | Material  | Padding |
@@ -894,7 +894,7 @@ namespace optixu {
              ^
              |
              optixGetSbtDataPointer()
-   
+
     JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
         GeometryInstanceAccelerationStructureのsetUserData(), setChildUserData(),
         GeometryInstanceのsetUserData(), MaterialのsetUserData()
@@ -1636,7 +1636,7 @@ private: \
     class DenoisingTask {
         uint32_t placeHolder[6];
 
-        // TODO: ? implement a function to query required window (tile + overlap).
+        void getOutputTile(int32_t* offsetX, int32_t* offsetY, int32_t* width, int32_t* height) const;
     };
 
     struct DenoiserSizes {

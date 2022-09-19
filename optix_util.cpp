@@ -2432,7 +2432,8 @@ namespace optixu {
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         // TODO: ? stream
         CUDADRV_CHECK(cuEventSynchronize(m->finishEvent));
-        CUDADRV_CHECK(cuMemcpyDtoH(&m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
+        CUDADRV_CHECK(cuMemcpyDtoH(
+            &m->compactedSize, m->propertyCompactedSize.result, sizeof(m->compactedSize)));
 
         *compactedAccelBufferSize = m->compactedSize;
 
@@ -3406,69 +3407,260 @@ namespace optixu {
 
 
 
-    void Denoiser::Priv::invoke(
+    void DenoisingTask::getOutputTile(
+        int32_t* offsetX, int32_t* offsetY, int32_t* width, int32_t* height) const {
+        _DenoisingTask _task(*this);
+        *offsetX = _task.outputOffsetX;
+        *offsetY = _task.outputOffsetY;
+        *width = _task.outputWidth;
+        *height = _task.outputHeight;
+    }
+
+
+
+    void Denoiser::destroy() {
+        if (m)
+            delete m;
+        m = nullptr;
+    }
+
+    void Denoiser::prepare(
+        uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
+        DenoiserSizes* sizes, uint32_t* numTasks) const {
+        m->throwRuntimeError(tileWidth <= imageWidth && tileHeight <= imageHeight,
+                             "Tile width/height must be equal to or smaller than the image size.");
+
+        if (tileWidth == 0)
+            tileWidth = imageWidth;
+        if (tileHeight == 0)
+            tileHeight = imageHeight;
+
+        m->useTiling = tileWidth < imageWidth || tileHeight < imageHeight;
+
+        m->imageWidth = imageWidth;
+        m->imageHeight = imageHeight;
+        m->tileWidth = tileWidth;
+        m->tileHeight = tileHeight;
+        OptixDenoiserSizes rawSizes;
+        OPTIX_CHECK(optixDenoiserComputeMemoryResources(m->rawDenoiser, tileWidth, tileHeight, &rawSizes));
+        m->sizes.stateSize = rawSizes.stateSizeInBytes;
+        m->sizes.scratchSize = m->useTiling ?
+            rawSizes.withOverlapScratchSizeInBytes : rawSizes.withoutOverlapScratchSizeInBytes;
+        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL) {
+            m->sizes.normalizerSize = sizeof(float);
+            m->sizes.scratchSizeForComputeNormalizer = rawSizes.computeIntensitySizeInBytes;
+        }
+        else if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X) {
+            m->sizes.normalizerSize = 3 * sizeof(float);
+            m->sizes.scratchSizeForComputeNormalizer = rawSizes.computeAverageColorSizeInBytes;
+        }
+        else {
+            m->sizes.normalizerSize = 0;
+            m->sizes.scratchSizeForComputeNormalizer = 0;
+        }
+        m->sizes.internalGuideLayerPixelSize = rawSizes.internalGuideLayerPixelSizeInBytes;
+        m->overlapWidth = rawSizes.overlapWindowSizeInPixels;
+        m->inputWidth = std::min(tileWidth + 2 * m->overlapWidth, imageWidth);
+        m->inputHeight = std::min(tileHeight + 2 * m->overlapWidth, imageHeight);
+
+        *sizes = m->sizes;
+
+        *numTasks = 0;
+        for (int32_t outputOffsetY = 0; outputOffsetY < static_cast<int32_t>(imageHeight);) {
+            int32_t outputHeight = tileHeight;
+            if (outputOffsetY == 0)
+                outputHeight += m->overlapWidth;
+
+            for (int32_t outputOffsetX = 0; outputOffsetX < static_cast<int32_t>(imageWidth);) {
+                int32_t outputWidth = tileWidth;
+                if (outputOffsetX == 0)
+                    outputWidth += m->overlapWidth;
+
+                ++*numTasks;
+
+                outputOffsetX += outputWidth;
+            }
+
+            outputOffsetY += outputHeight;
+        }
+
+        m->tasksAreReady = false;
+        m->stateIsReady = false;
+        m->imageSizeSet = true;
+    }
+
+    void Denoiser::getTasks(DenoisingTask* tasks) const {
+        m->throwRuntimeError(m->imageSizeSet, "Call prepare() before this function.");
+
+        uint32_t taskIdx = 0;
+        for (int32_t outputOffsetY = 0; outputOffsetY < static_cast<int32_t>(m->imageHeight);) {
+            int32_t outputHeight = m->tileHeight;
+            if (outputOffsetY == 0)
+                outputHeight += m->overlapWidth;
+            if (outputOffsetY + outputHeight > static_cast<int32_t>(m->imageHeight))
+                outputHeight = m->imageHeight - outputOffsetY;
+
+            int32_t inputOffsetY = std::max(outputOffsetY - m->overlapWidth, 0);
+            if (inputOffsetY + m->inputHeight > m->imageHeight)
+                inputOffsetY = m->imageHeight - m->inputHeight;
+
+            for (int32_t outputOffsetX = 0; outputOffsetX < static_cast<int32_t>(m->imageWidth);) {
+                int32_t outputWidth = m->tileWidth;
+                if (outputOffsetX == 0)
+                    outputWidth += m->overlapWidth;
+                if (outputOffsetX + outputWidth > static_cast<int32_t>(m->imageWidth))
+                    outputWidth = m->imageWidth - outputOffsetX;
+
+                int32_t inputOffsetX = std::max(outputOffsetX - m->overlapWidth, 0);
+                if (inputOffsetX + m->inputWidth > m->imageWidth)
+                    inputOffsetX = m->imageWidth - m->inputWidth;
+
+                _DenoisingTask task;
+                task.inputOffsetX = inputOffsetX;
+                task.inputOffsetY = inputOffsetY;
+                task.outputOffsetX = outputOffsetX;
+                task.outputOffsetY = outputOffsetY;
+                task.outputWidth = outputWidth;
+                task.outputHeight = outputHeight;
+                tasks[taskIdx++] = task;
+
+                outputOffsetX += outputWidth;
+            }
+
+            outputOffsetY += outputHeight;
+        }
+
+        m->tasksAreReady = true;
+    }
+
+    void Denoiser::setupState(
+        CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const {
+        m->throwRuntimeError(
+            m->imageSizeSet,
+            "Call prepare() before this function.");
+        m->throwRuntimeError(
+            stateBuffer.sizeInBytes() >= m->sizes.stateSize,
+            "Size of the given state buffer is not enough.");
+        m->throwRuntimeError(
+            scratchBuffer.sizeInBytes() >= m->sizes.scratchSize,
+            "Size of the given scratch buffer is not enough.");
+        OPTIX_CHECK(optixDenoiserSetup(
+            m->rawDenoiser, stream,
+            m->inputWidth, m->inputHeight,
+            stateBuffer.getCUdeviceptr(), stateBuffer.sizeInBytes(),
+            scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
+
+        m->stateBuffer = stateBuffer;
+        m->scratchBuffer = scratchBuffer;
+        m->stateIsReady = true;
+    }
+
+    void Denoiser::computeNormalizer(
+        CUstream stream,
+        const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
+        const BufferView &scratchBuffer, CUdeviceptr normalizer) const {
+        m->throwRuntimeError(
+            m->imageSizeSet,
+            "Call prepare() before this function.");
+        m->throwRuntimeError(
+            scratchBuffer.sizeInBytes() >= m->sizes.scratchSizeForComputeNormalizer,
+            "Size of the given scratch buffer is not enough.");
+
+        OptixImage2D colorLayer = {};
+        colorLayer.data = noisyBeauty.getCUdeviceptr();
+        colorLayer.width = m->imageWidth;
+        colorLayer.height = m->imageHeight;
+        colorLayer.format = beautyFormat;
+        colorLayer.pixelStrideInBytes = getPixelSize(beautyFormat);
+        colorLayer.rowStrideInBytes = colorLayer.pixelStrideInBytes * m->imageWidth;
+
+        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
+            OPTIX_CHECK(optixDenoiserComputeIntensity(
+                m->rawDenoiser, stream,
+                &colorLayer, normalizer,
+                scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
+        else if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X)
+            OPTIX_CHECK(optixDenoiserComputeAverageColor(
+                m->rawDenoiser, stream,
+                &colorLayer, normalizer,
+                scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
+    }
+
+    void Denoiser::invoke(
         CUstream stream, const DenoisingTask &task,
         const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
         OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
         const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
         const BufferView &internalGuideLayerForNextFrame) const {
-        throwRuntimeError(
-            stateIsReady,
+        bool isTemporal =
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
+        bool performUpscale =
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
+        bool requireInternalGuideLayer =
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
+        m->throwRuntimeError(
+            m->tasksAreReady,
+            "You need to call getTasks() before invoke.");
+        m->throwRuntimeError(
+            m->stateIsReady,
             "You need to call setupState() before invoke.");
-        throwRuntimeError(
-            inputBuffers.noisyBeauty.isValid(),
-            "Input noisy beauty buffer must be provided.");
-        throwRuntimeError(
-            denoisedBeauty.isValid(),
-            "Denoised beauty buffer must be provided.");
-        throwRuntimeError(
+        m->throwRuntimeError(
+            inputBuffers.noisyBeauty.isValid() && denoisedBeauty.isValid(),
+            "Both of noisy/denoised beauty buffers must be provided.");
+        m->throwRuntimeError(
             inputBuffers.numAovs == 0 || (inputBuffers.noisyAovs && denoisedAovs),
             "Both of noisy/denoised AOV buffers must be provided.");
         for (uint32_t i = 0; i < inputBuffers.numAovs; ++i) {
-            throwRuntimeError(
+            m->throwRuntimeError(
                 inputBuffers.noisyAovs[i].isValid() && denoisedAovs[i].isValid(),
                 "Either of AOV %u input/output buffer is invalid.", i);
         }
-        bool isTemporal =
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL ||
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
-        bool performUpscale =
-            modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
-        bool requireInternalGuideLayer =
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
-        throwRuntimeError(
-            !guideAlbedo || inputBuffers.albedo.isValid(),
+        m->throwRuntimeError(
+            normalizer != 0 || m->modelKind == OPTIX_DENOISER_MODEL_KIND_LDR,
+            "Normalizer must be provided for this denoiser.");
+        m->throwRuntimeError(
+            !m->guideAlbedo || inputBuffers.albedo.isValid(),
             "Denoiser requires the albedo buffer.");
-        throwRuntimeError(
-            !guideNormal || inputBuffers.normal.isValid(),
+        m->throwRuntimeError(
+            !m->guideNormal || inputBuffers.normal.isValid(),
             "Denoiser requires the normal buffer.");
         if (requireInternalGuideLayer) {
-            throwRuntimeError(
+            m->throwRuntimeError(
                 inputBuffers.previousInternalGuideLayer.isValid(),
                 "Denoiser requires the previous internal guide layer buffer.");
-            throwRuntimeError(
+            m->throwRuntimeError(
                 internalGuideLayerForNextFrame.isValid(),
                 "Denoiser requires a buffer to output the internal guide layer for the next frame.");
         }
-        throwRuntimeError(
+        m->throwRuntimeError(
             !isTemporal || inputBuffers.flow.isValid(),
-            "Denoiser requires the flow buffer.");
-        throwRuntimeError(
-            (!isTemporal || modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X) ||
+            "Temporal denoiser requires the flow buffer.");
+        m->throwRuntimeError(
+            (!isTemporal || m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X) ||
             inputBuffers.previousDenoisedBeauty.isValid(),
             "Denoiser requires the previous denoised beauty buffer.");
+
         OptixDenoiserParams params = {};
         params.denoiseAlpha = alphaMode;
-        if (modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
-            modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
+        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
+            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
             params.hdrIntensity = normalizer;
-        else if (modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
-                 modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
-                 modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
-                 modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X)
+        else if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
+                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X)
             params.hdrAverageColor = normalizer;
         params.blendFactor = blendFactor;
         params.temporalModeUsePreviousLayers = !isFirstFrame;
@@ -3479,26 +3671,26 @@ namespace optixu {
         (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
             uint32_t pixelStride = getPixelSize(format);
             *layer = {};
-            layer->rowStrideInBytes = imageWidth * pixelStride;
+            layer->rowStrideInBytes = m->imageWidth * pixelStride;
             layer->pixelStrideInBytes = pixelStride;
-            uint32_t addressOffset =
+            uintptr_t addressOffset =
                 _task.inputOffsetY * layer->rowStrideInBytes +
                 _task.inputOffsetX * pixelStride;
             layer->data = baseAddress + addressOffset;
-            layer->width = maxInputWidth;
-            layer->height = maxInputHeight;
+            layer->width = m->inputWidth;
+            layer->height = m->inputHeight;
             layer->format = format;
         };
         const auto setUpOutputLayer = [&]
         (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
             uint32_t scale = performUpscale ? 2 : 1;
             uint32_t pixelStride = format == OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER ?
-                sizes.internalGuideLayerPixelSize :
+                static_cast<uint32_t>(m->sizes.internalGuideLayerPixelSize) :
                 getPixelSize(format);
             *layer = {};
-            layer->rowStrideInBytes = scale * imageWidth * pixelStride;
+            layer->rowStrideInBytes = scale * m->imageWidth * pixelStride;
             layer->pixelStrideInBytes = pixelStride;
-            uint32_t addressOffset =
+            uintptr_t addressOffset =
                 scale * _task.outputOffsetY * layer->rowStrideInBytes +
                 scale * _task.outputOffsetX * pixelStride;
             layer->data = baseAddress + addressOffset;
@@ -3510,9 +3702,9 @@ namespace optixu {
         // TODO: 入出力画像のrowStrideを指定できるようにする。
 
         OptixDenoiserGuideLayer guideLayer = {};
-        if (guideAlbedo)
+        if (m->guideAlbedo)
             setUpInputLayer(inputBuffers.albedoFormat, inputBuffers.albedo.getCUdeviceptr(), &guideLayer.albedo);
-        if (guideNormal)
+        if (m->guideNormal)
             setUpInputLayer(inputBuffers.normalFormat, inputBuffers.normal.getCUdeviceptr(), &guideLayer.normal);
         if (isTemporal)
             setUpInputLayer(inputBuffers.flowFormat, inputBuffers.flow.getCUdeviceptr(), &guideLayer.flow);
@@ -3561,201 +3753,15 @@ namespace optixu {
             setUpOutputLayer(layerInfo.format, layerInfo.output.getCUdeviceptr(), &denoiserLayer.output);
         }
 
-        int32_t offsetX = _task.outputOffsetX - _task.inputOffsetX;
-        int32_t offsetY = _task.outputOffsetY - _task.inputOffsetY;
+        int32_t offsetXInWorkingTile = _task.outputOffsetX - _task.inputOffsetX;
+        int32_t offsetYInWorkingTile = _task.outputOffsetY - _task.inputOffsetY;
         OPTIX_CHECK(optixDenoiserInvoke(
-            rawDenoiser, stream,
+            m->rawDenoiser, stream,
             &params,
-            stateBuffer.getCUdeviceptr(), stateBuffer.sizeInBytes(),
+            m->stateBuffer.getCUdeviceptr(), m->stateBuffer.sizeInBytes(),
             &guideLayer,
             denoiserLayers.data(), 1 + inputBuffers.numAovs,
-            offsetX, offsetY,
-            scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
-    }
-
-    void Denoiser::destroy() {
-        if (m)
-            delete m;
-        m = nullptr;
-    }
-
-    void Denoiser::prepare(
-        uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,
-        DenoiserSizes* sizes, uint32_t* numTasks) const {
-        m->throwRuntimeError(tileWidth <= imageWidth && tileHeight <= imageHeight,
-                             "Tile width/height must be equal to or smaller than the image size.");
-
-        if (tileWidth == 0)
-            tileWidth = imageWidth;
-        if (tileHeight == 0)
-            tileHeight = imageHeight;
-
-        m->useTiling = tileWidth < imageWidth || tileHeight < imageHeight;
-
-        m->imageWidth = imageWidth;
-        m->imageHeight = imageHeight;
-        m->tileWidth = tileWidth;
-        m->tileHeight = tileHeight;
-        OptixDenoiserSizes rawSizes;
-        OPTIX_CHECK(optixDenoiserComputeMemoryResources(m->rawDenoiser, tileWidth, tileHeight, &rawSizes));
-        m->sizes.stateSize = rawSizes.stateSizeInBytes;
-        m->sizes.scratchSize = m->useTiling ?
-            rawSizes.withOverlapScratchSizeInBytes : rawSizes.withoutOverlapScratchSizeInBytes;
-        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
-            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL) {
-            m->sizes.normalizerSize = sizeof(float);
-            m->sizes.scratchSizeForComputeNormalizer = rawSizes.computeIntensitySizeInBytes;
-        }
-        else if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
-                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
-                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
-                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X) {
-            m->sizes.normalizerSize = 3 * sizeof(float);
-            m->sizes.scratchSizeForComputeNormalizer = rawSizes.computeAverageColorSizeInBytes;
-        }
-        else {
-            m->sizes.normalizerSize = 0;
-            m->sizes.scratchSizeForComputeNormalizer = 0;
-        }
-        m->sizes.internalGuideLayerPixelSize = rawSizes.internalGuideLayerPixelSizeInBytes;
-        m->overlapWidth = rawSizes.overlapWindowSizeInPixels;
-        m->maxInputWidth = std::min(tileWidth + 2 * m->overlapWidth, imageWidth);
-        m->maxInputHeight = std::min(tileHeight + 2 * m->overlapWidth, imageHeight);
-
-        *sizes = m->sizes;
-
-        *numTasks = 0;
-        for (int32_t outputOffsetY = 0; outputOffsetY < static_cast<int32_t>(imageHeight);) {
-            int32_t outputHeight = tileHeight;
-            if (outputOffsetY == 0)
-                outputHeight += m->overlapWidth;
-
-            for (int32_t outputOffsetX = 0; outputOffsetX < static_cast<int32_t>(imageWidth);) {
-                int32_t outputWidth = tileWidth;
-                if (outputOffsetX == 0)
-                    outputWidth += m->overlapWidth;
-
-                ++*numTasks;
-
-                outputOffsetX += outputWidth;
-            }
-
-            outputOffsetY += outputHeight;
-        }
-
-        m->stateIsReady = false;
-        m->imageSizeSet = true;
-    }
-
-    void Denoiser::getTasks(DenoisingTask* tasks) const {
-        m->throwRuntimeError(m->imageSizeSet, "Call prepare() before this function.");
-
-        uint32_t taskIdx = 0;
-        for (int32_t outputOffsetY = 0; outputOffsetY < static_cast<int32_t>(m->imageHeight);) {
-            int32_t outputHeight = m->tileHeight;
-            if (outputOffsetY == 0)
-                outputHeight += m->overlapWidth;
-            if (outputOffsetY + outputHeight > static_cast<int32_t>(m->imageHeight))
-                outputHeight = m->imageHeight - outputOffsetY;
-
-            int32_t inputOffsetY = std::max(outputOffsetY - m->overlapWidth, 0);
-            if (inputOffsetY + m->maxInputHeight > m->imageHeight)
-                inputOffsetY = m->imageHeight - m->maxInputHeight;
-
-            for (int32_t outputOffsetX = 0; outputOffsetX < static_cast<int32_t>(m->imageWidth);) {
-                int32_t outputWidth = m->tileWidth;
-                if (outputOffsetX == 0)
-                    outputWidth += m->overlapWidth;
-                if (outputOffsetX + outputWidth > static_cast<int32_t>(m->imageWidth))
-                    outputWidth = m->imageWidth - outputOffsetX;
-
-                int32_t inputOffsetX = std::max(outputOffsetX - m->overlapWidth, 0);
-                if (inputOffsetX + m->maxInputWidth > m->imageWidth)
-                    inputOffsetX = m->imageWidth - m->maxInputWidth;
-
-                _DenoisingTask task;
-                task.inputOffsetX = inputOffsetX;
-                task.inputOffsetY = inputOffsetY;
-                task.outputOffsetX = outputOffsetX;
-                task.outputOffsetY = outputOffsetY;
-                task.outputWidth = outputWidth;
-                task.outputHeight = outputHeight;
-                tasks[taskIdx++] = task;
-
-                outputOffsetX += outputWidth;
-            }
-
-            outputOffsetY += outputHeight;
-        }
-    }
-
-    void Denoiser::setupState(
-        CUstream stream, const BufferView &stateBuffer, const BufferView &scratchBuffer) const {
-        m->throwRuntimeError(
-            m->imageSizeSet,
-            "Call prepare() before this function.");
-        m->throwRuntimeError(
-            stateBuffer.sizeInBytes() >= m->sizes.stateSize,
-            "Size of the given state buffer is not enough.");
-        m->throwRuntimeError(
-            scratchBuffer.sizeInBytes() >= m->sizes.scratchSize,
-            "Size of the given scratch buffer is not enough.");
-        uint32_t maxInputWidth = m->useTiling ? (m->tileWidth + 2 * m->overlapWidth) : m->imageWidth;
-        uint32_t maxInputHeight = m->useTiling ? (m->tileHeight + 2 * m->overlapWidth) : m->imageHeight;
-        OPTIX_CHECK(optixDenoiserSetup(
-            m->rawDenoiser, stream,
-            maxInputWidth, maxInputHeight,
-            stateBuffer.getCUdeviceptr(), stateBuffer.sizeInBytes(),
-            scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
-
-        m->stateBuffer = stateBuffer;
-        m->scratchBuffer = scratchBuffer;
-        m->stateIsReady = true;
-    }
-
-    void Denoiser::computeNormalizer(
-        CUstream stream,
-        const BufferView &noisyBeauty, OptixPixelFormat beautyFormat,
-        const BufferView &scratchBuffer, CUdeviceptr normalizer) const {
-        m->throwRuntimeError(
-            scratchBuffer.sizeInBytes() >= m->sizes.scratchSizeForComputeNormalizer,
-            "Size of the given scratch buffer is not enough.");
-
-        OptixImage2D colorLayer = {};
-        colorLayer.data = noisyBeauty.getCUdeviceptr();
-        colorLayer.width = m->imageWidth;
-        colorLayer.height = m->imageHeight;
-        colorLayer.format = beautyFormat;
-        colorLayer.pixelStrideInBytes = getPixelSize(beautyFormat);
-        colorLayer.rowStrideInBytes = colorLayer.pixelStrideInBytes * m->imageWidth;
-
-        if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
-            m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
-            OPTIX_CHECK(optixDenoiserComputeIntensity(
-                m->rawDenoiser, stream,
-                &colorLayer, normalizer,
-                scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
-        else if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
-                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
-                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
-                 m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X)
-            OPTIX_CHECK(optixDenoiserComputeAverageColor(
-                m->rawDenoiser, stream,
-                &colorLayer, normalizer,
-                scratchBuffer.getCUdeviceptr(), scratchBuffer.sizeInBytes()));
-    }
-
-    void Denoiser::invoke(
-        CUstream stream, const DenoisingTask &task,
-        const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
-        OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
-        const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
-        const BufferView &internalGuideLayerForNextFrame) const {
-        m->invoke(
-            stream, task,
-            inputBuffers, isFirstFrame,
-            alphaMode, normalizer, blendFactor,
-            denoisedBeauty, denoisedAovs,
-            internalGuideLayerForNextFrame);
+            offsetXInWorkingTile, offsetYInWorkingTile,
+            m->scratchBuffer.getCUdeviceptr(), m->scratchBuffer.sizeInBytes()));
     }
 }
