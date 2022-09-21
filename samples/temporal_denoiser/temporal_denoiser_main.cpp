@@ -385,11 +385,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    // JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
-    //     Debug構成だとOptiX-IRを使うとカーネル中のisnan()の動作がおかしい。
+    // JP: Debug構成だとOptiX-IRを使うとカーネル中のisnan()の動作がおかしい。
     //     質問中:
-    // EN: Pass payload types to module creation when using payload annotation.
-    //     isnan() in the kernel doesn't work properly with OptiX-IR/Debug configuration for some reason.
+    // EN: isnan() in the kernel doesn't work properly with OptiX-IR/Debug configuration for some reason.
     //     ongoing question:
     // https://forums.developer.nvidia.com/t/optix-7-5-debuggable-optix-ir-makes-isnan-not-working/228251
 #if 1
@@ -1705,7 +1703,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     毎フレーム呼ぶ必要があるのはcomputeNormalizer()とinvoke()。
         //     サイズが足りていればcomputeNormalizer()のスクラッチバッファーとしてデノイザーのものが再利用できる。
         // EN: Denoise the path tracing result.
-        //     computeNormalizer() and invoke() should be calld every frame.
+        //     computeNormalizer() and invoke() should be called every frame.
         //     Reusing the scratch buffer for denoising for computeNormalizer() is possible if its size is enough.
         denoiser.computeNormalizer(
             cuStream,

@@ -22,6 +22,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t tileHeight = 0;
     bool useKernelPredictionMode = false;
     bool performUpscale = false;
+    bool useAlbedo = true;
+    bool useNormal = true;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -37,6 +39,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             useKernelPredictionMode = true;
         else if (arg == "--upscale")
             performUpscale = true;
+        else if (arg == "--no-albedo")
+            useAlbedo = false;
+        else if (arg == "--no-normal")
+            useNormal = false;
         else
             throw std::runtime_error("Unknown command line argument.");
         ++argIdx;
@@ -674,7 +680,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     else if (useKernelPredictionMode)
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_AOV;
 
-    optixu::Denoiser denoiser = optixContext.createDenoiser(denoiserModel, true, true);
+    optixu::Denoiser denoiser = optixContext.createDenoiser(denoiserModel, useAlbedo, useNormal);
     optixu::DenoiserSizes denoiserSizes;
     uint32_t numTasks;
     denoiser.prepare(
@@ -761,8 +767,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::DenoiserInputBuffers inputBuffers = {};
     inputBuffers.noisyBeauty = linearColorBuffer;
-    inputBuffers.albedo = linearAlbedoBuffer;
-    inputBuffers.normal = linearNormalBuffer;
+    if (useAlbedo)
+        inputBuffers.albedo = linearAlbedoBuffer;
+    if (useNormal)
+        inputBuffers.normal = linearNormalBuffer;
     inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
     inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
     inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
@@ -771,7 +779,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     毎フレーム呼ぶ必要があるのはcomputeNormalizer()とinvoke()。
     //     サイズが足りていればcomputeNormalizer()のスクラッチバッファーとしてデノイザーのものが再利用できる。
     // EN: Denoise the path tracing result.
-    //     computeNormalizer() and invoke() should be calld every frame.
+    //     computeNormalizer() and invoke() should be called every frame.
     //     Reusing the scratch buffer for denoising for computeNormalizer() is possible if its size is enough.
     timerDenoise.start(cuStream);
     denoiser.computeNormalizer(
