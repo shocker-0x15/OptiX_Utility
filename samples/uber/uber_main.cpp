@@ -1183,9 +1183,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブのAABBを計算するカーネルを実行。
     // EN: Execute a kernel to compute AABBs of custom primitives.
-    cudau::dim3 dimBB = kernelCalculateBoundingBoxesForSpheres.calcGridDim(customPrimAABBs.numElements());
-    kernelCalculateBoundingBoxesForSpheres(
-        cuStream, dimBB,
+    kernelCalculateBoundingBoxesForSpheres.launchWithThreadDim(
+        cuStream, cudau::dim3(customPrimAABBs.numElements()),
         customPrimParameters.getDevicePointer(),
         customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
 
@@ -1826,19 +1825,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // JP: ジオメトリの非剛体変形。
             // EN: Non-rigid deformation of a geometry.
             curGPUTimer.deform.start(cuStream);
-            cudau::dim3 dimDeform = kernelDeform.calcGridDim(orgObjectVertexBuffer.numElements());
-            kernelDeform(
-                cuStream, dimDeform,
+            kernelDeform.launchWithThreadDim(
+                cuStream, cudau::dim3(orgObjectVertexBuffer.numElements()),
                 orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
                 0.5f * std::sinf(2 * pi_v<float> *(animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
-            cudau::dim3 dimAccum = kernelAccumulateVertexNormals.calcGridDim(triangleBuffer.numElements());
-            kernelAccumulateVertexNormals(
-                cuStream, dimAccum,
+            kernelAccumulateVertexNormals.launchWithThreadDim(
+                cuStream, cudau::dim3(triangleBuffer.numElements()),
                 meshObject.getVertexBuffer().getDevicePointer(),
                 triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
-            kernelNormalizeVertexNormals(
-                cuStream, dimDeform,
+            kernelNormalizeVertexNormals.launchWithThreadDim(
+                cuStream, cudau::dim3(orgObjectVertexBuffer.numElements()),
                 meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(cuStream);
 
@@ -1921,10 +1918,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // Post Process
         sw.start();
         curGPUTimer.postProcess.start(cuStream);
-        cudau::dim3 dimPostProcess = kernelPostProcess.calcGridDim(renderTargetSizeX, renderTargetSizeY);
         outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
-        kernelPostProcess(
-            cuStream, dimPostProcess,
+        kernelPostProcess.launchWithThreadDim(
+            cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)
             arrayAccumBuffer.getSurfaceObject(0),
 #else

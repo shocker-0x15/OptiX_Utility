@@ -247,6 +247,15 @@ namespace cudau {
                 gridDim, m_blockDim, m_sharedMemSize,
                 std::forward<ArgTypes>(args)...);
         }
+
+        template <typename... ArgTypes>
+        void launchWithThreadDim(CUstream stream, const dim3 &threadDim, ArgTypes&&... args) const {
+            dim3 gridDim = calcGridDim(threadDim.x, threadDim.y, threadDim.z);
+            callKernel(
+                stream, m_kernel,
+                gridDim, m_blockDim, m_sharedMemSize,
+                std::forward<ArgTypes>(args)...);
+        }
     };
 
 

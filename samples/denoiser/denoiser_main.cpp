@@ -753,9 +753,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
     // EN: Copy the results to the linear buffers (and normalize normals).
-    cudau::dim3 dimCopyBuffers = kernelCopyBuffers.calcGridDim(renderTargetSizeX, renderTargetSizeY);
-    kernelCopyBuffers(
-        cuStream, dimCopyBuffers,
+    kernelCopyBuffers.launchWithThreadDim(
+        cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
         colorAccumBuffer.getSurfaceObject(0),
         albedoAccumBuffer.getSurfaceObject(0),
         normalAccumBuffer.getSurfaceObject(0),

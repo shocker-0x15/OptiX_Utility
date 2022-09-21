@@ -1673,9 +1673,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
         // EN: Copy the results to the linear buffers (and normalize normals).
-        cudau::dim3 dimCopyBuffers = kernelCopyToLinearBuffers.calcGridDim(renderTargetWidth, renderTargetHeight);
-        kernelCopyToLinearBuffers(
-            cuStream, dimCopyBuffers,
+        kernelCopyToLinearBuffers.launchWithThreadDim(
+            cuStream, cudau::dim3(renderTargetWidth, renderTargetHeight),
             beautyAccumBuffer.getSurfaceObject(0),
             albedoAccumBuffer.getSurfaceObject(0),
             normalAccumBuffer.getSurfaceObject(0),
@@ -1743,8 +1742,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             Assert_ShouldNotBeCalled();
             break;
         }
-        kernelVisualizeToOutputBuffer(
-            cuStream, kernelVisualizeToOutputBuffer.calcGridDim(contentWidth, contentHeight),
+        kernelVisualizeToOutputBuffer.launchWithThreadDim(
+            cuStream, cudau::dim3(contentWidth, contentHeight),
             bufferToDisplay,
             bufferTypeToDisplay,
             0.5f, std::pow(10.0f, motionVectorScale),
