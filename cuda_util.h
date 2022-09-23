@@ -163,13 +163,10 @@ namespace cudau {
 
     using ConstVoidPtr = const void*;
 
-    inline void addArgPointer(ConstVoidPtr* pointer) {}
+    inline void addArgPointer(ConstVoidPtr* argPointer, CUdeviceptr* pointer) {}
 
     template <typename HeadType, typename... TailTypes>
-    void addArgPointer(ConstVoidPtr* pointer, HeadType &&head, TailTypes&&... tails) {
-        *pointer = &head;
-        addArgPointer(pointer + 1, std::forward<TailTypes>(tails)...);
-    }
+    void addArgPointer(ConstVoidPtr* argPointer, CUdeviceptr* pointer, HeadType &&head, TailTypes&&... tails);
 
     template <typename... ArgTypes>
     void callKernel(
@@ -178,7 +175,8 @@ namespace cudau {
         ArgTypes&&... args) {
         if constexpr (sizeof...(args) > 0) {
             ConstVoidPtr argPointers[sizeof...(args)];
-            addArgPointer(argPointers, std::forward<ArgTypes>(args)...);
+            CUdeviceptr pointers[sizeof...(args)] = {};
+            addArgPointer(argPointers, pointers, std::forward<ArgTypes>(args)...);
 
             CUDADRV_CHECK(cuLaunchKernel(
                 kernel,
@@ -600,6 +598,26 @@ namespace cudau {
             return ret;
         }
     };
+
+
+
+    template <typename>
+    static constexpr bool is_TypedBuffer_v = false;
+
+    template <typename T>
+    static constexpr bool is_TypedBuffer_v<TypedBuffer<T>> = true;
+
+    template <typename HeadType, typename... TailTypes>
+    void addArgPointer(ConstVoidPtr* argPointer, CUdeviceptr* pointer, HeadType &&head, TailTypes&&... tails) {
+        if constexpr (is_TypedBuffer_v<std::remove_cvref_t<HeadType>>) {
+            *pointer = head.getCUdeviceptr();
+            *argPointer = pointer;
+        }
+        else {
+            *argPointer = &head;
+        }
+        addArgPointer(argPointer + 1, pointer + 1, std::forward<TailTypes>(tails)...);
+    }
 
 
 

@@ -758,9 +758,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         colorAccumBuffer.getSurfaceObject(0),
         albedoAccumBuffer.getSurfaceObject(0),
         normalAccumBuffer.getSurfaceObject(0),
-        linearColorBuffer.getDevicePointer(),
-        linearAlbedoBuffer.getDevicePointer(),
-        linearNormalBuffer.getDevicePointer(),
+        linearColorBuffer,
+        linearAlbedoBuffer,
+        linearNormalBuffer,
         uint2(renderTargetSizeX, renderTargetSizeY));
     timerRender.stop(cuStream);
 

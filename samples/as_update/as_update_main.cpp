@@ -949,15 +949,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             float t = 0.5f + 0.5f * std::sin(2 * pi_v<float> * static_cast<float>(frameIndex % 180) / 180);
             deform.launchWithThreadDim(
                 cuStream, cudau::dim3(bunnyVertexBuffer.numElements()),
-                bunnyVertexBuffer.getDevicePointer(), deformedBunnyVertexBuffer.getDevicePointer(),
+                bunnyVertexBuffer, deformedBunnyVertexBuffer,
                 bunnyVertexBuffer.numElements(), 20.0f, t);
             accumulateVertexNormals.launchWithThreadDim(
                 cuStream, cudau::dim3(bunnyTriangleBuffer.numElements()),
-                deformedBunnyVertexBuffer.getDevicePointer(), bunnyTriangleBuffer.getDevicePointer(),
+                deformedBunnyVertexBuffer, bunnyTriangleBuffer,
                 bunnyTriangleBuffer.numElements());
             normalizeVertexNormals.launchWithThreadDim(
                 cuStream, cudau::dim3(bunnyVertexBuffer.numElements()),
-                deformedBunnyVertexBuffer.getDevicePointer(),
+                deformedBunnyVertexBuffer,
                 bunnyVertexBuffer.numElements());
             bunnyGas.update(cuStream, asBuildScratchMem);
         }

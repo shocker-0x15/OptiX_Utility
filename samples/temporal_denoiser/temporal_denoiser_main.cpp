@@ -1678,9 +1678,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             beautyAccumBuffer.getSurfaceObject(0),
             albedoAccumBuffer.getSurfaceObject(0),
             normalAccumBuffer.getSurfaceObject(0),
-            linearBeautyBuffer.getDevicePointer(),
-            linearAlbedoBuffer.getDevicePointer(),
-            linearNormalBuffer.getDevicePointer(),
+            linearBeautyBuffer,
+            linearAlbedoBuffer,
+            linearNormalBuffer,
             uint2(renderTargetWidth, renderTargetHeight));
 
         cudau::TypedBuffer<float4> &linearDenoisedBeautyBuffer = linearDenoisedBeautyBuffers[bufferIndex];

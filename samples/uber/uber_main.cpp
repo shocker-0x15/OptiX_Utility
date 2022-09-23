@@ -1185,8 +1185,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Execute a kernel to compute AABBs of custom primitives.
     kernelCalculateBoundingBoxesForSpheres.launchWithThreadDim(
         cuStream, cudau::dim3(customPrimAABBs.numElements()),
-        customPrimParameters.getDevicePointer(),
-        customPrimAABBs.getDevicePointer(), customPrimAABBs.numElements());
+        customPrimParameters,
+        customPrimAABBs, customPrimAABBs.numElements());
 
     // JP: Geometry Acceleration Structureをビルドする。
     //     スクラッチバッファーは共用する。
@@ -1827,16 +1827,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curGPUTimer.deform.start(cuStream);
             kernelDeform.launchWithThreadDim(
                 cuStream, cudau::dim3(orgObjectVertexBuffer.numElements()),
-                orgObjectVertexBuffer.getDevicePointer(), meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements(),
+                orgObjectVertexBuffer, meshObject.getVertexBuffer(), orgObjectVertexBuffer.numElements(),
                 0.5f * std::sinf(2 * pi_v<float> *(animFrameIndex % 690) / 690.0f));
             const cudau::TypedBuffer<Shared::Triangle> &triangleBuffer = meshObject.getTriangleBuffer(objectMatGroupIndex);
             kernelAccumulateVertexNormals.launchWithThreadDim(
                 cuStream, cudau::dim3(triangleBuffer.numElements()),
-                meshObject.getVertexBuffer().getDevicePointer(),
-                triangleBuffer.getDevicePointer(), triangleBuffer.numElements());
+                meshObject.getVertexBuffer(),
+                triangleBuffer, triangleBuffer.numElements());
             kernelNormalizeVertexNormals.launchWithThreadDim(
                 cuStream, cudau::dim3(orgObjectVertexBuffer.numElements()),
-                meshObject.getVertexBuffer().getDevicePointer(), orgObjectVertexBuffer.numElements());
+                meshObject.getVertexBuffer(), orgObjectVertexBuffer.numElements());
             curGPUTimer.deform.stop(cuStream);
 
             // JP: 変形したジオメトリを基にGASをアップデート。
