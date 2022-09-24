@@ -57,58 +57,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if constexpr (Shared::usePayloadAnnotation) {
         // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
         // EN: Create payload types for two ray types.
-        payloadTypes[0] = Shared::SearchRayPayloadSignature::createPayloadType(
-            {
-                // rng
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
-                // alpha
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
-                // contribution
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
-                // origin
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
-                // direction
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE),
-                // flags
-                // JP: Missプログラムではterminateに書込みしか行っていないように見えるが、
-                //     flagsはビットフィールドなのでRead Writeとして取り扱う必要がある。
-                // EN: The miss program seems to only write to "terminate" but
-                //     flags is a bit field so needs to be regarded as read write.
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
-            });
-        payloadTypes[1] = Shared::VisibilityRayPayloadSignature::createPayloadType(
-            {
-                // visibility
-                (OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_CH_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
-                 OPTIX_PAYLOAD_SEMANTICS_AH_WRITE |
-                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE)
-            });
+        payloadTypes[0] = Shared::SearchRayPayloadSignature::getPayloadType();
+        payloadTypes[1] = Shared::VisibilityRayPayloadSignature::getPayloadType();
     }
     // JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
     //     Debug構成だとOptiX-IRを使うと何故か動作しない。

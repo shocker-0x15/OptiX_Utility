@@ -98,6 +98,68 @@ namespace Shared {
         unsigned int terminate : 1;
     };
 
-    using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, float3, float3, float3, float3, PathFlags>;
-    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
+    // JP: 通常のPayloadSignature型の代わりにアクセス情報を記述したAnnotatedPayloadSignature型を使用する。
+    // EN: Use AnnotatedPayloadSignature type which describes access information
+    //     instead of the ordinary PayloadSignature type.
+    using SearchRayPayloadSignature =
+        //optixu::PayloadSignature<PCG32RNG, float3, float3, float3, float3, PathFlags>;
+        optixu::AnnotatedPayloadSignature<
+            optixu::AnnotatedPayload<
+                PCG32RNG, // rng
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>,
+            optixu::AnnotatedPayload<
+                float3, // alpha
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>,
+            optixu::AnnotatedPayload<
+                float3, // contribution
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>,
+            optixu::AnnotatedPayload<
+                float3, // origin
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>,
+            optixu::AnnotatedPayload<
+                float3, // direction
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ |
+                OPTIX_PAYLOAD_SEMANTICS_CH_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>,
+            // JP: Missプログラムではterminateに書込みしか行っていないように見えるが、
+            //     flagsはビットフィールドなのでRead Writeとして取り扱う必要がある。
+            // EN: The miss program seems to only write to "terminate" but
+            //     flags is a bit field so needs to be regarded as read write.
+            optixu::AnnotatedPayload<
+                PathFlags, // flags
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>
+        > ;
+    using VisibilityRayPayloadSignature =
+        //optixu::PayloadSignature<float>;
+        optixu::AnnotatedPayloadSignature<
+            optixu::AnnotatedPayload<
+                float, // visibility
+                OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_CH_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_MS_NONE |
+                OPTIX_PAYLOAD_SEMANTICS_AH_WRITE |
+                OPTIX_PAYLOAD_SEMANTICS_IS_NONE>
+        >;
 }

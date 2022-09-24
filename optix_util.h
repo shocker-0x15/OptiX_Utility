@@ -32,6 +32,12 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+  JP: - AnnotatedPayloadSignatureテンプレート型を定義。ペイロードアノテーションはこの型経由で行う。
+        PayloadSignature::createPayloadType()を削除。
+  EN: - Defined AnnotatedPayloadSignature template type. Use this type for payload annotation.
+        Removed PayloadSignature::createPayloadType().
+
+- !!BREAKING
   JP: - Upscaling Denoiserをサポート。
       - Denoiserクラスのインターフェースをいくらか変更。
       - reportIntersection(), throwException()を削除。
@@ -445,15 +451,31 @@ namespace optixu {
         template <uint32_t index>
         RT_DEVICE_FUNCTION RT_INLINE static void setAt(const TypeAt<index> &payload);
 #endif
+    };
+
+    template <typename T, OptixPayloadSemantics _semantics>
+    struct AnnotatedPayload {
+        using Type = T;
+        static constexpr OptixPayloadSemantics semantics = _semantics;
+    };
+
+    template <typename... AnnotatedPayloadTypes>
+    struct AnnotatedPayloadSignature :
+        public PayloadSignature<typename AnnotatedPayloadTypes::Type...> {
+        using BaseSignature = PayloadSignature<typename AnnotatedPayloadTypes::Type...>;
+
+        static constexpr OptixPayloadSemantics semantics[BaseSignature::_arraySize] = {
+            AnnotatedPayloadTypes::semantics...
+        };
 
 #if !defined(__CUDA_ARCH__)
-        static PayloadType createPayloadType(const OptixPayloadSemantics (&varSemantics)[numParameters]) {
+        static PayloadType getPayloadType() {
             PayloadType ret;
-            ret.numDwords = numDwords;
+            ret.numDwords = BaseSignature::numDwords;
             uint32_t offset = 0;
-            for (uint32_t varIdx = 0; varIdx < numParameters; ++varIdx) {
-                const uint32_t sizeInDwords = sizesInDwords[varIdx];
-                OptixPayloadSemantics varSem = varSemantics[varIdx];
+            for (uint32_t varIdx = 0; varIdx < BaseSignature::numParameters; ++varIdx) {
+                const uint32_t sizeInDwords = BaseSignature::sizesInDwords[varIdx];
+                OptixPayloadSemantics varSem = semantics[varIdx];
                 for (uint32_t dwIdx = 0; dwIdx < sizeInDwords; ++dwIdx)
                     ret.semantics[offset + dwIdx] = varSem;
                 offset += sizeInDwords;
