@@ -150,7 +150,7 @@ namespace Shared {
                 OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE |
                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE>
-        > ;
+        >;
     using VisibilityRayPayloadSignature =
         //optixu::PayloadSignature<float>;
         optixu::AnnotatedPayloadSignature<
