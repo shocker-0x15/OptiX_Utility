@@ -32,14 +32,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: カーブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
-    //     複数のカーブタイプがあり、このサンプルでは全て使用する。
-    //     カーブのアトリビュートサイズは1Dword(float)。
-    // EN: Appropriately setting primitive type flags is required since this sample uses curve intersection.
-    //     There are multiple curve types and the sample use all of them.
-    //     The attribute size of curves is 1 Dword (float).
+    /*
+    JP: カーブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
+        複数のカーブタイプがあり、このサンプルでは全て使用する。
+        カーブのアトリビュートサイズは1Dword(float)。
+    EN: Appropriately setting primitive type flags is required since this sample uses curve intersection.
+        There are multiple curve types and the sample use all of them.
+        The attribute size of curves is 1 Dword (float).
+    */
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         std::max(optixu::calcSumDwords<float2>(),
                  optixu::calcSumDwords<float>()),
         "plp", sizeof(Shared::PipelineLaunchParameters),
@@ -69,13 +71,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
-    // JP: 各種カーブ用のヒットグループを作成する。
-    //     各種カーブには三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
-    //     カーブを含むことになるASと同じビルド設定を予め指定しておく必要がある。
-    // EN: Create a hit group for each of curve types.
-    //     Each curve type uses a built-in intersection program similar to triangle,
-    //     so the user doesn't need to specify it.
-    //     The same build configuration as an AS having the curve is required.
+    /*
+    JP: 各種カーブ用のヒットグループを作成する。
+        各種カーブには三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
+        カーブを含むことになるASと同じビルド設定を予め指定しておく必要がある。
+    EN: Create a hit group for each of curve types.
+        Each curve type uses a built-in intersection program similar to triangle,
+        so the user doesn't need to specify it.
+        The same build configuration as an AS having the curve is required.
+    */
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
     constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
     constexpr bool curveASUpdatable = false;

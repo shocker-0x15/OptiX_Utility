@@ -117,5 +117,5 @@ namespace Shared {
     };
 
     using PartialSphereAttributeSignature = optixu::AttributeSignature<float, float>;
-    using PayloadSignature = optixu::PayloadSignature<float3>;
+    using MyPayloadSignature = optixu::PayloadSignature<float3>;
 }

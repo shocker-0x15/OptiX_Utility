@@ -43,7 +43,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: このサンプルでは多段階のASとトランスフォームを使用する。
     // EN: This sample uses multi-level AS and transforms.
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
         true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,

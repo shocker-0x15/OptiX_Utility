@@ -318,7 +318,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
         false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
@@ -967,15 +967,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
         for (int i = 0; i < bunnies.size(); ++i)
             bunnies[i].update(1.0f / 60.0f);
         
-        // JP: IASのアップデートを行う。
-        //     品質を維持するためにたまにはリビルドする。
-        //     アップデートの代用としてのリビルドでは、インスタンスの追加・削除や
-        //     ASビルド設定の変更を行っていないのでmarkDirty()やprepareForBuild()は必要無い。
-        // EN: Update the IAS.
-        //     Sometimes perform rebuild to maintain AS quality.
-        //     Rebuild as the alternative for update doesn't involves
-        //     add/remove of instances and changes of AS build settings
-        //     so neither of markDirty() nor prepareForBuild() is required.
+        /*
+        JP: IASのアップデートを行う。
+            品質を維持するためにたまにはリビルドする。
+            アップデートの代用としてのリビルドでは、インスタンスの追加・削除や
+            ASビルド設定の変更を行っていないのでmarkDirty()やprepareForBuild()は必要無い。
+        EN: Update the IAS.
+            Sometimes perform rebuild to maintain AS quality.
+            Rebuild as the alternative for update doesn't involves
+            add/remove of instances and changes of AS build settings
+            so neither of markDirty() nor prepareForBuild() is required.
+        */
         if (frameIndex % 10 == 0)
             plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
         else

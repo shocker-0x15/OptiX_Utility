@@ -56,5 +56,5 @@ namespace Shared {
         PerspectiveCamera camera;
     };
 
-    using PayloadSignature = optixu::PayloadSignature<float3>;
+    using MyPayloadSignature = optixu::PayloadSignature<float3>;
 }

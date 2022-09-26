@@ -79,7 +79,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
     float3 color;
-    PayloadSignature::trace(
+    MyPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
@@ -90,7 +90,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 color = make_float3(0, 0, 0.1f);
-    PayloadSignature::set(&color);
+    MyPayloadSignature::set(&color);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -130,5 +130,5 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     // JP: 法線を可視化。
     // EN: Visualize the normal.
     float3 color = 0.5f * sn + make_float3(0.5f);
-    PayloadSignature::set(&color);
+    MyPayloadSignature::set(&color);
 }

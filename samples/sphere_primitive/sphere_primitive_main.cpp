@@ -35,7 +35,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Appropriately setting primitive type flags is required since this sample uses sphere intersection.
     //     The attribute size of spheres is 1 Dword (float).
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         std::max(optixu::calcSumDwords<float2>(),
                  optixu::calcSumDwords<float>()),
         "plp", sizeof(Shared::PipelineLaunchParameters),
@@ -62,13 +62,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
-    // JP: 球用のヒットグループを作成する。
-    //     球には三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
-    //     球を含むことになるASと同じビルド設定を予め指定しておく必要がある。
-    // EN: Create a hit group for spheres.
-    //     Sphere uses a built-in intersection program similar to triangle,
-    //     so the user doesn't need to specify it.
-    //     The same build configuration as an AS having the sphere is required.
+    /*
+    JP: 球用のヒットグループを作成する。
+        球には三角形と同様、ビルトインのIntersection Programが使われるのでユーザーが指定する必要はない。
+        球を含むことになるASと同じビルド設定を予め指定しておく必要がある。
+    EN: Create a hit group for spheres.
+        Sphere uses a built-in intersection program similar to triangle,
+        so the user doesn't need to specify it.
+        The same build configuration as an AS having the sphere is required.
+    */
     constexpr optixu::ASTradeoff sphereASTradeOff = optixu::ASTradeoff::PreferFastTrace;
     constexpr bool sphereASUpdatable = false;
     constexpr bool sphereASCompactable = true;

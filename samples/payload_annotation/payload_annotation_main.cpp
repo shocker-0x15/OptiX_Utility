@@ -60,13 +60,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         payloadTypes[0] = Shared::SearchRayPayloadSignature::getPayloadType();
         payloadTypes[1] = Shared::VisibilityRayPayloadSignature::getPayloadType();
     }
-    // JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
-    //     Debug構成だとOptiX-IRを使うと何故か動作しない。
-    //     質問中:
-    // EN: Pass payload types to module creation when using payload annotation.
-    //     OptiX-IR doesn't work with Debug configuration for some reason.
-    //     ongoing question:
-    // https://forums.developer.nvidia.com/t/optix-7-5-payload-type-mismatch-errors-when-using-optix-ir/218138
+    /*
+    JP: ペイロードアノテーションを使用する場合はモジュール作成時にペイロードタイプ情報を渡す。
+        Debug構成だとOptiX-IRを使うと何故か動作しない。
+        質問中:
+    EN: Pass payload types to module creation when using payload annotation.
+        OptiX-IR doesn't work with Debug configuration for some reason.
+        ongoing question:
+    https://forums.developer.nvidia.com/t/optix-7-5-payload-type-mismatch-errors-when-using-optix-ir/218138
+    */
 #if 1
     const std::string optixPtx =
         readTxtFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.ptx");

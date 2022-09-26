@@ -32,12 +32,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: このサンプルでは単一のGASのみを使用する。
-    //     カーネル中で使用しているアトリビュートサイズは2Dwords(三角形の重心座標 float2)。
-    // EN: This sample uses only a single GAS.
-    //     The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2).
+    /*
+    JP: このサンプルでは単一のGASのみを使用する。
+        カーネル中で使用しているアトリビュートサイズは2Dwords(三角形の重心座標 float2)。
+    EN: This sample uses only a single GAS.
+        The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2).
+    */
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
         false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
@@ -58,12 +60,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
 
-    // JP: 三角形用のヒットグループを作成する。
-    //     このサンプルではAny-Hit Programは使用しない。
-    //     三角形はビルトインのIntersection Programを使用するためユーザーが指定する必要はない。
-    // EN: Create a hit group for triangles.
-    //     This sample doesn't use any-hit programs.
-    //     The user doesn't need to specify an intersection program since triangles use the build-in.
+    /*
+    JP: 三角形用のヒットグループを作成する。
+        このサンプルではAny-Hit Programは使用しない。
+        三角形はビルトインのIntersection Programを使用するためユーザーが指定する必要はない。
+    EN: Create a hit group for triangles.
+        This sample doesn't use any-hit programs.
+        The user doesn't need to specify an intersection program since triangles use the build-in.
+    */
     optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit0"),
         emptyModule, nullptr);
@@ -79,14 +83,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
-    // JP: シーンに依存しないシェーダーバインディングテーブルの確保。
-    //     OptiX UtilityのAPIにCUDA UtilityのBufferを直接渡しているように見えるが、
-    //     実際には暗黙的な変換がかかっていることに注意(optixu_on_cudau.h 参照)。
-    //     OptiX UtilityはCUDA Utilityには直接依存しない。
-    // EN: Allocate the shader binding table which doesn't depend on a scene.
-    //     It appears directly passing Buffer of CUDA Utility to OptiX Utility API
-    //     but note that there is actually implicit conversion (see optixu_on_cudau.h).
-    //     OptiX Utility is not directly dependent on CUDA Utility.
+    /*
+    JP: シーンに依存しないシェーダーバインディングテーブルの確保。
+        OptiX UtilityのAPIにCUDA UtilityのBufferを直接渡しているように見えるが、
+        実際には暗黙的な変換がかかっていることに注意(optixu_on_cudau.h 参照)。
+        OptiX UtilityはCUDA Utilityには直接依存しない。
+    EN: Allocate the shader binding table which doesn't depend on a scene.
+        It appears directly passing Buffer of CUDA Utility to OptiX Utility API
+        but note that there is actually implicit conversion (see optixu_on_cudau.h).
+        OptiX Utility is not directly dependent on CUDA Utility.
+    */
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
     pipeline.generateShaderBindingTableLayout(&sbtSize);
@@ -178,17 +184,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
         geomData.matSR_N = transpose(inverse(matSR));
 
-        // JP: GeometryInstanceに頂点バッファーと三角形(インデックス)バッファーを渡す。
-        //     GeometryInstanceはバッファーの参照を持つだけなので一時変数のバッファーを渡したり
-        //     Acceleration Structureのビルド時に解放されていないように注意。
-        //     OptiX UtilityのAPIにCUDA UtilityのBufferを直接渡しているように見えるが、
-        //     実際には暗黙的な変換がかかっていることに注意(optixu_on_cudau.h 参照)。
-        // EN: Pass the vertex buffer and triangle (index) buffer to the GeometryInstance.
-        //     Note that GeometryInstance just takes a reference to a buffer and doesn't hold it,
-        //     so do not pass a buffer of temporary variable or be careful so that the buffer is not
-        //     released when building an acceleration structure.
-        //     It appears directly passing Buffer of CUDA Utility to OptiX Utility API
-        //     but note that there is actually implicit conversion (see optixu_on_cudau.h).
+        /*
+        JP: GeometryInstanceに頂点バッファーと三角形(インデックス)バッファーを渡す。
+            GeometryInstanceはバッファーの参照を持つだけなので一時変数のバッファーを渡したり
+            Acceleration Structureのビルド時に解放されていないように注意。
+            OptiX UtilityのAPIにCUDA UtilityのBufferを直接渡しているように見えるが、
+            実際には暗黙的な変換がかかっていることに注意(optixu_on_cudau.h 参照)。
+        EN: Pass the vertex buffer and triangle (index) buffer to the GeometryInstance.
+            Note that GeometryInstance just takes a reference to a buffer and doesn't hold it,
+            so do not pass a buffer of temporary variable or be careful so that the buffer is not
+            released when building an acceleration structure.
+            It appears directly passing Buffer of CUDA Utility to OptiX Utility API
+            but note that there is actually implicit conversion (see optixu_on_cudau.h).
+        */
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
         roomGeomInst.setNumMaterials(1, optixu::BufferView());
@@ -324,12 +332,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
     gas.addChild(roomGeomInst/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
-    // JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
-    //     指定されたTransformを用いてAcceleration Structureが作られる。
-    //     ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
-    // EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
-    //     Acceleration structure is built using the specified transform.
-    //     Note that geometry that given by the user in a kernel is not transformed.
+    /*
+    JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。
+        指定されたTransformを用いてAcceleration Structureが作られる。
+        ただしカーネル内でユーザー自身が与えるジオメトリ情報には変換がかかっていないことには注意する必要がある。
+    EN: It is possible to specify an additional static transform when adding a GeometryInstance to a GAS.
+        Acceleration structure is built using the specified transform.
+        Note that geometry that given by the user in a kernel is not transformed.
+    */
     gas.addChild(areaLightGeomInst, preTransformBuffer.getCUdeviceptrAt(1));
     gas.addChild(bunnyGeomInst, preTransformBuffer.getCUdeviceptrAt(2));
     gas.prepareForBuild(&asMemReqs);

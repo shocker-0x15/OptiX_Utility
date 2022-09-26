@@ -30,14 +30,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
-    //     カーブ・球・カスタムプリミティブとの衝突判定を使うため
-    //     プリミティブ種別のフラグを適切に設定する必要がある。
-    // EN: This sample uses two-level AS (single-level instancing).
-    //     Appropriately setting primitive type flags is required since this sample uses curve, sphere and
-    //     custom primitive intersection.
+    /*
+    JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
+        カーブ・球・カスタムプリミティブとの衝突判定を使うため
+        プリミティブ種別のフラグを適切に設定する必要がある。
+    EN: This sample uses two-level AS (single-level instancing).
+        Appropriately setting primitive type flags is required since this sample uses curve, sphere and
+        custom primitive intersection.
+    */
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         std::max<uint32_t>({
             optixu::calcSumDwords<float2>(),
             optixu::calcSumDwords<float>(),
@@ -615,13 +617,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     spheres.optixGas.rebuild(cuStream, spheres.gasMem, asBuildScratchMem);
     partialSpheres.optixGas.rebuild(cuStream, partialSpheres.gasMem, asBuildScratchMem);
 
-    // JP: 静的なメッシュはコンパクションもしておく。
-    //     ここではモーションがあることが"動的"を意味しない。頻繁にASのリビルドが必要なものを"動的"、そうでないものを"静的"とする。
-    //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
-    // EN: Perform compaction for static meshes.
-    //     The existence of motion does not mean "dynamic" here.
-    //     Call things as "dynamic" for which we often need to rebuild the AS otherwise call them as "static".
-    //     Record ASs of multiple meshes into single buffer back to back.
+    /*
+    JP: 静的なメッシュはコンパクションもしておく。
+        ここではモーションがあることが"動的"を意味しない。
+        頻繁にASのリビルドが必要なものを"動的"、そうでないものを"静的"とする。
+        複数のメッシュのASをひとつのバッファーに詰めて記録する。
+    EN: Perform compaction for static meshes.
+        The presence of motion does not mean "dynamic" here.
+        Call things as "dynamic" for which we often need to rebuild the AS otherwise call them as "static".
+        Record ASs of multiple meshes into single buffer back to back.
+    */
     struct CompactedASInfo {
         Geometry* geom;
         size_t offset;

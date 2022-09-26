@@ -40,7 +40,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
     pipeline.setPipelineOptions(
-        Shared::PayloadSignature::numDwords,
+        Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
         false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
@@ -61,12 +61,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    // JP: 三角形用のヒットグループを作成する。
-    //     このサンプルではAny-Hit Programは使用しない。
-    //     三角形はビルトインのIntersection Programを使用するためユーザーが指定する必要はない。
-    // EN: Create a hit group for triangles.
-    //     This sample doesn't use any-hit programs.
-    //     The user doesn't need to specify an intersection program since triangles use the build-in.
+    /*
+    JP: 三角形用のヒットグループを作成する。
+        このサンプルではAny-Hit Programは使用しない。
+        三角形はビルトインのIntersection Programを使用するためユーザーが指定する必要はない。
+    EN: Create a hit group for triangles.
+        This sample doesn't use any-hit programs.
+        The user doesn't need to specify an intersection program since triangles use the build-in.
+    */
     optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
