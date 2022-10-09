@@ -430,6 +430,8 @@ namespace optixu {
         static constexpr uint32_t numParameters = sizeof...(PayloadTypes);
         static constexpr uint32_t numDwords =
             static_cast<uint32_t>(detail::calcSumDwords<PayloadTypes...>());
+        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
+                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         static constexpr uint32_t _arraySize = numParameters > 0 ? numParameters : 1u;
         static constexpr uint32_t sizesInDwords[_arraySize] = {
             static_cast<uint32_t>(detail::getNumDwords<PayloadTypes>())...
@@ -494,6 +496,7 @@ namespace optixu {
         static constexpr uint32_t numParameters = sizeof...(AttributeTypes);
         static constexpr uint32_t numDwords =
             static_cast<uint32_t>(detail::calcSumDwords<AttributeTypes...>());
+        static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         static constexpr uint32_t sizesInDwords[numParameters] = {
             static_cast<uint32_t>(detail::getNumDwords<AttributeTypes>())...
         };
@@ -514,6 +517,7 @@ namespace optixu {
         static constexpr uint32_t numParameters = sizeof...(ExceptionDetailTypes);
         static constexpr uint32_t numDwords =
             static_cast<uint32_t>(detail::calcSumDwords<ExceptionDetailTypes...>());
+        static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
         static constexpr uint32_t sizesInDwords[numParameters] = {
             static_cast<uint32_t>(detail::getNumDwords<ExceptionDetailTypes>())...
         };
@@ -562,7 +566,7 @@ namespace optixu {
         template <typename Func, typename Type, uint32_t offsetInDst, uint32_t srcSlot>
         RT_DEVICE_FUNCTION RT_INLINE void getValue(
             Type* value) {
-            if (!value)
+            if (!value) // hope calls for this function are removed when value is compile-time nullptr.
                 return;
             *(reinterpret_cast<uint32_t*>(value) + offsetInDst) = Func::get<srcSlot>();
             if constexpr (offsetInDst + 1 < getNumDwords<Type>())
@@ -582,7 +586,7 @@ namespace optixu {
         template <typename Func, typename Type, uint32_t offsetInSrc, uint32_t dstSlot>
         RT_DEVICE_FUNCTION RT_INLINE void setValue(
             const Type* value) {
-            if (!value)
+            if (!value) // hope calls for this function are removed when value is compile-time nullptr.
                 return;
             Func::set<dstSlot>(*(reinterpret_cast<const uint32_t*>(value) + offsetInSrc));
             if constexpr (offsetInSrc + 1 < getNumDwords<Type>())
@@ -621,13 +625,14 @@ namespace optixu {
             uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
             uint32_t* const* payloads,
             std::index_sequence<I...>) {
-            optixTrace(payloadTypeID,
-                       handle,
-                       origin, direction,
-                       tmin, tmax, rayTime,
-                       visibilityMask, rayFlags,
-                       SBToffset, SBTstride, missSBTIndex,
-                       *payloads[I]...);
+            optixTrace(
+                payloadTypeID,
+                handle,
+                origin, direction,
+                tmin, tmax, rayTime,
+                visibilityMask, rayFlags,
+                SBToffset, SBTstride, missSBTIndex,
+                *payloads[I]...);
         }
 
         template <size_t... I>
@@ -762,14 +767,6 @@ namespace optixu {
         };
     }
 
-    /*
-    JP: 右辺値参照でペイロードを受け取れば右辺値も受け取れて、かつ値の書き換えも反映できる。
-        が、optixTraceに仕様をあわせることと、テンプレート引数の整合性チェックを簡単にするため、
-        ただの参照で受け取る。
-    EN: Taking payloads as rvalue reference makes it possible to take rvalue while reflecting value changes.
-        However take them as normal reference to ease consistency check of template arguments and for
-        conforming optixTrace.
-    */
     template <typename... PayloadTypes>
     template <OptixPayloadTypeID payloadTypeID>
     RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
@@ -780,8 +777,6 @@ namespace optixu {
             OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
             PayloadTypes &... payloads) {
-        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
-                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         if constexpr (numDwords == 0) {
             optixTrace(
                 payloadTypeID,
@@ -807,8 +802,6 @@ namespace optixu {
     template <typename... PayloadTypes>
     RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
         get(PayloadTypes*... payloads) {
-        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
-                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         static_assert(numDwords > 0, "Calling this function for this signature has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::PayloadFunc, 0>(payloads...);
@@ -817,8 +810,6 @@ namespace optixu {
     template <typename... PayloadTypes>
     RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
         set(const PayloadTypes*... payloads) {
-        static_assert(numDwords <= detail::maxNumPayloadsInDwords,
-                      "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
         static_assert(numDwords > 0, "Calling this function for this signature has no effect.");
         if constexpr (numDwords > 0)
             detail::setValues<detail::PayloadFunc, 0>(payloads...);
@@ -847,7 +838,6 @@ namespace optixu {
         reportIntersection(
             float hitT, uint32_t hitKind,
             const AttributeTypes &... attributes) {
-        static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         if constexpr (numDwords == 0) {
             optixReportIntersection(hitT, hitKind);
         }
@@ -861,7 +851,6 @@ namespace optixu {
     template <typename... AttributeTypes>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         get(AttributeTypes*... attributes) {
-        static_assert(numDwords <= 8, "Maximum number of attributes is 8 dwords.");
         static_assert(numDwords > 0, "Calling this function for this signature has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::AttributeFunc, 0>(attributes...);
@@ -874,7 +863,6 @@ namespace optixu {
         throwException(
             int32_t exceptionCode,
             const ExceptionDetailTypes &... exDetails) {
-        static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
         if constexpr (numDwords == 0) {
             optixThrowException(exceptionCode);
         }
@@ -888,7 +876,6 @@ namespace optixu {
     template <typename... ExceptionDetailTypes>
     RT_DEVICE_FUNCTION RT_INLINE void ExceptionDetailSignature<ExceptionDetailTypes...>::
         get(ExceptionDetailTypes*... exDetails) {
-        static_assert(numDwords <= 8, "Maximum number of exception details is 8 dwords.");
         static_assert(numDwords > 0, "Calling this function for this signature has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::ExceptionDetailFunc, 0>(exDetails...);

@@ -48,7 +48,7 @@ Currently based on OptiX 7.5.0
   - HDR with Kernel Prediction Model (AOV Output Not Tested)
   - HDR Upscaling 2x (AOV Output Not Tested)
   - HDR Temporal
-  - HDR Temporal with Kernel Prediction Model (Not Tested)
+  - HDR Temporal with Kernel Prediction Model (AOV Output Not Tested)
   - HDR Temporal + Upscaling 2x (AOV Output Not Tested)
 - Automatic payload/attribute value packing in kernel code
 - Payload usage annotation to reduce register consumption in complex pipelines
