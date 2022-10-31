@@ -45,7 +45,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::calcSumDwords<float>(),
             Shared::PartialSphereAttributeSignature::numDwords }),
             "plp", sizeof(Shared::PipelineLaunchParameters),
-            true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+            optixu::UseMotionBlur::Yes, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
             DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
@@ -70,23 +70,25 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
+    constexpr auto useEmbeddedVertexData = optixu::AllowRandomVertexAccess(Shared::useEmbeddedVertexData);
+
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
     constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
-    constexpr bool curveASUpdatable = false;
-    constexpr bool curveASCompactable = true;
+    constexpr optixu::AllowUpdate curveASUpdatable = optixu::AllowUpdate::No;
+    constexpr optixu::AllowCompaction curveASCompactable = optixu::AllowCompaction::Yes;
     optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
 
     constexpr optixu::ASTradeoff sphereASTradeOff = optixu::ASTradeoff::PreferFastTrace;
-    constexpr bool sphereASUpdatable = false;
-    constexpr bool sphereASCompactable = true;
+    constexpr optixu::AllowUpdate sphereASUpdatable = optixu::AllowUpdate::No;
+    constexpr optixu::AllowCompaction sphereASCompactable = optixu::AllowCompaction::Yes;
     optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        sphereASTradeOff, sphereASUpdatable, sphereASCompactable, Shared::useEmbeddedVertexData);
+        sphereASTradeOff, sphereASUpdatable, sphereASCompactable, useEmbeddedVertexData);
 
     // JP: このヒットグループはレイと(部分)球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
     // EN: This is for ray-(partial-)sphere intersection, so pass a custom intersection program.
@@ -270,7 +272,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGeomInst.setUserData(geomData);
 
         bunny.optixGas = scene.createGeometryAccelerationStructure();
-        bunny.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        bunny.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         bunny.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -364,7 +370,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         curves.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
         curves.optixGas.setConfiguration(
             curveASTradeOff, curveASUpdatable, curveASCompactable,
-            Shared::useEmbeddedVertexData);
+            useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -443,7 +449,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         spheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
         spheres.optixGas.setConfiguration(
             sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
-            Shared::useEmbeddedVertexData);
+            useEmbeddedVertexData);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         spheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -522,7 +528,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         partialSpheres.optixGas =
             scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
-        partialSpheres.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        partialSpheres.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         partialSpheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -591,7 +601,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+    ias.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     ias.addChild(bunnyInst);
     ias.addChild(curveInstA);
     ias.addChild(curveInstB);

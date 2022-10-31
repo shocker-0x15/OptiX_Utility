@@ -46,7 +46,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        true, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        optixu::UseMotionBlur::Yes, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -215,7 +215,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.optixGeomInst.setUserData(geomData);
 
         room.optixGas = scene.createGeometryAccelerationStructure();
-        room.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        room.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
         room.optixGas.setNumMaterialSets(1);
         room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         room.optixGas.addChild(room.optixGeomInst);
@@ -253,7 +257,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.optixGeomInst.setUserData(geomData);
 
         areaLight.optixGas = scene.createGeometryAccelerationStructure();
-        areaLight.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        areaLight.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
         areaLight.optixGas.setNumMaterialSets(1);
         areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         areaLight.optixGas.addChild(areaLight.optixGeomInst);
@@ -299,7 +307,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGeomInst.setUserData(geomData);
 
         bunny.optixGas = scene.createGeometryAccelerationStructure();
-        bunny.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        bunny.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
         bunny.optixGas.setNumMaterialSets(1);
         bunny.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         bunny.optixGas.addChild(bunny.optixGeomInst);
@@ -350,7 +362,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cube.optixGeomInst.setUserData(geomData);
 
         cube.optixGas = scene.createGeometryAccelerationStructure();
-        cube.optixGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+        cube.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
         cube.optixGas.setNumMaterialSets(1);
         cube.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         cube.optixGas.addChild(cube.optixGeomInst);
@@ -481,7 +497,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     constexpr uint32_t numMotionKeys = 3;
-    lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+    lowerIas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
     lowerIas.addChild(roomInst);
     lowerIas.addChild(areaLightInst);
@@ -539,7 +559,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure topIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer topIasMem;
     cudau::TypedBuffer<OptixInstance> topInstanceBuffer;
-    topIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+    topIas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     topIas.addChild(topInstA);
     topIas.addChild(topInstB);
     topIas.addChild(topInstC);

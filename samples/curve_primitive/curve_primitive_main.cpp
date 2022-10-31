@@ -45,7 +45,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::max(optixu::calcSumDwords<float2>(),
                  optixu::calcSumDwords<float>()),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
@@ -82,28 +82,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
     */
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
     constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
-    constexpr bool curveASUpdatable = false;
-    constexpr bool curveASCompactable = true;
+    constexpr optixu::AllowUpdate curveASUpdatable = optixu::AllowUpdate::No;
+    constexpr optixu::AllowCompaction curveASCompactable = optixu::AllowCompaction::Yes;
+    constexpr auto useEmbeddedVertexData = optixu::AllowRandomVertexAccess(Shared::useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForLinearCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR, OPTIX_CURVE_ENDCAP_DEFAULT,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForQuadraticCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
     optixu::ProgramGroup hitProgramGroupForCatmullRomCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
-        curveASTradeOff, curveASUpdatable, curveASCompactable, Shared::useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -413,7 +414,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create geometry acceleration structures.
     optixu::GeometryAccelerationStructure floorGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer floorGasMem;
-    floorGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    floorGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     floorGas.setNumMaterialSets(1);
     floorGas.setNumRayTypes(0, Shared::NumRayTypes);
     floorGas.addChild(floorGeomInst);
@@ -432,7 +437,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer linearCurvesGasMem;
     linearCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable,
-        Shared::useEmbeddedVertexData);
+        useEmbeddedVertexData);
     linearCurvesGas.setNumMaterialSets(1);
     linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     linearCurvesGas.addChild(linearCurveGeomInst);
@@ -445,7 +450,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer quadraticCurvesGasMem;
     quadraticCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable,
-        Shared::useEmbeddedVertexData);
+        useEmbeddedVertexData);
     quadraticCurvesGas.setNumMaterialSets(1);
     quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     quadraticCurvesGas.addChild(quadraticCurveGeomInst);
@@ -458,7 +463,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer cubicCurvesGasMem;
     cubicCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable,
-        Shared::useEmbeddedVertexData);
+        useEmbeddedVertexData);
     cubicCurvesGas.setNumMaterialSets(1);
     cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     cubicCurvesGas.addChild(cubicCurveGeomInst);
@@ -471,7 +476,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer catmullRomCurvesGasMem;
     catmullRomCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable,
-        Shared::useEmbeddedVertexData);
+        useEmbeddedVertexData);
     catmullRomCurvesGas.setNumMaterialSets(1);
     catmullRomCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     catmullRomCurvesGas.addChild(catmullRomCurveGeomInst);
@@ -529,7 +534,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+    ias.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     ias.addChild(floorInst);
     ias.addChild(linearCurvesInst);
     ias.addChild(quadraticCurvesInst);

@@ -39,7 +39,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::max<uint32_t>(optixu::calcSumDwords<float2>(),
                            Shared::PartialSphereAttributeSignature::numDwords),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
@@ -272,7 +272,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create geometry acceleration structures.
     optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer roomGasMem;
-    roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    roomGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
@@ -288,7 +292,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure customPrimitivesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
     cudau::Buffer customPrimitivesGasMem;
-    customPrimitivesGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    customPrimitivesGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     customPrimitivesGas.setNumMaterialSets(1);
     customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
     customPrimitivesGas.addChild(customPrimsGeomInst);
@@ -313,7 +321,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false, false);
+    ias.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     ias.addChild(roomInst);
     ias.addChild(customPrimitivesInst);
     ias.prepareForBuild(&asMemReqs);

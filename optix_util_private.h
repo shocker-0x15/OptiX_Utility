@@ -199,7 +199,8 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(Context);
 
-        Priv(CUcontext _cuContext, uint32_t logLevel, bool enableValidation) : cuContext(_cuContext) {
+        Priv(CUcontext _cuContext, uint32_t logLevel, EnableValidation enableValidation) :
+            cuContext(_cuContext) {
             throwRuntimeError(logLevel <= 4, "Valid range for logLevel is [0, 4].");
             OPTIX_CHECK(optixInit());
 
@@ -1245,7 +1246,11 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(Denoiser);
 
-        Priv(_Context* ctxt, OptixDenoiserModelKind _modelKind, bool _guideAlbedo, bool _guideNormal) :
+        Priv(
+            _Context* ctxt,
+            OptixDenoiserModelKind _modelKind,
+            bool _guideAlbedo,
+            bool _guideNormal) :
             context(ctxt),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
             overlapWidth(0), inputWidth(0), inputHeight(0),

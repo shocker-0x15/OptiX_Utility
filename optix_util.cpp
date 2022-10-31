@@ -51,7 +51,7 @@ namespace optixu {
 
 
     // static
-    Context Context::create(CUcontext cuContext, uint32_t logLevel, bool enableValidation) {
+    Context Context::create(CUcontext cuContext, uint32_t logLevel, EnableValidation enableValidation) {
         return (new _Context(cuContext, logLevel, enableValidation))->getPublicType();
     }
 
@@ -85,7 +85,9 @@ namespace optixu {
     }
 
     Denoiser Context::createDenoiser(
-        OptixDenoiserModelKind modelKind, bool guideAlbedo, bool guideNormal) const {
+        OptixDenoiserModelKind modelKind,
+        GuideAlbedo guideAlbedo,
+        GuideNormal guideNormal) const {
         return (new _Denoiser(m, modelKind, guideAlbedo, guideNormal))->getPublicType();
     }
 
@@ -906,7 +908,7 @@ namespace optixu {
         geom.endcapFlags = endcapFlags;
     }
 
-    void GeometryInstance::setSingleRadius(bool useSingleRadius) const {
+    void GeometryInstance::setSingleRadius(UseSingleRadius useSingleRadius) const {
         m->throwRuntimeError(
             std::holds_alternative<Priv::SphereGeometry>(m->geometry),
             "This geometry instance was created not for spheres.");
@@ -1226,9 +1228,9 @@ namespace optixu {
 
     void GeometryAccelerationStructure::setConfiguration(
         ASTradeoff tradeoff,
-        bool allowUpdate,
-        bool allowCompaction,
-        bool allowRandomVertexAccess) const {
+        AllowUpdate allowUpdate,
+        AllowCompaction allowCompaction,
+        AllowRandomVertexAccess allowRandomVertexAccess) const {
         m->throwRuntimeError(
             m->geomType != GeometryType::CustomPrimitives || !allowRandomVertexAccess,
             "Random vertex access is the feature only for triangle/curve/sphere GAS.");
@@ -1595,17 +1597,17 @@ namespace optixu {
 
     void GeometryAccelerationStructure::getConfiguration(
         ASTradeoff* tradeOff,
-        bool* allowUpdate,
-        bool* allowCompaction,
-        bool* allowRandomVertexAccess) const {
+        AllowUpdate* allowUpdate,
+        AllowCompaction* allowCompaction,
+        AllowRandomVertexAccess* allowRandomVertexAccess) const {
         if (tradeOff)
             *tradeOff = m->tradeoff;
         if (allowUpdate)
-            *allowUpdate = m->allowUpdate;
+            *allowUpdate = AllowUpdate(m->allowUpdate);
         if (allowCompaction)
-            *allowCompaction = m->allowCompaction;
+            *allowCompaction = AllowCompaction(m->allowCompaction);
         if (allowRandomVertexAccess)
-            *allowRandomVertexAccess = m->allowRandomVertexAccess;
+            *allowRandomVertexAccess = AllowRandomVertexAccess(m->allowRandomVertexAccess);
     }
 
     void GeometryAccelerationStructure::getMotionOptions(
@@ -2269,9 +2271,9 @@ namespace optixu {
 
     void InstanceAccelerationStructure::setConfiguration(
         ASTradeoff tradeoff,
-        bool allowUpdate,
-        bool allowCompaction,
-        bool allowRandomInstanceAccess) const {
+        AllowUpdate allowUpdate,
+        AllowCompaction allowCompaction,
+        AllowRandomInstanceAccess allowRandomInstanceAccess) const {
         bool changed = false;
         changed |= m->tradeoff != tradeoff;
         m->tradeoff = tradeoff;
@@ -2528,16 +2530,17 @@ namespace optixu {
 
     void InstanceAccelerationStructure::getConfiguration(
         ASTradeoff* tradeOff,
-        bool* allowUpdate,
-        bool* allowCompaction,
-        bool* allowRandomInstanceAccess) const {
+        AllowUpdate* allowUpdate,
+        AllowCompaction* allowCompaction,
+        AllowRandomInstanceAccess* allowRandomInstanceAccess) const {
         if (tradeOff)
             *tradeOff = m->tradeoff;
         if (allowUpdate)
-            *allowUpdate = m->allowUpdate;
+            *allowUpdate = AllowUpdate(m->allowUpdate);
         if (allowCompaction)
-            *allowCompaction = m->allowCompaction;
-        *allowRandomInstanceAccess = m->allowRandomInstanceAccess;
+            *allowCompaction = AllowCompaction(m->allowCompaction);
+        if (allowRandomInstanceAccess)
+            *allowRandomInstanceAccess = AllowRandomInstanceAccess(m->allowRandomInstanceAccess);
     }
 
     void InstanceAccelerationStructure::getMotionOptions(
@@ -2768,7 +2771,7 @@ namespace optixu {
     void Pipeline::setPipelineOptions(
         uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
         const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-        bool useMotionBlur,
+        UseMotionBlur useMotionBlur,
         OptixTraversableGraphFlags traversableGraphFlags,
         OptixExceptionFlags exceptionFlags,
         OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags) const {
@@ -2945,7 +2948,8 @@ namespace optixu {
         OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
         Module module_CH, const char* entryFunctionNameCH,
         Module module_AH, const char* entryFunctionNameAH,
-        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+        ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
+        AllowRandomVertexAccess allowRandomVertexAccess,
         const PayloadType &payloadType) const {
         m->throwRuntimeError(
             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
@@ -3004,7 +3008,8 @@ namespace optixu {
     ProgramGroup Pipeline::createHitProgramGroupForSphereIS(
         Module module_CH, const char* entryFunctionNameCH,
         Module module_AH, const char* entryFunctionNameAH,
-        ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+        ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
+        AllowRandomVertexAccess allowRandomVertexAccess,
         const PayloadType &payloadType) const {
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);

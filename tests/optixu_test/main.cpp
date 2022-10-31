@@ -166,21 +166,21 @@ TEST(ContextTest, ContextCreation) {
         //context = optixu::Context::create(reinterpret_cast<CUcontext>(~static_cast<uintptr_t>(0))), false);
         context.destroy();
 
-        context = optixu::Context::create(cuContext, 0, false);
+        context = optixu::Context::create(cuContext, 0, optixu::EnableValidation::No);
         context.destroy();
-        context = optixu::Context::create(cuContext, 1, false);
+        context = optixu::Context::create(cuContext, 1, optixu::EnableValidation::No);
         context.destroy();
-        context = optixu::Context::create(cuContext, 2, false);
+        context = optixu::Context::create(cuContext, 2, optixu::EnableValidation::No);
         context.destroy();
-        context = optixu::Context::create(cuContext, 3, false);
+        context = optixu::Context::create(cuContext, 3, optixu::EnableValidation::No);
         context.destroy();
-        context = optixu::Context::create(cuContext, 4, false);
+        context = optixu::Context::create(cuContext, 4, optixu::EnableValidation::No);
         context.destroy();
-        context = optixu::Context::create(cuContext, 4, true);
+        context = optixu::Context::create(cuContext, 4, optixu::EnableValidation::Yes);
         context.destroy();
 
         // JP: コールバックレベルが範囲外。
-        EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 5, false));
+        EXPECT_EXCEPTION_RET(context, optixu::Context::create(cuContext, 5, optixu::EnableValidation::No));
     }
     catch (std::exception &ex) {
         printf("%s\n", ex.what());
@@ -245,16 +245,23 @@ TEST(ContextTest, ContextBasic) {
 
                 optixu::Denoiser denoiser;
 
-                denoiser = context.createDenoiser(OPTIX_DENOISER_MODEL_KIND_LDR, true, true);
+                denoiser = context.createDenoiser(
+                    OPTIX_DENOISER_MODEL_KIND_LDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
-                denoiser = context.createDenoiser(OPTIX_DENOISER_MODEL_KIND_HDR, true, true);
+                denoiser = context.createDenoiser(
+                    OPTIX_DENOISER_MODEL_KIND_HDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
                 // JP: 無効なenumを使ってデノイザーを生成。
-                EXPECT_EXCEPTION_RET(denoiser, context.createDenoiser(static_cast<OptixDenoiserModelKind>(~0), true, true), true);
+                EXPECT_EXCEPTION_RET(
+                    denoiser,
+                    context.createDenoiser(
+                        static_cast<OptixDenoiserModelKind>(~0),
+                        optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes),
+                    true);
             }
         }
         context.destroy();
@@ -285,7 +292,7 @@ TEST(MaterialTest, MaterialBasic) {
             shared::Pipeline0Payload0Signature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(shared::PipelineLaunchParameters0),
-            false,
+            optixu::UseMotionBlur::No,
             OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
             OPTIX_EXCEPTION_FLAG_DEBUG,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);

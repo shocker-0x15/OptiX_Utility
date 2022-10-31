@@ -454,7 +454,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::max<uint32_t>(optixu::calcSumDwords<float2>(),
                            Shared::SphereAttributeSignature::numDwords),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
         DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
                       OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
                       OPTIX_EXCEPTION_FLAG_DEBUG),
@@ -498,9 +498,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
     constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
-    constexpr bool curveASUpdatable = false;
-    constexpr bool curveASCompactable = true;
-    constexpr bool curveASAllowRandomVertexAccess = false;
+    constexpr optixu::AllowUpdate curveASUpdatable = optixu::AllowUpdate::No;
+    constexpr optixu::AllowCompaction curveASCompactable = optixu::AllowCompaction::Yes;
+    constexpr auto curveASAllowRandomVertexAccess = optixu::AllowRandomVertexAccess::No;
     optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr,
@@ -1118,7 +1118,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure gasCornellBox = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasCornellBoxMem;
     cudau::Buffer gasCornellBoxCompactedMem;
-    gasCornellBox.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    gasCornellBox.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     gasCornellBox.setNumMaterialSets(1);
     gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
@@ -1130,7 +1134,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::GeometryAccelerationStructure gasAreaLight = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasAreaLightMem;
     cudau::Buffer gasAreaLightCompactedMem;
-    gasAreaLight.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    gasAreaLight.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     gasAreaLight.setNumMaterialSets(1);
     gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
@@ -1155,7 +1163,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t gasObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasObject = scene.createGeometryAccelerationStructure();
     cudau::Buffer gasObjectMem;
-    gasObject.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
+    gasObject.setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,
+        optixu::AllowUpdate::Yes,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomVertexAccess::No);
     gasObject.setNumMaterialSets(2);
     gasObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasObject.setNumRayTypes(1, Shared::NumRayTypes);
@@ -1171,7 +1183,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t gasCustomPrimObjectIndex = travID++;
     optixu::GeometryAccelerationStructure gasCustomPrimObject = scene.createGeometryAccelerationStructure(optixu::GeometryType::CustomPrimitives);
     cudau::Buffer gasCustomPrimObjectMem;
-    gasCustomPrimObject.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
+    gasCustomPrimObject.setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,
+        optixu::AllowUpdate::Yes,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomVertexAccess::No);
     gasCustomPrimObject.setNumMaterialSets(1);
     gasCustomPrimObject.setNumRayTypes(0, Shared::NumRayTypes);
     gasCustomPrimObject.addChild(customPrimInstance);
@@ -1273,7 +1289,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure iasScene = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasSceneMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    iasScene.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
+    iasScene.setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,
+        optixu::AllowUpdate::Yes,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     iasScene.addChild(instCornellBox);
     iasScene.addChild(instAreaLight);
     iasScene.addChild(instFloorFiber);

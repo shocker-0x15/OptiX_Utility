@@ -321,7 +321,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -536,7 +536,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Create geometry acceleration structures.
     optixu::GeometryAccelerationStructure roomGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer roomGasMem;
-    roomGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    roomGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
@@ -546,7 +550,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::GeometryAccelerationStructure areaLightGas = scene.createGeometryAccelerationStructure();
     cudau::Buffer areaLightGasMem;
-    areaLightGas.setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, true, false);
+    areaLightGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     areaLightGas.setNumMaterialSets(1);
     areaLightGas.setNumRayTypes(0, Shared::NumRayTypes);
     areaLightGas.addChild(areaLightGeomInst);
@@ -558,7 +566,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer bunnyGasMem;
     // JP: update()を使用するためにアップデート可能に設定しておく。
     // EN: Make the AS updatable to use update().
-    bunnyGas.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, true, false);
+    bunnyGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,
+        optixu::AllowUpdate::Yes,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
     bunnyGas.setNumMaterialSets(1);
     bunnyGas.setNumRayTypes(0, Shared::NumRayTypes);
     bunnyGas.addChild(bunnyGeomInst);
@@ -664,7 +676,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     // JP: update()を使用するためにアップデート可能に設定しておく。
     // EN: Make the AS updatable to use update().
-    ias.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, false, false);
+    ias.setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,
+        optixu::AllowUpdate::Yes,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomInstanceAccess::No);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnies.size(); ++i)

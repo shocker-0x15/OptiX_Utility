@@ -32,6 +32,10 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+  JP: - ホスト側APIのbool引数それぞれの個別の型を定義。
+  EN: - Defined a dedicated type for each bool parameter of the host-side API.
+
+- !!BREAKING
   JP: - AnnotatedPayloadSignatureテンプレート型を定義。ペイロードアノテーションはこの型経由で行う。
         PayloadSignature::createPayloadType()を削除。
   EN: - Defined AnnotatedPayloadSignature template type. Use this type for payload annotation.
@@ -1045,6 +1049,35 @@ namespace optixu {
         return detail::calcSumDwords<Types...>();
     }
 
+    template <typename BaseType>
+    class TypedBool {
+        bool m_value;
+
+    public:
+        struct Bool {
+            bool b;
+        };
+
+        constexpr TypedBool(const TypedBool &b) : m_value(b) {}
+        constexpr TypedBool(Bool b) : m_value(b.b) {}
+        constexpr explicit TypedBool(bool b) : m_value(b) {}
+
+        constexpr operator bool() const {
+            return m_value;
+        }
+        constexpr bool operator==(const TypedBool &r) const {
+            return m_value == r.m_value;
+        }
+        constexpr bool operator!=(const TypedBool &r) const {
+            return m_value != r.m_value;
+        }
+
+        static constexpr Bool True{ true };
+        static constexpr Bool False{ false };
+        static constexpr Bool Yes{ true };
+        static constexpr Bool No{ false };
+    };
+
 
 
 #define OPTIXU_PIMPL() \
@@ -1068,12 +1101,32 @@ private: \
 
 
 
+#define OPTIXU_DECLARE_TYPED_BOOL(Name) \
+    using Name = TypedBool<struct _ ## Name>
+
+    OPTIXU_DECLARE_TYPED_BOOL(EnableValidation);
+    OPTIXU_DECLARE_TYPED_BOOL(GuideAlbedo);
+    OPTIXU_DECLARE_TYPED_BOOL(GuideNormal);
+    OPTIXU_DECLARE_TYPED_BOOL(UseSingleRadius);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowUpdate);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowCompaction);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowRandomVertexAccess);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowOpacityMicroMapUpdate);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowDisableOpacityMicroMaps);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowRandomInstanceAccess);
+    OPTIXU_DECLARE_TYPED_BOOL(UseMotionBlur);
+
+
+
     class Context {
         OPTIXU_PIMPL();
 
     public:
         [[nodiscard]]
-        static Context create(CUcontext cuContext, uint32_t logLevel = 4, bool enableValidation = false);
+        static Context create(
+            CUcontext cuContext,
+            uint32_t logLevel = 4,
+            EnableValidation enableValidation = EnableValidation::No);
         void destroy();
         OPTIXU_COMMON_FUNCTIONS(Context);
 
@@ -1088,7 +1141,10 @@ private: \
         [[nodiscard]]
         Scene createScene() const;
         [[nodiscard]]
-        Denoiser createDenoiser(OptixDenoiserModelKind modelKind, bool guideAlbedo, bool guideNormal) const;
+        Denoiser createDenoiser(
+            OptixDenoiserModelKind modelKind,
+            GuideAlbedo guideAlbedo,
+            GuideNormal guideNormal) const;
     };
 
 
@@ -1181,7 +1237,7 @@ private: \
             OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
-        void setSingleRadius(bool useSingleRadius) const;
+        void setSingleRadius(UseSingleRadius useSingleRadius) const;
         void setCustomPrimitiveAABBBuffer(
             const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
@@ -1240,8 +1296,8 @@ private: \
         // EN: Calling the following APIs automatically marks the GAS dirty.
         //     Changing the number of children invalidates the shader binding table layout of hit group.
         void setConfiguration(
-            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction,
-            bool allowRandomVertexAccess) const;
+            ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
+            AllowRandomVertexAccess allowRandomVertexAccess) const;
         void setMotionOptions(
             uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(
@@ -1312,8 +1368,8 @@ private: \
         OptixTraversableHandle getHandle() const;
 
         void getConfiguration(
-            ASTradeoff* tradeOff, bool* allowUpdate, bool* allowCompaction,
-            bool* allowRandomVertexAccess) const;
+            ASTradeoff* tradeOff, AllowUpdate* allowUpdate, AllowCompaction* allowCompaction,
+            AllowRandomVertexAccess* allowRandomVertexAccess) const;
         void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
         uint32_t findChildIndex(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
@@ -1439,9 +1495,9 @@ private: \
         // EN: Calling the following APIs automatically marks the IAS dirty.
         void setConfiguration(
             ASTradeoff tradeoff,
-            bool allowUpdate,
-            bool allowCompaction,
-            bool allowRandomInstanceAccess) const;
+            AllowUpdate allowUpdate,
+            AllowCompaction allowCompaction,
+            AllowRandomInstanceAccess allowRandomInstanceAccess) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChildAt(uint32_t index) const;
@@ -1478,9 +1534,9 @@ private: \
 
         void getConfiguration(
             ASTradeoff* tradeOff,
-            bool* allowUpdate,
-            bool* allowCompaction,
-            bool* allowRandomInstanceAccess) const;
+            AllowUpdate* allowUpdate,
+            AllowCompaction* allowCompaction,
+            AllowRandomInstanceAccess* allowRandomInstanceAccess) const;
         void getMotionOptions(
             uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
@@ -1500,7 +1556,7 @@ private: \
         void setPipelineOptions(
             uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
             const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-            bool useMotionBlur,
+            UseMotionBlur useMotionBlur,
             OptixTraversableGraphFlags traversableGraphFlags,
             OptixExceptionFlags exceptionFlags,
             OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags) const;
@@ -1536,13 +1592,15 @@ private: \
             OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
-            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+            ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
+            AllowRandomVertexAccess allowRandomVertexAccess,
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForSphereIS(
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
-            ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess,
+            ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
+            AllowRandomVertexAccess allowRandomVertexAccess,
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCustomIS(
