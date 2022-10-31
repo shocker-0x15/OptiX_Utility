@@ -54,6 +54,7 @@ Currently based on OptiX 7.6.0
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
+- Opacity Micro-Map
 - Parallel Module Compilation
 - AS Relocation
 - Test AOV denoisers
