@@ -18,7 +18,7 @@ Add optix_util.h, optix_util_private.h and optix_util.cpp to your program which 
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
-Currently based on OptiX 7.5.0
+Currently based on OptiX 7.6.0
 - Traversable types
   - Single GAS
   - Single-level instancing
@@ -260,15 +260,15 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 10 (21H2) & Visual Studio Community 2022 (17.3.4)
+* Windows 11 (22H2) & Visual Studio Community 2022 (17.3.6)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 516.94
+* NVIDIA Driver 526.47
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
 * CUDA 11.7
-* OptiX 7.5.0 (requires Maxwell or later generation NVIDIA GPU)
+* OptiX 7.6.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
