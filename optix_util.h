@@ -1299,9 +1299,7 @@ private: \
             ASTradeoff tradeoff,
             AllowUpdate allowUpdate = AllowUpdate::No,
             AllowCompaction allowCompaction = AllowCompaction::No,
-            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
-            AllowOpacityMicroMapUpdate allowOpacityMicroMapUpdate = AllowOpacityMicroMapUpdate::No,
-            AllowDisableOpacityMicroMaps allowDisableOpacityMicroMaps = AllowDisableOpacityMicroMaps::No) const;
+            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No) const;
         void setMotionOptions(
             uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(
