@@ -1296,8 +1296,12 @@ private: \
         // EN: Calling the following APIs automatically marks the GAS dirty.
         //     Changing the number of children invalidates the shader binding table layout of hit group.
         void setConfiguration(
-            ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
-            AllowRandomVertexAccess allowRandomVertexAccess) const;
+            ASTradeoff tradeoff,
+            AllowUpdate allowUpdate = AllowUpdate::No,
+            AllowCompaction allowCompaction = AllowCompaction::No,
+            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
+            AllowOpacityMicroMapUpdate allowOpacityMicroMapUpdate = AllowOpacityMicroMapUpdate::No,
+            AllowDisableOpacityMicroMaps allowDisableOpacityMicroMaps = AllowDisableOpacityMicroMaps::No) const;
         void setMotionOptions(
             uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(
@@ -1495,9 +1499,9 @@ private: \
         // EN: Calling the following APIs automatically marks the IAS dirty.
         void setConfiguration(
             ASTradeoff tradeoff,
-            AllowUpdate allowUpdate,
-            AllowCompaction allowCompaction,
-            AllowRandomInstanceAccess allowRandomInstanceAccess) const;
+            AllowUpdate allowUpdate = AllowUpdate::No,
+            AllowCompaction allowCompaction = AllowCompaction::No,
+            AllowRandomInstanceAccess allowRandomInstanceAccess = AllowRandomInstanceAccess::No) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChildAt(uint32_t index) const;
@@ -1592,15 +1596,19 @@ private: \
             OptixPrimitiveType curveType, OptixCurveEndcapFlags endcapFlags,
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
-            ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
-            AllowRandomVertexAccess allowRandomVertexAccess,
+            ASTradeoff tradeoff,
+            AllowUpdate allowUpdate = AllowUpdate::No,
+            AllowCompaction allowCompaction = AllowCompaction::No,
+            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForSphereIS(
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
-            ASTradeoff tradeoff, AllowUpdate allowUpdate, AllowCompaction allowCompaction,
-            AllowRandomVertexAccess allowRandomVertexAccess,
+            ASTradeoff tradeoff,
+            AllowUpdate allowUpdate = AllowUpdate::No,
+            AllowCompaction allowCompaction = AllowCompaction::No,
+            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         ProgramGroup createHitProgramGroupForCustomIS(

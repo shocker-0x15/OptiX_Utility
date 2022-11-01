@@ -94,7 +94,7 @@ pipeline.setPipelineOptions(
     optixu::calcSumDwords<PayloadSignature>(),
     optixu::calcSumDwords<AttributeSignature>(),
     "plp", sizeof(PipelineLaunchParameters),
-    false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+    optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
     OPTIX_EXCEPTION_FLAG_DEBUG,
     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -146,7 +146,9 @@ OptixAccelBufferSizes asMemReqs;
 
 // Create geometry acceleration structures.
 optixu::GeometryAccelerationStructure gas0 = scene.createGeometryAccelerationStructure();
-gas0.setConfiguration(optixu::ASTradeoff::PreferFastTrace, true, true, false); // Builder preference.
+gas0.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::Yes, optixu::AllowCompaction::Yes); // Builder preference.
 gas0.addChild(geomInst0);
 gas0.addChild(geomInst1);
 gas0.addChild(...);
@@ -165,7 +167,9 @@ optixu::Instance inst1 = scene.createInstance();
 
 // Create instance acceleration structures.
 optixu::InstanceAccelerationStructure ias0 = scene.createInstanceAccelerationStructure();
-ias0.setConfiguration(optixu::ASTradeoff::PreferFastBuild, true, true); // Builder preference.
+ias0.setConfiguration(
+    optixu::ASTradeoff::PreferFastBuild,
+    optixu::AllowUpdate::Yes, optixu::AllowCompaction::Yes); // Builder preference.
 ias0.addChild(inst0);
 ias0.addChild(inst1);
 ias0.addChild(...);
