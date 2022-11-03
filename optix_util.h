@@ -1059,7 +1059,7 @@ namespace optixu {
             bool b;
         };
 
-        constexpr TypedBool(const TypedBool &b) : m_value(b) {}
+        constexpr TypedBool(const TypedBool &b) : m_value(b.m_value) {}
         constexpr TypedBool(Bool b) : m_value(b.b) {}
         constexpr explicit TypedBool(bool b) : m_value(b) {}
 
@@ -1095,6 +1095,7 @@ namespace optixu {
     OPTIXU_DECLARE_TYPED_BOOL(AllowDisableOpacityMicroMaps);
     OPTIXU_DECLARE_TYPED_BOOL(AllowRandomInstanceAccess);
     OPTIXU_DECLARE_TYPED_BOOL(UseMotionBlur);
+    OPTIXU_DECLARE_TYPED_BOOL(IsFirstFrame);
 
 
 
@@ -1748,7 +1749,7 @@ namespace optixu {
             const BufferView &scratchBuffer, CUdeviceptr normalizer) const;
         void invoke(
             CUstream stream, const DenoisingTask &task,
-            const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
+            const DenoiserInputBuffers &inputBuffers, IsFirstFrame isFirstFrame,
             OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
             const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
             const BufferView &internalGuideLayerForNextFrame) const;

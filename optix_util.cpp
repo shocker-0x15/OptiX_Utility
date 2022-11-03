@@ -3610,7 +3610,7 @@ namespace optixu {
 
     void Denoiser::invoke(
         CUstream stream, const DenoisingTask &task,
-        const DenoiserInputBuffers &inputBuffers, bool isFirstFrame,
+        const DenoiserInputBuffers &inputBuffers, IsFirstFrame isFirstFrame,
         OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
         const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
         const BufferView &internalGuideLayerForNextFrame) const {

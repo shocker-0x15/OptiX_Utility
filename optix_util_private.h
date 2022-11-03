@@ -816,7 +816,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Transform");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Xfm");
 
 
 
