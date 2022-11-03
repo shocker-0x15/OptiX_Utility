@@ -130,7 +130,7 @@ namespace optixu {
     }
 
 #if defined(OPTIXU_ENABLE_RUNTIME_ERROR)
-#   define OPTIXU_THROW_RUNTIME_ERROR(TypeName) \
+#   define OPTIXU_DEFINE_THROW_RUNTIME_ERROR(TypeName) \
         template <typename... Types> \
         void throwRuntimeError(bool expr, const char* fmt, const Types &... args) const { \
             if (expr) \
@@ -141,7 +141,7 @@ namespace optixu {
             optixu::_throwRuntimeError(ss.str().c_str(), args...); \
         }
 #else
-#   define OPTIXU_THROW_RUNTIME_ERROR(TypeName) \
+#   define OPTIXU_DEFINE_THROW_RUNTIME_ERROR(TypeName) \
         template <typename... Types> \
         void throwRuntimeError(bool, const char*, const Types &...) const {}
 #endif
@@ -272,7 +272,7 @@ namespace optixu {
             }
         }
 
-        OPTIXU_THROW_RUNTIME_ERROR("Context");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Context");
     };
 
 
@@ -349,7 +349,7 @@ namespace optixu {
         _Context* getContext() const {
             return context;
         }
-        OPTIXU_THROW_RUNTIME_ERROR("Material");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Material");
 
         SizeAlign getUserDataSizeAlign() const {
             return userDataSizeAlign;
@@ -421,7 +421,7 @@ namespace optixu {
         _Context* getContext() const {
             return context;
         }
-        OPTIXU_THROW_RUNTIME_ERROR("Scene");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Scene");
 
 
 
@@ -613,7 +613,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_THROW_RUNTIME_ERROR("GeomInst");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("GeomInst");
 
 
 
@@ -728,7 +728,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_THROW_RUNTIME_ERROR("GAS");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("GAS");
 
 
 
@@ -816,7 +816,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_THROW_RUNTIME_ERROR("Transform");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Transform");
 
 
 
@@ -876,7 +876,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_THROW_RUNTIME_ERROR("Inst");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Inst");
 
 
 
@@ -956,7 +956,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_THROW_RUNTIME_ERROR("IAS");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("IAS");
 
 
 
@@ -1087,7 +1087,7 @@ namespace optixu {
         _Context* getContext() const override {
             return context;
         }
-        OPTIXU_THROW_RUNTIME_ERROR("Pipeline");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Pipeline");
 
 
 
@@ -1261,6 +1261,6 @@ namespace optixu {
         _Context* getContext() const override {
             return context;
         }
-        OPTIXU_THROW_RUNTIME_ERROR("Denoiser");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Denoiser");
     };
 }
