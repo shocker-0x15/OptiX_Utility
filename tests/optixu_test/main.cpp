@@ -289,7 +289,6 @@ TEST(MaterialTest, MaterialBasic) {
             shared::Pipeline0Payload0Signature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(shared::PipelineLaunchParameters0),
-            optixu::UseMotionBlur::No,
             OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
             OPTIX_EXCEPTION_FLAG_DEBUG,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);

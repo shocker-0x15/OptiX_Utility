@@ -33,7 +33,9 @@ EN:
 変更履歴 / Update History:
 - !!BREAKING
   JP: - ホスト側APIのbool引数それぞれの個別の型を定義。
+      - Pipeline::setPipelineOptions()の引数の順序を変更。
   EN: - Defined a dedicated type for each bool parameter of the host-side API.
+      - Changed the order of parameters of Pipeline::setPipelineOptions().
 
 - !!BREAKING
   JP: - AnnotatedPayloadSignatureテンプレート型を定義。ペイロードアノテーションはこの型経由で行う。
@@ -1553,10 +1555,10 @@ namespace optixu {
         void setPipelineOptions(
             uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
             const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-            UseMotionBlur useMotionBlur,
             OptixTraversableGraphFlags traversableGraphFlags,
             OptixExceptionFlags exceptionFlags,
-            OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags) const;
+            OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
+            UseMotionBlur useMotionBlur = UseMotionBlur::No) const;
 
         [[nodiscard]]
         Module createModuleFromPTXString(

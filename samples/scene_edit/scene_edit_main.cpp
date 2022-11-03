@@ -1138,7 +1138,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        optixu::UseMotionBlur::No,
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
         DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
                       OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
@@ -1504,11 +1503,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         geomGroup->serialID = serialID;
                         geomGroup->name = name;
                         geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
-                        geomGroup->optixGAS.setConfiguration(
-                            optixu::ASTradeoff::PreferFastTrace,
-                            optixu::AllowUpdate::No,
-                            optixu::AllowCompaction::No,
-                            optixu::AllowRandomVertexAccess::No);
+                        geomGroup->optixGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
                         geomGroup->optixGAS.setNumMaterialSets(1);
                         geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
                         geomGroup->preTransforms.resize(numSelectedGeomInsts);
@@ -1812,11 +1807,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         group->serialID = serialID;
                         group->name = name;
                         group->optixIAS = optixEnv.scene.createInstanceAccelerationStructure();
-                        group->optixIAS.setConfiguration(
-                            optixu::ASTradeoff::PreferFastBuild,
-                            optixu::AllowUpdate::No,
-                            optixu::AllowCompaction::No,
-                            optixu::AllowRandomInstanceAccess::No);
+                        group->optixIAS.setConfiguration(optixu::ASTradeoff::PreferFastBuild);
 
                         instList.loopForSelected(
                             [&group](const InstanceRef &inst) {

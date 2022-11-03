@@ -41,15 +41,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     // JP: このサンプルでは多段階のASとトランスフォームを使用する。
+    //     インスタンスモーションブラーも使用するのでUseMotionBlur::Yesを指定する。
     // EN: This sample uses multi-level AS and transforms.
+    //     Specify UseMotionBlur::Yes since the sample also uses instance motion blur.
     pipeline.setPipelineOptions(
         Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        optixu::UseMotionBlur::Yes, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE,
+        optixu::UseMotionBlur::Yes);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "multi_level_instancing/ptxes/optix_kernels.optixir");
@@ -218,8 +221,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         room.optixGas.setNumMaterialSets(1);
         room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         room.optixGas.addChild(room.optixGeomInst);
@@ -260,8 +262,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         areaLight.optixGas.setNumMaterialSets(1);
         areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         areaLight.optixGas.addChild(areaLight.optixGeomInst);
@@ -310,8 +311,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         bunny.optixGas.setNumMaterialSets(1);
         bunny.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         bunny.optixGas.addChild(bunny.optixGeomInst);
@@ -365,8 +365,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cube.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         cube.optixGas.setNumMaterialSets(1);
         cube.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         cube.optixGas.addChild(cube.optixGeomInst);
@@ -497,11 +496,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     constexpr uint32_t numMotionKeys = 3;
-    lowerIas.setConfiguration(
-        optixu::ASTradeoff::PreferFastTrace,
-        optixu::AllowUpdate::No,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+    lowerIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     lowerIas.setMotionOptions(numMotionKeys, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
     lowerIas.addChild(roomInst);
     lowerIas.addChild(areaLightInst);
@@ -559,11 +554,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure topIas = scene.createInstanceAccelerationStructure();
     cudau::Buffer topIasMem;
     cudau::TypedBuffer<OptixInstance> topInstanceBuffer;
-    topIas.setConfiguration(
-        optixu::ASTradeoff::PreferFastTrace,
-        optixu::AllowUpdate::No,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+    topIas.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     topIas.addChild(topInstA);
     topIas.addChild(topInstB);
     topIas.addChild(topInstC);

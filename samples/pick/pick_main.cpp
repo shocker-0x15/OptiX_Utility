@@ -353,7 +353,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             Shared::PickPayloadSignature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(Shared::PickPipelineLaunchParameters),
-            optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+            OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
             DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -398,7 +398,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             Shared::RenderPayloadSignature::numDwords,
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(Shared::RenderPipelineLaunchParameters),
-            optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+            OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
             DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -747,8 +747,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomGroup.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         roomGroup.optixGas.setNumMaterialSets(1);
         roomGroup.optixGas.setNumRayTypes(0, maxNumRayTypes);
         for (auto it = room.groups.cbegin(); it != room.groups.cend(); ++it)
@@ -777,8 +776,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyGroup.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         bunnyGroup.optixGas.setNumMaterialSets(NumBunnies);
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
             bunnyGroup.optixGas.setNumRayTypes(matSetIdx, maxNumRayTypes);
@@ -841,11 +839,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(
-        optixu::ASTradeoff::PreferFastTrace,
-        optixu::AllowUpdate::No,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     ias.addChild(roomInst);
     for (int i = 0; i < bunnyInsts.size(); ++i)
         ias.addChild(bunnyInsts[i]);

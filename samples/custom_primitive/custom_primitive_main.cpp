@@ -39,7 +39,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::max<uint32_t>(optixu::calcSumDwords<float2>(),
                            Shared::PartialSphereAttributeSignature::numDwords),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
@@ -275,8 +275,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomGas.setConfiguration(
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
-        optixu::AllowCompaction::Yes,
-        optixu::AllowRandomVertexAccess::No);
+        optixu::AllowCompaction::Yes);
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
@@ -295,8 +294,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     customPrimitivesGas.setConfiguration(
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
-        optixu::AllowCompaction::Yes,
-        optixu::AllowRandomVertexAccess::No);
+        optixu::AllowCompaction::Yes);
     customPrimitivesGas.setNumMaterialSets(1);
     customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
     customPrimitivesGas.addChild(customPrimsGeomInst);
@@ -321,11 +319,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(
-        optixu::ASTradeoff::PreferFastTrace,
-        optixu::AllowUpdate::No,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     ias.addChild(roomInst);
     ias.addChild(customPrimitivesInst);
     ias.prepareForBuild(&asMemReqs);
