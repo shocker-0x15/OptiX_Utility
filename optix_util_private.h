@@ -103,6 +103,8 @@ namespace optixu {
 
 
 
+    using _Context = Context::Priv;
+
     // Alias private classes.
 #define OPTIXU_PREPROCESS_OBJECT(Name) using _ ## Name = Name::Priv
     OPTIXU_PREPROCESS_OBJECTS();
@@ -125,17 +127,6 @@ namespace optixu {
     template <typename PublicType>
     static typename PublicType::Priv* extract(const PublicType &obj) {
         return PublicType::Priv::extract(obj);
-    }
-
-#define OPTIXU_PRIV_NAME_INTERFACE() \
-    void setName(const std::string &name) const { \
-        getContext()->registerName(this, name); \
-    } \
-    const char* getRegisteredName() const { \
-        return getContext()->getRegisteredName(this); \
-    } \
-    std::string getName() const { \
-        return getContext()->getName(this); \
     }
 
 #if defined(OPTIXU_ENABLE_RUNTIME_ERROR)
@@ -286,7 +277,28 @@ namespace optixu {
 
 
 
-    class Material::Priv {
+    class PrivateObject {
+    public:
+        virtual _Context* getContext() const = 0;
+        OptixDeviceContext getRawContext() const {
+            return getContext()->getRawContext();
+        }
+
+        void setName(const std::string &name) const {
+            getContext()->registerName(this, name);
+        }
+        const char* getRegisteredName() const {
+            return getContext()->getRegisteredName(this);
+        }
+        std::string getName() const {
+            return getContext()->getName(this);
+        }
+    };
+
+
+
+    template <>
+    class Object<Material>::Priv : public PrivateObject {
         struct Key {
             const _Pipeline* pipeline;
             uint32_t rayType;
@@ -337,10 +349,6 @@ namespace optixu {
         _Context* getContext() const {
             return context;
         }
-        OptixDeviceContext getRawContext() const {
-            return context->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("Material");
 
         SizeAlign getUserDataSizeAlign() const {
@@ -353,7 +361,8 @@ namespace optixu {
 
 
 
-    class Scene::Priv {
+    template <>
+    class Object<Scene>::Priv : public PrivateObject {
         struct SBTOffsetKey {
             uint32_t gasSerialID;
             uint32_t matSetIndex;
@@ -412,10 +421,6 @@ namespace optixu {
         _Context* getContext() const {
             return context;
         }
-        OptixDeviceContext getRawContext() const {
-            return context->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("Scene");
 
 
@@ -451,7 +456,8 @@ namespace optixu {
 
 
 
-    class GeometryInstance::Priv {
+    template <>
+    class Object<GeometryInstance>::Priv : public PrivateObject {
         _Scene* scene;
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
@@ -604,13 +610,9 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return scene->getContext();
         }
-        OptixDeviceContext getRawContext() const {
-            return scene->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("GeomInst");
 
 
@@ -638,7 +640,8 @@ namespace optixu {
 
 
 
-    class GeometryAccelerationStructure::Priv {
+    template <>
+    class Object<GeometryAccelerationStructure>::Priv : public PrivateObject {
         struct Child {
             _GeometryInstance* geomInst;
             CUdeviceptr preTransform;
@@ -695,7 +698,7 @@ namespace optixu {
             handle(0), compactedHandle(0),
             tradeoff(ASTradeoff::Default),
             allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
-            readyToBuild(false), available(false), 
+            readyToBuild(false), available(false),
             readyToCompact(false), compactedAvailable(false) {
             scene->addGAS(this);
 
@@ -722,13 +725,9 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return scene->getContext();
         }
-        OptixDeviceContext getRawContext() const {
-            return scene->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("GAS");
 
 
@@ -769,7 +768,8 @@ namespace optixu {
 
 
 
-    class Transform::Priv {
+    template <>
+    class Object<Transform>::Priv : public PrivateObject {
         _Scene* scene;
         std::variant<
             void*,
@@ -813,13 +813,9 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return scene->getContext();
         }
-        OptixDeviceContext getRawContext() const {
-            return scene->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("Transform");
 
 
@@ -839,7 +835,8 @@ namespace optixu {
 
 
 
-    class Instance::Priv {
+    template <>
+    class Object<Instance>::Priv : public PrivateObject {
         _Scene* scene;
         std::variant<
             void*,
@@ -876,10 +873,9 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("Inst");
 
 
@@ -892,7 +888,8 @@ namespace optixu {
 
 
 
-    class InstanceAccelerationStructure::Priv {
+    template <>
+    class Object<InstanceAccelerationStructure>::Priv : public PrivateObject {
         _Scene* scene;
 
         std::vector<_Instance*> children;
@@ -956,13 +953,9 @@ namespace optixu {
         const _Scene* getScene() const {
             return scene;
         }
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return scene->getContext();
         }
-        OptixDeviceContext getRawContext() const {
-            return scene->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("IAS");
 
 
@@ -991,7 +984,8 @@ namespace optixu {
 
 
 
-    class Pipeline::Priv {
+    template <>
+    class Object<Pipeline>::Priv : public PrivateObject {
         struct KeyForBuiltinISModule {
             OptixPrimitiveType curveType;
             OptixCurveEndcapFlags endcapFlags;
@@ -1090,13 +1084,9 @@ namespace optixu {
         }
         ~Priv();
 
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return context;
         }
-        OptixDeviceContext getRawContext() const {
-            return context->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("Pipeline");
 
 
@@ -1110,7 +1100,8 @@ namespace optixu {
 
 
 
-    class Module::Priv {
+    template <>
+    class Object<Module>::Priv : public PrivateObject {
         const _Pipeline* pipeline;
         OptixModule rawModule;
 
@@ -1123,13 +1114,12 @@ namespace optixu {
             getContext()->unregisterName(this);
         }
 
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return pipeline->getContext();
         }
         const _Pipeline* getPipeline() const {
             return pipeline;
         }
-        OPTIXU_PRIV_NAME_INTERFACE();
 
         OptixModule getRawModule() const {
             return rawModule;
@@ -1138,7 +1128,8 @@ namespace optixu {
 
 
 
-    class ProgramGroup::Priv {
+    template <>
+    class Object<ProgramGroup>::Priv : public PrivateObject {
         _Pipeline* pipeline;
         OptixProgramGroup rawGroup;
 
@@ -1151,13 +1142,12 @@ namespace optixu {
             getContext()->unregisterName(this);
         }
 
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return pipeline->getContext();
         }
         const _Pipeline* getPipeline() const {
             return pipeline;
         }
-        OPTIXU_PRIV_NAME_INTERFACE();
 
         OptixProgramGroup getRawProgramGroup() const {
             return rawGroup;
@@ -1217,7 +1207,8 @@ namespace optixu {
                   alignof(DenoisingTask) == alignof(_DenoisingTask),
                   "Size/Alignment mismatch: DenoisingTask vs _DenoisingTask");
 
-    class Denoiser::Priv {
+    template <>
+    class Object<Denoiser>::Priv : public PrivateObject {
         _Context* context;
         OptixDenoiser rawDenoiser;
         OptixDenoiserModelKind modelKind;
@@ -1267,13 +1258,9 @@ namespace optixu {
             context->unregisterName(this);
         }
 
-        _Context* getContext() const {
+        _Context* getContext() const override {
             return context;
         }
-        OptixDeviceContext getRawContext() const {
-            return context->getRawContext();
-        }
-        OPTIXU_PRIV_NAME_INTERFACE();
         OPTIXU_THROW_RUNTIME_ERROR("Denoiser");
     };
 }

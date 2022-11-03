@@ -967,7 +967,6 @@ namespace optixu {
     */
 
 #define OPTIXU_PREPROCESS_OBJECTS() \
-    OPTIXU_PREPROCESS_OBJECT(Context); \
     OPTIXU_PREPROCESS_OBJECT(Material); \
     OPTIXU_PREPROCESS_OBJECT(Scene); \
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
@@ -1080,27 +1079,6 @@ namespace optixu {
 
 
 
-#define OPTIXU_PIMPL() \
-public: \
-    class Priv; \
-private: \
-    Priv* m = nullptr
-
-#define OPTIXU_COMMON_FUNCTIONS(SelfType) \
-    operator bool() const { return m; } \
-    bool operator==(const SelfType &r) const { return m == r.m; } \
-    bool operator!=(const SelfType &r) const { return m != r.m; } \
-    bool operator<(const SelfType &r) const { \
-        static_assert(std::is_same<decltype(r), decltype(*this)>::value, \
-                      "This function can be defined only for the self type."); \
-        return m < r.m; \
-    } \
-    Context getContext() const; \
-    void setName(const std::string &name) const; \
-    const char* getName() const;
-
-
-
 #define OPTIXU_DECLARE_TYPED_BOOL(Name) \
     using Name = TypedBool<struct _ ## Name>
 
@@ -1119,7 +1097,10 @@ private: \
 
 
     class Context {
-        OPTIXU_PIMPL();
+    public:
+        class Priv;
+    private:
+        Priv* m = nullptr;
 
     public:
         [[nodiscard]]
@@ -1128,7 +1109,6 @@ private: \
             uint32_t logLevel = 4,
             EnableValidation enableValidation = EnableValidation::No);
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Context);
 
         CUcontext getCUcontext() const;
 
@@ -1145,16 +1125,52 @@ private: \
             OptixDenoiserModelKind modelKind,
             GuideAlbedo guideAlbedo,
             GuideNormal guideNormal) const;
+
+        operator bool() const { return m; }
+        bool operator==(const Context &r) const { return m == r.m; }
+        bool operator!=(const Context &r) const { return m != r.m; }
+        bool operator<(const Context &r) const {
+            return m < r.m;
+        }
+
+        void setName(const std::string &name) const;
+        const char* getName() const;
     };
 
 
 
-    class Material {
-        OPTIXU_PIMPL();
+    template <typename T>
+    class Object {
+    public:
+        class Priv;
+
+    protected:
+        Priv* m = nullptr;
 
     public:
+        explicit operator bool() const {
+            return m;
+        }
+        bool operator==(const T &r) const {
+            return m == r.m;
+        }
+        bool operator!=(const T &r) const {
+            return m != r.m;
+        }
+        bool operator<(const T &r) const {
+            return m < r.m;
+        }
+
+        Context getContext() const;
+        void setName(const std::string &name) const;
+        const char* getName() const;
+    };
+
+
+
+    class Material : public Object<Material> {
+    public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Material);
 
         // JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
         //     パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
@@ -1183,12 +1199,9 @@ private: \
 
 
 
-    class Scene {
-        OPTIXU_PIMPL();
-
+    class Scene : public Object<Scene> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Scene);
 
         [[nodiscard]]
         GeometryInstance createGeometryInstance(GeometryType geomType = GeometryType::Triangles) const;
@@ -1212,12 +1225,9 @@ private: \
 
 
 
-    class GeometryInstance {
-        OPTIXU_PIMPL();
-
+    class GeometryInstance : public Object<GeometryInstance> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(GeometryInstance);
 
         /*
         JP: 以下のAPIを呼んだ場合は所属するGASのmarkDirty()を呼ぶ必要がある。
@@ -1284,12 +1294,9 @@ private: \
 
 
 
-    class GeometryAccelerationStructure {
-        OPTIXU_PIMPL();
-
+    class GeometryAccelerationStructure : public Object<GeometryAccelerationStructure> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(GeometryAccelerationStructure);
 
         // JP: 以下のAPIを呼んだ場合はGASが自動でdirty状態になる。
         //     子の数が変更される場合はヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。
@@ -1393,12 +1400,9 @@ private: \
 
 
 
-    class Transform {
-        OPTIXU_PIMPL();
-
+    class Transform : public Object<Transform> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Transform);
 
         // JP: 以下のAPIを呼んだ場合はTransformが自動でdirty状態になる。
         // EN: Calling the following APIs automatically marks the transform dirty.
@@ -1443,12 +1447,9 @@ private: \
 
 
 
-    class Instance {
-        OPTIXU_PIMPL();
-
+    class Instance : public Object<Instance> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Instance);
 
         // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a IAS to which the instance belongs is required.
@@ -1486,12 +1487,9 @@ private: \
           基本的にインスタンスバッファーとASのメモリ(コンパクション版にもなり得る)
           は同じ寿命で扱ったほうが良さそう。
     */
-    class InstanceAccelerationStructure {
-        OPTIXU_PIMPL();
-
+    class InstanceAccelerationStructure : public Object<InstanceAccelerationStructure> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(InstanceAccelerationStructure);
 
         // JP: 以下のAPIを呼んだ場合はIASが自動でdirty状態になる。
         // EN: Calling the following APIs automatically marks the IAS dirty.
@@ -1548,12 +1546,9 @@ private: \
 
 
 
-    class Pipeline {
-        OPTIXU_PIMPL();
-
+    class Pipeline : public Object<Pipeline> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Pipeline);
 
         void setPipelineOptions(
             uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
@@ -1688,22 +1683,16 @@ private: \
 
     // JP: Moduleの寿命はそれを参照するあらゆるProgramGroupの寿命よりも長い必要がある。
     // EN: The lifetime of a module must extend to the lifetime of any ProgramGroup that reference that module.
-    class Module {
-        OPTIXU_PIMPL();
-
+    class Module : public Object<Module> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Module);
     };
 
 
 
-    class ProgramGroup {
-        OPTIXU_PIMPL();
-
+    class ProgramGroup : public Object<ProgramGroup> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(ProgramGroup);
 
         void getStackSize(OptixStackSizes* sizes) const;
     };
@@ -1741,12 +1730,9 @@ private: \
         uint32_t numAovs;
     };
 
-    class Denoiser {
-        OPTIXU_PIMPL();
-
+    class Denoiser : public Object<Denoiser> {
     public:
         void destroy();
-        OPTIXU_COMMON_FUNCTIONS(Denoiser);
 
         void prepare(
             uint32_t imageWidth, uint32_t imageHeight, uint32_t tileWidth, uint32_t tileHeight,

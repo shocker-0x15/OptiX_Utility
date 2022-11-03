@@ -34,22 +34,6 @@ namespace optixu {
 
 
 
-    // Define common interfaces.
-#define OPTIXU_PREPROCESS_OBJECT(Type) \
-    Context Type::getContext() const { \
-        return m->getContext()->getPublicType(); \
-    } \
-    void Type::setName(const std::string &name) const { \
-        m->setName(name); \
-    } \
-    const char* Type::getName() const { \
-        return m->getRegisteredName(); \
-    }
-    OPTIXU_PREPROCESS_OBJECTS();
-#undef OPTIXU_PREPROCESS_OBJECT
-
-
-
     // static
     Context Context::create(CUcontext cuContext, uint32_t logLevel, EnableValidation enableValidation) {
         return (new _Context(cuContext, logLevel, enableValidation))->getPublicType();
@@ -68,6 +52,31 @@ namespace optixu {
             OPTIX_CHECK(optixDeviceContextSetLogCallback(m->rawContext, callback, callbackData, logLevel));
         else
             OPTIX_CHECK(optixDeviceContextSetLogCallback(m->rawContext, &logCallBack, nullptr, logLevel));
+    }
+
+    void Context::setName(const std::string &name) const {
+        m->setName(name);
+    }
+
+    const char* Context::getName() const {
+        return m->getRegisteredName();
+    }
+
+
+
+    template <typename T>
+    Context Object<T>::getContext() const {
+        return m->getContext()->getPublicType();
+    }
+
+    template <typename T>
+    void Object<T>::setName(const std::string &name) const {
+        m->setName(name);
+    }
+
+    template <typename T>
+    const char* Object<T>::getName() const {
+        return m->getRegisteredName();
     }
 
 
