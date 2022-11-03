@@ -2780,10 +2780,10 @@ namespace optixu {
     void Pipeline::setPipelineOptions(
         uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
         const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-        UseMotionBlur useMotionBlur,
         OptixTraversableGraphFlags traversableGraphFlags,
         OptixExceptionFlags exceptionFlags,
-        OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags) const {
+        OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
+        UseMotionBlur useMotionBlur) const {
         m->throwRuntimeError(
             !m->pipelineLinked,
             "Changing pipeline options after linking is not supported yet.");

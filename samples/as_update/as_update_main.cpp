@@ -321,7 +321,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -539,8 +539,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     roomGas.setConfiguration(
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
-        optixu::AllowCompaction::Yes,
-        optixu::AllowRandomVertexAccess::No);
+        optixu::AllowCompaction::Yes);
     roomGas.setNumMaterialSets(1);
     roomGas.setNumRayTypes(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
@@ -553,8 +552,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLightGas.setConfiguration(
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
-        optixu::AllowCompaction::Yes,
-        optixu::AllowRandomVertexAccess::No);
+        optixu::AllowCompaction::Yes);
     areaLightGas.setNumMaterialSets(1);
     areaLightGas.setNumRayTypes(0, Shared::NumRayTypes);
     areaLightGas.addChild(areaLightGeomInst);
@@ -569,8 +567,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     bunnyGas.setConfiguration(
         optixu::ASTradeoff::PreferFastBuild,
         optixu::AllowUpdate::Yes,
-        optixu::AllowCompaction::Yes,
-        optixu::AllowRandomVertexAccess::No);
+        optixu::AllowCompaction::Yes);
     bunnyGas.setNumMaterialSets(1);
     bunnyGas.setNumRayTypes(0, Shared::NumRayTypes);
     bunnyGas.addChild(bunnyGeomInst);
@@ -678,9 +675,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Make the AS updatable to use update().
     ias.setConfiguration(
         optixu::ASTradeoff::PreferFastBuild,
-        optixu::AllowUpdate::Yes,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+        optixu::AllowUpdate::Yes);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnies.size(); ++i)

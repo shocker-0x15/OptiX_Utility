@@ -42,7 +42,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::MyPayloadSignature::numDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        optixu::UseMotionBlur::No, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
@@ -331,8 +331,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gas.setConfiguration(
         optixu::ASTradeoff::Default,
         optixu::AllowUpdate::No,
-        optixu::AllowCompaction::Yes,
-        optixu::AllowRandomVertexAccess::No);
+        optixu::AllowCompaction::Yes);
     gas.setNumMaterialSets(1);
     gas.setNumRayTypes(0, Shared::NumRayTypes);
     gas.addChild(roomGeomInst/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.

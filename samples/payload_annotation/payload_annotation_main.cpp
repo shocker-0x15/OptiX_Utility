@@ -48,7 +48,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         payloadSizeInDwords,
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
-        optixu::UseMotionBlur::No,
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
@@ -364,8 +363,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         room.optixGas.setNumMaterialSets(1);
         room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         room.optixGas.addChild(room.optixGeomInst);
@@ -406,8 +404,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         areaLight.optixGas.setNumMaterialSets(1);
         areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
         areaLight.optixGas.addChild(areaLight.optixGeomInst);
@@ -457,8 +454,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         bunny.optixGas.setNumMaterialSets(NumBunnies);
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
             bunny.optixGas.setNumRayTypes(matSetIdx, Shared::NumRayTypes);
@@ -520,11 +516,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(
-        optixu::ASTradeoff::PreferFastTrace,
-        optixu::AllowUpdate::No,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
     for (int i = 0; i < bunnyInsts.size(); ++i)

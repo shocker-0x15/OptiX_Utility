@@ -34,9 +34,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
         カーブ・球・カスタムプリミティブとの衝突判定を使うため
         プリミティブ種別のフラグを適切に設定する必要がある。
+        変形モーションブラーを使用するのでUseMotionBlur::Yesを指定する。
     EN: This sample uses two-level AS (single-level instancing).
         Appropriately setting primitive type flags is required since this sample uses curve, sphere and
         custom primitive intersection.
+        Specify UseMotionBlur::Yes since the sample uses deformation motion blur.
     */
     pipeline.setPipelineOptions(
         Shared::MyPayloadSignature::numDwords,
@@ -44,14 +46,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::calcSumDwords<float2>(),
             optixu::calcSumDwords<float>(),
             Shared::PartialSphereAttributeSignature::numDwords }),
-            "plp", sizeof(Shared::PipelineLaunchParameters),
-            optixu::UseMotionBlur::Yes, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-            DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        "plp", sizeof(Shared::PipelineLaunchParameters),
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM,
+        optixu::UseMotionBlur::Yes);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.optixir");
@@ -275,8 +278,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         bunny.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -531,8 +533,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         partialSpheres.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes,
-            optixu::AllowRandomVertexAccess::No);
+            optixu::AllowCompaction::Yes);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         partialSpheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -601,11 +602,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
     cudau::Buffer iasMem;
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
-    ias.setConfiguration(
-        optixu::ASTradeoff::PreferFastTrace,
-        optixu::AllowUpdate::No,
-        optixu::AllowCompaction::No,
-        optixu::AllowRandomInstanceAccess::No);
+    ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     ias.addChild(bunnyInst);
     ias.addChild(curveInstA);
     ias.addChild(curveInstB);
@@ -664,8 +661,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.geom->optixGas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.geom->optixGas.compact(
+            cuStream,
+            optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
