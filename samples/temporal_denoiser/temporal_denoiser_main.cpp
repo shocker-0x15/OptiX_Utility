@@ -1726,7 +1726,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         for (int i = 0; i < denoisingTasks.size(); ++i)
             denoiser.invoke(
                 cuStream, denoisingTasks[i],
-                inputBuffers, isNewSequence,
+                inputBuffers, optixu::IsFirstFrame(isNewSequence),
                 OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer.getCUdeviceptr(), 0.0f,
                 linearDenoisedBeautyBuffer,
                 nullptr, // no AOV outputs
