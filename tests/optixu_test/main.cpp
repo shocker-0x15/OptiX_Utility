@@ -195,9 +195,6 @@ TEST(ContextTest, ContextBasic) {
         {
             // JP: 共通処理。
             {
-                optixu::Context retContext = context.getContext();
-                EXPECT_EQ(retContext, context);
-
                 const char* nameA = "ABCDE";
                 context.setName(nameA);
                 EXPECT_STREQ(context.getName(), nameA);
