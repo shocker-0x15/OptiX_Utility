@@ -28,6 +28,7 @@ Currently based on OptiX 7.6.0
   - Curves (Linear Segments, Quadratic, Cubic B-Splines, Catmull-Rom Splines)
   - Spheres
   - User-defined custom primitives
+- Opacity micro-map
 - Motion blur types
   - Instance motion blur
   - Deformation blur
@@ -54,7 +55,6 @@ Currently based on OptiX 7.6.0
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
-- Opacity Micro-Map
 - Parallel Module Compilation
 - AS Relocation
 - Test AOV denoisers

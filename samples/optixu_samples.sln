@@ -37,6 +37,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "12.payload_annotation", "pa
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "07.sphere_primitive", "sphere_primitive\sphere_primitive.vcxproj", "{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "13.opacity_micro_map", "opacity_micro_map\opacity_micro_map.vcxproj", "{A6882C6F-6687-4A3A-9703-6832C32D7C3B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -107,6 +109,10 @@ Global
 		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Debug|x64.Build.0 = Debug|x64
 		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Release|x64.ActiveCfg = Release|x64
 		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}.Release|x64.Build.0 = Release|x64
+		{A6882C6F-6687-4A3A-9703-6832C32D7C3B}.Debug|x64.ActiveCfg = Debug|x64
+		{A6882C6F-6687-4A3A-9703-6832C32D7C3B}.Debug|x64.Build.0 = Debug|x64
+		{A6882C6F-6687-4A3A-9703-6832C32D7C3B}.Release|x64.ActiveCfg = Release|x64
+		{A6882C6F-6687-4A3A-9703-6832C32D7C3B}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
