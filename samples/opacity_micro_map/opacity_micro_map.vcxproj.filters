@@ -31,6 +31,7 @@
     <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
       <Filter>non-essentials\ext</Filter>
     </ClCompile>
+    <ClCompile Include="omm_generator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -61,8 +62,10 @@
     <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
+    <ClInclude Include="omm_generator.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="omm_kernels.cu" />
   </ItemGroup>
 </Project>

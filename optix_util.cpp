@@ -249,6 +249,10 @@ namespace optixu {
         m = nullptr;
     }
 
+    OpacityMicroMapArray Scene::createOpacityMicroMapArray() const {
+        return (new _OpacityMicroMapArray(m))->getPublicType();
+    }
+
     GeometryInstance Scene::createGeometryInstance(GeometryType geomType) const {
         m->throwRuntimeError(
             geomType == GeometryType::Triangles ||
@@ -333,6 +337,77 @@ namespace optixu {
 
     bool Scene::shaderBindingTableLayoutIsReady() const {
         return m->sbtLayoutIsUpToDate;
+    }
+
+
+
+    void OpacityMicroMapArray::Priv::markDirty() {
+        readyToBuild = false;
+        available = false;
+    }
+
+    void OpacityMicroMapArray::destroy() {
+        if (m)
+            delete m;
+        m = nullptr;
+    }
+
+    void OpacityMicroMapArray::setConfiguration(OptixOpacityMicromapFlags config) const {
+        bool changed = false;
+        changed = m->flags != config;
+        m->flags = config;
+
+        if (changed)
+            m->markDirty();
+    }
+
+    void OpacityMicroMapArray::prepareForBuild(
+        const BufferView &inputBuffer,
+        const BufferView &perMicroMapDescBuffer,
+        const OptixOpacityMicromapHistogramEntry* microMapHistogramEntries,
+        uint32_t numMicroMapHistogramEntries,
+        OptixMicromapBufferSizes* memoryRequirement) const {
+        m->inputBuffer = inputBuffer;
+        m->perMicroMapDescBuffer = perMicroMapDescBuffer;
+        m->microMapHistogramEntries.resize(numMicroMapHistogramEntries);
+        std::copy_n(microMapHistogramEntries, numMicroMapHistogramEntries, m->microMapHistogramEntries.data());
+
+        m->buildInput = {};
+        m->buildInput.flags = m->flags;
+        m->buildInput.micromapHistogramEntries = m->microMapHistogramEntries.data();
+        m->buildInput.numMicromapHistogramEntries = static_cast<uint32_t>(m->microMapHistogramEntries.size());
+        OPTIX_CHECK(optixOpacityMicromapArrayComputeMemoryUsage(
+            m->getRawContext(), &m->buildInput, &m->memoryRequirement));
+
+        *memoryRequirement = m->memoryRequirement;
+
+        m->buildInput.inputBuffer = m->inputBuffer.getCUdeviceptr();
+        m->buildInput.perMicromapDescBuffer = m->perMicroMapDescBuffer.getCUdeviceptr();
+        m->buildInput.perMicromapDescStrideInBytes = m->perMicroMapDescBuffer.stride();
+
+        m->markDirty();
+        m->readyToBuild = true;
+    }
+
+    void OpacityMicroMapArray::rebuild(
+        CUstream stream, const BufferView &ommArrayBuffer, const BufferView &scratchBuffer) const {
+        m->throwRuntimeError(
+            m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+        m->throwRuntimeError(
+            ommArrayBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+            "Size of the given buffer is not enough.");
+        m->throwRuntimeError(
+            scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+            "Size of the given scratch buffer is not enough.");
+
+        OptixMicromapBuffers buffers = {};
+        buffers.output = ommArrayBuffer.getCUdeviceptr();
+        buffers.outputSizeInBytes = m->memoryRequirement.outputSizeInBytes;
+        buffers.temp = scratchBuffer.getCUdeviceptr();
+        buffers.tempSizeInBytes = m->memoryRequirement.tempSizeInBytes;
+        OPTIX_CHECK(optixOpacityMicromapArrayBuild(m->getRawContext(), stream, &m->buildInput, &buffers));
+
+        m->available = true;
     }
 
 
@@ -1239,7 +1314,9 @@ namespace optixu {
         ASTradeoff tradeoff,
         AllowUpdate allowUpdate,
         AllowCompaction allowCompaction,
-        AllowRandomVertexAccess allowRandomVertexAccess) const {
+        AllowRandomVertexAccess allowRandomVertexAccess,
+        AllowOpacityMicroMapUpdate allowOpacityMicroMapUpdate,
+        AllowDisableOpacityMicroMaps allowDisableOpacityMicroMaps) const {
         m->throwRuntimeError(
             m->geomType != GeometryType::CustomPrimitives || !allowRandomVertexAccess,
             "Random vertex access is the feature only for triangle/curve/sphere GAS.");
@@ -1252,6 +1329,10 @@ namespace optixu {
         m->allowCompaction = allowCompaction;
         changed |= m->allowRandomVertexAccess != allowRandomVertexAccess;
         m->allowRandomVertexAccess = allowRandomVertexAccess;
+        changed |= m->allowOpacityMicroMapUpdate != allowOpacityMicroMapUpdate;
+        m->allowOpacityMicroMapUpdate = allowOpacityMicroMapUpdate;
+        changed |= m->allowDisableOpacityMicroMaps != allowDisableOpacityMicroMaps;
+        m->allowDisableOpacityMicroMaps = allowDisableOpacityMicroMaps;
 
         if (changed)
             m->markDirty();
@@ -1375,7 +1456,9 @@ namespace optixu {
         m->buildOptions.buildFlags |=
             (m->allowUpdate ? OPTIX_BUILD_FLAG_ALLOW_UPDATE : 0)
             | (m->allowCompaction ? OPTIX_BUILD_FLAG_ALLOW_COMPACTION : 0)
-            | (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0);
+            | (m->allowRandomVertexAccess ? OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS : 0)
+            | (m->allowOpacityMicroMapUpdate ? OPTIX_BUILD_FLAG_ALLOW_OPACITY_MICROMAP_UPDATE : 0)
+            | (m->allowDisableOpacityMicroMaps ? OPTIX_BUILD_FLAG_ALLOW_DISABLE_OPACITY_MICROMAPS : 0);
 
         uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0)
@@ -1608,7 +1691,9 @@ namespace optixu {
         ASTradeoff* tradeOff,
         AllowUpdate* allowUpdate,
         AllowCompaction* allowCompaction,
-        AllowRandomVertexAccess* allowRandomVertexAccess) const {
+        AllowRandomVertexAccess* allowRandomVertexAccess,
+        AllowOpacityMicroMapUpdate* allowOpacityMicroMapUpdate,
+        AllowDisableOpacityMicroMaps* allowDisableOpacityMicroMaps) const {
         if (tradeOff)
             *tradeOff = m->tradeoff;
         if (allowUpdate)
@@ -1617,6 +1702,10 @@ namespace optixu {
             *allowCompaction = AllowCompaction(m->allowCompaction);
         if (allowRandomVertexAccess)
             *allowRandomVertexAccess = AllowRandomVertexAccess(m->allowRandomVertexAccess);
+        if (allowOpacityMicroMapUpdate)
+            *allowOpacityMicroMapUpdate = AllowOpacityMicroMapUpdate(m->allowOpacityMicroMapUpdate);
+        if (allowDisableOpacityMicroMaps)
+            *allowDisableOpacityMicroMaps = AllowDisableOpacityMicroMaps(m->allowDisableOpacityMicroMaps);
     }
 
     void GeometryAccelerationStructure::getMotionOptions(
@@ -2783,7 +2872,7 @@ namespace optixu {
         OptixTraversableGraphFlags traversableGraphFlags,
         OptixExceptionFlags exceptionFlags,
         OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
-        UseMotionBlur useMotionBlur) const {
+        UseMotionBlur useMotionBlur, UseOpacityMicroMaps useOpacityMicroMaps) const {
         m->throwRuntimeError(
             !m->pipelineLinked,
             "Changing pipeline options after linking is not supported yet.");
@@ -2795,6 +2884,7 @@ namespace optixu {
         m->pipelineCompileOptions.numAttributeValues = numAttributeValuesInDwords;
         m->pipelineCompileOptions.pipelineLaunchParamsVariableName = launchParamsVariableName;
         m->pipelineCompileOptions.usesMotionBlur = useMotionBlur;
+        m->pipelineCompileOptions.allowOpacityMicromaps = useOpacityMicroMaps;
         m->pipelineCompileOptions.traversableGraphFlags = traversableGraphFlags;
         m->pipelineCompileOptions.exceptionFlags = exceptionFlags;
         m->pipelineCompileOptions.usesPrimitiveTypeFlags = supportedPrimitiveTypeFlags;

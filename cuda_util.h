@@ -592,7 +592,7 @@ namespace cudau {
             return ret;
         }
 
-        operator std::vector<T>() {
+        operator std::vector<T>() const {
             std::vector<T> ret(numElements());
             read(ret);
             return std::move(ret);

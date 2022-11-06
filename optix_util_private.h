@@ -457,6 +457,46 @@ namespace optixu {
 
 
     template <>
+    class Object<OpacityMicroMapArray>::Priv : public PrivateObject {
+        _Scene* scene;
+        OptixOpacityMicromapFlags flags;
+
+        BufferView inputBuffer;
+        BufferView perMicroMapDescBuffer;
+        std::vector<OptixOpacityMicromapHistogramEntry> microMapHistogramEntries;
+
+        OptixOpacityMicromapArrayBuildInput buildInput;
+        OptixMicromapBufferSizes memoryRequirement;
+
+        struct {
+            unsigned int readyToBuild : 1;
+            unsigned int available : 1;
+        };
+
+    public:
+        OPTIXU_OPAQUE_BRIDGE(OpacityMicroMapArray);
+
+        Priv(_Scene* _scene) :
+            scene(_scene) {
+        }
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
+
+        const _Scene* getScene() const {
+            return scene;
+        }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("OMM");
+
+        void markDirty();
+    };
+
+
+
+    template <>
     class Object<GeometryInstance>::Priv : public PrivateObject {
         _Scene* scene;
         SizeAlign userDataSizeAlign;
@@ -681,6 +721,8 @@ namespace optixu {
             unsigned int allowUpdate : 1;
             unsigned int allowCompaction : 1;
             unsigned int allowRandomVertexAccess : 1;
+            unsigned int allowOpacityMicroMapUpdate : 1;
+            unsigned int allowDisableOpacityMicroMaps : 1;
             unsigned int readyToBuild : 1;
             unsigned int available : 1;
             unsigned int readyToCompact : 1;
@@ -698,6 +740,7 @@ namespace optixu {
             handle(0), compactedHandle(0),
             tradeoff(ASTradeoff::Default),
             allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
+            allowOpacityMicroMapUpdate(false), allowDisableOpacityMicroMaps(false),
             readyToBuild(false), available(false),
             readyToCompact(false), compactedAvailable(false) {
             scene->addGAS(this);
