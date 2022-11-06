@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "opacity_micro_map_shared.h"
 
