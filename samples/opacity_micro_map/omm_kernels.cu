@@ -1,4 +1,4 @@
-#include "opacity_micro_map_shared.h"
+﻿#include "opacity_micro_map_shared.h"
 
 using namespace Shared;
 

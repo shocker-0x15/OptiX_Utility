@@ -401,7 +401,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorInst.setChild(floor.optixGas);
 
     std::vector<optixu::Instance> treeInsts;
-    std::mt19937 treeRng(471203123);
+    std::mt19937 treeRng(471203125);
     std::uniform_real_distribution<float> treeU01;
     constexpr float treeScale = 0.003f;
     constexpr uint32_t treeGridSize = 100;

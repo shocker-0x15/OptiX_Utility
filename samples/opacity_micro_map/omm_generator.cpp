@@ -1,4 +1,4 @@
-#include "omm_generator.h"
+﻿#include "omm_generator.h"
 
 static CUmodule s_ommModule;
 static cudau::Kernel s_evaluateTriangleTransparencies;
@@ -46,7 +46,11 @@ void evaluatePerTriangleStates(
         transparentCounts, numPixelsValues, numTriangles,
         ommFormatCounts, ommSizes);
 
-    // ommSizes���X�L�����A
+    /*
+    ommSizesをスキャン、三角形ごとのOMMオフセットがわかる。
+    三角形ごとのOMM Descが作成できる。
+    三角形ごとにOMMを作成する。
+    */
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));
     std::vector<uint32_t> transparentCountsOnHost = transparentCounts;
@@ -64,7 +68,7 @@ void evaluatePerTriangleStates(
         //    transparentCountsOnHost[i], numPixelsValuesOnHost[i],
         //    100 * trRatio);
 
-        // JP: OptiX��enum�𗬗p����B
+        // JP: OptiXのenumを流用する。
         // EN: Reuse OptiX's enum.
         if (trCount == 0)
             (*triStates)[i] = OPTIX_OPACITY_MICROMAP_STATE_OPAQUE;
