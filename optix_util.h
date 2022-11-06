@@ -916,6 +916,8 @@ namespace optixu {
               |              +-- GAS
               |              |
               |              +-- GeomInst
+              |              |
+              |              +-- OpacityMicroMap
               |
               +-- Denoiser
 
@@ -971,6 +973,7 @@ namespace optixu {
 #define OPTIXU_PREPROCESS_OBJECTS() \
     OPTIXU_PREPROCESS_OBJECT(Material); \
     OPTIXU_PREPROCESS_OBJECT(Scene); \
+    OPTIXU_PREPROCESS_OBJECT(OpacityMicroMapArray); \
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
     OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
     OPTIXU_PREPROCESS_OBJECT(Transform); \
@@ -1095,6 +1098,7 @@ namespace optixu {
     OPTIXU_DECLARE_TYPED_BOOL(AllowDisableOpacityMicroMaps);
     OPTIXU_DECLARE_TYPED_BOOL(AllowRandomInstanceAccess);
     OPTIXU_DECLARE_TYPED_BOOL(UseMotionBlur);
+    OPTIXU_DECLARE_TYPED_BOOL(UseOpacityMicroMaps);
     OPTIXU_DECLARE_TYPED_BOOL(IsFirstFrame);
 
 
@@ -1207,9 +1211,13 @@ namespace optixu {
         void destroy();
 
         [[nodiscard]]
-        GeometryInstance createGeometryInstance(GeometryType geomType = GeometryType::Triangles) const;
+        OpacityMicroMapArray createOpacityMicroMapArray() const;
         [[nodiscard]]
-        GeometryAccelerationStructure createGeometryAccelerationStructure(GeometryType geomType = GeometryType::Triangles) const;
+        GeometryInstance createGeometryInstance(
+            GeometryType geomType = GeometryType::Triangles) const;
+        [[nodiscard]]
+        GeometryAccelerationStructure createGeometryAccelerationStructure(
+            GeometryType geomType = GeometryType::Triangles) const;
         [[nodiscard]]
         Transform createTransform() const;
         [[nodiscard]]
@@ -1224,6 +1232,22 @@ namespace optixu {
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
         bool shaderBindingTableLayoutIsReady() const;
+    };
+
+
+
+    class OpacityMicroMapArray : public Object<OpacityMicroMapArray> {
+    public:
+        void destroy();
+
+        void setConfiguration(OptixOpacityMicromapFlags config) const;
+        void prepareForBuild(
+            const BufferView &inputBuffer,
+            const BufferView &perMicroMapDescBuffer,
+            const OptixOpacityMicromapHistogramEntry* microMapHistogramEntries,
+            uint32_t numMicroMapHistogramEntries,
+            OptixMicromapBufferSizes* memoryRequirement) const;
+        void rebuild(CUstream stream, const BufferView &ommArrayBuffer, const BufferView &scratchBuffer) const;
     };
 
 
@@ -1248,6 +1272,12 @@ namespace optixu {
         void setTriangleBuffer(
             const BufferView &triangleBuffer,
             OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
+        void setMicroMapArrayBuffer(
+            const BufferView &microMapArrayBuffer,
+            const OptixOpacityMicromapUsageCount* microMapUsageCounts,
+            uint32_t numMicroMapUsageCounts,
+            const BufferView &microMapIndexBuffer,
+            uint32_t indexSize = sizeof(uint32_t)) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setSingleRadius(UseSingleRadius useSingleRadius) const;
@@ -1309,7 +1339,9 @@ namespace optixu {
             ASTradeoff tradeoff,
             AllowUpdate allowUpdate = AllowUpdate::No,
             AllowCompaction allowCompaction = AllowCompaction::No,
-            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No) const;
+            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
+            AllowOpacityMicroMapUpdate allowOpacityMicroMapUpdate = AllowOpacityMicroMapUpdate::No,
+            AllowDisableOpacityMicroMaps allowDisableOpacityMicroMaps = AllowDisableOpacityMicroMaps::No) const;
         void setMotionOptions(
             uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(
@@ -1381,7 +1413,9 @@ namespace optixu {
 
         void getConfiguration(
             ASTradeoff* tradeOff, AllowUpdate* allowUpdate, AllowCompaction* allowCompaction,
-            AllowRandomVertexAccess* allowRandomVertexAccess) const;
+            AllowRandomVertexAccess* allowRandomVertexAccess,
+            AllowOpacityMicroMapUpdate* allowOpacityMicroMapUpdate,
+            AllowDisableOpacityMicroMaps* allowDisableOpacityMicroMaps) const;
         void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
         uint32_t getNumChildren() const;
         uint32_t findChildIndex(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
@@ -1559,7 +1593,8 @@ namespace optixu {
             OptixTraversableGraphFlags traversableGraphFlags,
             OptixExceptionFlags exceptionFlags,
             OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
-            UseMotionBlur useMotionBlur = UseMotionBlur::No) const;
+            UseMotionBlur useMotionBlur = UseMotionBlur::No,
+            UseOpacityMicroMaps useOpacityMicroMaps = UseOpacityMicroMaps::No) const;
 
         [[nodiscard]]
         Module createModuleFromPTXString(

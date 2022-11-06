@@ -27,6 +27,17 @@ namespace Shared {
 
 
 
+    enum OMMFormat : uint32_t {
+        OMMFormat_None = 0, // TODO: Level 0は無視？
+        OMMFormat_Level1,
+        OMMFormat_Level2,
+        OMMFormat_Level3,
+        OMMFormat_Level4,
+        NumOMMFormats
+    };
+
+
+
     struct PerspectiveCamera {
         float aspect;
         float fovY;

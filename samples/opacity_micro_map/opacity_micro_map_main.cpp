@@ -25,6 +25,8 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
+#include "omm_generator.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
     auto visualizationMode = Shared::VisualizationMode_Final;
 
@@ -265,15 +267,33 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tree.optixGas.setNumMaterialSets(1);
         tree.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
 
+        uint32_t maxNumTrianglesPerGroup = 0;
+        for (int groupIdx = 0; groupIdx < matGroups.size(); ++groupIdx) {
+            const obj::MaterialGroup &srcGroup = matGroups[groupIdx];
+            maxNumTrianglesPerGroup = std::max(
+                maxNumTrianglesPerGroup,
+                static_cast<uint32_t>(srcGroup.triangles.size()));
+        }
+
+        cudau::TypedBuffer<uint32_t> transparentCounts(
+            cuContext, cudau::BufferType::Device, maxNumTrianglesPerGroup);
+        cudau::TypedBuffer<uint32_t> numPixelsValues(
+            cuContext, cudau::BufferType::Device, maxNumTrianglesPerGroup);
+        cudau::TypedBuffer<uint32_t> numFetchedTriangles(
+            cuContext, cudau::BufferType::Device, 1);
+        cudau::TypedBuffer<uint32_t> ommFormatCounts(
+            cuContext, cudau::BufferType::Device, Shared::NumOMMFormats);
+
         for (int groupIdx = 0; groupIdx < matGroups.size(); ++groupIdx) {
             const obj::MaterialGroup &srcGroup = matGroups[groupIdx];
             const obj::Material &srcMat = materials[srcGroup.materialIndex];
+            const uint32_t numTriangles = srcGroup.triangles.size();
 
             Geometry::MaterialGroup group;
             group.triangleBuffer.initialize(
                 cuContext, cudau::BufferType::Device,
                 reinterpret_cast<const Shared::Triangle*>(srcGroup.triangles.data()),
-                srcGroup.triangles.size());
+                numTriangles);
 
             Shared::GeometryInstanceData geomData = {};
             geomData.vertexBuffer = tree.vertexBuffer.getDevicePointer();
@@ -295,12 +315,62 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
                 texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Point);
                 texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
-                texSampler.setWrapMode(0, cudau::TextureWrapMode::Clamp);
-                texSampler.setWrapMode(1, cudau::TextureWrapMode::Clamp);
+                texSampler.setWrapMode(0, cudau::TextureWrapMode::Repeat);
+                texSampler.setWrapMode(1, cudau::TextureWrapMode::Repeat);
                 group.texObj = texSampler.createTextureObject(group.texArray);
                 geomData.texture = group.texObj;
             }
 
+            /*
+            */
+            std::vector<uint32_t> perTriangleStates;
+            uint32_t ommFormatCountsOnHost[Shared::NumOMMFormats];
+            evaluatePerTriangleStates(
+                tree.vertexBuffer, group.triangleBuffer, numTriangles,
+                group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
+                transparentCounts, numPixelsValues, numFetchedTriangles, ommFormatCounts,
+                &perTriangleStates, ommFormatCountsOnHost);
+
+            std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries(numTriangles);
+
+            bool allOpaque = true;
+            for (int i = 0; i < numTriangles; ++i) {
+                uint32_t state = perTriangleStates[i];
+                if (state != OPTIX_OPACITY_MICROMAP_STATE_OPAQUE) {
+                    allOpaque = false;
+                    break;
+                }
+            }
+
+            // JP: すべての三角形がOpaqueならOMMをそもそも使用しない。
+            // EN: Don't use OMM if all the triangles are opaque.
+            // TODO: すべての三角形がTransparentなケース。
+            if (!allOpaque) {
+                OptixOpacityMicromapHistogramEntry entries[Shared::NumOMMFormats];
+                for (int i = 0; i < Shared::NumOMMFormats; ++i) {
+                    OptixOpacityMicromapHistogramEntry &entry = entries[i];
+                    entry.count = ommFormatCountsOnHost[i];
+                    entry.format = i == 0 ?
+                        OPTIX_OPACITY_MICROMAP_FORMAT_NONE :
+                        OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
+                    entry.subdivisionLevel = i;
+                }
+
+                optixu::OpacityMicroMapArray ommArray = scene.createOpacityMicroMapArray();
+
+                OptixMicromapBufferSizes ommArraySizes;
+                ommArray.setConfiguration(OPTIX_OPACITY_MICROMAP_FLAG_PREFER_FAST_TRACE);
+                ommArray.prepareForBuild(
+                    optixu::BufferView(), optixu::BufferView(),
+                    entries, Shared::NumOMMFormats, &ommArraySizes);
+            }
+
+            /*
+            JP: 処理によっては完全にOpaqueなジオメトリはAny-Hit呼び出しが起こらないように
+                ジオメトリフラグを設定しても良いかもしれない。
+                このサンプルではOpaquenessに関わらずシャドウレイの処理にAny-Hitを使っているため無効化できない。
+            EN: 
+            */
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(tree.vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
@@ -312,6 +382,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             tree.optixGas.addChild(group.optixGeomInst);
             tree.matGroups.push_back(std::move(group));
         }
+
+        ommFormatCounts.finalize();
+        numFetchedTriangles.finalize();
+        numPixelsValues.finalize();
+        transparentCounts.finalize();
 
         tree.optixGas.prepareForBuild(&asMemReqs);
         tree.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -326,7 +401,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorInst.setChild(floor.optixGas);
 
     std::vector<optixu::Instance> treeInsts;
-    std::mt19937 treeRng(4712031123);
+    std::mt19937 treeRng(471203123);
     std::uniform_real_distribution<float> treeU01;
     constexpr float treeScale = 0.003f;
     constexpr uint32_t treeGridSize = 100;
