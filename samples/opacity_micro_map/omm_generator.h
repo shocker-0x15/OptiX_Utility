@@ -12,5 +12,6 @@ void evaluatePerTriangleStates(
     const cudau::TypedBuffer<uint32_t> &numFetchedTriangles,
     const cudau::TypedBuffer<uint32_t> &ommFormatCounts,
     const cudau::TypedBuffer<uint64_t> &ommSizes,
+    const cudau::Buffer &scratchMemForScan,
     std::vector<uint32_t>* triStates,
     uint32_t ommFormatCountsOnHost[Shared::NumOMMFormats]);

@@ -98,7 +98,7 @@ target_compile_features("${TARGET_NAME}" PRIVATE cxx_std_20)
 set_target_properties(
     "${TARGET_NAME}" PROPERTIES
     CXX_EXTENSIONS OFF
-    PROJECT_LABEL "10.${TARGET_NAME}"
+    PROJECT_LABEL "11.${TARGET_NAME}"
     FOLDER "samples")
 target_include_directories(
     "${TARGET_NAME}" PRIVATE

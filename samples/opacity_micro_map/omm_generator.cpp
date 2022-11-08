@@ -1,4 +1,5 @@
 ﻿#include "omm_generator.h"
+#include "../../ext/cubd/cubd.h"
 
 static CUmodule s_ommModule;
 static cudau::Kernel s_evaluateTriangleTransparencies;
@@ -14,6 +15,7 @@ void evaluatePerTriangleStates(
     const cudau::TypedBuffer<uint32_t> &numFetchedTriangles,
     const cudau::TypedBuffer<uint32_t> &ommFormatCounts,
     const cudau::TypedBuffer<uint64_t> &ommSizes,
+    const cudau::Buffer &scratchMemForScan,
     std::vector<uint32_t>* triStates,
     uint32_t ommFormatCountsOnHost[Shared::NumOMMFormats]) {
     static bool isInitialized = false;
@@ -46,6 +48,12 @@ void evaluatePerTriangleStates(
         transparentCounts, numPixelsValues, numTriangles,
         ommFormatCounts, ommSizes);
 
+    size_t sizeOfScratchMemForScan = scratchMemForScan.sizeInBytes();
+    cubd::DeviceScan::ExclusiveSum(
+        scratchMemForScan.getDevicePointer(), sizeOfScratchMemForScan,
+        ommSizes.getDevicePointer(), ommSizes.getDevicePointer(),
+        numTriangles, stream);
+
     /*
     ommSizesをスキャン、三角形ごとのOMMオフセットがわかる。
     三角形ごとのOMM Descが作成できる。
@@ -55,7 +63,8 @@ void evaluatePerTriangleStates(
     CUDADRV_CHECK(cuStreamSynchronize(stream));
     std::vector<uint32_t> transparentCountsOnHost = transparentCounts;
     std::vector<uint32_t> numPixelsValuesOnHost = numPixelsValues;
-    //std::vector<uint32_t> numFetchedTrianglesOnHost = numFetchedTriangles;
+    std::vector<uint32_t> numFetchedTrianglesOnHost = numFetchedTriangles;
+    std::vector<uint64_t> ommSizesOnHost = ommSizes;
     transparentCountsOnHost.resize(numTriangles);
     numPixelsValuesOnHost.resize(numTriangles);
     triStates->resize(numTriangles);

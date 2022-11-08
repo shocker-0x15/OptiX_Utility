@@ -85,6 +85,13 @@ endif()
 add_subdirectory(ext/assimp)
 set_project_group("External" "ext/assimp")
 
+# CUBd
+option(CUBD_BUILD_SAMPLES "Build sample projects for cubd." OFF)
+option(CUBD_BUILD_DYNAMIC_LIB "Build dynamic-link cubd library." OFF)
+option(CUBD_BUILD_STATIC_LIB "Build static-link cubd library." ON)
+add_subdirectory(ext/cubd)
+set_project_group("External" "ext/cubd")
+
 # GoogleTest
 option(BUILD_GMOCK "Builds the googlemock subproject" OFF)
 option(INSTALL_GTEST "Enable installation of googletest. (Projects embedding googletest may want to turn this OFF.)" OFF)
