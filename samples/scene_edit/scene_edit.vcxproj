@@ -110,13 +110,13 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7\lib\x64;$(SolutionDir)..\ext\prebuilt\lib;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(IncludePath)</IncludePath>
     <TargetName>scene_edit</TargetName>
     <ExternalIncludePath>$(SolutionDir)..\ext\prebuilt\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.6.0\include;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7\lib\x64;$(SolutionDir)..\ext\prebuilt\lib;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(IncludePath)</IncludePath>
     <TargetName>scene_edit</TargetName>
     <ExternalIncludePath>$(SolutionDir)..\ext\prebuilt\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.6.0\include;$(ExternalIncludePath)</ExternalIncludePath>
@@ -133,7 +133,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>$(SolutionDir)..\ext\prebuilt\lib\assimp-vc143-mt.lib;cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>assimp-vc143-mt.lib;cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <PostBuildEvent>
@@ -174,7 +174,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>$(SolutionDir)..\ext\prebuilt\lib\assimp-vc143-mt.lib;cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>assimp-vc143-mt.lib;cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>

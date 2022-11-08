@@ -26,6 +26,7 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #include "../../ext/stb_image.h"
 
 #include "omm_generator.h"
+#include "../../ext/cubd/cubd.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
     auto visualizationMode = Shared::VisualizationMode_Final;
@@ -281,8 +282,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cuContext, cudau::BufferType::Device, maxNumTrianglesPerGroup);
         cudau::TypedBuffer<uint32_t> numFetchedTriangles(
             cuContext, cudau::BufferType::Device, 1);
+        cudau::TypedBuffer<uint64_t> ommSizes(
+            cuContext, cudau::BufferType::Device, maxNumTrianglesPerGroup);
         cudau::TypedBuffer<uint32_t> ommFormatCounts(
             cuContext, cudau::BufferType::Device, Shared::NumOMMFormats);
+
+        size_t sizeOfScratchMemForScan;
+        cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
+            nullptr, sizeOfScratchMemForScan,
+            nullptr, nullptr, maxNumTrianglesPerGroup);
+        cudau::Buffer scratchMemForScan;
+        scratchMemForScan.initialize(cuContext, cudau::BufferType::Device, sizeOfScratchMemForScan, 1);
 
         for (int groupIdx = 0; groupIdx < matGroups.size(); ++groupIdx) {
             const obj::MaterialGroup &srcGroup = matGroups[groupIdx];
@@ -328,7 +338,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             evaluatePerTriangleStates(
                 tree.vertexBuffer, group.triangleBuffer, numTriangles,
                 group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
-                transparentCounts, numPixelsValues, numFetchedTriangles, ommFormatCounts,
+                transparentCounts, numPixelsValues, numFetchedTriangles, ommFormatCounts, ommSizes,
+                scratchMemForScan,
                 &perTriangleStates, ommFormatCountsOnHost);
 
             std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries(numTriangles);
@@ -383,7 +394,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             tree.matGroups.push_back(std::move(group));
         }
 
+        scratchMemForScan.finalize();
+
         ommFormatCounts.finalize();
+        ommSizes.finalize();
         numFetchedTriangles.finalize();
         numPixelsValues.finalize();
         transparentCounts.finalize();

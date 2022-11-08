@@ -10,3 +10,6 @@
 [submodule "ext/assimp"]
 	path = ext/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "ext/cubd"]
+	path = ext/cubd
+	url = https://github.com/shocker-0x15/CUBd.git
