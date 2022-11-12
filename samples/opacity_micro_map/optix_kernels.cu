@@ -208,11 +208,17 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibilityWithAlpha)() {
     float alpha = fetchAlpha(geomInst, HitPointParameter::get());
     if (isTransparent(alpha)) {
         optixIgnoreIntersection();
-        return;
     }
     else {
         float visibility = 0.0f;
         VisibilityRayPayloadSignature::set(&visibility, nullptr);
         optixTerminateRay();
     }
+}
+
+CUDA_DEVICE_KERNEL void RT_CH_NAME(visibilityWithAlpha)() {
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryInstanceData &geomInst = sbtr.geomInstData;
+    float visibility = 0.0f;
+    VisibilityRayPayloadSignature::set(&visibility, nullptr);
 }

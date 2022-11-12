@@ -609,7 +609,8 @@ namespace cudau {
 
     template <typename HeadType, typename... TailTypes>
     void addArgPointer(ConstVoidPtr* argPointer, CUdeviceptr* pointer, HeadType &&head, TailTypes&&... tails) {
-        if constexpr (is_TypedBuffer_v<std::remove_const_t<std::remove_reference_t<HeadType>>>) {
+        using RawHeadType = std::remove_const_t<std::remove_reference_t<HeadType>>;
+        if constexpr (is_TypedBuffer_v<RawHeadType> || std::is_same_v<RawHeadType, Buffer>) {
             *pointer = head.getCUdeviceptr();
             *argPointer = pointer;
         }

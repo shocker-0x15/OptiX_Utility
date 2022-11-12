@@ -341,11 +341,6 @@ namespace optixu {
 
 
 
-    void OpacityMicroMapArray::Priv::markDirty() {
-        readyToBuild = false;
-        available = false;
-    }
-
     void OpacityMicroMapArray::destroy() {
         if (m)
             delete m;
@@ -357,18 +352,16 @@ namespace optixu {
         changed = m->flags != config;
         m->flags = config;
 
-        if (changed)
-            m->markDirty();
+        if (changed) {
+            m->memoryUsageComputed = false;
+            m->available = false;
+        }
     }
 
-    void OpacityMicroMapArray::prepareForBuild(
-        const BufferView &inputBuffer,
-        const BufferView &perMicroMapDescBuffer,
+    void OpacityMicroMapArray::computeMemoryUsage(
         const OptixOpacityMicromapHistogramEntry* microMapHistogramEntries,
         uint32_t numMicroMapHistogramEntries,
         OptixMicromapBufferSizes* memoryRequirement) const {
-        m->inputBuffer = inputBuffer;
-        m->perMicroMapDescBuffer = perMicroMapDescBuffer;
         m->microMapHistogramEntries.resize(numMicroMapHistogramEntries);
         std::copy_n(microMapHistogramEntries, numMicroMapHistogramEntries, m->microMapHistogramEntries.data());
 
@@ -381,33 +374,63 @@ namespace optixu {
 
         *memoryRequirement = m->memoryRequirement;
 
-        m->buildInput.inputBuffer = m->inputBuffer.getCUdeviceptr();
+        m->memoryUsageComputed = true;
+        m->available = false;
+    }
+
+    void OpacityMicroMapArray::setBuffers(
+        const BufferView &rawOmmBuffer, const BufferView &perMicroMapDescBuffer,
+        const BufferView &outputBuffer) const {
+        m->throwRuntimeError(
+            outputBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+            "Size of the given buffer is not enough.");
+        m->rawOmmBuffer = rawOmmBuffer;
+        m->perMicroMapDescBuffer = perMicroMapDescBuffer;
+        m->outputBuffer = outputBuffer;
+
+        m->buildInput.inputBuffer = m->rawOmmBuffer.getCUdeviceptr();
         m->buildInput.perMicromapDescBuffer = m->perMicroMapDescBuffer.getCUdeviceptr();
         m->buildInput.perMicromapDescStrideInBytes = m->perMicroMapDescBuffer.stride();
 
-        m->markDirty();
-        m->readyToBuild = true;
+        m->buffersSet = true;
+        m->available = false;
+    }
+
+    void OpacityMicroMapArray::markDirty() const {
+        m->memoryUsageComputed = false;
+        m->available = false;
     }
 
     void OpacityMicroMapArray::rebuild(
-        CUstream stream, const BufferView &ommArrayBuffer, const BufferView &scratchBuffer) const {
+        CUstream stream, const BufferView &scratchBuffer) const {
         m->throwRuntimeError(
-            m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+            m->memoryUsageComputed, "You need to call computeMemoryUsage() before rebuild.");
         m->throwRuntimeError(
-            ommArrayBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-            "Size of the given buffer is not enough.");
+            m->buffersSet, "You need to call setBuffers() before rebuild.");
         m->throwRuntimeError(
             scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
             "Size of the given scratch buffer is not enough.");
 
         OptixMicromapBuffers buffers = {};
-        buffers.output = ommArrayBuffer.getCUdeviceptr();
+        buffers.output = m->outputBuffer.getCUdeviceptr();
         buffers.outputSizeInBytes = m->memoryRequirement.outputSizeInBytes;
         buffers.temp = scratchBuffer.getCUdeviceptr();
         buffers.tempSizeInBytes = m->memoryRequirement.tempSizeInBytes;
         OPTIX_CHECK(optixOpacityMicromapArrayBuild(m->getRawContext(), stream, &m->buildInput, &buffers));
 
         m->available = true;
+    }
+
+    bool OpacityMicroMapArray::isReady() const {
+        return m->isReady();
+    }
+
+    BufferView OpacityMicroMapArray::getOutputBuffer() const {
+        return m->getBuffer();
+    }
+
+    OptixOpacityMicromapFlags OpacityMicroMapArray::getConfiguration() const {
+        return m->flags;
     }
 
 
@@ -460,6 +483,20 @@ namespace optixu {
             }
             triArray.indexFormat = geom.indexFormat;
             triArray.primitiveIndexOffset = primitiveIndexOffset;
+
+            if (geom.opacityMicroMapArray) {
+                OptixBuildInputOpacityMicromap &ommInput = triArray.opacityMicromap;
+                ommInput.opacityMicromapArray = geom.opacityMicroMapArray->getBuffer().getCUdeviceptr();
+                ommInput.micromapUsageCounts = geom.opacityMicroMapUsageCounts.data();
+                ommInput.numMicromapUsageCounts = static_cast<uint32_t>(geom.opacityMicroMapUsageCounts.size());
+                ommInput.indexingMode = geom.opacityMicroMapIndexingMode;
+                if (ommInput.indexingMode == OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_INDEXED) {
+                    ommInput.indexBuffer = geom.opacityMicroMapIndexBuffer.getCUdeviceptr();
+                    ommInput.indexStrideInBytes = geom.opacityMicroMapIndexBuffer.stride();
+                    ommInput.indexSizeInBytes = geom.opacityMicroMapIndexSize;
+                    ommInput.indexOffset = geom.opacityMicroMapIndexOffset;
+                }
+            }
 
             triArray.numSbtRecords = static_cast<uint32_t>(buildInputFlags.size());
             if (triArray.numSbtRecords > 1) {
@@ -682,6 +719,22 @@ namespace optixu {
 
             if (geom.indexFormat != OPTIX_INDICES_FORMAT_NONE)
                 triArray.indexBuffer = geom.triangleBuffer.getCUdeviceptr();
+
+            if (geom.opacityMicroMapArray) {
+                // TODO: どの情報が更新可能なのか調べる。
+                throwRuntimeError(geom.opacityMicroMapArray->isReady(), "OMM array is not ready");
+                OptixBuildInputOpacityMicromap &ommInput = triArray.opacityMicromap;
+                ommInput.opacityMicromapArray = geom.opacityMicroMapArray->getBuffer().getCUdeviceptr();
+                ommInput.micromapUsageCounts = geom.opacityMicroMapUsageCounts.data();
+                ommInput.numMicromapUsageCounts = static_cast<uint32_t>(geom.opacityMicroMapUsageCounts.size());
+                ommInput.indexingMode = geom.opacityMicroMapIndexingMode;
+                if (ommInput.indexingMode == OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_INDEXED) {
+                    ommInput.indexBuffer = geom.opacityMicroMapIndexBuffer.getCUdeviceptr();
+                    ommInput.indexStrideInBytes = geom.opacityMicroMapIndexBuffer.stride();
+                    ommInput.indexSizeInBytes = geom.opacityMicroMapIndexSize;
+                    ommInput.indexOffset = geom.opacityMicroMapIndexOffset;
+                }
+            }
 
             if (triArray.numSbtRecords > 1)
                 triArray.sbtIndexOffsetBuffer = geom.materialIndexBuffer.getCUdeviceptr();
@@ -976,6 +1029,40 @@ namespace optixu {
         geom.indexFormat = format;
     }
 
+    void GeometryInstance::setOpacityMicroMapArray(
+        OpacityMicroMapArray opacityMicroMapArray,
+        const OptixOpacityMicromapUsageCount* ommUsageCounts, uint32_t numOmmUsageCounts,
+        const BufferView &ommIndexBuffer,
+        uint32_t indexSize, uint32_t indexOffset) const {
+        m->throwRuntimeError(
+            std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+            "This geometry instance was created not for triangles.");
+        m->throwRuntimeError(
+            indexSize >= 1 && indexSize <= 4,
+            "Invalid index offset size.");
+        m->throwRuntimeError(
+            !ommIndexBuffer.isValid() || ommIndexBuffer.stride() >= indexSize,
+            "Buffer's stride is smaller than the given index offset size.");
+        auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        geom.opacityMicroMapArray = extract(opacityMicroMapArray);
+        if (opacityMicroMapArray) {
+            geom.opacityMicroMapIndexBuffer = ommIndexBuffer;
+            geom.opacityMicroMapIndexingMode = ommIndexBuffer.isValid() ?
+                OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_INDEXED :
+                OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_LINEAR;
+            geom.opacityMicroMapIndexSize = indexSize;
+            geom.opacityMicroMapIndexOffset = indexOffset;
+            geom.opacityMicroMapUsageCounts.resize(numOmmUsageCounts);
+            std::copy_n(ommUsageCounts, numOmmUsageCounts, geom.opacityMicroMapUsageCounts.data());
+        }
+        else {
+            geom.opacityMicroMapIndexBuffer = BufferView();
+            geom.opacityMicroMapIndexingMode = OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_NONE;
+            geom.opacityMicroMapIndexSize = 0;
+            geom.opacityMicroMapUsageCounts.clear();
+        }
+    }
+
     void GeometryInstance::setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const {
         m->throwRuntimeError(
             std::holds_alternative<Priv::CurveGeometry>(m->geometry),
@@ -1030,10 +1117,9 @@ namespace optixu {
         m->throwRuntimeError(
             indexSize >= 1 && indexSize <= 4,
             "Invalid index offset size.");
-        if (matIndexBuffer.isValid())
-            m->throwRuntimeError(
-                matIndexBuffer.stride() >= indexSize,
-                "Buffer's stride is smaller than the given index offset size.");
+        m->throwRuntimeError(
+            !matIndexBuffer.isValid() || matIndexBuffer.stride() >= indexSize,
+            "Buffer's stride is smaller than the given index offset size.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
@@ -1161,6 +1247,22 @@ namespace optixu {
         if (format)
             *format = geom.indexFormat;
         return geom.triangleBuffer;
+    }
+
+    OpacityMicroMapArray GeometryInstance::getOpacityMicroMapBuffer(
+        BufferView* ommIndexBuffer,
+        uint32_t* indexSize, uint32_t* indexOffset) const {
+        m->throwRuntimeError(
+            std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
+            "This geometry instance was created not for triangles.");
+        const auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
+        if (ommIndexBuffer)
+            *ommIndexBuffer = geom.opacityMicroMapIndexBuffer;
+        if (indexSize)
+            *indexSize = geom.opacityMicroMapIndexSize;
+        if (indexOffset)
+            *indexOffset = geom.opacityMicroMapIndexOffset;
+        return geom.opacityMicroMapArray->getPublicType();
     }
 
     BufferView GeometryInstance::getSegmentIndexBuffer() const {

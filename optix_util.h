@@ -1241,13 +1241,22 @@ namespace optixu {
         void destroy();
 
         void setConfiguration(OptixOpacityMicromapFlags config) const;
-        void prepareForBuild(
-            const BufferView &inputBuffer,
-            const BufferView &perMicroMapDescBuffer,
+        void computeMemoryUsage(
             const OptixOpacityMicromapHistogramEntry* microMapHistogramEntries,
             uint32_t numMicroMapHistogramEntries,
             OptixMicromapBufferSizes* memoryRequirement) const;
-        void rebuild(CUstream stream, const BufferView &ommArrayBuffer, const BufferView &scratchBuffer) const;
+        void setBuffers(
+            const BufferView &rawOmmBuffer, const BufferView &perMicroMapDescBuffer,
+            const BufferView &outputBuffer) const;
+
+        void markDirty() const;
+
+        void rebuild(CUstream stream, const BufferView &scratchBuffer) const;
+
+        bool isReady() const;
+        BufferView getOutputBuffer() const;
+
+        OptixOpacityMicromapFlags getConfiguration() const;
     };
 
 
@@ -1272,12 +1281,11 @@ namespace optixu {
         void setTriangleBuffer(
             const BufferView &triangleBuffer,
             OptixIndicesFormat format = OPTIX_INDICES_FORMAT_UNSIGNED_INT3) const;
-        void setMicroMapArrayBuffer(
-            const BufferView &microMapArrayBuffer,
-            const OptixOpacityMicromapUsageCount* microMapUsageCounts,
-            uint32_t numMicroMapUsageCounts,
-            const BufferView &microMapIndexBuffer,
-            uint32_t indexSize = sizeof(uint32_t)) const;
+        void setOpacityMicroMapArray(
+            OpacityMicroMapArray opacityMicroMapArray,
+            const OptixOpacityMicromapUsageCount* ommUsageCounts, uint32_t numOmmUsageCounts,
+            const BufferView &ommIndexBuffer,
+            uint32_t indexSize = sizeof(uint32_t), uint32_t indexOffset = 0) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setSingleRadius(UseSingleRadius useSingleRadius) const;
@@ -1312,6 +1320,9 @@ namespace optixu {
         BufferView getWidthBuffer(uint32_t motionStep = 0);
         BufferView getRadiusBuffer(uint32_t motionStep = 0);
         BufferView getTriangleBuffer(OptixIndicesFormat* format = nullptr) const;
+        OpacityMicroMapArray getOpacityMicroMapBuffer(
+            BufferView* ommIndexBuffer = nullptr,
+            uint32_t* indexSize = nullptr, uint32_t* indexOffset = nullptr) const;
         BufferView getSegmentIndexBuffer() const;
         BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
         uint32_t getPrimitiveIndexOffset() const;

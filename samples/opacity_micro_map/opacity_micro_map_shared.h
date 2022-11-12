@@ -2,6 +2,8 @@
 
 #include "../common/common.h"
 
+static constexpr bool useSimpleScene = false;
+
 namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;
 
@@ -29,10 +31,10 @@ namespace Shared {
 
     enum OMMFormat : uint32_t {
         OMMFormat_None = 0, // TODO: Level 0は無視？
-        OMMFormat_Level1,
-        OMMFormat_Level2,
-        OMMFormat_Level3,
-        OMMFormat_Level4,
+        OMMFormat_Level1, // 4 micro-tris,
+        OMMFormat_Level2, // 16 micro-tris
+        OMMFormat_Level3, // 64 micro-tris
+        OMMFormat_Level4, // 256 micro-tris
         NumOMMFormats
     };
 
