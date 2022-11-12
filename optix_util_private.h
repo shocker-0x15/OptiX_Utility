@@ -461,15 +461,17 @@ namespace optixu {
         _Scene* scene;
         OptixOpacityMicromapFlags flags;
 
-        BufferView inputBuffer;
+        BufferView rawOmmBuffer;
         BufferView perMicroMapDescBuffer;
+        BufferView outputBuffer;
         std::vector<OptixOpacityMicromapHistogramEntry> microMapHistogramEntries;
 
         OptixOpacityMicromapArrayBuildInput buildInput;
         OptixMicromapBufferSizes memoryRequirement;
 
         struct {
-            unsigned int readyToBuild : 1;
+            unsigned int memoryUsageComputed : 1;
+            unsigned int buffersSet : 1;
             unsigned int available : 1;
         };
 
@@ -477,7 +479,9 @@ namespace optixu {
         OPTIXU_OPAQUE_BRIDGE(OpacityMicroMapArray);
 
         Priv(_Scene* _scene) :
-            scene(_scene) {
+            scene(_scene),
+            memoryUsageComputed(false), buffersSet(false),
+            available(false) {
         }
         ~Priv() {
             getContext()->unregisterName(this);
@@ -491,7 +495,14 @@ namespace optixu {
         }
         OPTIXU_DEFINE_THROW_RUNTIME_ERROR("OMM");
 
-        void markDirty();
+        bool isReady() const {
+            return available;
+        }
+
+        BufferView getBuffer() const {
+            throwRuntimeError(outputBuffer.isValid(), "Output buffer has not been set.");
+            return outputBuffer;
+        }
     };
 
 
@@ -506,10 +517,16 @@ namespace optixu {
             CUdeviceptr* vertexBufferArray;
             BufferView* vertexBuffers;
             BufferView triangleBuffer;
+            BufferView materialIndexBuffer;
+            _OpacityMicroMapArray* opacityMicroMapArray;
+            BufferView opacityMicroMapIndexBuffer;
+            std::vector<OptixOpacityMicromapUsageCount> opacityMicroMapUsageCounts;
             OptixVertexFormat vertexFormat;
             OptixIndicesFormat indexFormat;
-            BufferView materialIndexBuffer;
+            OptixOpacityMicromapArrayIndexingMode opacityMicroMapIndexingMode;
+            uint32_t opacityMicroMapIndexOffset;
             unsigned int materialIndexSize : 3;
+            unsigned int opacityMicroMapIndexSize : 3;
         };
         struct CurveGeometry {
             CUdeviceptr* vertexBufferArray;
@@ -564,13 +581,14 @@ namespace optixu {
                 geometry = TriangleGeometry{};
                 auto &geom = std::get<TriangleGeometry>(geometry);
                 geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.vertexBufferArray[0] = 0;
                 geom.vertexBuffers = new BufferView[numMotionSteps];
-                geom.vertexBuffers[0] = BufferView();
-                geom.triangleBuffer = BufferView();
+                geom.opacityMicroMapArray = nullptr;
                 geom.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
                 geom.indexFormat = OPTIX_INDICES_FORMAT_NONE;
+                geom.opacityMicroMapIndexingMode = OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_NONE;
+                geom.opacityMicroMapIndexOffset = 0;
                 geom.materialIndexSize = 0;
+                geom.opacityMicroMapIndexSize = 0;
             }
             else if (geomType == GeometryType::LinearSegments ||
                      geomType == GeometryType::QuadraticBSplines ||
@@ -579,37 +597,25 @@ namespace optixu {
                 geometry = CurveGeometry{};
                 auto &geom = std::get<CurveGeometry>(geometry);
                 geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.vertexBufferArray[0] = 0;
                 geom.vertexBuffers = new BufferView[numMotionSteps];
-                geom.vertexBuffers[0] = BufferView();
                 geom.widthBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.widthBufferArray[0] = 0;
                 geom.widthBuffers = new BufferView[numMotionSteps];
-                geom.widthBuffers[0] = BufferView();
-                geom.segmentIndexBuffer = BufferView();
                 geom.endcapFlags = OPTIX_CURVE_ENDCAP_DEFAULT;
             }
             else if (geomType == GeometryType::Spheres) {
                 geometry = SphereGeometry{};
                 auto &geom = std::get<SphereGeometry>(geometry);
                 geom.centerBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.centerBufferArray[0] = 0;
                 geom.centerBuffers = new BufferView[numMotionSteps];
-                geom.centerBuffers[0] = BufferView();
                 geom.radiusBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.radiusBufferArray[0] = 0;
                 geom.radiusBuffers = new BufferView[numMotionSteps];
-                geom.radiusBuffers[0] = BufferView();
-                geom.materialIndexSize = 0;
                 geom.useSingleRadius = false;
             }
             else if (geomType == GeometryType::CustomPrimitives) {
                 geometry = CustomPrimitiveGeometry{};
                 auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
                 geom.primitiveAabbBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.primitiveAabbBufferArray[0] = 0;
                 geom.primitiveAabbBuffers = new BufferView[numMotionSteps];
-                geom.primitiveAabbBuffers[0] = BufferView();
                 geom.materialIndexSize = 0;
             }
             else {
