@@ -1320,7 +1320,7 @@ namespace optixu {
         BufferView getWidthBuffer(uint32_t motionStep = 0);
         BufferView getRadiusBuffer(uint32_t motionStep = 0);
         BufferView getTriangleBuffer(OptixIndicesFormat* format = nullptr) const;
-        OpacityMicroMapArray getOpacityMicroMapBuffer(
+        OpacityMicroMapArray getOpacityMicroMapArray(
             BufferView* ommIndexBuffer = nullptr,
             uint32_t* indexSize = nullptr, uint32_t* indexOffset = nullptr) const;
         BufferView getSegmentIndexBuffer() const;
