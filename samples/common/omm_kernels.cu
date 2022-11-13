@@ -1,9 +1,15 @@
-﻿#include "opacity_micro_map_shared.h"
+﻿#include "omm_generator.h"
 #include "optix_micromap.h"
 
-using namespace Shared;
+using namespace shared;
 
 static constexpr uint32_t WarpSize = 32;
+
+struct Triangle {
+    uint32_t index0;
+    uint32_t index1;
+    uint32_t index2;
+};
 
 CUDA_DEVICE_FUNCTION CUDA_INLINE float fetchAlpha(
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
@@ -39,22 +45,48 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE bool isTransparent(float alpha) {
     return alpha < 0.5f;
 }
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeBottomFlatTriangle(
-    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
-    const float2 ps[3],
-    uint32_t* transparentCount, uint32_t* numPixels) {
-    const float invSlope01 = (ps[1].x - ps[0].x) / (ps[1].y - ps[0].y);
-    const float invSlope02 = (ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
 
-    float curXFBegin = ps[0].x;
-    float curXFEnd = ps[0].x;
+
+enum class FlatTriangleType {
+    BottomFlat,
+    TopFlat,
+};
+
+template <FlatTriangleType triType, bool ignoreFirstLine>
+CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeFlatTriangle(
+    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
+    const float2 ps[2],
+    uint32_t* numTransparentPixels, uint32_t* numPixels) {
+    float invBeginSlope;
+    float invEndSlope;
+    float curXFBegin;
+    float curXFEnd;
+    int32_t curY;
+    int32_t yEnd;
+    if constexpr (triType == FlatTriangleType::BottomFlat) {
+        invBeginSlope = (ps[1].x - ps[0].x) / (ps[1].y - ps[0].y);
+        invEndSlope = (ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
+
+        curXFBegin = ps[0].x;
+        curXFEnd = ps[0].x;
+        curY = static_cast<int32_t>(ps[0].y);
+        yEnd = static_cast<int32_t>(ps[1].y);
+    }
+    else /*if constexpr (triType == FlatTriangleType::TopFlat)*/ {
+        invEndSlope = -(ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
+        invBeginSlope = -(ps[2].x - ps[1].x) / (ps[2].y - ps[1].y);
+
+        curXFBegin = ps[2].x;
+        curXFEnd = ps[2].x;
+        curY = static_cast<int32_t>(ps[2].y);
+        yEnd = static_cast<int32_t>(ps[0].y) + ignoreFirstLine;
+    }
+
     int32_t curX = static_cast<int32_t>(curXFBegin);
     int32_t curXEnd = static_cast<int32_t>(curXFEnd);
-    int32_t curY = static_cast<int32_t>(ps[0].y);
-    const int32_t yEnd = static_cast<int32_t>(ps[1].y);
     uint32_t curNumItemsPerWarp = 0;
     int2 item = make_int2(INT32_MAX, INT32_MAX);
-    while (curY <= yEnd) {
+    while (triType == FlatTriangleType::BottomFlat ? curY <= yEnd : curY >= yEnd) {
         const uint32_t numItemsToFill =
             min(curXEnd - curX + 1, static_cast<int32_t>(WarpSize - curNumItemsPerWarp));
         if (threadIdx.x >= curNumItemsPerWarp &&
@@ -65,16 +97,19 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeBottomFlatTriangle(
         if (curNumItemsPerWarp == WarpSize) {
             const float alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
             const uint32_t numTrsInWarp = __popc(__ballot_sync(0xFFFFFFFF, isTransparent(alpha)));
-            *transparentCount += numTrsInWarp;
+            *numTransparentPixels += numTrsInWarp;
             curNumItemsPerWarp = 0;
         }
         curX += numItemsToFill;
         if (curX > curXEnd) {
-            curXFBegin += invSlope01;
-            curXFEnd += invSlope02;
+            curXFBegin += invBeginSlope;
+            curXFEnd += invEndSlope;
             curX = static_cast<int32_t>(curXFBegin);
             curXEnd = static_cast<int32_t>(curXFEnd);
-            ++curY;
+            if constexpr (triType == FlatTriangleType::BottomFlat)
+                ++curY;
+            else /*if constexpr (triType == FlatTriangleType::TopFlat)*/
+                --curY;
         }
     }
     if (curNumItemsPerWarp > 0) {
@@ -82,74 +117,26 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeBottomFlatTriangle(
         if (threadIdx.x < curNumItemsPerWarp)
             alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
         const uint32_t numTrsInWarp = __popc(__ballot_sync(0xFFFFFFFF, isTransparent(alpha)));
-        *transparentCount += numTrsInWarp;
+        *numTransparentPixels += numTrsInWarp;
     }
 }
-
-CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeTopFlatTriangle(
-    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
-    const float2 ps[3], bool ignoreFirstLine,
-    uint32_t* transparentCount, uint32_t* numPixels) {
-    const float invSlope02 = (ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
-    const float invSlope12 = (ps[2].x - ps[1].x) / (ps[2].y - ps[1].y);
-
-    float curXFBegin = ps[2].x;
-    float curXFEnd = ps[2].x;
-    int32_t curX = static_cast<int32_t>(curXFBegin);
-    int32_t curXEnd = static_cast<int32_t>(curXFEnd);
-    int32_t curY = static_cast<int32_t>(ps[2].y);
-    const int32_t yEnd = static_cast<int32_t>(ps[0].y) + ignoreFirstLine;
-    uint32_t curNumItemsPerWarp = 0;
-    int2 item = make_int2(INT32_MAX, INT32_MAX);
-    while (curY >= yEnd) {
-        const uint32_t numItemsToFill =
-            min(curXEnd - curX + 1, static_cast<int32_t>(WarpSize - curNumItemsPerWarp));
-        if (threadIdx.x >= curNumItemsPerWarp &&
-            threadIdx.x < (curNumItemsPerWarp + numItemsToFill))
-            item = make_int2(curX + threadIdx.x - curNumItemsPerWarp, curY);
-        curNumItemsPerWarp += numItemsToFill;
-        *numPixels += numItemsToFill;
-        if (curNumItemsPerWarp == WarpSize) {
-            const float alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
-            const uint32_t numTrsInWarp = __popc(__ballot_sync(0xFFFFFFFF, isTransparent(alpha)));
-            *transparentCount += numTrsInWarp;
-            curNumItemsPerWarp = 0;
-        }
-        curX += numItemsToFill;
-        if (curX > curXEnd) {
-            curXFBegin -= invSlope12;
-            curXFEnd -= invSlope02;
-            curX = static_cast<int32_t>(curXFBegin);
-            curXEnd = static_cast<int32_t>(curXFEnd);
-            --curY;
-        }
-    }
-    if (curNumItemsPerWarp > 0) {
-        float alpha = 1.0f;
-        if (threadIdx.x < curNumItemsPerWarp)
-            alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
-        const uint32_t numTrsInWarp = __popc(__ballot_sync(0xFFFFFFFF, isTransparent(alpha)));
-        *transparentCount += numTrsInWarp;
-    }
-}
-
-
 
 CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
     uint32_t triIdx,
-    const Vertex* vertices, const Triangle* triangles, uint32_t numTriangles,
+    const uint8_t* texCoords, uint64_t vertexStride,
+    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     uint32_t* numTransparentPixels, uint32_t* numPixels) {
-    const Triangle &tri = triangles[triIdx];
-    const float2 texCoords[] = {
-        vertices[tri.index0].texCoord,
-        vertices[tri.index1].texCoord,
-        vertices[tri.index2].texCoord
+    auto &tri = reinterpret_cast<const Triangle &>(triangles[triangleStride * triIdx]);
+    const float2 tcs[] = {
+        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index0]),
+        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index1]),
+        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index2]),
     };
     float2 fPixs[3] = {
-        make_float2(texSize.x * texCoords[0].x, texSize.y * texCoords[0].y),
-        make_float2(texSize.x * texCoords[1].x, texSize.y * texCoords[1].y),
-        make_float2(texSize.x * texCoords[2].x, texSize.y * texCoords[2].y)
+        make_float2(texSize.x * tcs[0].x, texSize.y * tcs[0].y),
+        make_float2(texSize.x * tcs[1].x, texSize.y * tcs[1].y),
+        make_float2(texSize.x * tcs[2].x, texSize.y * tcs[2].y)
     };
 
     const auto swap = [](float2 &a, float2 &b) {
@@ -175,9 +162,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
         if (fPixs[0].x < fPixs[1].x)
             swap(fPixs[0], fPixs[1]);
 
-        rasterizeTopFlatTriangle(
+        rasterizeFlatTriangle<FlatTriangleType::TopFlat, false>(
             texture, texSize, numChannels, alphaChannelIdx,
-            fPixs, false,
+            fPixs,
             numTransparentPixels, numPixels);
     }
     // Bottom-Flat
@@ -186,7 +173,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
         if (fPixs[1].x >= fPixs[2].x)
             swap(fPixs[1], fPixs[2]);
 
-        rasterizeBottomFlatTriangle(
+        rasterizeFlatTriangle<FlatTriangleType::BottomFlat, false>(
             texture, texSize, numChannels, alphaChannelIdx,
             fPixs,
             numTransparentPixels, numPixels);
@@ -206,7 +193,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
         if (ps[1].x >= ps[2].x)
             swap(ps[1], ps[2]);
 
-        rasterizeBottomFlatTriangle(
+        rasterizeFlatTriangle<FlatTriangleType::BottomFlat, false>(
             texture, texSize, numChannels, alphaChannelIdx,
             ps,
             numTransparentPixels, numPixels);
@@ -218,16 +205,18 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
         if (ps[0].x < ps[1].x)
             swap(ps[0], ps[1]);
 
-        rasterizeTopFlatTriangle(
+        rasterizeFlatTriangle<FlatTriangleType::TopFlat, true>(
             texture, texSize, numChannels, alphaChannelIdx,
-            ps, true,
+            ps,
             numTransparentPixels, numPixels);
     }
 }
 
-CUDA_DEVICE_KERNEL void evaluateTriangleTransparencies(
-    const Vertex* vertices, const Triangle* triangles, uint32_t numTriangles,
+CUDA_DEVICE_KERNEL void countOMMFormats(
+    const uint8_t* texCoords, uint64_t vertexStride,
+    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
+    OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     volatile uint32_t* numFetchedTriangles,
     uint32_t* ommFormatCounts, uint64_t* ommSizes) {
     while (true) {
@@ -254,18 +243,18 @@ CUDA_DEVICE_KERNEL void evaluateTriangleTransparencies(
             uint32_t numPixels;
             evaluateSingleTriangleTransparency(
                 triIdx,
-                vertices, triangles, numTriangles,
+                texCoords, vertexStride, triangles, triangleStride, numTriangles,
                 texture, texSize, numChannels, alphaChannelIdx,
                 &numTransparentPixels, &numPixels);
 
             if (threadIdx.x == 0) {
                 const bool singleState = numTransparentPixels == 0 || numTransparentPixels == numPixels;
                 constexpr int32_t minLevel = OMMFormat_None;
-                constexpr int32_t maxLevel = OMMFormat_Level4;
+                const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
                 const int32_t level = singleState ? 0 :
                     min(max(static_cast<int32_t>(
                         std::log(static_cast<float>(numPixels)) / std::log(4.0f)
-                        ) - 4, minLevel), maxLevel); // -4: ad-hoc offset
+                        ) - 4 + subdivLevelBias, minLevel), maxLevel); // -4: ad-hoc offset
                 atomicAdd(&ommFormatCounts[level], 1u);
 
                 const uint32_t ommSizeInBits = level == 0 ? 0 : 2 * (1 << (2 * level));
@@ -286,16 +275,16 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
     if (triIdx >= numTriangles)
         return;
 
-    const auto ommIndices8 = reinterpret_cast<uint8_t*>(ommIndices);
-    const auto ommIndices16 = reinterpret_cast<uint16_t*>(ommIndices);
-    const auto ommIndices32 = reinterpret_cast<uint32_t*>(ommIndices);
+    const auto ommIndices8 = reinterpret_cast<int8_t*>(ommIndices);
+    const auto ommIndices16 = reinterpret_cast<int16_t*>(ommIndices);
+    const auto ommIndices32 = reinterpret_cast<int32_t*>(ommIndices);
 
     const uint64_t ommOffset = ommOffsets[triIdx];
     const uint32_t ommSize = static_cast<uint32_t>(ommOffsets[triIdx + 1] - ommOffset);
     const uint32_t numMicroTris = 4 * ommSize;
     const uint32_t ommLevel = tzcnt(numMicroTris) >> 1;
     if (ommLevel == 0) {
-        const uint32_t ommIndex = OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_OPAQUE;
+        const int32_t ommIndex = OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_OPAQUE;
         if (ommIndexSize == 1)
             ommIndices8[triIdx] = ommIndex;
         else if (ommIndexSize == 2)
@@ -312,70 +301,68 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
     ommDesc.subdivisionLevel = ommLevel;
 
     if (ommIndexSize == 1)
-        ommIndices8[triIdx] = descIdx;
+        ommIndices8[triIdx] = static_cast<int32_t>(descIdx);
     else if (ommIndexSize == 2)
-        ommIndices16[triIdx] = descIdx;
+        ommIndices16[triIdx] = static_cast<int32_t>(descIdx);
     else/* if (ommIndexSize == 4)*/
-        ommIndices32[triIdx] = descIdx;
+        ommIndices32[triIdx] = static_cast<int32_t>(descIdx);
 }
 
 
 
+template <FlatTriangleType triType, bool ignoreFirstLine>
+CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeFlatMicroTriangle(
+    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
+    const float2 ps[2],
+    uint32_t* numTransparentPixels, uint32_t* numPixels) {
+    float invBeginSlope;
+    float invEndSlope;
+    float curXFBegin;
+    float curXFEnd;
+    int32_t curY;
+    int32_t yEnd;
+    if constexpr (triType == FlatTriangleType::BottomFlat) {
+        invBeginSlope = (ps[1].x - ps[0].x) / (ps[1].y - ps[0].y);
+        invEndSlope = (ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
+
+        curXFBegin = ps[0].x;
+        curXFEnd = ps[0].x;
+        curY = static_cast<int32_t>(ps[0].y);
+        yEnd = static_cast<int32_t>(ps[1].y);
+    }
+    else /*if constexpr (triType == FlatTriangleType::TopFlat)*/ {
+        invEndSlope = -(ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
+        invBeginSlope = -(ps[2].x - ps[1].x) / (ps[2].y - ps[1].y);
+
+        curXFBegin = ps[2].x;
+        curXFEnd = ps[2].x;
+        curY = static_cast<int32_t>(ps[2].y);
+        yEnd = static_cast<int32_t>(ps[0].y) + ignoreFirstLine;
+    }
+
+    while (triType == FlatTriangleType::BottomFlat ? curY <= yEnd : curY >= yEnd) {
+        int32_t curXBegin = static_cast<int32_t>(curXFBegin);
+        int32_t curXEnd = static_cast<int32_t>(curXFEnd);
+        for (int32_t curX = curXBegin; curX <= curXEnd; ++curX) {
+            int2 item = make_int2(curX, curY);
+            float alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
+            if (isTransparent(alpha))
+                ++*numTransparentPixels;
+        }
+        curXFBegin += invBeginSlope;
+        curXFEnd += invEndSlope;
+        if constexpr (triType == FlatTriangleType::BottomFlat)
+            ++curY;
+        else /*if constexpr (triType == FlatTriangleType::TopFlat)*/
+            --curY;
+
+        *numPixels += curXEnd - curXBegin + 1;
+    }
+}
+
 CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
     float2 fPixA, float2 fPixB, float2 fPixC,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx) {
-    const auto rasterizeBottomFlatTriangle = [&]
-    (const float2 ps[3], uint32_t* numPixels, uint32_t* numTransparents) {
-        const float invSlope01 = (ps[1].x - ps[0].x) / (ps[1].y - ps[0].y);
-        const float invSlope02 = (ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
-
-        float curXFBegin = ps[0].x;
-        float curXFEnd = ps[0].x;
-        int32_t curY = static_cast<int32_t>(ps[0].y);
-        const int32_t yEnd = static_cast<int32_t>(ps[1].y);
-        while (curY <= yEnd) {
-            int32_t curXBegin = static_cast<int32_t>(curXFBegin);
-            int32_t curXEnd = static_cast<int32_t>(curXFEnd);
-            for (int32_t curX = curXBegin; curX <= curXEnd; ++curX) {
-                int2 item = make_int2(curX, curY);
-                float alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
-                if (isTransparent(alpha))
-                    ++*numTransparents;
-            }
-            curXFBegin += invSlope01;
-            curXFEnd += invSlope02;
-            ++curY;
-
-            *numPixels += curXEnd - curXBegin + 1;
-        }
-    };
-
-    const auto rasterizeTopFlatTriangle = [&]
-    (const float2 ps[3], bool ignoreFirstLine, uint32_t* numPixels, uint32_t* numTransparents) {
-        const float invSlope02 = (ps[2].x - ps[0].x) / (ps[2].y - ps[0].y);
-        const float invSlope12 = (ps[2].x - ps[1].x) / (ps[2].y - ps[1].y);
-
-        float curXFBegin = ps[2].x;
-        float curXFEnd = ps[2].x;
-        int32_t curY = static_cast<int32_t>(ps[2].y);
-        const int32_t yEnd = static_cast<int32_t>(ps[0].y) + ignoreFirstLine;
-        while (curY >= yEnd) {
-            int32_t curXBegin = static_cast<int32_t>(curXFBegin);
-            int32_t curXEnd = static_cast<int32_t>(curXFEnd);
-            for (int32_t curX = curXBegin; curX <= curXEnd; ++curX) {
-                int2 item = make_int2(curX, curY);
-                float alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
-                if (isTransparent(alpha))
-                    ++*numTransparents;
-            }
-            curXFBegin -= invSlope12;
-            curXFEnd -= invSlope02;
-            --curY;
-
-            *numPixels += curXEnd - curXBegin + 1;
-        }
-    };
-
     const auto swap = [](float2 &a, float2 &b) {
         float2 temp = a;
         a = b;
@@ -395,8 +382,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
     ps[1] = fPixB;
     ps[2] = fPixC;
 
+    uint32_t numTrPixels = 0;
     uint32_t numPixels = 0;
-    uint32_t numTransparents = 0;
 
     // Top-Flat
     if (ps[0].y == ps[1].y) {
@@ -404,7 +391,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
         if (ps[0].x < ps[1].x)
             swap(ps[0], ps[1]);
 
-        rasterizeTopFlatTriangle(ps, false, &numPixels, &numTransparents);
+        rasterizeFlatMicroTriangle<FlatTriangleType::TopFlat, false>(
+            texture, texSize, numChannels, alphaChannelIdx,
+            ps,
+            &numTrPixels, &numPixels);
     }
     // Bottom-Flat
     else if (ps[1].y == ps[2].y) {
@@ -412,7 +402,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
         if (ps[1].x >= ps[2].x)
             swap(ps[1], ps[2]);
 
-        rasterizeBottomFlatTriangle(ps, &numPixels, &numTransparents);
+        rasterizeFlatMicroTriangle<FlatTriangleType::BottomFlat, false>(
+            texture, texSize, numChannels, alphaChannelIdx,
+            ps,
+            &numTrPixels, &numPixels);
     }
     // General
     else {
@@ -428,7 +421,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
         if (ps[1].x >= ps[2].x)
             swap(ps[1], ps[2]);
 
-        rasterizeBottomFlatTriangle(ps, &numPixels, &numTransparents);
+        rasterizeFlatMicroTriangle<FlatTriangleType::BottomFlat, false>(
+            texture, texSize, numChannels, alphaChannelIdx,
+            ps,
+            &numTrPixels, &numPixels);
 
         ps[0] = newP;
         ps[1] = fPixB;
@@ -437,15 +433,18 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
         if (ps[0].x < ps[1].x)
             swap(ps[0], ps[1]);
 
-        rasterizeTopFlatTriangle(ps, true, &numPixels, &numTransparents);
+        rasterizeFlatMicroTriangle<FlatTriangleType::TopFlat, true>(
+            texture, texSize, numChannels, alphaChannelIdx,
+            ps,
+            &numTrPixels, &numPixels);
     }
 
     uint32_t state;
-    if (numTransparents == 0)
+    if (numTrPixels == 0)
         state = OPTIX_OPACITY_MICROMAP_STATE_OPAQUE;
-    else if (numTransparents == numPixels)
+    else if (numTrPixels == numPixels)
         state = OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
-    else if (2 * numTransparents < numPixels)
+    else if (2 * numTrPixels < numPixels)
         state = OPTIX_OPACITY_MICROMAP_STATE_UNKNOWN_OPAQUE;
     else
         state = OPTIX_OPACITY_MICROMAP_STATE_UNKNOWN_TRANSPARENT;
@@ -454,7 +453,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
 }
 
 CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
-    const Vertex* vertices, const Triangle* triangles, uint32_t numTriangles,
+    const uint8_t* texCoords, uint64_t vertexStride,
+    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     const uint64_t* ommOffsets,
     volatile uint32_t* numFetchedTriangles,
@@ -475,10 +475,10 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
             if (triIdx >= numTriangles)
                 return;
 
-            const Triangle &tri = triangles[triIdx];
-            const float2 tcA = vertices[tri.index0].texCoord;
-            const float2 tcB = vertices[tri.index1].texCoord;
-            const float2 tcC = vertices[tri.index2].texCoord;
+            auto &tri = reinterpret_cast<const Triangle &>(triangles[triangleStride * triIdx]);
+            const float2 tcA = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index0]);
+            const float2 tcB = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index1]);
+            const float2 tcC = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index2]);
             const float2 fTexSize = make_float2(texSize.x, texSize.y);
 
             const uint64_t ommOffset = ommOffsets[triIdx];

@@ -17,7 +17,7 @@
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
-    <ClCompile Include="omm_generator.cpp" />
+    <ClCompile Include="..\common\omm_generator.cpp" />
     <ClCompile Include="opacity_micro_map_main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -30,11 +30,11 @@
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\obj_loader.h" />
-    <ClInclude Include="omm_generator.h" />
+    <ClInclude Include="..\common\omm_generator.h" />
     <ClInclude Include="opacity_micro_map_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="omm_kernels.cu">
+    <CudaCompile Include="..\common\omm_kernels.cu">
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>

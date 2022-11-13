@@ -216,6 +216,15 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibilityWithAlpha)() {
     }
 }
 
+/*
+JP: アルファテクスチャーの貼られた物体におけるシャドウレイでは通常Any-Hit Programを使用するが、
+    Opacity Micro-Mapを適用すると遮蔽があると判定されるFully-OpaqueなMicro Triangleに関しても
+    Any-Hitが呼ばれなくなるため、Closest-Hitでも可視性をゼロにセットする処理が必要になる。
+EN: Shadow rays for alpha-textured object usually use an any-hit program.
+    However when using opacity micro-map, the any-hit program will never be called even for fully-opaque
+    micro triangle where it should find occulusion. Therefore, a closest-hit program to set
+    the visibility to zero is required.
+*/
 CUDA_DEVICE_KERNEL void RT_CH_NAME(visibilityWithAlpha)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryInstanceData &geomInst = sbtr.geomInstData;

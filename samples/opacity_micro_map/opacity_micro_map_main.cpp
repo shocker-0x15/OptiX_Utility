@@ -25,11 +25,12 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
-#include "omm_generator.h"
 #include "../../ext/cubd/cubd.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
     auto visualizationMode = Shared::VisualizationMode_Final;
+    shared::OMMFormat maxOmmSubDivLevel = shared::OMMFormat_Level4;
+    int32_t ommSubdivLevelBias = 0;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -46,6 +47,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 visualizationMode = Shared::VisualizationMode_NumShadowAnyHits;
             else
                 throw std::runtime_error("Argument for --visualize is invalid.");
+            argIdx += 1;
+        }
+        else if (arg == "--max-subdiv-level") {
+            if (argIdx + 1 >= argc)
+                throw std::runtime_error("Argument for --max-subdiv-level is not complete.");
+            uint32_t level = std::atoi(argv[argIdx + 1]);
+            if (level < 0 || level > shared::OMMFormat_Level12)
+                throw std::runtime_error("Invalid OMM subdivision level.");
+            maxOmmSubDivLevel = static_cast<shared::OMMFormat>(level);
+            argIdx += 1;
+        }
+        else if (arg == "--subdiv-level-bias") {
+            if (argIdx + 1 >= argc)
+                throw std::runtime_error("Argument for --subdiv-level-bias is not complete.");
+            ommSubdivLevelBias = std::atoi(argv[argIdx + 1]);
             argIdx += 1;
         }
         else
@@ -166,7 +182,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer ommBuildScratchMem;
     cudau::Buffer asBuildScratchMem;
 
-    using OMMIndexType = uint16_t;
+    using OMMIndexType = int16_t;
 
     struct Geometry {
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
@@ -298,7 +314,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cudau::TypedBuffer<uint32_t> counter(
             cuContext, cudau::BufferType::Device, 1);
         cudau::TypedBuffer<uint32_t> ommFormatCounts(
-            cuContext, cudau::BufferType::Device, Shared::NumOMMFormats);
+            cuContext, cudau::BufferType::Device, shared::NumOMMFormats);
 
         size_t sizeOfScratchMemForScan;
         cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
@@ -346,20 +362,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             /*
             */
-            evaluatePerTriangleStates(
-                tree.vertexBuffer, group.triangleBuffer, numTriangles,
+            countOMMFormats(
+                tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
+                group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                 group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
+                maxOmmSubDivLevel, ommSubdivLevelBias,
                 counter, scratchMemForScan,
                 ommFormatCounts, ommSizes);
 
-            uint32_t ommFormatCountsOnHost[Shared::NumOMMFormats];
-            ommFormatCounts.read(ommFormatCountsOnHost, Shared::NumOMMFormats, 0);
+            uint32_t ommFormatCountsOnHost[shared::NumOMMFormats];
+            ommFormatCounts.read(ommFormatCountsOnHost, shared::NumOMMFormats, 0);
             uint64_t rawOmmArraySize = ommSizes[numTriangles];
             std::vector<OptixOpacityMicromapUsageCount> ommUsageCounts;
             if (rawOmmArraySize > 0) {
                 uint32_t numOmms = 0;
                 std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries;
-                for (int i = 1; i < Shared::NumOMMFormats; ++i) {
+                for (int i = 1; i < shared::NumOMMFormats; ++i) {
                     uint32_t count = ommFormatCountsOnHost[i];
                     if (count == 0)
                         continue;
@@ -407,7 +425,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 /*
                 */
                 generateOMMArray(
-                    tree.vertexBuffer, group.triangleBuffer, numTriangles,
+                    tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
+                    group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                     group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
                     ommSizes, counter,
                     group.rawOmmArray, group.ommDescs, group.ommIndexBuffer, sizeof(OMMIndexType));
