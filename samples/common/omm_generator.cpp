@@ -2,15 +2,15 @@
 #include "../../ext/cubd/cubd.h"
 
 static CUmodule s_ommModule;
-static cudau::Kernel s_evaluateTriangleTransparencies;
+static cudau::Kernel s_countOMMFormats;
 static cudau::Kernel s_createOMMDescriptors;
 static cudau::Kernel s_evaluateMicroTriangleTransparencies;
 
-void evaluatePerTriangleStates(
-    const cudau::TypedBuffer<Shared::Vertex> &vertices,
-    const cudau::TypedBuffer<Shared::Triangle> &triangles,
-    uint32_t numTriangles,
+void countOMMFormats(
+    CUdeviceptr texCoords, size_t vertexStride,
+    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
+    shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     const cudau::TypedBuffer<uint32_t> &counter,
     const cudau::Buffer &scratchMemForScan,
     const cudau::TypedBuffer<uint32_t> &ommFormatCounts,
@@ -20,8 +20,8 @@ void evaluatePerTriangleStates(
         CUDADRV_CHECK(cuModuleLoad(
             &s_ommModule,
             (getExecutableDirectory() / "opacity_micro_map/ptxes/omm_kernels.ptx").string().c_str()));
-        s_evaluateTriangleTransparencies.set(
-            s_ommModule, "evaluateTriangleTransparencies", cudau::dim3(32), 0);
+        s_countOMMFormats.set(
+            s_ommModule, "countOMMFormats", cudau::dim3(32), 0);
         s_createOMMDescriptors.set(
             s_ommModule, "createOMMDescriptors", cudau::dim3(32), 0);
         s_evaluateMicroTriangleTransparencies.set(
@@ -34,10 +34,11 @@ void evaluatePerTriangleStates(
     counter.fill(0, stream);
     ommFormatCounts.fill(0, stream);
 
-    s_evaluateTriangleTransparencies(
+    s_countOMMFormats(
         stream, cudau::dim3(1024),
-        vertices, triangles, numTriangles,
+        texCoords, vertexStride, triangles, triangleStride, numTriangles,
         texture, texSize, numChannels, alphaChannelIndex,
+        maxSubdivLevel, subdivLevelBias,
         counter,
         ommFormatCounts, ommOffsets);
 
@@ -51,9 +52,8 @@ void evaluatePerTriangleStates(
 }
 
 void generateOMMArray(
-    const cudau::TypedBuffer<Shared::Vertex> &vertices,
-    const cudau::TypedBuffer<Shared::Triangle> &triangles,
-    uint32_t numTriangles,
+    CUdeviceptr texCoords, size_t vertexStride,
+    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
     const cudau::TypedBuffer<uint64_t> &ommOffsets,
     const cudau::TypedBuffer<uint32_t> &counter,
@@ -77,7 +77,7 @@ void generateOMMArray(
     counter.fill(0, stream);
     s_evaluateMicroTriangleTransparencies(
         stream, cudau::dim3(1024),
-        vertices, triangles, numTriangles,
+        texCoords, vertexStride, triangles, triangleStride, numTriangles,
         texture, texSize, numChannels, alphaChannelIndex,
         ommOffsets, counter, ommArray);
 
