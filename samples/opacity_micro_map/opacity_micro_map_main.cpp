@@ -6,7 +6,8 @@ JP: このサンプルはAny-Hit Program呼び出しを削減することでア�
     GASの生成時に追加情報として渡すことで少量の追加メモリと引き換えにAny-Hit Programの呼び出し回数を削減し、
     アルファテストなどが有効なジオメトリに対するレイトレーシングを高速化することができます。
     OptiXのAPIにはOMM自体の生成処理は含まれていないため、何らかの手段を用いて生成する必要がありますが、
-    このサンプルにはOMMの生成処理も含まれています。
+    このサンプルにはOMMの生成処理も含まれています。OMM生成処理はテクスチャーとメッシュ間のマッピング、
+    テクスチャー自体が静的な場合オフラインで予め行うことも可能です。
 
 EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha tests, etc. by reducing
     any-hit program calls.
@@ -14,7 +15,8 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
     Providing OMM as additional information when building a GAS costs a bit of additional memory but
     reduces any-hit program calls to accelerate ray tracing for geometries with alpha tests.
     OptiX API doesn't provide generation of OMM itself, so OMM generation by some means is required.
-    This sample also provide OMM generation.
+    This sample also provide OMM generation. OMM generation can be offline pre-computation if
+    the mapping between a texture and a mesh and the texture itself are static.
 
 */
 
