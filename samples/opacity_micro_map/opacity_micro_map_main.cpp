@@ -27,6 +27,8 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
+static constexpr bool useSimpleScene = false;
+
 int32_t main(int32_t argc, const char* argv[]) try {
     auto visualizationMode = Shared::VisualizationMode_Final;
     shared::OMMFormat maxOmmSubDivLevel = shared::OMMFormat_Level4;
