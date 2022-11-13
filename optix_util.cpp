@@ -722,7 +722,7 @@ namespace optixu {
 
             if (geom.opacityMicroMapArray) {
                 // TODO: どの情報が更新可能なのか調べる。
-                throwRuntimeError(geom.opacityMicroMapArray->isReady(), "OMM array is not ready");
+                throwRuntimeError(geom.opacityMicroMapArray->isReady(), "OMM array is not ready.");
                 OptixBuildInputOpacityMicromap &ommInput = triArray.opacityMicromap;
                 ommInput.opacityMicromapArray = geom.opacityMicroMapArray->getBuffer().getCUdeviceptr();
                 ommInput.micromapUsageCounts = geom.opacityMicroMapUsageCounts.data();
@@ -1038,7 +1038,7 @@ namespace optixu {
             std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
             "This geometry instance was created not for triangles.");
         m->throwRuntimeError(
-            indexSize >= 1 && indexSize <= 4,
+            indexSize == 2 || indexSize == 4,
             "Invalid index offset size.");
         m->throwRuntimeError(
             !ommIndexBuffer.isValid() || ommIndexBuffer.stride() >= indexSize,
