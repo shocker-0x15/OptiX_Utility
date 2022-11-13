@@ -4,20 +4,20 @@
 
 namespace shared {
     enum OMMFormat : uint32_t {
-        OMMFormat_None = 0,
-        OMMFormat_Level0,  //        1 micro-tris,
-        OMMFormat_Level1,  //        4 micro-tris,
-        OMMFormat_Level2,  //       16 micro-tris
-        OMMFormat_Level3,  //       64 micro-tris
-        OMMFormat_Level4,  //      256 micro-tris
-        OMMFormat_Level5,  //     1024 micro-tris
-        OMMFormat_Level6,  //     4096 micro-tris
-        OMMFormat_Level7,  //    16384 micro-tris
-        OMMFormat_Level8,  //    65536 micro-tris
-        OMMFormat_Level9,  //   262144 micro-tris
-        OMMFormat_Level10, //  1048576 micro-tris
-        OMMFormat_Level11, //  4194394 micro-tris
-        OMMFormat_Level12, // 16777216 micro-tris
+        OMMFormat_Level0 = 0, //        1 micro-tris,
+        OMMFormat_Level1,     //        4 micro-tris,
+        OMMFormat_Level2,     //       16 micro-tris
+        OMMFormat_Level3,     //       64 micro-tris
+        OMMFormat_Level4,     //      256 micro-tris
+        OMMFormat_Level5,     //     1024 micro-tris
+        OMMFormat_Level6,     //     4096 micro-tris
+        OMMFormat_Level7,     //    16384 micro-tris
+        OMMFormat_Level8,     //    65536 micro-tris
+        OMMFormat_Level9,     //   262144 micro-tris
+        OMMFormat_Level10,    //  1048576 micro-tris
+        OMMFormat_Level11,    //  4194394 micro-tris
+        OMMFormat_Level12,    // 16777216 micro-tris
+        OMMFormat_None,
         NumOMMFormats
     };
 

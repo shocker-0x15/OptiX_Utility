@@ -1249,7 +1249,7 @@ namespace optixu {
         return geom.triangleBuffer;
     }
 
-    OpacityMicroMapArray GeometryInstance::getOpacityMicroMapBuffer(
+    OpacityMicroMapArray GeometryInstance::getOpacityMicroMapArray(
         BufferView* ommIndexBuffer,
         uint32_t* indexSize, uint32_t* indexOffset) const {
         m->throwRuntimeError(

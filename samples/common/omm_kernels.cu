@@ -279,13 +279,13 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                 const bool singleState =
                     state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
                     state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
-                const int32_t minLevel = static_cast<int32_t>(minSubdivLevel) - 1;
-                const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel) - 1;
+                const int32_t minLevel = static_cast<int32_t>(minSubdivLevel);
+                const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
                 const int32_t level = singleState ? 0 :
                     min(max(static_cast<int32_t>(
                         std::log(static_cast<float>(numPixels)) / std::log(4.0f)
                         ) - 4 + subdivLevelBias, minLevel), maxLevel); // -4: ad-hoc offset
-                atomicAdd(&ommFormatCounts[singleState ? 0 : (1 + level)], 1u);
+                atomicAdd(&ommFormatCounts[singleState ? OMMFormat_None : level], 1u);
 
                 // JP: Dword単位に切り上げた三角形のOMMサイズを記録する。
                 // EN: Record the OMM size of the triangle with rounding up to in Dwords.

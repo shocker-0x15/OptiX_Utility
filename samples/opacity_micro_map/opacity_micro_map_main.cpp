@@ -52,10 +52,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         else if (arg == "--max-subdiv-level") {
             if (argIdx + 1 >= argc)
                 throw std::runtime_error("Argument for --max-subdiv-level is not complete.");
-            uint32_t level = std::atoi(argv[argIdx + 1]);
+            int32_t level = std::atoi(argv[argIdx + 1]);
             if (level < 0 || level > shared::OMMFormat_Level12)
                 throw std::runtime_error("Invalid OMM subdivision level.");
-            maxOmmSubDivLevel = static_cast<shared::OMMFormat>(1 + level);
+            maxOmmSubDivLevel = static_cast<shared::OMMFormat>(level);
             argIdx += 1;
         }
         else if (arg == "--subdiv-level-bias") {
@@ -293,11 +293,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cuContext, cudau::BufferType::Device,
             reinterpret_cast<Shared::Vertex*>(vertices.data()), vertices.size());
 
+        // JP: ここではデフォルト値を使っているが、GASにはOpacity Micro-Mapに関連する設定がある。
+        // EN: GAS has settings related opacity micro-map while the default values are used here.
         tree.optixGas = scene.createGeometryAccelerationStructure();
         tree.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
-            optixu::AllowCompaction::Yes);
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No,
+            optixu::AllowOpacityMicroMapUpdate::No,
+            optixu::AllowDisableOpacityMicroMaps::No);
         tree.optixGas.setNumMaterialSets(1);
         tree.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
 
@@ -368,10 +373,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (rawOmmArraySize > 0) {
                 uint32_t numOmms = 0;
                 std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries;
-                hpprintf("None    : %u\n", ommFormatCounts[0]);
-                for (int i = 1; i < shared::NumOMMFormats; ++i) {
+                hpprintf("None    : %u\n", ommFormatCounts[shared::OMMFormat_None]);
+                for (int i = 0; i <= shared::OMMFormat_Level12; ++i) {
                     uint32_t count = ommFormatCounts[i];
-                    hpprintf("Level %2u: %u\n", i - 1, count);
+                    hpprintf("Level %2u: %u\n", i, count);
                     if (count == 0)
                         continue;
 
