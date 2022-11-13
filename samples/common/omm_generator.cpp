@@ -10,7 +10,7 @@ void countOMMFormats(
     CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
-    shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
+    shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     const cudau::TypedBuffer<uint32_t> &counter,
     const cudau::Buffer &scratchMemForScan,
     const cudau::TypedBuffer<uint32_t> &ommFormatCounts,
@@ -34,11 +34,12 @@ void countOMMFormats(
     counter.fill(0, stream);
     ommFormatCounts.fill(0, stream);
 
+    maxSubdivLevel = std::max(minSubdivLevel, maxSubdivLevel);
     s_countOMMFormats(
         stream, cudau::dim3(1024),
         texCoords, vertexStride, triangles, triangleStride, numTriangles,
         texture, texSize, numChannels, alphaChannelIndex,
-        maxSubdivLevel, subdivLevelBias,
+        minSubdivLevel, maxSubdivLevel, subdivLevelBias,
         counter,
         ommFormatCounts, ommOffsets);
 
@@ -67,12 +68,6 @@ void generateOMMArray(
         ommOffsets, numTriangles,
         counter,
         ommDescs, ommIndexBuffer, ommIndexSize);
-    //CUDADRV_CHECK(cuStreamSynchronize(stream));
-    //std::vector<OptixOpacityMicromapDesc> ommDescsOnHost = ommDescs;
-    //std::vector<uint16_t> ommIndicesOnHost(numTriangles);
-    //ommIndexBuffer.read(ommIndicesOnHost);
-    //uint32_t numOmms;
-    //counter.read(&numOmms, 1u);
 
     counter.fill(0, stream);
     s_evaluateMicroTriangleTransparencies(

@@ -4,7 +4,9 @@
 
 namespace shared {
     enum OMMFormat : uint32_t {
-        OMMFormat_None = 0, // TODO: Level 0は無視？
+        // TODO: Level 0は無視？
+        //       Level 1のストライドが1バイトになってしまうので正しく動かない。
+        OMMFormat_None = 0,
         OMMFormat_Level1, // 4 micro-tris,
         OMMFormat_Level2, // 16 micro-tris
         OMMFormat_Level3, // 64 micro-tris
@@ -27,7 +29,7 @@ void countOMMFormats(
     CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
-    shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
+    shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     const cudau::TypedBuffer<uint32_t> &counter,
     const cudau::Buffer &scratchMemForScan,
     const cudau::TypedBuffer<uint32_t> &ommFormatCounts,

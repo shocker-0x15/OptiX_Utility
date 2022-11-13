@@ -360,13 +360,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 geomData.texture = group.texObj;
             }
 
-            /*
-            */
+            // JP: まずは各三角形のOMMフォーマットを決定する。
+            // EN: Fisrt, determine the OMM format of each triangle.
             countOMMFormats(
                 tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
                 group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                 group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
-                maxOmmSubDivLevel, ommSubdivLevelBias,
+                shared::OMMFormat_Level2, maxOmmSubDivLevel, ommSubdivLevelBias,
                 counter, scratchMemForScan,
                 ommFormatCounts, ommSizes);
 
@@ -388,11 +388,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     histEntry.subdivisionLevel = i;
                     ommHistogramEntries.push_back(histEntry);
 
-                    // JP: このサンプルではあるアルファテクスチャを使用する三角形メッシュと
-                    //     OMM Arrayが一対一対応なのでヒストグラムと各OMM種別の参照回数は同じになる。
-                    // EN: Each usage count of an OMM type becomes the same as the histogram entry
-                    //     since an OMM array and a triangle mesh with an alpha texture are one-to-one mapping
-                    //     in this sample.
+                    /*
+                    JP: このサンプルではあるアルファテクスチャを使用する三角形メッシュと
+                        OMM Arrayが一対一対応なのでOMM Array中のヒストグラムと
+                        メッシュにおける各OMM種別の参照回数は同じになる。
+                    EN: Each usage count of an OMM type in the mesh becomes the same as the histogram entry
+                        in the OMM array since an OMM array and a triangle mesh with an alpha texture are
+                        one-to-one mapping in this sample.
+                    */
                     OptixOpacityMicromapUsageCount usageEntry;
                     usageEntry.count = count;
                     usageEntry.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
@@ -422,8 +425,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group.ommIndexBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles);
                 group.optixOmmArray.setBuffers(group.rawOmmArray, group.ommDescs, group.ommArrayMem);
 
-                /*
-                */
+                // JP: 各三角形のOMMを生成する。
+                // EN: Generate an OMM for each triangle.
                 generateOMMArray(
                     tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
@@ -432,15 +435,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     group.rawOmmArray, group.ommDescs, group.ommIndexBuffer, sizeof(OMMIndexType));
             }
 
-            /*
-            JP: 処理によっては完全にOpaqueなジオメトリはAny-Hit呼び出しが起こらないように
-                ジオメトリフラグを設定しても良いかもしれない。
-                このサンプルではOpaquenessに関わらずシャドウレイの処理にAny-Hitを使っているため無効化できない。
-            EN: 
-            */
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(tree.vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
+            // JP: OMM ArrayをGeometryInstanceにセットする。
+            // EN: Set the OMM array to the geometry instance.
             if (group.optixOmmArray)
                 group.optixGeomInst.setOpacityMicroMapArray(
                     group.optixOmmArray, ommUsageCounts.data(), ommUsageCounts.size(),

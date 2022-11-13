@@ -82,11 +82,18 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeFlatTriangle(
         yEnd = static_cast<int32_t>(ps[0].y) + ignoreFirstLine;
     }
 
+    /*
+    JP: 三角形をラスタライズして各スレッドでテクスチャーフェッチ、総ピクセル数と透明ピクセル数をカウントする。
+    EN: Rasterize the triangle and fetch the texture by each thread, then count the total number of pixels
+        and the number of transparent pixels.
+    */
     int32_t curX = static_cast<int32_t>(curXFBegin);
     int32_t curXEnd = static_cast<int32_t>(curXFEnd);
     uint32_t curNumItemsPerWarp = 0;
     int2 item = make_int2(INT32_MAX, INT32_MAX);
     while (triType == FlatTriangleType::BottomFlat ? curY <= yEnd : curY >= yEnd) {
+        // JP: Warpの空いているスレッドにタスクを充填する。
+        // EN: Assign tasks to available threads in the warp.
         const uint32_t numItemsToFill =
             min(curXEnd - curX + 1, static_cast<int32_t>(WarpSize - curNumItemsPerWarp));
         if (threadIdx.x >= curNumItemsPerWarp &&
@@ -94,12 +101,16 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeFlatTriangle(
             item = make_int2(curX + threadIdx.x - curNumItemsPerWarp, curY);
         curNumItemsPerWarp += numItemsToFill;
         *numPixels += numItemsToFill;
+
+        // JP: Warpがいっぱいになったらテクスチャーフェッチを実行する。
+        // EN: Once the warp becomes full, perform texture fetch.
         if (curNumItemsPerWarp == WarpSize) {
             const float alpha = fetchAlpha(texture, texSize, numChannels, alphaChannelIdx, item);
             const uint32_t numTrsInWarp = __popc(__ballot_sync(0xFFFFFFFF, isTransparent(alpha)));
             *numTransparentPixels += numTrsInWarp;
             curNumItemsPerWarp = 0;
         }
+
         curX += numItemsToFill;
         if (curX > curXEnd) {
             curXFBegin += invBeginSlope;
@@ -112,6 +123,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeFlatTriangle(
                 --curY;
         }
     }
+    // JP: 最後に余ったテクスチャーフェッチタスクを実行する。
+    // EN: Finally, perform the remaining texture fetch tasks.
     if (curNumItemsPerWarp > 0) {
         float alpha = 1.0f;
         if (threadIdx.x < curNumItemsPerWarp)
@@ -216,7 +229,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
     const uint8_t* texCoords, uint64_t vertexStride,
     const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
-    OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
+    OMMFormat minSubdivLevel, OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     volatile uint32_t* numFetchedTriangles,
     uint32_t* ommFormatCounts, uint64_t* ommSizes) {
     while (true) {
@@ -227,12 +240,13 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
         if (curNumFetches >= numTriangles)
             return;
 
+        constexpr uint32_t numTrisPerFetch = 8;
         uint32_t baseTriIdx;
         if (threadIdx.x == 0)
-            baseTriIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), WarpSize);
+            baseTriIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
         baseTriIdx = __shfl_sync(0xFFFFFFFF, baseTriIdx, 0);
 
-        for (uint32_t triSubIdx = 0; triSubIdx < WarpSize; ++triSubIdx) {
+        for (uint32_t triSubIdx = 0; triSubIdx < numTrisPerFetch; ++triSubIdx) {
             // JP: Warp中の全スレッドが同じ三角形を処理する。
             // EN: All the threads in a warp process the same triangle.
             const uint32_t triIdx = baseTriIdx + triSubIdx;
@@ -248,8 +262,12 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                 &numTransparentPixels, &numPixels);
 
             if (threadIdx.x == 0) {
+                // JP: ラスタライズされた結果のテクセル数から分割レベルを計算する。
+                //     他にも良い指標があるかもしれない。
+                // EN: Determine the subdivision level from the number of texels computed from the rasterization.
+                //     There may be other good parameters.
                 const bool singleState = numTransparentPixels == 0 || numTransparentPixels == numPixels;
-                constexpr int32_t minLevel = OMMFormat_None;
+                const int32_t minLevel = static_cast<int32_t>(minSubdivLevel);
                 const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
                 const int32_t level = singleState ? 0 :
                     min(max(static_cast<int32_t>(
@@ -463,12 +481,13 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
         if (*numFetchedTriangles >= numTriangles)
             return;
 
+        constexpr uint32_t numTrisPerFetch = 8;
         uint32_t baseTriIdx;
         if (threadIdx.x == 0)
-            baseTriIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), WarpSize);
+            baseTriIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
         baseTriIdx = __shfl_sync(0xFFFFFFFF, baseTriIdx, 0);
 
-        for (uint32_t triSubIdx = 0; triSubIdx < WarpSize; ++triSubIdx) {
+        for (uint32_t triSubIdx = 0; triSubIdx < numTrisPerFetch; ++triSubIdx) {
             // JP: Warp中の全スレッドが同じ三角形を処理する。
             // EN: All the threads in a warp process the same triangle.
             const uint32_t triIdx = baseTriIdx + triSubIdx;
@@ -497,7 +516,7 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
             const uint32_t numMicroTris = 4 * ommSize;
             const uint32_t ommLevel = tzcnt(numMicroTris) >> 1;
             for (uint32_t microTriBaseIdx = 0; microTriBaseIdx < numMicroTris; microTriBaseIdx += WarpSize) {
-                // JP: 各スレッドがマイクロ三角形のステートを計算する。
+                // JP: 各スレッドがMicro Triangleのステートを計算する。
                 // EN: Each thread computes the state of a micro triangle.
                 // TODO: Upper/Lower Micro-Triangleを適切に振り分けてDivergenceを抑える。
                 const uint32_t microTriIdx = microTriBaseIdx + threadIdx.x;
