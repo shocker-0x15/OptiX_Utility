@@ -31,10 +31,15 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- JP: - Opacity Micro-Mapをサポート。
+  EN: - Supported opacity micro-map.
+
 - !!BREAKING
-  JP: - ホスト側APIのbool引数それぞれの個別の型を定義。
+  JP: - OptiX 7.6.0をサポート。
+      - ホスト側APIのbool引数それぞれの個別の型を定義。
       - Pipeline::setPipelineOptions()の引数の順序を変更。
-  EN: - Defined a dedicated type for each bool parameter of the host-side API.
+  EN: - Supported OptiX 7.6.0.
+      - Defined a dedicated type for each bool parameter of the host-side API.
       - Changed the order of parameters of Pipeline::setPipelineOptions().
 
 - !!BREAKING

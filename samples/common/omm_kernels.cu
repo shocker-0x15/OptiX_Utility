@@ -47,6 +47,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE bool isTransparent(float alpha) {
 
 
 
+// TODO: Conservativeなラスタライザーの実装。
+
 enum class FlatTriangleType {
     BottomFlat,
     TopFlat,

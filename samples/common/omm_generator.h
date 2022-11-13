@@ -4,8 +4,8 @@
 
 namespace shared {
     enum OMMFormat : uint32_t {
-        OMMFormat_Level0 = 0, //        1 micro-tris,
-        OMMFormat_Level1,     //        4 micro-tris,
+        OMMFormat_Level0 = 0, //        1 micro-tris
+        OMMFormat_Level1,     //        4 micro-tris
         OMMFormat_Level2,     //       16 micro-tris
         OMMFormat_Level3,     //       64 micro-tris
         OMMFormat_Level4,     //      256 micro-tris

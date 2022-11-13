@@ -3,8 +3,6 @@
 #include "../common/common.h"
 #include "../common/omm_generator.h"
 
-static constexpr bool useSimpleScene = true;
-
 namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;
 
