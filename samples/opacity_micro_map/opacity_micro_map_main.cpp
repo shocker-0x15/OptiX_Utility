@@ -27,8 +27,6 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
-#include "../../ext/cubd/cubd.h"
-
 int32_t main(int32_t argc, const char* argv[]) try {
     auto visualizationMode = Shared::VisualizationMode_Final;
     shared::OMMFormat maxOmmSubDivLevel = shared::OMMFormat_Level4;
@@ -57,7 +55,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             uint32_t level = std::atoi(argv[argIdx + 1]);
             if (level < 0 || level > shared::OMMFormat_Level12)
                 throw std::runtime_error("Invalid OMM subdivision level.");
-            maxOmmSubDivLevel = static_cast<shared::OMMFormat>(level);
+            maxOmmSubDivLevel = static_cast<shared::OMMFormat>(1 + level);
             argIdx += 1;
         }
         else if (arg == "--subdiv-level-bias") {
@@ -311,19 +309,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 static_cast<uint32_t>(srcGroup.triangles.size()));
         }
 
-        cudau::TypedBuffer<uint64_t> ommSizes(
-            cuContext, cudau::BufferType::Device, maxNumTrianglesPerGroup + 1);
-        cudau::TypedBuffer<uint32_t> counter(
-            cuContext, cudau::BufferType::Device, 1);
-        cudau::TypedBuffer<uint32_t> ommFormatCounts(
-            cuContext, cudau::BufferType::Device, shared::NumOMMFormats);
-
-        size_t sizeOfScratchMemForScan;
-        cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
-            nullptr, sizeOfScratchMemForScan,
-            nullptr, nullptr, maxNumTrianglesPerGroup + 1);
-        cudau::Buffer scratchMemForScan;
-        scratchMemForScan.initialize(cuContext, cudau::BufferType::Device, sizeOfScratchMemForScan, 1);
+        size_t scratchMemSizeForOMM = getScratchMemSizeForOMMGeneration(maxNumTrianglesPerGroup);
+        cudau::Buffer scratchMemForOMM;
+        scratchMemForOMM.initialize(cuContext, cudau::BufferType::Device, scratchMemSizeForOMM, 1);
 
         for (int groupIdx = 0; groupIdx < matGroups.size(); ++groupIdx) {
             const obj::MaterialGroup &srcGroup = matGroups[groupIdx];
@@ -364,23 +352,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // JP: まずは各三角形のOMMフォーマットを決定する。
             // EN: Fisrt, determine the OMM format of each triangle.
+            uint32_t ommFormatCounts[shared::NumOMMFormats];
+            uint64_t rawOmmArraySize;
             countOMMFormats(
                 tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
                 group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                 group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
-                shared::OMMFormat_Level2, maxOmmSubDivLevel, ommSubdivLevelBias,
-                counter, scratchMemForScan,
-                ommFormatCounts, ommSizes);
+                shared::OMMFormat_Level0, maxOmmSubDivLevel, ommSubdivLevelBias,
+                scratchMemForOMM,
+                ommFormatCounts, &rawOmmArraySize);
 
-            uint32_t ommFormatCountsOnHost[shared::NumOMMFormats];
-            ommFormatCounts.read(ommFormatCountsOnHost, shared::NumOMMFormats, 0);
-            uint64_t rawOmmArraySize = ommSizes[numTriangles];
             std::vector<OptixOpacityMicromapUsageCount> ommUsageCounts;
+            hpprintf("Group %u (%u tris): OMM %s\n",
+                     groupIdx, numTriangles, rawOmmArraySize > 0 ? "Enabled" : "Disabled");
             if (rawOmmArraySize > 0) {
                 uint32_t numOmms = 0;
                 std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries;
+                hpprintf("None    : %u\n", ommFormatCounts[0]);
                 for (int i = 1; i < shared::NumOMMFormats; ++i) {
-                    uint32_t count = ommFormatCountsOnHost[i];
+                    uint32_t count = ommFormatCounts[i];
+                    hpprintf("Level %2u: %u\n", i - 1, count);
                     if (count == 0)
                         continue;
 
@@ -404,8 +395,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     usageEntry.subdivisionLevel = i;
                     ommUsageCounts.push_back(usageEntry);
 
-                    numOmms += ommFormatCountsOnHost[i];
+                    numOmms += ommFormatCounts[i];
                 }
+                hpprintf("\n");
 
                 group.optixOmmArray = scene.createOpacityMicroMapArray();
 
@@ -433,7 +425,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                     group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
-                    ommSizes, counter,
+                    scratchMemForOMM,
                     group.rawOmmArray, group.ommDescs, group.ommIndexBuffer, sizeof(OMMIndexType));
             }
 
@@ -455,11 +447,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             tree.matGroups.push_back(std::move(group));
         }
 
-        scratchMemForScan.finalize();
-
-        ommSizes.finalize();
-        counter.finalize();
-        ommFormatCounts.finalize();
+        scratchMemForOMM.finalize();
 
         tree.optixGas.prepareForBuild(&asMemReqs);
         tree.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -626,8 +614,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     if constexpr (useSimpleScene) {
-        plp.camera.position = make_float3(0, 4.5f, 4.5f);
-        plp.camera.orientation = rotateY3x3(pi_v<float>) * rotateX3x3(pi_v<float> / 4.2f);
+        plp.camera.position = make_float3(0, 6.0f, 6.0f);
+        plp.camera.orientation = rotateY3x3(pi_v<float>) * rotateX3x3(pi_v<float> / 4.0f);
     }
     else {
         plp.camera.position = make_float3(0, 2, 5);

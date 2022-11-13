@@ -231,7 +231,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     OMMFormat minSubdivLevel, OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     volatile uint32_t* numFetchedTriangles,
-    uint32_t* ommFormatCounts, uint64_t* ommSizes) {
+    uint32_t* ommFormatCounts, uint32_t* perTriInfos, uint64_t* ommSizes) {
     while (true) {
         uint32_t curNumFetches;
         if (threadIdx.x == 0)
@@ -262,22 +262,45 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                 &numTransparentPixels, &numPixels);
 
             if (threadIdx.x == 0) {
+                uint32_t state;
+                if (numTransparentPixels == 0)
+                    state = OPTIX_OPACITY_MICROMAP_STATE_OPAQUE;
+                else if (numTransparentPixels == numPixels)
+                    state = OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
+                else if (2 * numTransparentPixels < numPixels)
+                    state = OPTIX_OPACITY_MICROMAP_STATE_UNKNOWN_OPAQUE;
+                else
+                    state = OPTIX_OPACITY_MICROMAP_STATE_UNKNOWN_TRANSPARENT;
+
                 // JP: ラスタライズされた結果のテクセル数から分割レベルを計算する。
                 //     他にも良い指標があるかもしれない。
                 // EN: Determine the subdivision level from the number of texels computed from the rasterization.
                 //     There may be other good parameters.
-                const bool singleState = numTransparentPixels == 0 || numTransparentPixels == numPixels;
-                const int32_t minLevel = static_cast<int32_t>(minSubdivLevel);
-                const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
+                const bool singleState =
+                    state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
+                    state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
+                const int32_t minLevel = static_cast<int32_t>(minSubdivLevel) - 1;
+                const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel) - 1;
                 const int32_t level = singleState ? 0 :
                     min(max(static_cast<int32_t>(
                         std::log(static_cast<float>(numPixels)) / std::log(4.0f)
                         ) - 4 + subdivLevelBias, minLevel), maxLevel); // -4: ad-hoc offset
-                atomicAdd(&ommFormatCounts[level], 1u);
+                atomicAdd(&ommFormatCounts[singleState ? 0 : (1 + level)], 1u);
 
-                const uint32_t ommSizeInBits = level == 0 ? 0 : 2 * (1 << (2 * level));
-                const uint32_t ommSizeInBytes = (ommSizeInBits + 7) / 8;
-                ommSizes[triIdx] = ommSizeInBytes;
+                // JP: Dword単位に切り上げた三角形のOMMサイズを記録する。
+                // EN: Record the OMM size of the triangle with rounding up to in Dwords.
+                const uint32_t ommSizeInBits = singleState ? 0 : 2 * (1 << (2 * level));
+                const uint32_t ommSizeInDwords = (ommSizeInBits + 31) / 32;
+                ommSizes[triIdx] = 4 * ommSizeInDwords;
+
+                // JP: 三角形の状態を記録する。
+                // EN: Record the triangle state.
+                PerTriInfo triInfo = {};
+                triInfo.state = state;
+                triInfo.level = level;
+                const uint32_t triInfoBinIdx = triIdx / 4;
+                const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
+                atomicOr(&perTriInfos[triInfoBinIdx], triInfo.asUInt << offsetInTriInfoBin);
             }
         }
     }
@@ -286,7 +309,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
 
 
 CUDA_DEVICE_KERNEL void createOMMDescriptors(
-    const uint64_t* ommOffsets, uint32_t numTriangles,
+    const uint32_t* perTriInfos, const uint64_t* ommOffsets, uint32_t numTriangles,
     uint32_t* descCounter,
     OptixOpacityMicromapDesc* ommDescs, void* ommIndices, uint32_t ommIndexSize) {
     const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -297,12 +320,15 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
     const auto ommIndices16 = reinterpret_cast<int16_t*>(ommIndices);
     const auto ommIndices32 = reinterpret_cast<int32_t*>(ommIndices);
 
-    const uint64_t ommOffset = ommOffsets[triIdx];
-    const uint32_t ommSize = static_cast<uint32_t>(ommOffsets[triIdx + 1] - ommOffset);
-    const uint32_t numMicroTris = 4 * ommSize;
-    const uint32_t ommLevel = tzcnt(numMicroTris) >> 1;
-    if (ommLevel == 0) {
-        const int32_t ommIndex = OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_OPAQUE;
+    const uint32_t triInfoBinIdx = triIdx / 4;
+    const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
+    PerTriInfo triInfo;
+    triInfo.asUInt = (perTriInfos[triInfoBinIdx] >> offsetInTriInfoBin) & 0xFF;
+
+    if (triInfo.state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
+        triInfo.state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT) {
+        // OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX
+        const int32_t ommIndex = -1 - triInfo.state;
         if (ommIndexSize == 1)
             ommIndices8[triIdx] = ommIndex;
         else if (ommIndexSize == 2)
@@ -312,18 +338,18 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
         return;
     }
 
-    const uint32_t descIdx = atomicAdd(descCounter, 1u);
+    const int32_t descIdx = static_cast<int32_t>(atomicAdd(descCounter, 1u));
     OptixOpacityMicromapDesc &ommDesc = ommDescs[descIdx];
-    ommDesc.byteOffset = ommOffset;
+    ommDesc.byteOffset = ommOffsets[triIdx];
     ommDesc.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
-    ommDesc.subdivisionLevel = ommLevel;
+    ommDesc.subdivisionLevel = triInfo.level;
 
     if (ommIndexSize == 1)
-        ommIndices8[triIdx] = static_cast<int32_t>(descIdx);
+        ommIndices8[triIdx] = descIdx;
     else if (ommIndexSize == 2)
-        ommIndices16[triIdx] = static_cast<int32_t>(descIdx);
+        ommIndices16[triIdx] = descIdx;
     else/* if (ommIndexSize == 4)*/
-        ommIndices32[triIdx] = static_cast<int32_t>(descIdx);
+        ommIndices32[triIdx] = descIdx;
 }
 
 
@@ -474,7 +500,7 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
     const uint8_t* texCoords, uint64_t vertexStride,
     const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
-    const uint64_t* ommOffsets,
+    const uint32_t* perTriInfos, const uint64_t* ommOffsets,
     volatile uint32_t* numFetchedTriangles,
     uint8_t* opacityMicroMaps) {
     while (true) {
@@ -493,6 +519,11 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
             const uint32_t triIdx = baseTriIdx + triSubIdx;
             if (triIdx >= numTriangles)
                 return;
+
+            const uint32_t triInfoBinIdx = triIdx / 4;
+            const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
+            PerTriInfo triInfo;
+            triInfo.asUInt = (perTriInfos[triInfoBinIdx] >> offsetInTriInfoBin) & 0xFF;
 
             auto &tri = reinterpret_cast<const Triangle &>(triangles[triangleStride * triIdx]);
             const float2 tcA = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index0]);
@@ -513,8 +544,7 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
                     reinterpret_cast<uint32_t*>(opacityMicroMap)[dwIdx] = 0;
             }
 
-            const uint32_t numMicroTris = 4 * ommSize;
-            const uint32_t ommLevel = tzcnt(numMicroTris) >> 1;
+            const uint32_t numMicroTris = 1 << (2 * triInfo.level);
             for (uint32_t microTriBaseIdx = 0; microTriBaseIdx < numMicroTris; microTriBaseIdx += WarpSize) {
                 // JP: 各スレッドがMicro Triangleのステートを計算する。
                 // EN: Each thread computes the state of a micro triangle.
@@ -524,7 +554,7 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
                     break;
 
                 float2 bc0, bc1, bc2;
-                optixMicromapIndexToBaseBarycentrics(microTriIdx, ommLevel, bc0, bc1, bc2);
+                optixMicromapIndexToBaseBarycentrics(microTriIdx, triInfo.level, bc0, bc1, bc2);
 
                 const float2 fPix0 =
                     fTexSize * ((1.0f - (bc0.x + bc0.y)) * tcA + bc0.x * tcB + bc0.y * tcC);

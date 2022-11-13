@@ -6,15 +6,7 @@ static cudau::Kernel s_countOMMFormats;
 static cudau::Kernel s_createOMMDescriptors;
 static cudau::Kernel s_evaluateMicroTriangleTransparencies;
 
-void countOMMFormats(
-    CUdeviceptr texCoords, size_t vertexStride,
-    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
-    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
-    shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
-    const cudau::TypedBuffer<uint32_t> &counter,
-    const cudau::Buffer &scratchMemForScan,
-    const cudau::TypedBuffer<uint32_t> &ommFormatCounts,
-    const cudau::TypedBuffer<uint64_t> &ommOffsets) {
+size_t getScratchMemSizeForOMMGeneration(uint32_t maxNumTriangles) {
     static bool isInitialized = false;
     if (!isInitialized) {
         CUDADRV_CHECK(cuModuleLoad(
@@ -29,10 +21,54 @@ void countOMMFormats(
         isInitialized = true;
     }
 
+    size_t size = 0;
+    // ommSizes / ommOffsets
+    size += sizeof(uint64_t) * (maxNumTriangles + 1);
+    // perTriInfos
+    size += sizeof(uint32_t) * ((maxNumTriangles + 3) / 4);
+    // counter
+    size += sizeof(uint32_t);
+    // ommFormatCounts
+    size += sizeof(uint32_t) * shared::NumOMMFormats;
+    // scratchMemForScan
+    size_t sizeOfScratchMemForScan;
+    cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
+        nullptr, sizeOfScratchMemForScan,
+        nullptr, nullptr, maxNumTriangles + 1);
+    size += sizeOfScratchMemForScan;
+
+    return size;
+}
+
+void countOMMFormats(
+    CUdeviceptr texCoords, size_t vertexStride,
+    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
+    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
+    shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
+    const cudau::Buffer &scratchMem,
+    uint32_t ommFormatCounts[shared::NumOMMFormats], uint64_t* rawOmmArraySize) {
     CUstream stream = 0;
 
-    counter.fill(0, stream);
-    ommFormatCounts.fill(0, stream);
+    CUdeviceptr scratchMemBase = scratchMem.getCUdeviceptr();
+    uint64_t curScratchMemOffset = 0;
+    CUdeviceptr ommSizes = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint64_t) * (numTriangles + 1);
+    CUdeviceptr perTriInfos = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t) * ((numTriangles + 3) / 4);
+    CUdeviceptr counter = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t);
+    CUdeviceptr ommFormatCountsOnDevice = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t) * shared::NumOMMFormats;
+    CUdeviceptr scratchMemForScan = scratchMemBase + curScratchMemOffset;
+    size_t sizeOfScratchMemForScan;
+    cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
+        nullptr, sizeOfScratchMemForScan,
+        nullptr, nullptr, numTriangles + 1);
+    //curScratchMemOffset += sizeOfScratchMemForScan;
+
+    CUDADRV_CHECK(cuMemsetD32Async(perTriInfos, 0, (numTriangles + 3) / 4, stream));
+    CUDADRV_CHECK(cuMemsetD32Async(ommFormatCountsOnDevice, 0, shared::NumOMMFormats, stream));
+    CUDADRV_CHECK(cuMemsetD32Async(counter, 0, 1, stream));
 
     maxSubdivLevel = std::max(minSubdivLevel, maxSubdivLevel);
     s_countOMMFormats(
@@ -41,40 +77,66 @@ void countOMMFormats(
         texture, texSize, numChannels, alphaChannelIndex,
         minSubdivLevel, maxSubdivLevel, subdivLevelBias,
         counter,
-        ommFormatCounts, ommOffsets);
+        ommFormatCountsOnDevice, perTriInfos, ommSizes);
 
-    size_t sizeOfScratchMemForScan = scratchMemForScan.sizeInBytes();
     cubd::DeviceScan::ExclusiveSum(
-        scratchMemForScan.getDevicePointer(), sizeOfScratchMemForScan,
-        ommOffsets.getDevicePointer(), ommOffsets.getDevicePointer(),
+        reinterpret_cast<void*>(scratchMemForScan), sizeOfScratchMemForScan,
+        reinterpret_cast<uint64_t*>(ommSizes), reinterpret_cast<uint64_t*>(ommSizes),
         numTriangles + 1, stream);
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));
+
+    CUDADRV_CHECK(cuMemcpyDtoH(
+        ommFormatCounts, ommFormatCountsOnDevice, sizeof(uint32_t) * shared::NumOMMFormats));
+    CUDADRV_CHECK(cuMemcpyDtoH(
+        rawOmmArraySize, ommSizes + sizeof(uint64_t) * numTriangles, sizeof(uint64_t)));
 }
 
 void generateOMMArray(
     CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
-    const cudau::TypedBuffer<uint64_t> &ommOffsets,
-    const cudau::TypedBuffer<uint32_t> &counter,
+    const cudau::Buffer &scratchMem,
     const cudau::Buffer &ommArray, const cudau::TypedBuffer<OptixOpacityMicromapDesc> &ommDescs,
     const cudau::Buffer &ommIndexBuffer, uint32_t ommIndexSize) {
     CUstream stream = 0;
 
-    counter.fill(0, stream);
+    CUdeviceptr scratchMemBase = scratchMem.getCUdeviceptr();
+    uint64_t curScratchMemOffset = 0;
+    CUdeviceptr ommOffsets = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint64_t) * (numTriangles + 1);
+    CUdeviceptr perTriInfos = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t) * ((numTriangles + 3) / 4);
+    CUdeviceptr counter = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t);
+    CUdeviceptr ommFormatCountsOnDevice = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t) * shared::NumOMMFormats;
+    CUdeviceptr scratchMemForScan = scratchMemBase + curScratchMemOffset;
+    size_t sizeOfScratchMemForScan;
+    cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
+        nullptr, sizeOfScratchMemForScan,
+        nullptr, nullptr, numTriangles + 1);
+    //curScratchMemOffset += sizeOfScratchMemForScan;
+
+    CUDADRV_CHECK(cuMemsetD32Async(counter, 0, 1, stream));
     s_createOMMDescriptors.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
-        ommOffsets, numTriangles,
+        perTriInfos, ommOffsets, numTriangles,
         counter,
         ommDescs, ommIndexBuffer, ommIndexSize);
+    //CUDADRV_CHECK(cuStreamSynchronize(stream));
+    //uint32_t counterOnHost;
+    //counter.read(&counterOnHost, 1);
+    //std::vector<OptixOpacityMicromapDesc> ommDescsOnHost = ommDescs;
+    //std::vector<int16_t> indicesOnHost;
+    //ommIndexBuffer.read(indicesOnHost);
 
-    counter.fill(0, stream);
+    CUDADRV_CHECK(cuMemsetD32Async(counter, 0, 1, stream));
     s_evaluateMicroTriangleTransparencies(
         stream, cudau::dim3(1024),
         texCoords, vertexStride, triangles, triangleStride, numTriangles,
         texture, texSize, numChannels, alphaChannelIndex,
-        ommOffsets, counter, ommArray);
+        perTriInfos, ommOffsets, counter, ommArray);
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));
 }
