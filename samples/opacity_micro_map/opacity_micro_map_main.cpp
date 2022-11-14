@@ -1,6 +1,6 @@
 ﻿/*
 
-JP: このサンプルはAny-Hit Program呼び出しを削減することでアルファテストなどを高速化する
+JP: このサンプルはAny-Hit Program呼び出しを削減することでアルファテストなどを高速化(*)する
     Opacity Micro-Map (OMM)の使用方法を示します。
     OMMは三角形メッシュにおけるテクスチャー等によるジオメトリの切り抜きに関する情報を事前計算したものです。
     GASの生成時に追加情報として渡すことで少量の追加メモリと引き換えにAny-Hit Programの呼び出し回数を削減し、
@@ -9,7 +9,9 @@ JP: このサンプルはAny-Hit Program呼び出しを削減することでア�
     このサンプルにはOMMの生成処理も含まれています。OMM生成処理はテクスチャーとメッシュ間のマッピング、
     テクスチャー自体が静的な場合オフラインで予め行うことも可能です。
 
-EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha tests, etc. by reducing
+    *: このサンプル自体はOMMの使い方の説明目的なので、シーンが単純すぎて高速化が確認できない可能性があります。
+
+EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha tests (*), etc. by reducing
     any-hit program calls.
     OMM is precomputed information regarding geometry cutouts by textures or something for triangle mesh.
     Providing OMM as additional information when building a GAS costs a bit of additional memory but
@@ -17,6 +19,9 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
     OptiX API doesn't provide generation of OMM itself, so OMM generation by some means is required.
     This sample also provide OMM generation. OMM generation can be offline pre-computation if
     the mapping between a texture and a mesh and the texture itself are static.
+
+    *: This sample itself is for demonstrating how to use OMM, therefore the scene is probably too simple
+       to see the speedup.
 
 */
 
@@ -27,22 +32,48 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
-static constexpr bool useSimpleScene = false;
-
 int32_t main(int32_t argc, const char* argv[]) try {
+    bool useOMM = true;
     auto visualizationMode = Shared::VisualizationMode_Final;
     shared::OMMFormat maxOmmSubDivLevel = shared::OMMFormat_Level4;
     int32_t ommSubdivLevelBias = 0;
+    bool useOmmIndexBuffer = true;
 
+    /*
+    JP: --no-omm: OMMを無効化する。
+        --visualize ***: 可視化モードを切り替える。
+          - final: 最終レンダリング。
+          - barycentric: 重心座標の可視化。ベース三角形の形状を確認できる。
+          - primary-any-hits: プライマリーレイをトレースする最中に生じたAny-Hit呼び出し回数の可視化。
+          - shadow-any-hits: シャドウレイをトレースする最中に生じたAny-Hit呼び出し回数の可視化。
+        --max-subdiv-level *: OMMの最大分割レベル。
+        --subdiv-level-bias *: OMMの分割レベルへのバイアス。
+        --no-index-buffer: OMM用のインデックスバッファーを使用しない。
+
+    EN: --no-omm: Disable OMM.
+        --visualize ***: You can change visualizing mode
+          - final: Final rendering.
+          - barycentric: Visualize barycentric coordinates, can be used to see the shapes of base triangles.
+          - primary-any-hits: Visualize the number of any-hit calls during primary ray trace.
+          - shadow-any-hits: Visualize the number of any-hit calls during shadow ray trace.
+        --max-subdiv-level *: The maximum OMM subdivision level.
+        --subdiv-level-bias *: The bias to OMM subdivision level.
+        --no-index-buffer: Specify not to use index buffers for OMM.
+    */
     uint32_t argIdx = 1;
     while (argIdx < argc) {
         std::string_view arg = argv[argIdx];
-        if (arg == "--visualize") {
+        if (arg == "--no-omm") {
+            useOMM = false;
+        }
+        else if (arg == "--visualize") {
             if (argIdx + 1 >= argc)
                 throw std::runtime_error("Argument for --visualize is not complete.");
             std::string_view visType = argv[argIdx + 1];
             if (visType == "final")
                 visualizationMode = Shared::VisualizationMode_Final;
+            else if (visType == "barycentric")
+                visualizationMode = Shared::VisualizationMode_Barycentric;
             else if (visType == "primary-any-hits")
                 visualizationMode = Shared::VisualizationMode_NumPrimaryAnyHits;
             else if (visType == "shadow-any-hits")
@@ -65,6 +96,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 throw std::runtime_error("Argument for --subdiv-level-bias is not complete.");
             ommSubdivLevelBias = std::atoi(argv[argIdx + 1]);
             argIdx += 1;
+        }
+        else if (arg == "--no-index-buffer") {
+            useOmmIndexBuffer = false;
         }
         else
             throw std::runtime_error("Unknown command line argument.");
@@ -99,7 +133,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE,
-        optixu::UseMotionBlur::No, optixu::UseOpacityMicroMaps::Yes);
+        optixu::UseMotionBlur::No, optixu::UseOpacityMicroMaps(useOMM));
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "opacity_micro_map/ptxes/optix_kernels.optixir");
@@ -280,10 +314,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Geometry tree;
     {
-        std::filesystem::path filePath =
-            useSimpleScene ?
-            R"(../../data/transparent_test.obj)" :
-            R"(C:\Users\shocker_0x15\repos\assets\McguireCGArchive\white_oak\white_oak.obj)";
+        std::filesystem::path filePath = R"(../../data/transparent_test.obj)";
         std::filesystem::path fileDir = filePath.parent_path();
 
         std::vector<obj::Vertex> vertices;
@@ -357,17 +388,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 geomData.texture = group.texObj;
             }
 
+            OMMGeneratorContext ommContext;
+            ommContext.texCoords = tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord);
+            ommContext.vertexStride = sizeof(Shared::Vertex);
+            ommContext.triangles = group.triangleBuffer.getCUdeviceptr();
+            ommContext.triangleStride = sizeof(Shared::Triangle);
+            ommContext.numTriangles = numTriangles;
+            ommContext.texture = group.texObj;
+            ommContext.texSize = make_uint2(group.texArray.getWidth(), group.texArray.getHeight());
+            ommContext.numChannels = 4;
+            ommContext.alphaChannelIndex = 3;
+            ommContext.scratchMem = scratchMemForOMM.getCUdeviceptr();
+            ommContext.useIndexBuffer = useOmmIndexBuffer;
+            ommContext.indexSize = sizeof(OMMIndexType);
+            ommContext.minSubdivLevel = shared::OMMFormat_Level0;
+            ommContext.maxSubdivLevel = maxOmmSubDivLevel;
+            ommContext.subdivLevelBias = ommSubdivLevelBias;
+
             // JP: まずは各三角形のOMMフォーマットを決定する。
             // EN: Fisrt, determine the OMM format of each triangle.
             uint32_t ommFormatCounts[shared::NumOMMFormats];
-            uint64_t rawOmmArraySize;
-            countOMMFormats(
-                tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
-                group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
-                group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
-                shared::OMMFormat_Level0, maxOmmSubDivLevel, ommSubdivLevelBias,
-                scratchMemForOMM,
-                ommFormatCounts, &rawOmmArraySize);
+            uint64_t rawOmmArraySize = 0;
+            if (useOMM)
+                countOMMFormats(ommContext, ommFormatCounts, &rawOmmArraySize);
 
             std::vector<OptixOpacityMicromapUsageCount> ommUsageCounts;
             hpprintf("Group %u (%u tris): OMM %s\n",
@@ -423,17 +466,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                 group.rawOmmArray.initialize(cuContext, cudau::BufferType::Device, rawOmmArraySize, 1);
                 group.ommDescs.initialize(cuContext, cudau::BufferType::Device, numOmms);
-                group.ommIndexBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles);
+                if (useOmmIndexBuffer)
+                    group.ommIndexBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles);
                 group.optixOmmArray.setBuffers(group.rawOmmArray, group.ommDescs, group.ommArrayMem);
 
                 // JP: 各三角形のOMMを生成する。
                 // EN: Generate an OMM for each triangle.
-                generateOMMArray(
-                    tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord), sizeof(Shared::Vertex),
-                    group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
-                    group.texObj, make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
-                    scratchMemForOMM,
-                    group.rawOmmArray, group.ommDescs, group.ommIndexBuffer, sizeof(OMMIndexType));
+                generateOMMArray(ommContext, group.rawOmmArray, group.ommDescs, group.ommIndexBuffer);
             }
 
             group.optixGeomInst = scene.createGeometryInstance();
@@ -441,10 +480,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
             // JP: OMM ArrayをGeometryInstanceにセットする。
             // EN: Set the OMM array to the geometry instance.
-            if (group.optixOmmArray)
+            if (useOMM && group.optixOmmArray &&
+                visualizationMode != Shared::VisualizationMode_Barycentric)
                 group.optixGeomInst.setOpacityMicroMapArray(
                     group.optixOmmArray, ommUsageCounts.data(), ommUsageCounts.size(),
-                    group.ommIndexBuffer, sizeof(OMMIndexType));
+                    useOmmIndexBuffer ? group.ommIndexBuffer : optixu::BufferView(),
+                    sizeof(OMMIndexType));
             group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, alphaTestMat);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -468,42 +509,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Instance floorInst = scene.createInstance();
     floorInst.setChild(floor.optixGas);
 
-    std::vector<optixu::Instance> treeInsts;
-    if constexpr (useSimpleScene) {
-        optixu::Instance inst = scene.createInstance();
-        inst.setChild(tree.optixGas);
-        float xfm[] = {
-            1.0f, 0.0f, 0.0f, 0,
-            0.0f, 1.0f, 0.0f, 1.0f,
-            0.0f, 0.0f, 1.0f, 0,
-        };
-        inst.setTransform(xfm);
-        treeInsts.push_back(inst);
-    }
-    else {
-        std::mt19937 treeRng(471203125);
-        std::uniform_real_distribution<float> treeU01;
-        constexpr float treeScale = 0.003f;
-        constexpr uint32_t treeGridSize = 100;
-        for (int instIdx = 0; instIdx < treeGridSize * treeGridSize; ++instIdx) {
-            optixu::Instance inst = scene.createInstance();
-            int32_t iz = instIdx / treeGridSize;
-            int32_t ix = instIdx % treeGridSize;
-            float dz = 0.5f * (treeU01(treeRng) - 0.5f);
-            float dx = 0.5f * (treeU01(treeRng) - 0.5f);
-            float z = -100 + (iz + 0.5f + dz) / treeGridSize * 200;
-            float x = -100 + (ix + 0.5f + dx) / treeGridSize * 200;
-            Matrix3x3 m = rotateY3x3(2 * M_PI * treeU01(treeRng)) * scale3x3(treeScale);
-            inst.setChild(tree.optixGas);
-            float xfm[] = {
-                m.m00, m.m01, m.m02, x,
-                m.m10, m.m11, m.m12, 0,
-                m.m20, m.m21, m.m22, z,
-            };
-            inst.setTransform(xfm);
-            treeInsts.push_back(inst);
-        }
-    }
+    optixu::Instance cutOutInst = scene.createInstance();
+    cutOutInst.setChild(tree.optixGas);
+    float xfm[] = {
+        1.0f, 0.0f, 0.0f, 0,
+        0.0f, 1.0f, 0.0f, 1.0f,
+        0.0f, 0.0f, 1.0f, 0,
+    };
+    cutOutInst.setTransform(xfm);
 
 
 
@@ -514,8 +527,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     ias.addChild(floorInst);
-    for (int i = 0; i < treeInsts.size(); ++i)
-        ias.addChild(treeInsts[i]);
+    ias.addChild(cutOutInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -620,14 +632,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    if constexpr (useSimpleScene) {
-        plp.camera.position = make_float3(0, 6.0f, 6.0f);
-        plp.camera.orientation = rotateY3x3(pi_v<float>) * rotateX3x3(pi_v<float> / 4.0f);
-    }
-    else {
-        plp.camera.position = make_float3(0, 2, 5);
-        plp.camera.orientation = rotateY3x3(0.8f * pi_v<float>) * rotateX3x3(pi_v<float> / 12);
-    }
+    plp.camera.position = make_float3(0, 6.0f, 6.0f);
+    plp.camera.orientation = rotateY3x3(pi_v<float>) * rotateX3x3(pi_v<float> / 4.0f);
     plp.lightDirection = normalize(float3(1, 5, 2));
     plp.lightRadiance = float3(7.5f, 7.5f, 7.5f);
     plp.envRadiance = float3(0.10f, 0.13f, 0.9f);
@@ -687,8 +693,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
-    for (int i = 0; i < treeInsts.size(); ++i)
-        treeInsts[i].destroy();
+    cutOutInst.destroy();
     floorInst.destroy();
 
     tree.finalize();

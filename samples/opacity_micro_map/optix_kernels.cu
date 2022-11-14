@@ -85,15 +85,20 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
+    // JP: ベース三角形の重心座標可視化の際はアルファテストを無効化する。
+    // EN: Disable alpha tests when visualizing barycentrics of base triangles.
+    OptixRayFlags rayFlags = plp.visualizationMode != VisualizationMode_Barycentric ?
+        OPTIX_RAY_FLAG_NONE : OPTIX_RAY_FLAG_DISABLE_ANYHIT;
     float3 color;
     uint32_t numAnyHitCalls = 0;
     PrimaryRayPayloadSignature::trace(
         plp.travHandle, origin, direction,
-        0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+        0.0f, FLT_MAX, 0.0f, 0xFF, rayFlags,
         RayType_Primary, NumRayTypes, RayType_Primary,
         color, numAnyHitCalls);
 
-    if (plp.visualizationMode != VisualizationMode_Final) {
+    if (plp.visualizationMode == VisualizationMode_NumPrimaryAnyHits ||
+        plp.visualizationMode == VisualizationMode_NumShadowAnyHits) {
         const uint32_t maxValue = plp.visualizationMode == VisualizationMode_NumPrimaryAnyHits ? 20 : 10;
         float3 falseColor = calcFalseColor(numAnyHitCalls, 0, maxValue);
         color = 0.2f * color + 0.8f * falseColor;
@@ -145,6 +150,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float b1 = hp.b1;
         float b2 = hp.b2;
         float b0 = 1 - (b1 + b2);
+        if (plp.visualizationMode == VisualizationMode_Barycentric) {
+            float3 result = make_float3(b0, b1, b2);
+            PrimaryRayPayloadSignature::set(&result, nullptr);
+            return;
+        }
+
         p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
         sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
         texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;

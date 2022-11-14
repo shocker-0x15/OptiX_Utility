@@ -33,22 +33,34 @@ namespace shared {
 
 #if !defined(__CUDA_ARCH__)
 
+struct OMMGeneratorContext {
+    CUdeviceptr texCoords;
+    size_t vertexStride;
+    CUdeviceptr triangles;
+    size_t triangleStride;
+    uint32_t numTriangles;
+    CUtexObject texture;
+    uint2 texSize;
+    CUdeviceptr scratchMem;
+    uint32_t numChannels : 3;
+    uint32_t alphaChannelIndex : 2;
+    uint32_t useIndexBuffer : 1;
+    uint32_t indexSize : 3;
+    uint32_t minSubdivLevel : 4;
+    uint32_t maxSubdivLevel : 4;
+    uint32_t subdivLevelBias : 4;
+};
+
 size_t getScratchMemSizeForOMMGeneration(uint32_t maxNumTriangles);
 
 void countOMMFormats(
-    CUdeviceptr texCoords, size_t vertexStride,
-    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
-    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
-    shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
-    const cudau::Buffer &scratchMem,
+    const OMMGeneratorContext &context,
     uint32_t ommFormatCounts[shared::NumOMMFormats], uint64_t* rawOmmArraySize);
 
 void generateOMMArray(
-    CUdeviceptr texCoords, size_t vertexStride,
-    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
-    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
-    const cudau::Buffer &scratchMem,
-    const cudau::Buffer &ommArray, const cudau::TypedBuffer<OptixOpacityMicromapDesc> &ommDescs,
-    const cudau::Buffer &ommIndexBuffer, uint32_t ommIndexSize);
+    const OMMGeneratorContext &context,
+    const cudau::Buffer &ommArray,
+    const cudau::TypedBuffer<OptixOpacityMicromapDesc> &ommDescs,
+    const cudau::Buffer &ommIndexBuffer);
 
 #endif // #if !defined(__CUDA_ARCH__)

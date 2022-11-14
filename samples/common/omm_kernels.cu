@@ -232,7 +232,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
     const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     OMMFormat minSubdivLevel, OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
-    volatile uint32_t* numFetchedTriangles,
+    bool useIndexBuffer, volatile uint32_t* numFetchedTriangles,
     uint32_t* ommFormatCounts, uint32_t* perTriInfos, uint64_t* ommSizes) {
     while (true) {
         uint32_t curNumFetches;
@@ -278,20 +278,26 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                 //     他にも良い指標があるかもしれない。
                 // EN: Determine the subdivision level from the number of texels computed from the rasterization.
                 //     There may be other good parameters.
-                const bool singleState =
+                const bool isSingleState =
                     state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
                     state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
                 const int32_t minLevel = static_cast<int32_t>(minSubdivLevel);
                 const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
-                const int32_t level = singleState ? 0 :
+                const int32_t level = isSingleState ? 0 :
                     min(max(static_cast<int32_t>(
                         std::log(static_cast<float>(numPixels)) / std::log(4.0f)
                         ) - 4 + subdivLevelBias, minLevel), maxLevel); // -4: ad-hoc offset
-                atomicAdd(&ommFormatCounts[singleState ? OMMFormat_None : level], 1u);
+                const OMMFormat singleStateFormat = useIndexBuffer ? OMMFormat_None : OMMFormat_Level0;
+                atomicAdd(&ommFormatCounts[isSingleState ? singleStateFormat : level], 1u);
 
                 // JP: Dword単位に切り上げた三角形のOMMサイズを記録する。
+                //     インデックスバッファーを使わない場合、すべての三角形がOMMを持つ。
                 // EN: Record the OMM size of the triangle with rounding up to in Dwords.
-                const uint32_t ommSizeInBits = singleState ? 0 : 2 * (1 << (2 * level));
+                //     Every triangle has an OMM when not using an index buffer.
+                // TODO: バイト単位にする？
+                const uint32_t ommSizeInBits = isSingleState ?
+                    (useIndexBuffer ? 0 : 2) :
+                    2 * (1 << (2 * level));
                 const uint32_t ommSizeInDwords = (ommSizeInBits + 31) / 32;
                 ommSizes[triIdx] = 4 * ommSizeInDwords;
 
@@ -312,7 +318,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
 
 CUDA_DEVICE_KERNEL void createOMMDescriptors(
     const uint32_t* perTriInfos, const uint64_t* ommOffsets, uint32_t numTriangles,
-    uint32_t* descCounter,
+    bool useIndexBuffer, volatile uint32_t* descCounter,
     OptixOpacityMicromapDesc* ommDescs, void* ommIndices, uint32_t ommIndexSize) {
     const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
@@ -327,10 +333,11 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
     PerTriInfo triInfo;
     triInfo.asUInt = (perTriInfos[triInfoBinIdx] >> offsetInTriInfoBin) & 0xFF;
 
-    if (triInfo.state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
-        triInfo.state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT) {
+    if (useIndexBuffer &&
+        (triInfo.state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
+         triInfo.state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT)) {
         // OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX
-        const int32_t ommIndex = -1 - triInfo.state;
+        const int32_t ommIndex = -1 - static_cast<int32_t>(triInfo.state);
         if (ommIndexSize == 1)
             ommIndices8[triIdx] = ommIndex;
         else if (ommIndexSize == 2)
@@ -340,18 +347,20 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
         return;
     }
 
-    const int32_t descIdx = static_cast<int32_t>(atomicAdd(descCounter, 1u));
+    const int32_t descIdx = static_cast<int32_t>(atomicAdd(const_cast<uint32_t*>(descCounter), 1u));
     OptixOpacityMicromapDesc &ommDesc = ommDescs[descIdx];
     ommDesc.byteOffset = ommOffsets[triIdx];
     ommDesc.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
     ommDesc.subdivisionLevel = triInfo.level;
 
-    if (ommIndexSize == 1)
-        ommIndices8[triIdx] = descIdx;
-    else if (ommIndexSize == 2)
-        ommIndices16[triIdx] = descIdx;
-    else/* if (ommIndexSize == 4)*/
-        ommIndices32[triIdx] = descIdx;
+    if (useIndexBuffer) {
+        if (ommIndexSize == 1)
+            ommIndices8[triIdx] = descIdx;
+        else if (ommIndexSize == 2)
+            ommIndices16[triIdx] = descIdx;
+        else/* if (ommIndexSize == 4)*/
+            ommIndices32[triIdx] = descIdx;
+    }
 }
 
 

@@ -268,7 +268,7 @@ I've confirmed that the program runs correctly in the following environment.
 
 * Windows 11 (22H2) & Visual Studio Community 2022 (17.4.0)
 * Core i9-9900K, 32GB, RTX 3080 10GB
-* NVIDIA Driver 526.47
+* NVIDIA Driver 526.86
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
