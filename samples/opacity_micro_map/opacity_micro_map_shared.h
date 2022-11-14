@@ -48,6 +48,7 @@ namespace Shared {
 
     enum VisualizationMode : uint32_t {
         VisualizationMode_Final = 0,
+        VisualizationMode_Barycentric,
         VisualizationMode_NumPrimaryAnyHits,
         VisualizationMode_NumShadowAnyHits,
     };
