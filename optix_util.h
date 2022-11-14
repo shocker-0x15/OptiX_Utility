@@ -922,7 +922,7 @@ namespace optixu {
               |              |
               |              +-- GeomInst
               |              |
-              |              +-- OpacityMicroMap
+              |              +-- OMMArray
               |
               +-- Denoiser
 
