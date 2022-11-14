@@ -218,7 +218,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer ommBuildScratchMem;
     cudau::Buffer asBuildScratchMem;
 
-    using OMMIndexType = int16_t;
+    constexpr optixu::IndexSize ommIndexSize = optixu::IndexSize::k2Bytes;
 
     struct Geometry {
         cudau::TypedBuffer<Shared::Vertex> vertexBuffer;
@@ -231,7 +231,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::OpacityMicroMapArray optixOmmArray;
             cudau::Buffer rawOmmArray;
             cudau::TypedBuffer<OptixOpacityMicromapDesc> ommDescs;
-            cudau::TypedBuffer<OMMIndexType> ommIndexBuffer;
+            cudau::Buffer ommIndexBuffer;
             cudau::Buffer ommArrayMem;
         };
         std::vector<MaterialGroup> matGroups;
@@ -400,7 +400,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ommContext.alphaChannelIndex = 3;
             ommContext.scratchMem = scratchMemForOMM.getCUdeviceptr();
             ommContext.useIndexBuffer = useOmmIndexBuffer;
-            ommContext.indexSize = sizeof(OMMIndexType);
+            ommContext.indexSize = 1 << static_cast<uint32_t>(ommIndexSize);
             ommContext.minSubdivLevel = shared::OMMFormat_Level0;
             ommContext.maxSubdivLevel = maxOmmSubDivLevel;
             ommContext.subdivLevelBias = ommSubdivLevelBias;
@@ -467,7 +467,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group.rawOmmArray.initialize(cuContext, cudau::BufferType::Device, rawOmmArraySize, 1);
                 group.ommDescs.initialize(cuContext, cudau::BufferType::Device, numOmms);
                 if (useOmmIndexBuffer)
-                    group.ommIndexBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles);
+                    group.ommIndexBuffer.initialize(
+                        cuContext, cudau::BufferType::Device,
+                        numTriangles, 1 << static_cast<uint32_t>(ommIndexSize));
                 group.optixOmmArray.setBuffers(group.rawOmmArray, group.ommDescs, group.ommArrayMem);
 
                 // JP: 各三角形のOMMを生成する。
@@ -485,7 +487,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group.optixGeomInst.setOpacityMicroMapArray(
                     group.optixOmmArray, ommUsageCounts.data(), ommUsageCounts.size(),
                     useOmmIndexBuffer ? group.ommIndexBuffer : optixu::BufferView(),
-                    sizeof(OMMIndexType));
+                    ommIndexSize);
             group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, alphaTestMat);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);

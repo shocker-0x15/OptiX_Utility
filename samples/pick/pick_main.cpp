@@ -640,7 +640,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         group.optixGeomInst = scene.createGeometryInstance();
         group.optixGeomInst.setVertexBuffer(room.vertexBuffer);
         group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-        group.optixGeomInst.setNumMaterials(5, group.matIndexBuffer, sizeof(uint8_t));
+        group.optixGeomInst.setNumMaterials(5, group.matIndexBuffer, optixu::IndexSize::k1Byte);
         group.optixGeomInst.setMaterial(0, 0, floorMat);
         group.optixGeomInst.setMaterial(0, 1, farSideWallMat);
         group.optixGeomInst.setMaterial(0, 2, ceilingMat);

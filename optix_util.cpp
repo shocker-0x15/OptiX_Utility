@@ -1033,15 +1033,16 @@ namespace optixu {
         OpacityMicroMapArray opacityMicroMapArray,
         const OptixOpacityMicromapUsageCount* ommUsageCounts, uint32_t numOmmUsageCounts,
         const BufferView &ommIndexBuffer,
-        uint32_t indexSize, uint32_t indexOffset) const {
+        IndexSize indexSize, uint32_t indexOffset) const {
+        uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
         m->throwRuntimeError(
             std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
             "This geometry instance was created not for triangles.");
         m->throwRuntimeError(
-            indexSize == 2 || indexSize == 4,
+            indexSize == IndexSize::k2Bytes || indexSize == IndexSize::k4Bytes,
             "Invalid index offset size.");
         m->throwRuntimeError(
-            !ommIndexBuffer.isValid() || ommIndexBuffer.stride() >= indexSize,
+            !ommIndexBuffer.isValid() || ommIndexBuffer.stride() >= indexSizeInBytes,
             "Buffer's stride is smaller than the given index offset size.");
         auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
         geom.opacityMicroMapArray = extract(opacityMicroMapArray);
@@ -1050,7 +1051,7 @@ namespace optixu {
             geom.opacityMicroMapIndexingMode = ommIndexBuffer.isValid() ?
                 OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_INDEXED :
                 OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_LINEAR;
-            geom.opacityMicroMapIndexSize = indexSize;
+            geom.opacityMicroMapIndexSize = indexSizeInBytes;
             geom.opacityMicroMapIndexOffset = indexOffset;
             geom.opacityMicroMapUsageCounts.resize(numOmmUsageCounts);
             std::copy_n(ommUsageCounts, numOmmUsageCounts, geom.opacityMicroMapUsageCounts.data());
@@ -1105,7 +1106,8 @@ namespace optixu {
     }
 
     void GeometryInstance::setNumMaterials(
-        uint32_t numMaterials, const BufferView &matIndexBuffer, uint32_t indexSize) const {
+        uint32_t numMaterials, const BufferView &matIndexBuffer, IndexSize indexSize) const {
+        uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
         m->throwRuntimeError(
             !std::holds_alternative<Priv::CurveGeometry>(m->geometry),
             "Geometry instance for curves is not allowed to have multiple materials.");
@@ -1115,26 +1117,26 @@ namespace optixu {
             (numMaterials == 1) != matIndexBuffer.isValid(),
             "Material index offset buffer must be provided when multiple materials are used.");
         m->throwRuntimeError(
-            indexSize >= 1 && indexSize <= 4,
-            "Invalid index offset size.");
+            indexSizeInBytes >= 1 && indexSizeInBytes <= 4,
+            "Invalid index size.");
         m->throwRuntimeError(
-            !matIndexBuffer.isValid() || matIndexBuffer.stride() >= indexSize,
+            !matIndexBuffer.isValid() || matIndexBuffer.stride() >= indexSizeInBytes,
             "Buffer's stride is smaller than the given index offset size.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
             geom.materialIndexBuffer = matIndexBuffer;
-            geom.materialIndexSize = indexSize;
+            geom.materialIndexSize = indexSizeInBytes;
         }
         else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
             geom.materialIndexBuffer = matIndexBuffer;
-            geom.materialIndexSize = indexSize;
+            geom.materialIndexSize = indexSizeInBytes;
         }
         else if (std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
             geom.materialIndexBuffer = matIndexBuffer;
-            geom.materialIndexSize = indexSize;
+            geom.materialIndexSize = indexSizeInBytes;
         }
         else {
             optixuAssert_ShouldNotBeCalled();
@@ -1251,7 +1253,7 @@ namespace optixu {
 
     OpacityMicroMapArray GeometryInstance::getOpacityMicroMapArray(
         BufferView* ommIndexBuffer,
-        uint32_t* indexSize, uint32_t* indexOffset) const {
+        IndexSize* indexSize, uint32_t* indexOffset) const {
         m->throwRuntimeError(
             std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
             "This geometry instance was created not for triangles.");
@@ -1259,7 +1261,8 @@ namespace optixu {
         if (ommIndexBuffer)
             *ommIndexBuffer = geom.opacityMicroMapIndexBuffer;
         if (indexSize)
-            *indexSize = geom.opacityMicroMapIndexSize;
+            *indexSize = geom.opacityMicroMapIndexSize > 0 ?
+                static_cast<IndexSize>(tzcnt(geom.opacityMicroMapIndexSize)) : IndexSize::None;
         if (indexOffset)
             *indexOffset = geom.opacityMicroMapIndexOffset;
         return geom.opacityMicroMapArray->getPublicType();
@@ -1289,34 +1292,37 @@ namespace optixu {
         return m->primitiveIndexOffset;
     }
 
-    uint32_t GeometryInstance::getNumMaterials(BufferView* matIndexBuffer, uint32_t* indexSize) const {
+    uint32_t GeometryInstance::getNumMaterials(BufferView* matIndexBuffer, IndexSize* indexSize) const {
         if (matIndexBuffer || indexSize) {
             if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
-                    *indexSize = geom.materialIndexSize;
+                    *indexSize = geom.materialIndexSize > 0 ?
+                        static_cast<IndexSize>(tzcnt(geom.materialIndexSize)) : IndexSize::None;
             }
             else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
-                    *indexSize = geom.materialIndexSize;
+                    *indexSize = geom.materialIndexSize > 0 ?
+                        static_cast<IndexSize>(tzcnt(geom.materialIndexSize)) : IndexSize::None;
             }
             else if (std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
-                    *indexSize = geom.materialIndexSize;
+                    *indexSize = geom.materialIndexSize > 0 ?
+                        static_cast<IndexSize>(tzcnt(geom.materialIndexSize)) : IndexSize::None;
             }
             else {
                 if (matIndexBuffer)
                     *matIndexBuffer = BufferView();
                 if (indexSize)
-                    *indexSize = 0;
+                    *indexSize = IndexSize::None;
             }
         }
         return static_cast<uint32_t>(m->materials.size());
