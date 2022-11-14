@@ -257,8 +257,7 @@ TEST(ContextTest, ContextBasic) {
                     denoiser,
                     context.createDenoiser(
                         static_cast<OptixDenoiserModelKind>(~0),
-                        optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes),
-                    true);
+                        optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes));
             }
         }
         context.destroy();
