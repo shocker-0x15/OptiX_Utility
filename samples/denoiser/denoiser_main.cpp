@@ -359,7 +359,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.optixGeomInst = scene.createGeometryInstance();
         room.optixGeomInst.setVertexBuffer(room.vertexBuffer);
         room.optixGeomInst.setTriangleBuffer(room.triangleBuffer);
-        room.optixGeomInst.setNumMaterials(5, room.matIndexBuffer, sizeof(uint8_t));
+        room.optixGeomInst.setNumMaterials(5, room.matIndexBuffer, optixu::IndexSize::k1Byte);
         room.optixGeomInst.setMaterial(0, 0, floorMat);
         room.optixGeomInst.setMaterial(0, 1, farSideWallMat);
         room.optixGeomInst.setMaterial(0, 2, ceilingMat);

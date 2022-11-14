@@ -31,8 +31,11 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
-- JP: - Opacity Micro-Mapをサポート。
+- !!BREAKING
+  JP: - Opacity Micro-Mapをサポート。
+      - インデックスサイズ指定用のenum classを定義。
   EN: - Supported opacity micro-map.
+      - Defined an enum class to specify index sizes.
 
 - !!BREAKING
   JP: - OptiX 7.6.0をサポート。
@@ -994,6 +997,13 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECTS();
 #undef OPTIXU_PREPROCESS_OBJECT
 
+    enum class IndexSize {
+        k1Byte = 0,
+        k2Bytes,
+        k4Bytes,
+        None,
+    };
+
     enum class GeometryType {
         Triangles = 0,
         LinearSegments,
@@ -1105,6 +1115,8 @@ namespace optixu {
     OPTIXU_DECLARE_TYPED_BOOL(UseMotionBlur);
     OPTIXU_DECLARE_TYPED_BOOL(UseOpacityMicroMaps);
     OPTIXU_DECLARE_TYPED_BOOL(IsFirstFrame);
+
+#undef OPTIXU_DECLARE_TYPED_BOOL
 
 
 
@@ -1245,6 +1257,8 @@ namespace optixu {
     public:
         void destroy();
 
+        // JP: 以下のAPIを呼んだ場合はOMM Arrayが自動でdirty状態になる。
+        // EN: Calling the following APIs automatically marks the OMM array dirty.
         void setConfiguration(OptixOpacityMicromapFlags config) const;
         void computeMemoryUsage(
             const OptixOpacityMicromapHistogramEntry* microMapHistogramEntries,
@@ -1254,8 +1268,14 @@ namespace optixu {
             const BufferView &rawOmmBuffer, const BufferView &perMicroMapDescBuffer,
             const BufferView &outputBuffer) const;
 
+        // JP: OMM Arrayをdirty状態にする。
+        // EN: Mark the OMM array dirty.
         void markDirty() const;
 
+        // JP: OMM Arrayをリビルドした場合、それを参照するGASのリビルド、もしくはアップデートが必要。
+        //     アップデートを使う場合は予めGASの設定でOMM Arrayのアップデートを許可する必要がある。
+        // EN: If the OMM array is rebuilt, GASs refering the OMM array need to be rebuilt or updated.
+        //     Allowing OMM array update is required in the GAS setttings when using updating.
         void rebuild(CUstream stream, const BufferView &scratchBuffer) const;
 
         bool isReady() const;
@@ -1290,7 +1310,7 @@ namespace optixu {
             OpacityMicroMapArray opacityMicroMapArray,
             const OptixOpacityMicromapUsageCount* ommUsageCounts, uint32_t numOmmUsageCounts,
             const BufferView &ommIndexBuffer,
-            uint32_t indexSize = sizeof(uint32_t), uint32_t indexOffset = 0) const;
+            IndexSize indexSize = IndexSize::k4Bytes, uint32_t indexOffset = 0) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setSingleRadius(UseSingleRadius useSingleRadius) const;
@@ -1299,7 +1319,7 @@ namespace optixu {
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(
             uint32_t numMaterials, const BufferView &matIndexBuffer,
-            uint32_t indexSize = sizeof(uint32_t)) const;
+            IndexSize indexSize = IndexSize::k4Bytes) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
 
         /*
@@ -1327,11 +1347,11 @@ namespace optixu {
         BufferView getTriangleBuffer(OptixIndicesFormat* format = nullptr) const;
         OpacityMicroMapArray getOpacityMicroMapArray(
             BufferView* ommIndexBuffer = nullptr,
-            uint32_t* indexSize = nullptr, uint32_t* indexOffset = nullptr) const;
+            IndexSize* indexSize = nullptr, uint32_t* indexOffset = nullptr) const;
         BufferView getSegmentIndexBuffer() const;
         BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
         uint32_t getPrimitiveIndexOffset() const;
-        uint32_t getNumMaterials(BufferView* matIndexBuffer = nullptr, uint32_t* indexSize = nullptr) const;
+        uint32_t getNumMaterials(BufferView* matIndexBuffer = nullptr, IndexSize* indexSize = nullptr) const;
         OptixGeometryFlags getGeometryFlags(uint32_t matIdx) const;
         Material getMaterial(uint32_t matSetIdx, uint32_t matIdx) const;
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
@@ -1805,11 +1825,6 @@ namespace optixu {
             const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
             const BufferView &internalGuideLayerForNextFrame) const;
     };
-
-
-
-#undef OPTIXU_COMMON_FUNCTIONS
-#undef OPTIXU_PIMPL
 
 #endif // #if !defined(__CUDA_ARCH__)
     // END: Host-side API

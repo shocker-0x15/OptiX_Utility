@@ -212,7 +212,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(5, roomMatIndexBuffer, sizeof(uint8_t));
+        roomGeomInst.setNumMaterials(5, roomMatIndexBuffer, optixu::IndexSize::k1Byte);
         roomGeomInst.setMaterial(0, 0, floorMat);
         roomGeomInst.setMaterial(0, 1, farSideWallMat);
         roomGeomInst.setMaterial(0, 2, ceilingMat);
@@ -256,7 +256,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         multiMatPolygonGeomInst.setVertexBuffer(multiMatPolygonVertexBuffer);
         multiMatPolygonGeomInst.setTriangleBuffer(multiMatPolygonTriangleBuffer);
-        multiMatPolygonGeomInst.setNumMaterials(Ngon, multiMatPolygonMaterialIndexBuffer, sizeof(uint8_t));
+        multiMatPolygonGeomInst.setNumMaterials(Ngon, multiMatPolygonMaterialIndexBuffer, optixu::IndexSize::k1Byte);
         // JP: GASのインスタンスごとに異なるマテリアルを使用できるように
         //     各マテリアルセットのスロットにマテリアルをセットする。
         // EN: Set a material to each slot of material sets

@@ -586,10 +586,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.getCustomPrimitiveAABBBuffer());
             EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), 0);
             optixu::BufferView retMatIndexBuffer;
-            uint32_t retMatIndexSize;
+            optixu::IndexSize retMatIndexSize;
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), 1);
             EXPECT_EQ(retMatIndexBuffer, optixu::BufferView());
-            EXPECT_EQ(retMatIndexSize, 0);
+            EXPECT_EQ(retMatIndexSize, optixu::IndexSize::None);
             EXPECT_EQ(geomInst.getGeometryFlags(0), OPTIX_GEOMETRY_FLAG_NONE);
             EXPECT_EQ(geomInst.getMaterial(0, 0), optixu::Material());
             uint32_t userDataSize;
@@ -647,8 +647,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
             uint32_t numMaterials = 3;
             optixu::BufferView matIndexBuffer;
-            uint32_t matIndexSize;
-            matIndexSize = sizeof(4);
+            optixu::IndexSize matIndexSize;
+            matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
@@ -656,7 +656,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
-            matIndexSize = sizeof(2);
+            matIndexSize = optixu::IndexSize::k2Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
@@ -664,7 +664,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
-            matIndexSize = sizeof(4);
+            matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
             EXPECT_EXCEPTION(geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize));
@@ -736,10 +736,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EXCEPTION(geomInst.getCustomPrimitiveAABBBuffer());
             EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), 0);
             optixu::BufferView retMatIndexBuffer;
-            uint32_t retMatIndexSize;
+            optixu::IndexSize retMatIndexSize;
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), 1);
             EXPECT_EQ(retMatIndexBuffer, optixu::BufferView());
-            EXPECT_EQ(retMatIndexSize, 0);
+            EXPECT_EQ(retMatIndexSize, optixu::IndexSize::None);
             EXPECT_EQ(geomInst.getGeometryFlags(0), OPTIX_GEOMETRY_FLAG_NONE);
             EXPECT_EQ(geomInst.getMaterial(0, 0), optixu::Material());
             uint32_t userDataSize;
@@ -794,8 +794,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
             uint32_t numMaterials = 1;
             optixu::BufferView matIndexBuffer;
-            uint32_t matIndexSize;
-            matIndexSize = sizeof(4);
+            optixu::IndexSize matIndexSize;
+            matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numSegments, sizeof(uint32_t));
             EXPECT_EXCEPTION(geomInst.setNumMaterials(2, matIndexBuffer, matIndexSize));
 
@@ -863,10 +863,10 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(geomInst.getCustomPrimitiveAABBBuffer(), optixu::BufferView());
             EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), 0);
             optixu::BufferView retMatIndexBuffer;
-            uint32_t retMatIndexSize;
+            optixu::IndexSize retMatIndexSize;
             EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), 1);
             EXPECT_EQ(retMatIndexBuffer, optixu::BufferView());
-            EXPECT_EQ(retMatIndexSize, 0);
+            EXPECT_EQ(retMatIndexSize, optixu::IndexSize::None);
             EXPECT_EQ(geomInst.getGeometryFlags(0), OPTIX_GEOMETRY_FLAG_NONE);
             EXPECT_EQ(geomInst.getMaterial(0, 0), optixu::Material());
             uint32_t userDataSize;
@@ -905,8 +905,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
             uint32_t numMaterials = 3;
             optixu::BufferView matIndexBuffer;
-            uint32_t matIndexSize;
-            matIndexSize = sizeof(4);
+            optixu::IndexSize matIndexSize;
+            matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
@@ -914,7 +914,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
-            matIndexSize = sizeof(2);
+            matIndexSize = optixu::IndexSize::k2Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
             geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
@@ -922,7 +922,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
-            matIndexSize = sizeof(4);
+            matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
             EXPECT_EXCEPTION(geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize));

@@ -271,7 +271,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         //     この場合はプリミティブごとのマテリアルインデックスバッファーが必要となる。
         // EN: Set multiple materials to single GeometryInstance.
         //     Per-primitive material index buffer is required in this case.
-        roomGeomInst.setNumMaterials(5, roomMatIndexBuffer, sizeof(uint8_t));
+        roomGeomInst.setNumMaterials(5, roomMatIndexBuffer, optixu::IndexSize::k1Byte);
         roomGeomInst.setMaterial(0, 0, floorMat);
         roomGeomInst.setMaterial(0, 1, farSideWallMat);
         roomGeomInst.setMaterial(0, 2, ceilingMat);

@@ -103,6 +103,12 @@ namespace optixu {
 
 
 
+    inline uint32_t tzcnt(uint32_t x) {
+        return _tzcnt_u32(x);
+    }
+
+
+
     using _Context = Context::Priv;
 
     // Alias private classes.
