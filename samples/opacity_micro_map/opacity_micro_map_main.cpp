@@ -11,6 +11,16 @@ JP: このサンプルはAny-Hit Program呼び出しを削減することでア�
 
     *: このサンプル自体はOMMの使い方の説明目的なので、シーンが単純すぎて高速化が確認できない可能性があります。
 
+    --no-omm: OMMを無効化する。
+    --visualize ***: 可視化モードを切り替える。
+      - final: 最終レンダリング。
+      - barycentric: 重心座標の可視化。ベース三角形の形状を確認できる。
+      - primary-any-hits: プライマリーレイをトレースする最中に生じたAny-Hit呼び出し回数の可視化。
+      - shadow-any-hits: シャドウレイをトレースする最中に生じたAny-Hit呼び出し回数の可視化。
+    --max-subdiv-level *: OMMの最大分割レベル。
+    --subdiv-level-bias *: OMMの分割レベルへのバイアス。
+    --no-index-buffer: OMM用のインデックスバッファーを使用しない。
+
 EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha tests (*), etc. by reducing
     any-hit program calls.
     OMM is precomputed information regarding geometry cutouts by textures or something for triangle mesh.
@@ -22,6 +32,16 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 
     *: This sample itself is for demonstrating how to use OMM, therefore the scene is probably too simple
        to see the speedup.
+
+    --no-omm: Disable OMM.
+    --visualize ***: You can change visualizing mode
+      - final: Final rendering.
+      - barycentric: Visualize barycentric coordinates, can be used to see the shapes of base triangles.
+      - primary-any-hits: Visualize the number of any-hit calls during primary ray trace.
+      - shadow-any-hits: Visualize the number of any-hit calls during shadow ray trace.
+    --max-subdiv-level *: The maximum OMM subdivision level.
+    --subdiv-level-bias *: The bias to OMM subdivision level.
+    --no-index-buffer: Specify not to use index buffers for OMM.
 
 */
 
@@ -39,27 +59,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     int32_t ommSubdivLevelBias = 0;
     bool useOmmIndexBuffer = true;
 
-    /*
-    JP: --no-omm: OMMを無効化する。
-        --visualize ***: 可視化モードを切り替える。
-          - final: 最終レンダリング。
-          - barycentric: 重心座標の可視化。ベース三角形の形状を確認できる。
-          - primary-any-hits: プライマリーレイをトレースする最中に生じたAny-Hit呼び出し回数の可視化。
-          - shadow-any-hits: シャドウレイをトレースする最中に生じたAny-Hit呼び出し回数の可視化。
-        --max-subdiv-level *: OMMの最大分割レベル。
-        --subdiv-level-bias *: OMMの分割レベルへのバイアス。
-        --no-index-buffer: OMM用のインデックスバッファーを使用しない。
-
-    EN: --no-omm: Disable OMM.
-        --visualize ***: You can change visualizing mode
-          - final: Final rendering.
-          - barycentric: Visualize barycentric coordinates, can be used to see the shapes of base triangles.
-          - primary-any-hits: Visualize the number of any-hit calls during primary ray trace.
-          - shadow-any-hits: Visualize the number of any-hit calls during shadow ray trace.
-        --max-subdiv-level *: The maximum OMM subdivision level.
-        --subdiv-level-bias *: The bias to OMM subdivision level.
-        --no-index-buffer: Specify not to use index buffers for OMM.
-    */
     uint32_t argIdx = 1;
     while (argIdx < argc) {
         std::string_view arg = argv[argIdx];
