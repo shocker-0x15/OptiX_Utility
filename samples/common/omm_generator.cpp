@@ -24,6 +24,8 @@ size_t getScratchMemSizeForOMMGeneration(uint32_t maxNumTriangles) {
     size_t size = 0;
     // ommSizes / ommOffsets
     size += sizeof(uint64_t) * (maxNumTriangles + 1);
+    // hasOmmFlags / triToOmmMap
+    size += sizeof(uint32_t) * maxNumTriangles;
     // perTriInfos
     size += sizeof(uint32_t) * ((maxNumTriangles + 3) / 4);
     // counter
@@ -32,9 +34,15 @@ size_t getScratchMemSizeForOMMGeneration(uint32_t maxNumTriangles) {
     size += sizeof(uint32_t) * shared::NumOMMFormats;
     // scratchMemForScan
     size_t sizeOfScratchMemForScan;
+    size_t _sizeOfScratchMemForScan;
     cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
-        nullptr, sizeOfScratchMemForScan,
+        nullptr, _sizeOfScratchMemForScan,
         nullptr, nullptr, maxNumTriangles + 1);
+    sizeOfScratchMemForScan = _sizeOfScratchMemForScan;
+    cubd::DeviceScan::ExclusiveSum<const uint32_t*, uint32_t*>(
+        nullptr, _sizeOfScratchMemForScan,
+        nullptr, nullptr, maxNumTriangles);
+    sizeOfScratchMemForScan = std::max(sizeOfScratchMemForScan, _sizeOfScratchMemForScan);
     size += sizeOfScratchMemForScan;
 
     return size;
@@ -49,6 +57,8 @@ void countOMMFormats(
     uint64_t curScratchMemOffset = 0;
     CUdeviceptr ommSizes = scratchMemBase + curScratchMemOffset;
     curScratchMemOffset += sizeof(uint64_t) * (context.numTriangles + 1);
+    CUdeviceptr hasOmmFlags = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t) * context.numTriangles;
     CUdeviceptr perTriInfos = scratchMemBase + curScratchMemOffset;
     curScratchMemOffset += sizeof(uint32_t) * ((context.numTriangles + 3) / 4);
     CUdeviceptr counter = scratchMemBase + curScratchMemOffset;
@@ -57,9 +67,15 @@ void countOMMFormats(
     curScratchMemOffset += sizeof(uint32_t) * shared::NumOMMFormats;
     CUdeviceptr scratchMemForScan = scratchMemBase + curScratchMemOffset;
     size_t sizeOfScratchMemForScan;
+    size_t _sizeOfScratchMemForScan;
     cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
-        nullptr, sizeOfScratchMemForScan,
+        nullptr, _sizeOfScratchMemForScan,
         nullptr, nullptr, context.numTriangles + 1);
+    sizeOfScratchMemForScan = _sizeOfScratchMemForScan;
+    cubd::DeviceScan::ExclusiveSum<const uint32_t*, uint32_t*>(
+        nullptr, _sizeOfScratchMemForScan,
+        nullptr, nullptr, context.numTriangles);
+    sizeOfScratchMemForScan = std::max(sizeOfScratchMemForScan, _sizeOfScratchMemForScan);
     //curScratchMemOffset += sizeOfScratchMemForScan;
 
     CUDADRV_CHECK(cuMemsetD32Async(perTriInfos, 0, (context.numTriangles + 3) / 4, stream));
@@ -75,12 +91,16 @@ void countOMMFormats(
         context.texture, context.texSize, context.numChannels, context.alphaChannelIndex,
         context.minSubdivLevel, maxSubdivLevel, context.subdivLevelBias,
         static_cast<bool>(context.useIndexBuffer), counter,
-        ommFormatCountsOnDevice, perTriInfos, ommSizes);
+        ommFormatCountsOnDevice, perTriInfos, hasOmmFlags, ommSizes);
 
     cubd::DeviceScan::ExclusiveSum(
         reinterpret_cast<void*>(scratchMemForScan), sizeOfScratchMemForScan,
         reinterpret_cast<uint64_t*>(ommSizes), reinterpret_cast<uint64_t*>(ommSizes),
         context.numTriangles + 1, stream);
+    cubd::DeviceScan::ExclusiveSum(
+      reinterpret_cast<void*>(scratchMemForScan), sizeOfScratchMemForScan,
+      reinterpret_cast<uint32_t*>(hasOmmFlags), reinterpret_cast<uint32_t*>(hasOmmFlags),
+      context.numTriangles, stream);
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));
 
@@ -101,24 +121,31 @@ void generateOMMArray(
     uint64_t curScratchMemOffset = 0;
     CUdeviceptr ommOffsets = scratchMemBase + curScratchMemOffset;
     curScratchMemOffset += sizeof(uint64_t) * (context.numTriangles + 1);
+    CUdeviceptr triToOmmMap = scratchMemBase + curScratchMemOffset;
+    curScratchMemOffset += sizeof(uint32_t) * context.numTriangles;
     CUdeviceptr perTriInfos = scratchMemBase + curScratchMemOffset;
     curScratchMemOffset += sizeof(uint32_t) * ((context.numTriangles + 3) / 4);
     CUdeviceptr counter = scratchMemBase + curScratchMemOffset;
     curScratchMemOffset += sizeof(uint32_t);
-    CUdeviceptr ommFormatCountsOnDevice = scratchMemBase + curScratchMemOffset;
-    curScratchMemOffset += sizeof(uint32_t) * shared::NumOMMFormats;
-    CUdeviceptr scratchMemForScan = scratchMemBase + curScratchMemOffset;
-    size_t sizeOfScratchMemForScan;
-    cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
-        nullptr, sizeOfScratchMemForScan,
-        nullptr, nullptr, context.numTriangles + 1);
+    //CUdeviceptr ommFormatCountsOnDevice = scratchMemBase + curScratchMemOffset;
+    //curScratchMemOffset += sizeof(uint32_t) * shared::NumOMMFormats;
+    //CUdeviceptr scratchMemForScan = scratchMemBase + curScratchMemOffset;
+    //size_t sizeOfScratchMemForScan;
+    //size_t _sizeOfScratchMemForScan;
+    //cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
+    //    nullptr, _sizeOfScratchMemForScan,
+    //    nullptr, nullptr, context.numTriangles + 1);
+    //sizeOfScratchMemForScan = _sizeOfScratchMemForScan;
+    //cubd::DeviceScan::ExclusiveSum<const uint32_t*, uint32_t*>(
+    //    nullptr, _sizeOfScratchMemForScan,
+    //    nullptr, nullptr, context.numTriangles);
+    //sizeOfScratchMemForScan = std::max(sizeOfScratchMemForScan, _sizeOfScratchMemForScan);
     //curScratchMemOffset += sizeOfScratchMemForScan;
 
-    CUDADRV_CHECK(cuMemsetD32Async(counter, 0, 1, stream));
     s_createOMMDescriptors.launchWithThreadDim(
         stream, cudau::dim3(context.numTriangles),
-        perTriInfos, ommOffsets, context.numTriangles,
-        static_cast<bool>(context.useIndexBuffer), counter,
+        perTriInfos, triToOmmMap, ommOffsets, context.numTriangles,
+        static_cast<bool>(context.useIndexBuffer),
         ommDescs, ommIndexBuffer, context.indexSize);
 
     CUDADRV_CHECK(cuMemsetD32Async(counter, 0, 1, stream));
