@@ -233,7 +233,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     OMMFormat minSubdivLevel, OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     bool useIndexBuffer, volatile uint32_t* numFetchedTriangles,
-    uint32_t* ommFormatCounts, uint32_t* perTriInfos, uint64_t* ommSizes) {
+    uint32_t* ommFormatCounts, uint32_t* perTriInfos, uint32_t* hasOmmFlags, uint64_t* ommSizes) {
     while (true) {
         uint32_t curNumFetches;
         if (threadIdx.x == 0)
@@ -299,6 +299,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                     (useIndexBuffer ? 0 : 2) :
                     2 * (1 << (2 * level));
                 const uint32_t ommSizeInDwords = (ommSizeInBits + 31) / 32;
+                hasOmmFlags[triIdx] = ommSizeInDwords > 0;
                 ommSizes[triIdx] = 4 * ommSizeInDwords;
 
                 // JP: 三角形の状態を記録する。
@@ -317,8 +318,8 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
 
 
 CUDA_DEVICE_KERNEL void createOMMDescriptors(
-    const uint32_t* perTriInfos, const uint64_t* ommOffsets, uint32_t numTriangles,
-    bool useIndexBuffer, volatile uint32_t* descCounter,
+    const uint32_t* perTriInfos, const uint32_t* triToOmmMap, const uint64_t* ommOffsets, uint32_t numTriangles,
+    bool useIndexBuffer,
     OptixOpacityMicromapDesc* ommDescs, void* ommIndices, uint32_t ommIndexSize) {
     const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
@@ -347,19 +348,19 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
         return;
     }
 
-    const int32_t descIdx = static_cast<int32_t>(atomicAdd(const_cast<uint32_t*>(descCounter), 1u));
-    OptixOpacityMicromapDesc &ommDesc = ommDescs[descIdx];
+    const int32_t ommIdx = static_cast<int32_t>(triToOmmMap[triIdx]);
+    OptixOpacityMicromapDesc &ommDesc = ommDescs[ommIdx];
     ommDesc.byteOffset = ommOffsets[triIdx];
     ommDesc.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
     ommDesc.subdivisionLevel = triInfo.level;
 
     if (useIndexBuffer) {
         if (ommIndexSize == 1)
-            ommIndices8[triIdx] = descIdx;
+            ommIndices8[triIdx] = ommIdx;
         else if (ommIndexSize == 2)
-            ommIndices16[triIdx] = descIdx;
+            ommIndices16[triIdx] = ommIdx;
         else/* if (ommIndexSize == 4)*/
-            ommIndices32[triIdx] = descIdx;
+            ommIndices32[triIdx] = ommIdx;
     }
 }
 
