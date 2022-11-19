@@ -20,9 +20,12 @@
 
 
 #if defined(HP_Platform_Windows_MSVC)
+#   define WIN32_LEAN_AND_MEAN
 #   define NOMINMAX
 #   define _USE_MATH_DEFINES
 #   include <Windows.h>
+#   undef WIN32_LEAN_AND_MEAN
+#   undef NOMINMAX
 #   undef near
 #   undef far
 #   undef RGB
@@ -828,7 +831,7 @@ struct Matrix3x3 {
         float3 c2;
     };
 
-    CUDA_COMMON_FUNCTION constexpr Matrix3x3() :
+    CUDA_COMMON_FUNCTION /*constexpr*/ Matrix3x3() :
         c0(make_float3(1, 0, 0)),
         c1(make_float3(0, 1, 0)),
         c2(make_float3(0, 0, 1)) { }
@@ -836,7 +839,7 @@ struct Matrix3x3 {
         m00(array[0]), m10(array[1]), m20(array[2]),
         m01(array[3]), m11(array[4]), m21(array[5]),
         m02(array[6]), m12(array[7]), m22(array[8]) { }
-    CUDA_COMMON_FUNCTION constexpr Matrix3x3(const float3 &col0, const float3 &col1, const float3 &col2) :
+    CUDA_COMMON_FUNCTION /*constexpr*/ Matrix3x3(const float3 &col0, const float3 &col1, const float3 &col2) :
         c0(col0), c1(col1), c2(col2)
     { }
 
@@ -961,7 +964,7 @@ struct Quaternion {
     float w;
 
     CUDA_COMMON_FUNCTION constexpr Quaternion() : v(), w(1) {}
-    CUDA_COMMON_FUNCTION constexpr Quaternion(float xx, float yy, float zz, float ww) : v(make_float3(xx, yy, zz)), w(ww) {}
+    CUDA_COMMON_FUNCTION /*constexpr*/ Quaternion(float xx, float yy, float zz, float ww) : v(make_float3(xx, yy, zz)), w(ww) {}
     CUDA_COMMON_FUNCTION constexpr Quaternion(const float3 &vv, float ww) : v(vv), w(ww) {}
 
     CUDA_COMMON_FUNCTION Quaternion operator+() const { return *this; }
@@ -1020,7 +1023,10 @@ CUDA_COMMON_FUNCTION CUDA_INLINE Quaternion qFromEulerAngles(float roll, float p
 // Reference:
 // Long-Period Hash Functions for Procedural Texturing
 // combined permutation table of the hash function of period 739,024 = lcm(11, 13, 16, 17, 19)
-CUDA_CONSTANT_MEM static uint8_t PermutationTable[] = {
+#if defined(__CUDA_ARCH__)
+CUDA_CONSTANT_MEM
+#endif
+static uint8_t PermutationTable[] = {
     // table 0: 11 numbers
     0, 10, 2, 7, 3, 5, 6, 4, 8, 1, 9,
     // table 1: 13 numbers
@@ -1230,7 +1236,7 @@ public:
 
 // JP: ホスト専用の定義。
 // EN: Definitions only for host.
-#if !defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+#if !defined(__CUDACC__) || defined(OPTIXU_Platform_CodeCompletion)
 
 #if 1
 #   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
