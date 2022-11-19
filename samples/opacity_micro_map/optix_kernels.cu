@@ -238,7 +238,7 @@ EN: Shadow rays for alpha-textured object usually use an any-hit program.
 */
 CUDA_DEVICE_KERNEL void RT_CH_NAME(visibilityWithAlpha)() {
     auto sbtr = HitGroupSBTRecordData::get();
-    const GeometryInstanceData &geomInst = sbtr.geomInstData;
+    //const GeometryInstanceData &geomInst = sbtr.geomInstData;
     float visibility = 0.0f;
     VisibilityRayPayloadSignature::set(&visibility, nullptr);
 }

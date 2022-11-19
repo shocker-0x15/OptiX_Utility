@@ -311,7 +311,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
-    Geometry tree;
+    Geometry alphaTestGeom;
     {
         std::filesystem::path filePath = R"(../../data/transparent_test.obj)";
         std::filesystem::path fileDir = filePath.parent_path();
@@ -321,22 +321,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<obj::Material> materials;
         obj::load(filePath, &vertices, &matGroups, &materials);
 
-        tree.vertexBuffer.initialize(
+        alphaTestGeom.vertexBuffer.initialize(
             cuContext, cudau::BufferType::Device,
             reinterpret_cast<Shared::Vertex*>(vertices.data()), vertices.size());
 
         // JP: ここではデフォルト値を使っているが、GASにはOpacity Micro-Mapに関連する設定がある。
         // EN: GAS has settings related opacity micro-map while the default values are used here.
-        tree.optixGas = scene.createGeometryAccelerationStructure();
-        tree.optixGas.setConfiguration(
+        alphaTestGeom.optixGas = scene.createGeometryAccelerationStructure();
+        alphaTestGeom.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes,
             optixu::AllowRandomVertexAccess::No,
             optixu::AllowOpacityMicroMapUpdate::No,
             optixu::AllowDisableOpacityMicroMaps::No);
-        tree.optixGas.setNumMaterialSets(1);
-        tree.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        alphaTestGeom.optixGas.setNumMaterialSets(1);
+        alphaTestGeom.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
 
         uint32_t maxNumTrianglesPerGroup = 0;
         for (int groupIdx = 0; groupIdx < matGroups.size(); ++groupIdx) {
@@ -346,7 +346,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 static_cast<uint32_t>(srcGroup.triangles.size()));
         }
 
-        size_t scratchMemSizeForOMM = getScratchMemSizeForOMMGeneration(maxNumTrianglesPerGroup);
+        size_t scratchMemSizeForOMM = getScratchMemSizeForOMMGenerator(maxNumTrianglesPerGroup);
         cudau::Buffer scratchMemForOMM;
         scratchMemForOMM.initialize(cuContext, cudau::BufferType::Device, scratchMemSizeForOMM, 1);
 
@@ -362,7 +362,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 numTriangles);
 
             Shared::GeometryInstanceData geomData = {};
-            geomData.vertexBuffer = tree.vertexBuffer.getDevicePointer();
+            geomData.vertexBuffer = alphaTestGeom.vertexBuffer.getDevicePointer();
             geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
             geomData.albedo = float3(srcMat.diffuse[0], srcMat.diffuse[1], srcMat.diffuse[2]);
             if (!srcMat.diffuseTexPath.empty()) {
@@ -387,29 +387,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 geomData.texture = group.texObj;
             }
 
-            OMMGeneratorContext ommContext;
-            ommContext.texCoords = tree.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord);
-            ommContext.vertexStride = sizeof(Shared::Vertex);
-            ommContext.triangles = group.triangleBuffer.getCUdeviceptr();
-            ommContext.triangleStride = sizeof(Shared::Triangle);
-            ommContext.numTriangles = numTriangles;
-            ommContext.texture = group.texObj;
-            ommContext.texSize = make_uint2(group.texArray.getWidth(), group.texArray.getHeight());
-            ommContext.numChannels = 4;
-            ommContext.alphaChannelIndex = 3;
-            ommContext.scratchMem = scratchMemForOMM.getCUdeviceptr();
-            ommContext.useIndexBuffer = useOmmIndexBuffer;
-            ommContext.indexSize = 1 << static_cast<uint32_t>(ommIndexSize);
-            ommContext.minSubdivLevel = shared::OMMFormat_Level0;
-            ommContext.maxSubdivLevel = maxOmmSubDivLevel;
-            ommContext.subdivLevelBias = ommSubdivLevelBias;
-
             // JP: まずは各三角形のOMMフォーマットを決定する。
             // EN: Fisrt, determine the OMM format of each triangle.
-            uint32_t ommFormatCounts[shared::NumOMMFormats];
+            OMMGeneratorContext ommContext;
+            uint32_t histInOMMArray[shared::NumOMMFormats];
+            uint32_t histInMesh[shared::NumOMMFormats];
             uint64_t rawOmmArraySize = 0;
-            if (useOMM)
-                countOMMFormats(ommContext, ommFormatCounts, &rawOmmArraySize);
+            if (useOMM) {
+                initializeOMMGeneratorContext(
+                    alphaTestGeom.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord),
+                    sizeof(Shared::Vertex),
+                    group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
+                    group.texObj,
+                    make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,
+                    shared::OMMFormat_Level0, maxOmmSubDivLevel, ommSubdivLevelBias,
+                    useOmmIndexBuffer, 1 << static_cast<uint32_t>(ommIndexSize),
+                    scratchMemForOMM.getCUdeviceptr(), scratchMemForOMM.sizeInBytes(),
+                    &ommContext);
+
+                countOMMFormats(ommContext, histInOMMArray, histInMesh, &rawOmmArraySize);
+            }
 
             std::vector<OptixOpacityMicromapUsageCount> ommUsageCounts;
             hpprintf("Group %u (%u tris): OMM %s\n",
@@ -417,34 +414,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (rawOmmArraySize > 0) {
                 uint32_t numOmms = 0;
                 std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries;
-                hpprintf("None    : %u\n", ommFormatCounts[shared::OMMFormat_None]);
-                for (int i = 0; i <= shared::OMMFormat_Level12; ++i) {
-                    uint32_t count = ommFormatCounts[i];
-                    hpprintf("Level %2u: %u\n", i, count);
-                    if (count == 0)
-                        continue;
+                hpprintf("None    : %u, %u\n",
+                         histInOMMArray[shared::OMMFormat_None], histInMesh[shared::OMMFormat_None]);
+                for (int i = shared::OMMFormat_Level0; i <= shared::OMMFormat_Level12; ++i) {
+                    uint32_t countInOmmArray = histInOMMArray[i];
+                    uint32_t countInMesh = histInMesh[i];
+                    hpprintf("Level %2u: %u, %u\n", i, countInOmmArray, countInMesh);
 
-                    OptixOpacityMicromapHistogramEntry histEntry;
-                    histEntry.count = count;
-                    histEntry.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
-                    histEntry.subdivisionLevel = i;
-                    ommHistogramEntries.push_back(histEntry);
+                    if (countInOmmArray > 0) {
+                        OptixOpacityMicromapHistogramEntry histEntry;
+                        histEntry.count = countInOmmArray;
+                        histEntry.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
+                        histEntry.subdivisionLevel = i;
+                        ommHistogramEntries.push_back(histEntry);
 
-                    /*
-                    JP: このサンプルではあるアルファテクスチャを使用する三角形メッシュと
-                        OMM Arrayが一対一対応なのでOMM Array中のヒストグラムと
-                        メッシュにおける各OMM種別の参照回数は同じになる。
-                    EN: Each usage count of an OMM type in the mesh becomes the same as the histogram entry
-                        in the OMM array since an OMM array and a triangle mesh with an alpha texture are
-                        one-to-one mapping in this sample.
-                    */
-                    OptixOpacityMicromapUsageCount usageEntry;
-                    usageEntry.count = count;
-                    usageEntry.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
-                    usageEntry.subdivisionLevel = i;
-                    ommUsageCounts.push_back(usageEntry);
+                        numOmms += histInOMMArray[i];
+                    }
 
-                    numOmms += ommFormatCounts[i];
+                    if (countInMesh > 0) {
+                        OptixOpacityMicromapUsageCount histEntry;
+                        histEntry.count = countInMesh;
+                        histEntry.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
+                        histEntry.subdivisionLevel = i;
+                        ommUsageCounts.push_back(histEntry);
+                    }
                 }
                 hpprintf("\n");
 
@@ -477,7 +470,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             }
 
             group.optixGeomInst = scene.createGeometryInstance();
-            group.optixGeomInst.setVertexBuffer(tree.vertexBuffer);
+            group.optixGeomInst.setVertexBuffer(alphaTestGeom.vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
             // JP: OMM ArrayをGeometryInstanceにセットする。
             // EN: Set the OMM array to the geometry instance.
@@ -492,14 +485,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomData);
 
-            tree.optixGas.addChild(group.optixGeomInst);
-            tree.matGroups.push_back(std::move(group));
+            alphaTestGeom.optixGas.addChild(group.optixGeomInst);
+            alphaTestGeom.matGroups.push_back(std::move(group));
         }
 
         scratchMemForOMM.finalize();
 
-        tree.optixGas.prepareForBuild(&asMemReqs);
-        tree.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        alphaTestGeom.optixGas.prepareForBuild(&asMemReqs);
+        alphaTestGeom.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
@@ -511,7 +504,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorInst.setChild(floor.optixGas);
 
     optixu::Instance cutOutInst = scene.createInstance();
-    cutOutInst.setChild(tree.optixGas);
+    cutOutInst.setChild(alphaTestGeom.optixGas);
     float xfm[] = {
         1.0f, 0.0f, 0.0f, 0,
         0.0f, 1.0f, 0.0f, 1.0f,
@@ -544,8 +537,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Opacity Micro-Map Arrayをビルドする。
     // EN: Build opacity micro-map arrays.
-    for (int i = 0; i < tree.matGroups.size(); ++i) {
-        const Geometry::MaterialGroup &group = tree.matGroups[i];
+    for (int i = 0; i < alphaTestGeom.matGroups.size(); ++i) {
+        const Geometry::MaterialGroup &group = alphaTestGeom.matGroups[i];
         if (!group.optixOmmArray)
             continue;
 
@@ -557,7 +550,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
     floor.optixGas.rebuild(cuStream, floor.gasMem, asBuildScratchMem);
-    tree.optixGas.rebuild(cuStream, tree.gasMem, asBuildScratchMem);
+    alphaTestGeom.optixGas.rebuild(cuStream, alphaTestGeom.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -570,7 +563,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
     CompactedASInfo gasList[] = {
         { &floor, 0, 0 },
-        { &tree, 0, 0 },
+        { &alphaTestGeom, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -697,7 +690,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cutOutInst.destroy();
     floorInst.destroy();
 
-    tree.finalize();
+    alphaTestGeom.finalize();
     floor.finalize();
 
     scene.destroy();
