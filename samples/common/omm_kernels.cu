@@ -1,4 +1,4 @@
-﻿#include "omm_generator.h"
+﻿#include "omm_generator_private.h"
 #include "optix_micromap.h"
 
 using namespace shared;
@@ -43,6 +43,43 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float fetchAlpha(
 
 CUDA_DEVICE_FUNCTION CUDA_INLINE bool isTransparent(float alpha) {
     return alpha < 0.5f;
+}
+
+
+
+CUDA_DEVICE_KERNEL void extractTexCoords(
+    const uint8_t* texCoords, uint64_t vertexStride,
+    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
+    TriTexCoordTuple* triTcTuples, uint32_t* triIndices) {
+    const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (triIdx >= numTriangles)
+        return;
+
+    auto &tri = reinterpret_cast<const Triangle &>(triangles[triangleStride * triIdx]);
+    TriTexCoordTuple tuple {
+        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index0]),
+        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index1]),
+        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index2]),
+    };
+    triTcTuples[triIdx] = tuple;
+    triIndices[triIdx] = triIdx;
+}
+
+CUDA_DEVICE_KERNEL void testIfTCTupleIsUnique(
+    const TriTexCoordTuple* triTcTuples, uint32_t* refTupleIndices, uint32_t numTriangles) {
+    const uint32_t tupleIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (tupleIdx >= numTriangles)
+        return;
+
+    const TriTexCoordTuple &triTcTuple = triTcTuples[tupleIdx];
+    uint32_t refTupleIdx = tupleIdx;
+    if (tupleIdx > 0) {
+        const TriTexCoordTuple &prevTriTcTuple = triTcTuples[tupleIdx - 1];
+        if (triTcTuple == prevTriTcTuple)
+            refTupleIdx = 0;
+    }
+
+    refTupleIndices[tupleIdx] = refTupleIdx;
 }
 
 
@@ -137,21 +174,13 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void rasterizeFlatTriangle(
 }
 
 CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
-    uint32_t triIdx,
-    const uint8_t* texCoords, uint64_t vertexStride,
-    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
+    const TriTexCoordTuple &triTcTuple,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     uint32_t* numTransparentPixels, uint32_t* numPixels) {
-    auto &tri = reinterpret_cast<const Triangle &>(triangles[triangleStride * triIdx]);
-    const float2 tcs[] = {
-        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index0]),
-        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index1]),
-        reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index2]),
-    };
     float2 fPixs[3] = {
-        make_float2(texSize.x * tcs[0].x, texSize.y * tcs[0].y),
-        make_float2(texSize.x * tcs[1].x, texSize.y * tcs[1].y),
-        make_float2(texSize.x * tcs[2].x, texSize.y * tcs[2].y)
+        make_float2(texSize.x * triTcTuple.tcA.x, texSize.y * triTcTuple.tcA.y),
+        make_float2(texSize.x * triTcTuple.tcB.x, texSize.y * triTcTuple.tcB.y),
+        make_float2(texSize.x * triTcTuple.tcC.x, texSize.y * triTcTuple.tcC.y)
     };
 
     const auto swap = [](float2 &a, float2 &b) {
@@ -228,12 +257,13 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void evaluateSingleTriangleTransparency(
 }
 
 CUDA_DEVICE_KERNEL void countOMMFormats(
-    const uint8_t* texCoords, uint64_t vertexStride,
-    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
+    const TriTexCoordTuple* triTcTuples, const uint32_t* refTupleIndices, const uint32_t* triIndices,
+    uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     OMMFormat minSubdivLevel, OMMFormat maxSubdivLevel, int32_t subdivLevelBias,
     bool useIndexBuffer, volatile uint32_t* numFetchedTriangles,
-    uint32_t* ommFormatCounts, uint32_t* perTriInfos, uint32_t* hasOmmFlags, uint64_t* ommSizes) {
+    uint32_t* histInOmmArray, uint32_t* histInMesh,
+    uint32_t* perTriInfos, uint32_t* hasOmmFlags, uint64_t* ommSizes) {
     while (true) {
         uint32_t curNumFetches;
         if (threadIdx.x == 0)
@@ -243,24 +273,29 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
             return;
 
         constexpr uint32_t numTrisPerFetch = 8;
-        uint32_t baseTriIdx;
+        uint32_t baseTupleIdx;
         if (threadIdx.x == 0)
-            baseTriIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
-        baseTriIdx = __shfl_sync(0xFFFFFFFF, baseTriIdx, 0);
+            baseTupleIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
+        baseTupleIdx = __shfl_sync(0xFFFFFFFF, baseTupleIdx, 0);
 
-        for (uint32_t triSubIdx = 0; triSubIdx < numTrisPerFetch; ++triSubIdx) {
+        for (uint32_t tupleSubIdx = 0; tupleSubIdx < numTrisPerFetch; ++tupleSubIdx) {
             // JP: Warp中の全スレッドが同じ三角形を処理する。
             // EN: All the threads in a warp process the same triangle.
-            const uint32_t triIdx = baseTriIdx + triSubIdx;
-            if (triIdx >= numTriangles)
+            const uint32_t tupleIdx = baseTupleIdx + tupleSubIdx;
+            if (tupleIdx >= numTriangles)
                 return;
+
+            const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
+            if (tupleIdx != refTupleIdx)
+                continue;
+
+            const uint32_t triIdx = triIndices[tupleIdx];
+            const TriTexCoordTuple &triTcTuple = triTcTuples[tupleIdx];
 
             uint32_t numTransparentPixels;
             uint32_t numPixels;
             evaluateSingleTriangleTransparency(
-                triIdx,
-                texCoords, vertexStride, triangles, triangleStride, numTriangles,
-                texture, texSize, numChannels, alphaChannelIdx,
+                triTcTuple, texture, texSize, numChannels, alphaChannelIdx,
                 &numTransparentPixels, &numPixels);
 
             if (threadIdx.x == 0) {
@@ -288,7 +323,8 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                         std::log(static_cast<float>(numPixels)) / std::log(4.0f)
                         ) - 4 + subdivLevelBias, minLevel), maxLevel); // -4: ad-hoc offset
                 const OMMFormat singleStateFormat = useIndexBuffer ? OMMFormat_None : OMMFormat_Level0;
-                atomicAdd(&ommFormatCounts[isSingleState ? singleStateFormat : level], 1u);
+                atomicAdd(&histInOmmArray[isSingleState ? singleStateFormat : level], 1u);
+                atomicAdd(&histInMesh[isSingleState ? singleStateFormat : level], 1u);
 
                 // JP: Dword単位に切り上げた三角形のOMMサイズを記録する。
                 //     インデックスバッファーを使わない場合、すべての三角形がOMMを持つ。
@@ -317,18 +353,57 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
 
 
 
+CUDA_DEVICE_KERNEL void fillNonUniqueEntries(
+    const TriTexCoordTuple* triTcTuples, const uint32_t* refTupleIndices, const uint32_t* triIndices,
+    uint32_t numTriangles,
+    uint32_t* histInOmmArray, uint32_t* histInMesh,
+    uint32_t* perTriInfos, uint32_t* hasOmmFlags, uint64_t* ommSizes) {
+    const uint32_t tupleIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (tupleIdx >= numTriangles)
+        return;
+
+    const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
+    if (tupleIdx == refTupleIdx)
+        return;
+
+    const uint32_t triIdx = triIndices[tupleIdx];
+    const uint32_t refTriIdx = triIndices[refTupleIdx];
+
+    atomicAdd(&histInOmmArray[OMMFormat_None], 1u);
+    hasOmmFlags[triIdx] = 0;
+    ommSizes[triIdx] = 0;
+
+    PerTriInfo refTriInfo = {};
+    const uint32_t refTriInfoBinIdx = refTriIdx / 4;
+    const uint32_t offsetInRefTriInfoBin = 8 * (refTriIdx % 4);
+    refTriInfo.asUInt = (perTriInfos[refTriInfoBinIdx] >> offsetInRefTriInfoBin) & 0xFF;
+    const uint32_t triInfoBinIdx = triIdx / 4;
+    const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
+    atomicOr(&perTriInfos[triInfoBinIdx], refTriInfo.asUInt << offsetInTriInfoBin);
+
+    const bool isSingleState =
+        refTriInfo.state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
+        refTriInfo.state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
+    const OMMFormat singleStateFormat = OMMFormat_None;
+    atomicAdd(&histInMesh[isSingleState ? singleStateFormat : refTriInfo.level], 1u);
+}
+
+
+
 CUDA_DEVICE_KERNEL void createOMMDescriptors(
+    const uint32_t* refTupleIndices, const uint32_t* triIndices,
     const uint32_t* perTriInfos, const uint32_t* triToOmmMap, const uint64_t* ommOffsets, uint32_t numTriangles,
     bool useIndexBuffer,
     OptixOpacityMicromapDesc* ommDescs, void* ommIndices, uint32_t ommIndexSize) {
-    const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
-    if (triIdx >= numTriangles)
+    const uint32_t tupleIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (tupleIdx >= numTriangles)
         return;
 
     const auto ommIndices8 = reinterpret_cast<int8_t*>(ommIndices);
     const auto ommIndices16 = reinterpret_cast<int16_t*>(ommIndices);
     const auto ommIndices32 = reinterpret_cast<int32_t*>(ommIndices);
 
+    const uint32_t triIdx = triIndices[tupleIdx];
     const uint32_t triInfoBinIdx = triIdx / 4;
     const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
     PerTriInfo triInfo;
@@ -348,11 +423,15 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
         return;
     }
 
-    const int32_t ommIdx = static_cast<int32_t>(triToOmmMap[triIdx]);
-    OptixOpacityMicromapDesc &ommDesc = ommDescs[ommIdx];
-    ommDesc.byteOffset = ommOffsets[triIdx];
-    ommDesc.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
-    ommDesc.subdivisionLevel = triInfo.level;
+    const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
+    const uint32_t refTriIdx = triIndices[refTupleIdx];
+    const int32_t ommIdx = static_cast<int32_t>(triToOmmMap[refTriIdx]);
+    if (tupleIdx == refTupleIdx) {
+        OptixOpacityMicromapDesc &ommDesc = ommDescs[ommIdx];
+        ommDesc.byteOffset = ommOffsets[triIdx];
+        ommDesc.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
+        ommDesc.subdivisionLevel = triInfo.level;
+    }
 
     if (useIndexBuffer) {
         if (ommIndexSize == 1)
@@ -509,8 +588,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t evaluateSingleMicroTriangle(
 }
 
 CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
-    const uint8_t* texCoords, uint64_t vertexStride,
-    const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
+    const TriTexCoordTuple* triTcTuples, const uint32_t* refTupleIndices, const uint32_t* triIndices,
+    uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIdx,
     const uint32_t* perTriInfos, const uint64_t* ommOffsets,
     volatile uint32_t* numFetchedTriangles,
@@ -520,27 +599,30 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
             return;
 
         constexpr uint32_t numTrisPerFetch = 8;
-        uint32_t baseTriIdx;
+        uint32_t baseTupleIdx;
         if (threadIdx.x == 0)
-            baseTriIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
-        baseTriIdx = __shfl_sync(0xFFFFFFFF, baseTriIdx, 0);
+            baseTupleIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
+        baseTupleIdx = __shfl_sync(0xFFFFFFFF, baseTupleIdx, 0);
 
-        for (uint32_t triSubIdx = 0; triSubIdx < numTrisPerFetch; ++triSubIdx) {
+        for (uint32_t tupleSubIdx = 0; tupleSubIdx < numTrisPerFetch; ++tupleSubIdx) {
             // JP: Warp中の全スレッドが同じ三角形を処理する。
             // EN: All the threads in a warp process the same triangle.
-            const uint32_t triIdx = baseTriIdx + triSubIdx;
-            if (triIdx >= numTriangles)
+            const uint32_t tupleIdx = baseTupleIdx + tupleSubIdx;
+            if (tupleIdx >= numTriangles)
                 return;
+
+            const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
+            if (tupleIdx != refTupleIdx)
+                continue;
+
+            const uint32_t triIdx = triIndices[tupleIdx];
+            const TriTexCoordTuple &triTcTuple = triTcTuples[tupleIdx];
 
             const uint32_t triInfoBinIdx = triIdx / 4;
             const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
             PerTriInfo triInfo;
             triInfo.asUInt = (perTriInfos[triInfoBinIdx] >> offsetInTriInfoBin) & 0xFF;
 
-            auto &tri = reinterpret_cast<const Triangle &>(triangles[triangleStride * triIdx]);
-            const float2 tcA = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index0]);
-            const float2 tcB = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index1]);
-            const float2 tcC = reinterpret_cast<const float2 &>(texCoords[vertexStride * tri.index2]);
             const float2 fTexSize = make_float2(texSize.x, texSize.y);
 
             const uint64_t ommOffset = ommOffsets[triIdx];
@@ -569,11 +651,17 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
                 optixMicromapIndexToBaseBarycentrics(microTriIdx, triInfo.level, bc0, bc1, bc2);
 
                 const float2 fPix0 =
-                    fTexSize * ((1.0f - (bc0.x + bc0.y)) * tcA + bc0.x * tcB + bc0.y * tcC);
+                    fTexSize * ((1.0f - (bc0.x + bc0.y)) * triTcTuple.tcA +
+                                bc0.x * triTcTuple.tcB +
+                                bc0.y * triTcTuple.tcC);
                 const float2 fPix1 =
-                    fTexSize * ((1.0f - (bc1.x + bc1.y)) * tcA + bc1.x * tcB + bc1.y * tcC);
+                    fTexSize * ((1.0f - (bc1.x + bc1.y)) * triTcTuple.tcA +
+                                bc1.x * triTcTuple.tcB +
+                                bc1.y * triTcTuple.tcC);
                 const float2 fPix2 =
-                    fTexSize * ((1.0f - (bc2.x + bc2.y)) * tcA + bc2.x * tcB + bc2.y * tcC);
+                    fTexSize * ((1.0f - (bc2.x + bc2.y)) * triTcTuple.tcA +
+                                bc2.x * triTcTuple.tcB +
+                                bc2.y * triTcTuple.tcC);
 
                 const uint32_t state = evaluateSingleMicroTriangle(
                     fPix0, fPix1, fPix2,

@@ -18,6 +18,18 @@
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="..\common\omm_generator.cpp" />
+    <CudaCompile Include="..\common\omm_generator_misc.cu">
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">compile</NvccCompilation>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">compile</NvccCompilation>
+      <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </AdditionalCompilerOptions>
+      <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </AdditionalCompilerOptions>
+      <GenerateRelocatableDeviceCode Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GenerateRelocatableDeviceCode>
+      <GenerateRelocatableDeviceCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</GenerateRelocatableDeviceCode>
+    </CudaCompile>
     <ClCompile Include="opacity_micro_map_main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -31,6 +43,7 @@
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="..\common\omm_generator.h" />
+    <ClInclude Include="..\common\omm_generator_private.h" />
     <ClInclude Include="opacity_micro_map_shared.h" />
   </ItemGroup>
   <ItemGroup>

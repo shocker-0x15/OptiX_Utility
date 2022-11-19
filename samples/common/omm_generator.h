@@ -20,42 +20,30 @@ namespace shared {
         OMMFormat_None,
         NumOMMFormats
     };
-
-    union PerTriInfo {
-        struct {
-            uint32_t state : 2;
-            uint32_t level : 4;
-            uint32_t placeHolder : 26;
-        };
-        uint32_t asUInt;
-    };
 }
 
 #if !defined(__CUDA_ARCH__)
 
 struct OMMGeneratorContext {
-    CUdeviceptr texCoords;
-    size_t vertexStride;
-    CUdeviceptr triangles;
-    size_t triangleStride;
-    uint32_t numTriangles;
-    CUtexObject texture;
-    uint2 texSize;
-    CUdeviceptr scratchMem;
-    uint32_t numChannels : 3;
-    uint32_t alphaChannelIndex : 2;
-    uint32_t useIndexBuffer : 1;
-    uint32_t indexSize : 3;
-    uint32_t minSubdivLevel : 4;
-    uint32_t maxSubdivLevel : 4;
-    uint32_t subdivLevelBias : 4;
+    std::vector<uint8_t> internalState;
 };
 
-size_t getScratchMemSizeForOMMGeneration(uint32_t maxNumTriangles);
+size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles);
+
+void initializeOMMGeneratorContext(
+    CUdeviceptr texCoords, size_t vertexStride,
+    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
+    CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
+    shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
+    bool useIndexBuffer, uint32_t indexSize,
+    CUdeviceptr scratchMem, size_t scratchMemSize,
+    OMMGeneratorContext* context);
 
 void countOMMFormats(
     const OMMGeneratorContext &context,
-    uint32_t ommFormatCounts[shared::NumOMMFormats], uint64_t* rawOmmArraySize);
+    uint32_t histInOmmArray[shared::NumOMMFormats],
+    uint32_t histInMesh[shared::NumOMMFormats],
+    uint64_t* rawOmmArraySize);
 
 void generateOMMArray(
     const OMMGeneratorContext &context,
