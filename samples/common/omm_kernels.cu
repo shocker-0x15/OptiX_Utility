@@ -285,6 +285,9 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
             if (tupleIdx >= numTriangles)
                 return;
 
+            // JP: 処理中の要素が同じテクスチャー座標を持つ連続要素の先頭ではない場合は終了する。
+            // EN: Terminate if the current element is not the head of consecutive elements
+            //     with the same texture coordinates.
             const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
             if (tupleIdx != refTupleIdx)
                 continue;
@@ -624,6 +627,9 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
             if (tupleIdx >= numTriangles)
                 return;
 
+            // JP: 処理中の要素が同じテクスチャー座標を持つ連続要素の先頭ではない場合は終了する。
+            // EN: Terminate if the current element is not the head of consecutive elements
+            //     with the same texture coordinates.
             const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
             if (tupleIdx != refTupleIdx)
                 continue;
