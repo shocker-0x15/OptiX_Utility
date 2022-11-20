@@ -411,15 +411,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             std::vector<OptixOpacityMicromapUsageCount> ommUsageCounts;
             hpprintf("Group %u (%u tris): OMM %s\n",
                      groupIdx, numTriangles, rawOmmArraySize > 0 ? "Enabled" : "Disabled");
+            hpprintf("OMM Array Size: %llu [bytes]\n", rawOmmArraySize);
             if (rawOmmArraySize > 0) {
                 uint32_t numOmms = 0;
                 std::vector<OptixOpacityMicromapHistogramEntry> ommHistogramEntries;
-                hpprintf("None    : %u, %u\n",
+                hpprintf("Histogram in OMM Array, Mesh\n");
+                hpprintf("  None    : %5u, %5u\n",
                          histInOMMArray[shared::OMMFormat_None], histInMesh[shared::OMMFormat_None]);
                 for (int i = shared::OMMFormat_Level0; i <= shared::OMMFormat_Level12; ++i) {
                     uint32_t countInOmmArray = histInOMMArray[i];
                     uint32_t countInMesh = histInMesh[i];
-                    hpprintf("Level %2u: %u, %u\n", i, countInOmmArray, countInMesh);
+                    hpprintf("  Level %2u: %5u, %5u\n", i, countInOmmArray, countInMesh);
 
                     if (countInOmmArray > 0) {
                         OptixOpacityMicromapHistogramEntry histEntry;

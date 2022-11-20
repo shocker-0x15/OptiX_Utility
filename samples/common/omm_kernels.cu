@@ -355,7 +355,7 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
 
 CUDA_DEVICE_KERNEL void fillNonUniqueEntries(
     const TriTexCoordTuple* triTcTuples, const uint32_t* refTupleIndices, const uint32_t* triIndices,
-    uint32_t numTriangles,
+    uint32_t numTriangles, bool useIndexBuffer,
     uint32_t* histInOmmArray, uint32_t* histInMesh,
     uint32_t* perTriInfos, uint32_t* hasOmmFlags, uint64_t* ommSizes) {
     const uint32_t tupleIdx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -369,22 +369,35 @@ CUDA_DEVICE_KERNEL void fillNonUniqueEntries(
     const uint32_t triIdx = triIndices[tupleIdx];
     const uint32_t refTriIdx = triIndices[refTupleIdx];
 
-    atomicAdd(&histInOmmArray[OMMFormat_None], 1u);
-    hasOmmFlags[triIdx] = 0;
-    ommSizes[triIdx] = 0;
-
     PerTriInfo refTriInfo = {};
     const uint32_t refTriInfoBinIdx = refTriIdx / 4;
     const uint32_t offsetInRefTriInfoBin = 8 * (refTriIdx % 4);
     refTriInfo.asUInt = (perTriInfos[refTriInfoBinIdx] >> offsetInRefTriInfoBin) & 0xFF;
-    const uint32_t triInfoBinIdx = triIdx / 4;
-    const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
-    atomicOr(&perTriInfos[triInfoBinIdx], refTriInfo.asUInt << offsetInTriInfoBin);
 
     const bool isSingleState =
         refTriInfo.state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
         refTriInfo.state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;
-    const OMMFormat singleStateFormat = OMMFormat_None;
+    const OMMFormat singleStateFormat = useIndexBuffer ? OMMFormat_None : OMMFormat_Level0;
+
+    if (useIndexBuffer) {
+        atomicAdd(&histInOmmArray[OMMFormat_None], 1u);
+        hasOmmFlags[triIdx] = 0;
+        ommSizes[triIdx] = 0;
+    }
+    else {
+        atomicAdd(&histInOmmArray[isSingleState ? singleStateFormat : refTriInfo.level], 1u);
+        const uint32_t ommSizeInBits = isSingleState ?
+            (useIndexBuffer ? 0 : 2) :
+            2 * (1 << (2 * refTriInfo.level));
+        const uint32_t ommSizeInDwords = (ommSizeInBits + 31) / 32;
+        hasOmmFlags[triIdx] = ommSizeInDwords > 0;
+        ommSizes[triIdx] = 4 * ommSizeInDwords;
+    }
+
+    const uint32_t triInfoBinIdx = triIdx / 4;
+    const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
+    atomicOr(&perTriInfos[triInfoBinIdx], refTriInfo.asUInt << offsetInTriInfoBin);
+
     atomicAdd(&histInMesh[isSingleState ? singleStateFormat : refTriInfo.level], 1u);
 }
 
@@ -425,8 +438,8 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
 
     const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
     const uint32_t refTriIdx = triIndices[refTupleIdx];
-    const int32_t ommIdx = static_cast<int32_t>(triToOmmMap[refTriIdx]);
-    if (tupleIdx == refTupleIdx) {
+    const int32_t ommIdx = static_cast<int32_t>(triToOmmMap[useIndexBuffer ? refTriIdx : triIdx]);
+    if (tupleIdx == refTupleIdx || !useIndexBuffer) {
         OptixOpacityMicromapDesc &ommDesc = ommDescs[ommIdx];
         ommDesc.byteOffset = ommOffsets[triIdx];
         ommDesc.format = OPTIX_OPACITY_MICROMAP_FORMAT_4_STATE;
@@ -672,6 +685,52 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
                 atomicOr(
                     reinterpret_cast<uint32_t*>(opacityMicroMap) + binIdx,
                     state << offsetInBin);
+            }
+        }
+    }
+}
+
+
+
+CUDA_DEVICE_KERNEL void copyOpacityMicroMaps(
+    const uint32_t* refTupleIndices, const uint32_t* triIndices, const uint64_t* ommOffsets,
+    uint32_t numTriangles, volatile uint32_t* numFetchedTriangles,
+    uint8_t* opacityMicroMaps) {
+    while (true) {
+        if (*numFetchedTriangles >= numTriangles)
+            return;
+
+        constexpr uint32_t numTrisPerFetch = 8;
+        uint32_t baseTupleIdx;
+        if (threadIdx.x == 0)
+            baseTupleIdx = atomicAdd(const_cast<uint32_t*>(numFetchedTriangles), numTrisPerFetch);
+        baseTupleIdx = __shfl_sync(0xFFFFFFFF, baseTupleIdx, 0);
+
+        for (uint32_t tupleSubIdx = 0; tupleSubIdx < numTrisPerFetch; ++tupleSubIdx) {
+            // JP: Warp中の全スレッドが同じ三角形を処理する。
+            // EN: All the threads in a warp process the same triangle.
+            const uint32_t tupleIdx = baseTupleIdx + tupleSubIdx;
+            if (tupleIdx >= numTriangles)
+                return;
+
+            const uint32_t refTupleIdx = refTupleIndices[tupleIdx];
+            if (tupleIdx == refTupleIdx)
+                continue;
+
+            const uint32_t triIdx = triIndices[tupleIdx];
+            const uint64_t ommOffset = ommOffsets[triIdx];
+            const uint64_t ommNextOffset = ommOffsets[triIdx + 1];
+            const uint64_t ommSizeInDwords = (ommNextOffset - ommOffset) / sizeof(uint32_t);
+
+            const uint32_t refTriIdx = triIndices[refTupleIdx];
+            const uint64_t refOmmOffset = ommOffsets[refTriIdx];
+
+            const auto srcOpacityMicroMap = reinterpret_cast<const uint32_t*>(opacityMicroMaps + refOmmOffset);
+            const auto dstOpacityMicroMap = reinterpret_cast<uint32_t*>(opacityMicroMaps + ommOffset);
+            for (uint32_t dwBaseIdx = 0; dwBaseIdx < ommSizeInDwords; dwBaseIdx += WarpSize) {
+                const uint32_t dwIdx = dwBaseIdx + threadIdx.x;
+                if (dwIdx < ommSizeInDwords)
+                    dstOpacityMicroMap[dwIdx] = srcOpacityMicroMap[dwIdx];
             }
         }
     }
