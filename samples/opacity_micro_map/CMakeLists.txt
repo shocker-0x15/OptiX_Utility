@@ -13,7 +13,9 @@ file(
 file(
     GLOB OMM_GENERATOR_SOURCES
     "../common/omm_generator.h"
+    "../common/omm_generator_private.h"
     "../common/omm_generator.cpp"
+    "../common/omm_generator_misc.cu"
 )
 
 file(
@@ -74,6 +76,8 @@ source_group(
     "essentials/omm_generator" REGULAR_EXPRESSION
     "${CMAKE_SOURCE_DIR}/samples/common/omm_.*\.(h|hpp|c|cpp|cu)$")
 
+list(APPEND CUDA_NVCC_FLAGS "$<$<CONFIG:Debug>:-G>")
+
 add_executable(
     "${TARGET_NAME}"
     ${UTIL_SOURCES}
@@ -95,6 +99,10 @@ target_compile_definitions(
     "${TARGET_NAME}" PRIVATE
     "CUDA_UTIL_DONT_USE_GL_INTEROP"
     "USE_CUBD_LIB"
+)
+target_compile_options(
+    "${TARGET_NAME}" PRIVATE
+    "$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_NVCC_FLAGS}>"
 )
 target_include_directories(
     "${TARGET_NAME}" PRIVATE
