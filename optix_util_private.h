@@ -30,11 +30,15 @@
 #   undef RGB
 #endif
 
-#pragma warning(push)
-#pragma warning(disable:4819)
+#if defined(OPTIXU_Platform_Windows_MSVC)
+#   pragma warning(push)
+#   pragma warning(disable:4819)
+#endif
 #include <optix_function_table_definition.h>
 #include <cuda.h>
-#pragma warning(pop)
+#if defined(OPTIXU_Platform_Windows_MSVC)
+#   pragma warning(pop)
+#endif
 
 #include <sstream>
 #include <vector>
@@ -43,7 +47,19 @@
 #include <algorithm>
 #include <variant>
 
+#if __cplusplus <= 199711L
+#   if defined(OPTIXU_Platform_Windows_MSVC)
+#       pragma message("\"/Zc:__cplusplus\" compiler option to enable the updated __cplusplus definition is recommended.")
+#   else
+#       pragma message("Enabling the updated __cplusplus definition is recommended.")
+#   endif
+#endif
+
+#if __cplusplus >= 202002L
+#include <bit>
+#else
 #include <intrin.h>
+#endif
 
 #include <stdexcept>
 
@@ -106,9 +122,13 @@ namespace optixu {
 
 
 
-    inline uint32_t tzcnt(uint32_t x) {
+#if __cplusplus < 202002L
+    inline uint32_t countr_zero(uint32_t x) {
         return _tzcnt_u32(x);
     }
+#else
+    using std::countr_zero;
+#endif
 
 
 
@@ -164,7 +184,7 @@ namespace optixu {
         constexpr SizeAlign() : size(0), alignment(1) {}
         constexpr SizeAlign(uint32_t s, uint32_t a) : size(s), alignment(a) {}
 
-        SizeAlign &add(const SizeAlign &sa, uint32_t* offset) {
+        constexpr SizeAlign &add(const SizeAlign &sa, uint32_t* offset) {
             uint32_t mask = sa.alignment - 1;
             alignment = std::max(alignment, sa.alignment);
             size = (size + mask) & ~mask;
@@ -173,18 +193,24 @@ namespace optixu {
             size += sa.size;
             return *this;
         }
-        SizeAlign &operator+=(const SizeAlign &sa) {
+        constexpr SizeAlign &operator+=(const SizeAlign &sa) {
             return add(sa, nullptr);
         }
-        SizeAlign &alignUp() {
+        constexpr SizeAlign &alignUp() {
             uint32_t mask = alignment - 1;
             size = (size + mask) & ~mask;
             return *this;
         }
     };
 
-    SizeAlign max(const SizeAlign &sa0, const SizeAlign &sa1) {
+    static constexpr inline SizeAlign max(const SizeAlign &sa0, const SizeAlign &sa1) {
         return SizeAlign{ std::max(sa0.size, sa1.size), std::max(sa0.alignment, sa1.alignment) };
+    }
+
+
+
+    static constexpr inline IndexSize convertToIndexSizeEnum(uint32_t indexSize) {
+        return indexSize > 0 ? static_cast<IndexSize>(countr_zero(indexSize)) : IndexSize::None;
     }
 
 

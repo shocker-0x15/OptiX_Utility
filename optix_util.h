@@ -228,13 +228,17 @@ TODO:
 #include <initializer_list>
 #endif
 
-#pragma warning(push)
-#pragma warning(disable:4819)
+#if defined(OPTIXU_Platform_Windows_MSVC)
+#   pragma warning(push)
+#   pragma warning(disable:4819)
+#endif
 #include <optix.h>
 #if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
 #endif
-#pragma warning(pop)
+#if defined(OPTIXU_Platform_Windows_MSVC)
+#   pragma warning(pop)
+#endif
 
 #ifdef _DEBUG
 #   define OPTIXU_ENABLE_ASSERT

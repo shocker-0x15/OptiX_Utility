@@ -1261,8 +1261,7 @@ namespace optixu {
         if (ommIndexBuffer)
             *ommIndexBuffer = geom.opacityMicroMapIndexBuffer;
         if (indexSize)
-            *indexSize = geom.opacityMicroMapIndexSize > 0 ?
-                static_cast<IndexSize>(tzcnt(geom.opacityMicroMapIndexSize)) : IndexSize::None;
+            *indexSize = convertToIndexSizeEnum(geom.opacityMicroMapIndexSize);
         if (indexOffset)
             *indexOffset = geom.opacityMicroMapIndexOffset;
         return geom.opacityMicroMapArray->getPublicType();
@@ -1299,24 +1298,21 @@ namespace optixu {
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
-                    *indexSize = geom.materialIndexSize > 0 ?
-                        static_cast<IndexSize>(tzcnt(geom.materialIndexSize)) : IndexSize::None;
+                    *indexSize = convertToIndexSizeEnum(geom.materialIndexSize);
             }
             else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
-                    *indexSize = geom.materialIndexSize > 0 ?
-                        static_cast<IndexSize>(tzcnt(geom.materialIndexSize)) : IndexSize::None;
+                    *indexSize = convertToIndexSizeEnum(geom.materialIndexSize);
             }
             else if (std::holds_alternative<Priv::CustomPrimitiveGeometry>(m->geometry)) {
                 const auto &geom = std::get<Priv::CustomPrimitiveGeometry>(m->geometry);
                 if (matIndexBuffer)
                     *matIndexBuffer = geom.materialIndexBuffer;
                 if (indexSize)
-                    *indexSize = geom.materialIndexSize > 0 ?
-                        static_cast<IndexSize>(tzcnt(geom.materialIndexSize)) : IndexSize::None;
+                    *indexSize = convertToIndexSizeEnum(geom.materialIndexSize);
             }
             else {
                 if (matIndexBuffer)

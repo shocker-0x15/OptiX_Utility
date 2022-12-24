@@ -46,10 +46,14 @@ typedef unsigned long long CUsurfObject;
 #else
 #include <cstdint>
 #include <cfloat>
-#pragma warning(push)
-#pragma warning(disable:4819)
+#if defined(CUDAUPlatform_Windows)
+#   pragma warning(push)
+#   pragma warning(disable:4819)
+#endif
 #include <cuda.h>
-#pragma warning(pop)
+#if defined(CUDAUPlatform_Windows)
+#   pragma warning(pop)
+#endif
 #endif
 
 #if !defined(__CUDA_ARCH__)
