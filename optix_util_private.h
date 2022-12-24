@@ -30,9 +30,12 @@
 #   undef RGB
 #endif
 
+#pragma warning(push)
+#pragma warning(disable:4819)
 #include <optix_function_table_definition.h>
-
 #include <cuda.h>
+#pragma warning(pop)
+
 #include <sstream>
 #include <vector>
 #include <unordered_set>

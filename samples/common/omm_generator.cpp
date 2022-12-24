@@ -308,7 +308,7 @@ void countOMMFormats(
             ommSizes.size() * sizeof(ommSizes[0])));
         static bool printPerTriInfos = false;
         if (printPerTriInfos) {
-            for (int triIdx = 0; triIdx < _context.numTriangles; ++triIdx) {
+            for (uint32_t triIdx = 0; triIdx < _context.numTriangles; ++triIdx) {
                 const uint32_t triInfoBinIdx = triIdx / 4;
                 const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
                 shared::PerTriInfo triInfo = {};

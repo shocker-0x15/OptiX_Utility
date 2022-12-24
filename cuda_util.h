@@ -46,7 +46,10 @@ typedef unsigned long long CUsurfObject;
 #else
 #include <cstdint>
 #include <cfloat>
+#pragma warning(push)
+#pragma warning(disable:4819)
 #include <cuda.h>
+#pragma warning(pop)
 #endif
 
 #if !defined(__CUDA_ARCH__)
