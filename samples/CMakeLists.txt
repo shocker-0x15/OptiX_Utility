@@ -143,6 +143,8 @@ target_compile_options(
     # if (compilerID == MSVC && compilerLanguage != CUDA) set(/MP);
     "$<$<AND:$<C_COMPILER_ID:MSVC>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:/MP>"
     "$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:/MP>"
+    # if (compilerID == MSVC && compilerLanguage != CUDA) set(/Zc:__cplusplus);
+    "$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:/Zc:__cplusplus>"
 )
 
 # Windowsはsymlink作成に追加の権限が必要。
