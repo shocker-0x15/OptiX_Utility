@@ -401,10 +401,10 @@ CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator*(const uint2 &v0, const uint2 &v
     return make_uint2(v0.x * v1.x, v0.y * v1.y);
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator*(float s, const uint2 &v) {
-    return make_uint2(s * v.x, s * v.y);
+    return make_uint2(static_cast<uint32_t>(s * v.x), static_cast<uint32_t>(s * v.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE uint2 operator*(const uint2 &v, float s) {
-    return make_uint2(s * v.x, s * v.y);
+    return make_uint2(static_cast<uint32_t>(s * v.x), static_cast<uint32_t>(s * v.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE uint2 &operator*=(uint2 &v0, const uint2 &v1) {
     v0.x *= v1.x;
@@ -452,10 +452,10 @@ CUDA_COMMON_FUNCTION CUDA_INLINE float2 make_float2(float v) {
     return make_float2(v, v);
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE float2 make_float2(const int2 &v) {
-    return make_float2(v.x, v.y);
+    return make_float2(static_cast<float>(v.x), static_cast<float>(v.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE float2 make_float2(const uint2 &v) {
-    return make_float2(v.x, v.y);
+    return make_float2(static_cast<float>(v.x), static_cast<float>(v.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE bool operator==(const float2 &v0, const float2 &v1) {
     return v0.x == v1.x && v0.y == v1.y;

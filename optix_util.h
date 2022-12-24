@@ -227,11 +227,14 @@ TODO:
 #include <vector>
 #include <initializer_list>
 #endif
-#include <optix.h>
 
+#pragma warning(push)
+#pragma warning(disable:4819)
+#include <optix.h>
 #if !defined(__CUDA_ARCH__)
 #include <optix_stubs.h>
 #endif
+#pragma warning(pop)
 
 #ifdef _DEBUG
 #   define OPTIXU_ENABLE_ASSERT
@@ -582,7 +585,7 @@ namespace optixu {
             Type* value) {
             if (!value) // hope calls for this function are removed when value is compile-time nullptr.
                 return;
-            *(reinterpret_cast<uint32_t*>(value) + offsetInDst) = Func::get<srcSlot>();
+            *(reinterpret_cast<uint32_t*>(value) + offsetInDst) = Func::template get<srcSlot>();
             if constexpr (offsetInDst + 1 < getNumDwords<Type>())
                 getValue<Func, Type, offsetInDst + 1, srcSlot + 1>(value);
         }
