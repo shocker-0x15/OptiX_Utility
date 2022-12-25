@@ -3,6 +3,7 @@ import os
 import shutil
 import pathlib
 from pathlib import Path
+import argparse
 import subprocess
 import json
 from PIL import Image, ImageChops
@@ -17,26 +18,64 @@ def run_command(cmd):
     ret = subprocess.run(cmd, check=True)
 
 def run():
-    scriptDir = Path(__file__).parent
+    script_dir = Path(__file__).parent
+    root_dir = script_dir.parent
 
+    parser = argparse.ArgumentParser(description='Optix Utility Tests')
+    parser.add_argument('--cmake-path', required=True)
+    parser.add_argument('--build-dir', default=str(root_dir / 'build'))
+    args = parser.parse_args()
+
+    cmake_path = Path(args.cmake_path)
+    build_dir = Path(args.build_dir)
+
+
+
+    # ----------------------------------------------------------------
+    # CMake meta build
+
+    if build_dir.exists():
+        shutil.rmtree(build_dir)
+    build_dir.mkdir(parents=True)
+    cmd = [
+        str(cmake_path),
+        '-S', str(root_dir),
+        '-B', str(build_dir),
+        '-G','Visual Studio 17 2022', '-A', 'x64']
+    run_command(cmd)
+
+    # END: CMake meta build
+    # ----------------------------------------------------------------
+
+
+
+    # ----------------------------------------------------------------
+    # Build
+
+    sln = build_dir / R'OptiX_Utility_cmake.sln'
     msbuild = R'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
+    configs = ['Debug', 'Release']
+
+    for config in configs:
+        # # Clean
+        # cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
+        # cmd += [str(sln)]
+        # run_command(cmd)
+
+        # Build
+        cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
+        cmd += [str(sln)]
+        run_command(cmd)
+
+    # END: Build
+    # ----------------------------------------------------------------
+
+
 
     # ----------------------------------------------------------------
     # Unit tests
 
-    sln = scriptDir / R'optixu_unit_tests.sln'
-    config = 'Release'
-    exe = scriptDir / 'x64' / config / 'optixu_tests.exe'
-
-    # Clean
-    cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
-    cmd += [str(sln)]
-    run_command(cmd)
-
-    # Build
-    cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
-    cmd += [str(sln)]
-    run_command(cmd)
+    exe = build_dir / 'bin' / 'Release' / 'optixu_tests.exe'
 
     print('Run unit tests')
     cmd = [str(exe)]
@@ -50,31 +89,16 @@ def run():
     # ----------------------------------------------------------------
     # Sample image tests
 
-    sln = (scriptDir / R'..\samples\optixu_samples.sln').resolve()
-    refImgDir = scriptDir / R'ref_images'
+    refImgDir = script_dir / R'ref_images'
 
-    with open(scriptDir / R'tests.json') as f:
+    with open(script_dir / R'tests.json') as f:
         tests = json.load(f)
-
-    configs = ['Debug', 'Release']
-
-    # Build
-    for config in configs:
-        # Clean
-        cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
-        cmd += [str(sln)]
-        run_command(cmd)
-
-        # Build
-        cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
-        cmd += [str(sln)]
-        run_command(cmd)
 
     # Run tests
     results = {}
     for config in configs:
         resultsPerConfig = {}
-        outDir = (scriptDir / R'..\samples\x64' / config).resolve()
+        outDir = (build_dir / 'bin' / config).resolve()
         for test in tests:
             testName = test['name']
             testDir = Path(test['sample'])
@@ -82,7 +106,7 @@ def run():
 
             print('Run ' + testName + ':')
 
-            oldDir = chdir(scriptDir / R'..\samples' / testDir)
+            oldDir = chdir(build_dir / 'samples' / testDir)
             exe = outDir / exeName
             cmd = [str(exe)]
             if 'options' in test:
@@ -127,7 +151,7 @@ def run():
             chdir(oldDir)
         
         results[config] = resultsPerConfig
-    
+
     # Show results
     for config in configs:
         print('Test Results for ' + config + ':')
@@ -145,6 +169,8 @@ def run():
     # ----------------------------------------------------------------
 
     return 0
+
+
 
 if __name__ == '__main__':
     try:
