@@ -146,6 +146,19 @@ target_compile_options(
     # if (compilerID == MSVC && compilerLanguage != CUDA) set(/Zc:__cplusplus);
     "$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:/Zc:__cplusplus>"
 )
+if(${CPP_VER} STREQUAL "c++17")
+    target_compile_features(
+        fakelib INTERFACE
+        cxx_std_17
+    )
+elseif(${CPP_VER} STREQUAL "c++20")
+    target_compile_features(
+        fakelib INTERFACE
+        cxx_std_20
+    )
+else()
+    message(FATAL_ERROR "Invalid C++ standard.")
+endif()
 
 # Windowsはsymlink作成に追加の権限が必要。
 # file(CREATE_LINK "${CMAKE_SOURCE_DIR}/data" "${CMAKE_BINARY_DIR}/data" SYMBOLIC)

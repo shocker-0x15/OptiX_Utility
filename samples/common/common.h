@@ -39,7 +39,9 @@
 #   include <cstdint>
 #   include <cmath>
 
-#   include <numbers>
+#   if __cplusplus >= 202002L
+#       include <numbers>
+#   endif
 #   include <fstream>
 #   include <sstream>
 #   include <array>
@@ -1244,8 +1246,13 @@ public:
 #   define hpprintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
+#if __cplusplus >= 202002L
 template <std::floating_point T>
 static constexpr T pi_v = std::numbers::pi_v<T>;
+#else
+template <typename T>
+static constexpr T pi_v = static_cast<T>(M_PI);
+#endif
 
 
 

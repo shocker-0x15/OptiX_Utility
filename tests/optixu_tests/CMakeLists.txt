@@ -35,7 +35,7 @@ nvcuda_compile_optix_ir(
     "$<$<CONFIG:Debug>:-G>"
     "$<$<CONFIG:Debug>:-O0>"
     "--gpu-architecture=compute_52"
-    "-std=c++17"
+    "-std=${CPP_VER_CUDA}"
     "-cudart" "shared"
     "--use_fast_math"
     "--relocatable-device-code=true"
@@ -56,7 +56,13 @@ add_executable(
     ${SOURCES}
     ${OPTIX_KERNELS}
 )
-target_compile_features("${TARGET_NAME}" PRIVATE cxx_std_20)
+if(${CPP_VER} STREQUAL "c++17")
+    target_compile_features("${TARGET_NAME}" PRIVATE cxx_std_17)
+elseif(${CPP_VER} STREQUAL "c++20")
+    target_compile_features("${TARGET_NAME}" PRIVATE cxx_std_20)
+else()
+    message(FATAL_ERROR "Invalid C++ standard.")
+endif()
 set_target_properties(
     "${TARGET_NAME}" PROPERTIES
     CXX_EXTENSIONS OFF
