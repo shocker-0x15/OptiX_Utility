@@ -74,6 +74,16 @@ endfunction()
 # END: JP: CMakeLists.txtのあるサブディレクトリ内のターゲット全てにフォルダーを設定する。
 # ----------------------------------------------------------------
 
+set(CPP_VER "c++20" CACHE STRING "C++ version to test")
+set_property(
+    CACHE CPP_VER PROPERTY STRINGS
+    "c++17" "c++20")
+
+set(CPP_VER_CUDA "c++17" CACHE STRING "CUDA C++ version to test")
+set_property(
+    CACHE CPP_VER_CUDA PROPERTY STRINGS
+    "c++17" "c++20")
+
 # Assimp
 option(ASSIMP_BUILD_ASSIMP_TOOLS "If the supplementary tools for Assimp are built in addition to the library." OFF)
 option(ASSIMP_BUILD_SAMPLES "If the official samples are built as well (needs Glut)." OFF)

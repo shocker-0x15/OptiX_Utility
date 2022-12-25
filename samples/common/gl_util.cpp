@@ -620,7 +620,7 @@ namespace glu {
         static std::regex regexPragmaOnce(R"regex(^ *# *pragma *once *\r?\n)regex");
         static std::regex regexInclude(R"regex(^ *# *include "(.*)"\r?\n)regex");
 
-        if (includedFiles.contains(filePath.lexically_normal()))
+        if (includedFiles.count(filePath.lexically_normal()) > 0)
             return std::string("");
 
         const auto readFile = [](const std::filesystem::path &filepath) {

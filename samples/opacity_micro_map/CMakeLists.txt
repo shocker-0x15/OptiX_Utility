@@ -43,7 +43,7 @@ nvcuda_compile_ptx(
     "$<$<CONFIG:Debug>:-D_DEBUG=1>"
     "$<$<CONFIG:Debug>:-G>"
     "--gpu-architecture=compute_52"
-    "-std=c++17"
+    "-std=${CPP_VER_CUDA}"
     "-cudart" "shared"
     "--use_fast_math"
     "--relocatable-device-code=true"
@@ -61,7 +61,7 @@ nvcuda_compile_optix_ir(
     "$<$<CONFIG:Debug>:-G>"
     "$<$<CONFIG:Debug>:-O0>"
     "--gpu-architecture=compute_52"
-    "-std=c++17"
+    "-std=${CPP_VER_CUDA}"
     "-cudart" "shared"
     "--use_fast_math"
     "--relocatable-device-code=true"
@@ -91,7 +91,6 @@ add_executable(
     ${OPTIX_KERNELS}
     ${OMM_GENERATOR_SOURCES}
 )
-target_compile_features("${TARGET_NAME}" PRIVATE cxx_std_20)
 set_target_properties(
     "${TARGET_NAME}" PROPERTIES
     CXX_EXTENSIONS OFF

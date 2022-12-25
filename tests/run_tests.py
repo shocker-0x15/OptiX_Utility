@@ -24,6 +24,8 @@ def run():
     parser = argparse.ArgumentParser(description='Optix Utility Tests')
     parser.add_argument('--cmake-path', required=True)
     parser.add_argument('--build-dir', default=str(root_dir / 'build'))
+    parser.add_argument('--cppstd', default='c++20')
+    parser.add_argument('--cppstd-cuda', default='c++20')
     args = parser.parse_args()
 
     cmake_path = Path(args.cmake_path)
@@ -41,7 +43,9 @@ def run():
         str(cmake_path),
         '-S', str(root_dir),
         '-B', str(build_dir),
-        '-G','Visual Studio 17 2022', '-A', 'x64']
+        '-G','Visual Studio 17 2022', '-A', 'x64',
+        '-D', 'CPP_VER=' + args.cppstd,
+        '-D', 'CPP_VER_CUDA=' + args.cppstd_cuda]
     run_command(cmd)
 
     # END: CMake meta build
