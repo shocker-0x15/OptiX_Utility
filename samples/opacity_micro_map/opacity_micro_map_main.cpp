@@ -5,9 +5,10 @@ JP: このサンプルはAny-Hit Program呼び出しを削減することでア�
     OMMは三角形メッシュにおけるテクスチャー等によるジオメトリの切り抜きに関する情報を事前計算したものです。
     GASの生成時に追加情報として渡すことで少量の追加メモリと引き換えにAny-Hit Programの呼び出し回数を削減し、
     アルファテストなどが有効なジオメトリに対するレイトレーシングを高速化することができます。
-    OptiXのAPIにはOMM自体の生成処理は含まれていないため、何らかの手段を用いて生成する必要がありますが、
-    このサンプルにはOMMの生成処理も含まれています。OMM生成処理はテクスチャーとメッシュ間のマッピング、
-    テクスチャー自体が静的な場合オフラインで予め行うことも可能です。
+    OptiXのAPIにはOMM自体の生成処理は含まれていないため、何らかの手段を用いて生成する必要があります。
+    OMM生成処理はテクスチャーとメッシュ間のマッピング、テクスチャー自体が静的な場合オフラインで予め行うことも可能です。
+    このサンプルにはOMMの生成処理も含まれていますが、
+    おそらくOpacity Micro-Map SDK [1]などのツールを使うほうが良いでしょう。
 
     *: このサンプル自体はOMMの使い方の説明目的なので、シーンが単純すぎて高速化が確認できない可能性があります。
 
@@ -27,11 +28,14 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
     Providing OMM as additional information when building a GAS costs a bit of additional memory but
     reduces any-hit program calls to accelerate ray tracing for geometries with alpha tests.
     OptiX API doesn't provide generation of OMM itself, so OMM generation by some means is required.
-    This sample also provide OMM generation. OMM generation can be offline pre-computation if
-    the mapping between a texture and a mesh and the texture itself are static.
+    OMM generation can be offline pre-computation if the mapping between a texture and a mesh and
+    the texture itself are static.
+    This sample provides OMM generation also, but you may want to use a tool like Opacity Micro-Map SDK [1].
 
     *: This sample itself is for demonstrating how to use OMM, therefore the scene is probably too simple
        to see the speedup.
+
+    [1] Opacity Micro-Map SDK: https://github.com/NVIDIAGameWorks/Opacity-MicroMap-SDK
 
     --no-omm: Disable OMM.
     --visualize ***: You can change visualizing mode
