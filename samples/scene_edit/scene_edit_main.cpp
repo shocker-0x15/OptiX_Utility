@@ -1153,13 +1153,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
     // JP: このグループはレイと三角形の交叉判定用なのでカスタムのIntersectionプログラムは不要。
     // EN: This group is for ray-triangle intersection, so we don't need custom intersection program.
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
@@ -1178,23 +1178,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.setMappedMemoryPersistent(true);
     pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
-    OptixStackSizes stackSizes;
-
-    rayGenProgram.getStackSize(&stackSizes);
-    uint32_t cssRG = stackSizes.cssRG;
-
-    missProgram.getStackSize(&stackSizes);
-    uint32_t cssMS = stackSizes.cssMS;
-
-    hitProgramGroup.getStackSize(&stackSizes);
-    uint32_t cssCH = stackSizes.cssCH;
-
     uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
     uint32_t dcStackSizeFromState = 0;
     // Possible Program Paths:
     // RG - CH
     // RG - MS
-    uint32_t ccStackSize = cssRG + std::max(cssCH, cssMS);
+    uint32_t ccStackSize = rayGenProgram.getStackSize() +
+        std::max(hitProgramGroup.getCHStackSize(), missProgram.getStackSize());
     uint32_t maxTraversableGraphDepth = 5;
     pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, maxTraversableGraphDepth);
 

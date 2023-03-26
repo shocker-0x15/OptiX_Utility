@@ -323,9 +323,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     struct Pipeline {
         optixu::Pipeline pipeline;
         optixu::Module module;
-        std::map<std::string, optixu::ProgramGroup> rayGenPrograms;
-        optixu::ProgramGroup missProgram;
-        optixu::ProgramGroup hitProgramGroup;
+        std::map<std::string, optixu::Program> rayGenPrograms;
+        optixu::Program missProgram;
+        optixu::HitProgramGroup hitProgramGroup;
         cudau::Buffer shaderBindingTable;
         cudau::Buffer hitGroupShaderBindingTable;
 

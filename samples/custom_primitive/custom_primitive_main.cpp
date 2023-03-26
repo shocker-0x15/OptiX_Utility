@@ -53,17 +53,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
     // JP: このヒットグループはレイと(部分)球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
     // EN: This is for ray-(partial-)sphere intersection, so pass a custom intersection program.
-    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForCustomIS(
+    optixu::HitProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForCustomIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         moduleOptiX, RT_IS_NAME_STR("partialSphere"));

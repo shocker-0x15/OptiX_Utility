@@ -484,16 +484,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathtracing"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("searchRay"));
-    optixu::ProgramGroup visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathtracing"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program searchRayMissProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("searchRay"));
+    optixu::Program visibilityRayMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optixu::ProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup searchRayDiffuseHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr);
-    optixu::ProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup searchRaySpecularHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr);
-    optixu::ProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup visibilityRayHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"));
 
     constexpr OptixCurveEndcapFlags curveEndcap = OPTIX_CURVE_ENDCAP_ON;
@@ -501,40 +501,44 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr optixu::AllowUpdate curveASUpdatable = optixu::AllowUpdate::No;
     constexpr optixu::AllowCompaction curveASCompactable = optixu::AllowCompaction::Yes;
     constexpr auto curveASAllowRandomVertexAccess = optixu::AllowRandomVertexAccess::No;
-    optixu::ProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup searchRayDiffuseCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
-    optixu::ProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup searchRaySpecularCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
-    optixu::ProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup visibilityRayCurveHitProgramGroup = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"),
         curveASTradeOff, curveASUpdatable, curveASCompactable, curveASAllowRandomVertexAccess);
 
     // JP: これらのグループはレイとカスタムプリミティブの交差判定用なのでIntersectionプログラムを渡す必要がある。
     // EN: These are for ray-custom primitive hit groups, so we need a custom intersection program.
-    optixu::ProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
+    optixu::HitProgramGroup searchRayDiffuseCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
         moduleOptiX, RT_CH_NAME_STR("shading_diffuse"), emptyModule, nullptr,
         moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
-    optixu::ProgramGroup searchRaySpecularCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
+    optixu::HitProgramGroup searchRaySpecularCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
         moduleOptiX, RT_CH_NAME_STR("shading_specular"), emptyModule, nullptr,
         moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
-    optixu::ProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
+    optixu::HitProgramGroup visibilityRayCustomHitProgramGroup = pipeline.createHitProgramGroupForCustomIS(
         emptyModule, nullptr, moduleOptiX, RT_AH_NAME_STR("visibility"),
         moduleOptiX, RT_IS_NAME_STR("custom_primitive"));
 
     uint32_t nextCallableProgramIndex = 0;
     uint32_t callableProgramSampleTextureIndex = nextCallableProgramIndex++;
-    optixu::ProgramGroup callableProgramSampleTexture = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
+    optixu::CallableProgramGroup callableProgramSampleTexture = pipeline.createCallableProgramGroup(
+        moduleOptiX, RT_DC_NAME_STR("sampleTexture"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointTriangleIndex = nextCallableProgramIndex++;
-    optixu::ProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
+    optixu::CallableProgramGroup callableProgramDecodeHitPointTriangle = pipeline.createCallableProgramGroup(
+        moduleOptiX, RT_DC_NAME_STR("decodeHitPointTriangle"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointCurveIndex = nextCallableProgramIndex++;
-    optixu::ProgramGroup callableProgramDecodeHitPointCurve = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointCurve"), emptyModule, nullptr);
+    optixu::CallableProgramGroup callableProgramDecodeHitPointCurve = pipeline.createCallableProgramGroup(
+        moduleOptiX, RT_DC_NAME_STR("decodeHitPointCurve"), emptyModule, nullptr);
     uint32_t callableProgramDecodeHitPointSphereIndex = nextCallableProgramIndex++;
-    optixu::ProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableProgramGroup(moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
+    optixu::CallableProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableProgramGroup(
+        moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
     pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
@@ -558,40 +562,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.setMappedMemoryPersistent(true);
     pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
-    OptixStackSizes stackSizes;
-
-    rayGenProgram.getStackSize(&stackSizes);
-    uint32_t cssRG = stackSizes.cssRG;
-
-    searchRayMissProgram.getStackSize(&stackSizes);
-    uint32_t cssMS = stackSizes.cssMS;
-
-    searchRayDiffuseHitProgramGroup.getStackSize(&stackSizes);
-    uint32_t cssCHSearchRayDiffuse = stackSizes.cssCH;
-    searchRaySpecularHitProgramGroup.getStackSize(&stackSizes);
-    uint32_t cssCHSearchRaySpecular = stackSizes.cssCH;
-    visibilityRayHitProgramGroup.getStackSize(&stackSizes);
-    uint32_t cssAHVisibilityRay = stackSizes.cssAH;
-
-    uint32_t dssDC = 0;
-    callableProgramSampleTexture.getStackSize(&stackSizes);
-    dssDC = std::max(dssDC, stackSizes.dssDC);
-    callableProgramDecodeHitPointTriangle.getStackSize(&stackSizes);
-    dssDC = std::max(dssDC, stackSizes.dssDC);
-    callableProgramDecodeHitPointSphere.getStackSize(&stackSizes);
-    dssDC = std::max(dssDC, stackSizes.dssDC);
-
     uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
-    uint32_t dcStackSizeFromState = dssDC;
+    uint32_t dcStackSizeFromState = std::max(
+        {
+            callableProgramSampleTexture.getDCStackSize(),
+            callableProgramDecodeHitPointTriangle.getDCStackSize(),
+            callableProgramDecodeHitPointSphere.getDCStackSize(),
+        });
     // Possible Program Paths:
     // RG - CH(SearchRay/Diffuse) - AH(VisibilityRay)
     // RG - CH(SearchRay/Specular)
     // RG - MS(SearchRay)
-    uint32_t ccStackSize =
-        cssRG +
-        std::max(std::max(cssCHSearchRayDiffuse + cssAHVisibilityRay,
-                          cssCHSearchRaySpecular),
-                 cssMS);
+    uint32_t ccStackSize = rayGenProgram.getStackSize() +
+        std::max(
+            {
+                searchRayDiffuseHitProgramGroup.getCHStackSize() + visibilityRayHitProgramGroup.getAHStackSize(),
+                searchRaySpecularHitProgramGroup.getCHStackSize(),
+                searchRayMissProgram.getStackSize()
+            });
     pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 2);
 
     CUmodule modulePostProcess;

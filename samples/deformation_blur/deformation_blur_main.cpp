@@ -65,11 +65,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
@@ -79,7 +79,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr optixu::ASTradeoff curveASTradeOff = optixu::ASTradeoff::PreferFastTrace;
     constexpr optixu::AllowUpdate curveASUpdatable = optixu::AllowUpdate::No;
     constexpr optixu::AllowCompaction curveASCompactable = optixu::AllowCompaction::Yes;
-    optixu::ProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup hitProgramGroupForCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
@@ -88,14 +88,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr optixu::ASTradeoff sphereASTradeOff = optixu::ASTradeoff::PreferFastTrace;
     constexpr optixu::AllowUpdate sphereASUpdatable = optixu::AllowUpdate::No;
     constexpr optixu::AllowCompaction sphereASCompactable = optixu::AllowCompaction::Yes;
-    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
+    optixu::HitProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         sphereASTradeOff, sphereASUpdatable, sphereASCompactable, useEmbeddedVertexData);
 
     // JP: このヒットグループはレイと(部分)球の交叉判定用なのでカスタムのIntersectionプログラムを渡す。
     // EN: This is for ray-(partial-)sphere intersection, so pass a custom intersection program.
-    optixu::ProgramGroup hitProgramGroupForPartialSpheres = pipeline.createHitProgramGroupForCustomIS(
+    optixu::HitProgramGroup hitProgramGroupForPartialSpheres = pipeline.createHitProgramGroupForCustomIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         moduleOptiX, RT_IS_NAME_STR("partialSphere"));

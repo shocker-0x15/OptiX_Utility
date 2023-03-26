@@ -71,24 +71,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup pathTracingRayGenProgram =
+    optixu::Program pathTracingRayGenProgram =
         pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("pathTracing"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
 
     // JP: Miss Programで使用されているペイロードタイプ情報を渡す。
     // EN: Pass the payload type used in the miss program.
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(
+    optixu::Program missProgram = pipeline.createMissProgram(
         moduleOptiX, RT_MS_NAME_STR("miss"),
         Shared::usePayloadAnnotation ? payloadTypes[0] : optixu::PayloadType());
-    optixu::ProgramGroup emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
+    optixu::Program emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
     // JP: それぞれのヒットグループで使われているペイロードタイプ情報を渡す。
     // EN: Pass the payload type for each hit group.
-    optixu::ProgramGroup shadingHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup shadingHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("shading"),
         emptyModule, nullptr,
         Shared::usePayloadAnnotation ? payloadTypes[0] : optixu::PayloadType());
-    optixu::ProgramGroup visibilityHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup visibilityHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr,
         moduleOptiX, RT_AH_NAME_STR("visibility"),
         Shared::usePayloadAnnotation ? payloadTypes[1] : optixu::PayloadType());
