@@ -103,12 +103,12 @@ optixu::Module mainModule =
     pipeline.createModuleFromPTXString(
         ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
-optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
+optixu::Program rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
-optixu::ProgramGroup searchRayHitProgramGroup =
+optixu::HitProgramGroup searchRayHitProgramGroup =
     pipeline.createHitProgramGroupForTriangleIS(
         mainModule, RT_CH_NAME_STR("shading"), emptyModule, nullptr);
-optixu::ProgramGroup visibilityRayHitProgramGroup =
+optixu::HitProgramGroup visibilityRayHitProgramGroup =
     pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr, mainModule, RT_AH_NAME_STR("visibility"));
 // ...
@@ -266,14 +266,14 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 11 (22H2) & Visual Studio Community 2022 (17.4.4)
+* Windows 11 (22H2) & Visual Studio Community 2022 (17.5.3)
 * Core i9-9900K, 32GB, RTX 4080 16GB
-* NVIDIA Driver 528.24
+* NVIDIA Driver 531.29
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 11.7
+* CUDA 12.1
 * OptiX 7.6.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License

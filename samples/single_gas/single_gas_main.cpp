@@ -56,9 +56,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen0"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen0"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss0"));
 
     /*
     JP: 三角形用のヒットグループを作成する。
@@ -68,7 +68,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         This sample doesn't use any-hit programs.
         The user doesn't need to specify an intersection program since triangles use the build-in.
     */
-    optixu::ProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit0"),
         emptyModule, nullptr);
 

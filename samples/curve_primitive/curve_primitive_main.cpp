@@ -63,11 +63,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
@@ -85,22 +85,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr optixu::AllowUpdate curveASUpdatable = optixu::AllowUpdate::No;
     constexpr optixu::AllowCompaction curveASCompactable = optixu::AllowCompaction::Yes;
     constexpr auto useEmbeddedVertexData = optixu::AllowRandomVertexAccess(Shared::useEmbeddedVertexData);
-    optixu::ProgramGroup hitProgramGroupForLinearCurves = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup hitProgramGroupForLinearCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR, OPTIX_CURVE_ENDCAP_DEFAULT,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
-    optixu::ProgramGroup hitProgramGroupForQuadraticCurves = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup hitProgramGroupForQuadraticCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
-    optixu::ProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
-    optixu::ProgramGroup hitProgramGroupForCatmullRomCurves = pipeline.createHitProgramGroupForCurveIS(
+    optixu::HitProgramGroup hitProgramGroupForCatmullRomCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,

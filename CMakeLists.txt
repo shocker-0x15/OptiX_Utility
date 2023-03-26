@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.26)
 project(
     OptiX_Utility_cmake
     VERSION 1.0
@@ -14,7 +14,7 @@ set(
     CMAKE_MODULE_PATH
     "${CMAKE_SOURCE_DIR}/cmake"
     ${CMAKE_MODULE_PATH})
-find_package(CUDAToolkit 11.7 REQUIRED)
+find_package(CUDAToolkit 12.0 REQUIRED)
 find_package(OptiX76)
 include("copy_files")
 include("nvcuda_compile_ptx")

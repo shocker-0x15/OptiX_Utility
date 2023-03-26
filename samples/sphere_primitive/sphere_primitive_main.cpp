@@ -54,11 +54,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Module emptyModule;
 
-    optixu::ProgramGroup rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
-    //optixu::ProgramGroup exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
-    optixu::ProgramGroup missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+    //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
+    optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
 
-    optixu::ProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup hitProgramGroupForTriangles = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
 
@@ -75,7 +75,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr optixu::AllowUpdate sphereASUpdatable = optixu::AllowUpdate::No;
     constexpr optixu::AllowCompaction sphereASCompactable = optixu::AllowCompaction::Yes;
     constexpr auto useEmbeddedVertexData = optixu::AllowRandomVertexAccess(Shared::useEmbeddedVertexData);
-    optixu::ProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
+    optixu::HitProgramGroup hitProgramGroupForSpheres = pipeline.createHitProgramGroupForSphereIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         sphereASTradeOff, sphereASUpdatable, sphereASCompactable, useEmbeddedVertexData);
