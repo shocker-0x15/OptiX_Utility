@@ -540,7 +540,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::CallableProgramGroup callableProgramDecodeHitPointSphere = pipeline.createCallableProgramGroup(
         moduleOptiX, RT_DC_NAME_STR("decodeHitPointSphere"), emptyModule, nullptr);
 
-    pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    pipeline.link(2);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.

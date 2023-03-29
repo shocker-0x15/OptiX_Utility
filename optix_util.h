@@ -1704,7 +1704,7 @@ namespace optixu {
             Module module_CC, const char* entryFunctionNameCC,
             const PayloadType &payloadType = PayloadType()) const;
 
-        void link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const;
+        void link(uint32_t maxTraceDepth) const;
 
         // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが
         //     自動で無効化される。

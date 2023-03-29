@@ -2827,7 +2827,7 @@ namespace optixu {
 
         char log[4096];
         size_t logSize = sizeof(log);
-        OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
+        OPTIX_CHECK_LOG(optixModuleCreate(
             getRawContext(),
             &moduleCompileOptions,
             &pipelineCompileOptions,
@@ -3379,12 +3379,11 @@ namespace optixu {
         return (new _CallableProgramGroup(m, group))->getPublicType();
     }
 
-    void Pipeline::link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const {
+    void Pipeline::link(uint32_t maxTraceDepth) const {
         m->throwRuntimeError(!m->pipelineLinked, "This pipeline has been already linked.");
 
         OptixPipelineLinkOptions pipelineLinkOptions = {};
         pipelineLinkOptions.maxTraceDepth = maxTraceDepth;
-        pipelineLinkOptions.debugLevel = debugLevel;
 
         std::vector<OptixProgramGroup> groups;
         groups.resize(m->programGroups.size());

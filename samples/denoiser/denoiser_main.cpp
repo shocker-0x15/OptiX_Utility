@@ -114,7 +114,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         emptyModule, nullptr,
         moduleOptiX, RT_AH_NAME_STR("visibility"));
 
-    pipeline.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    pipeline.link(2);
 
     pipeline.setRayGenerationProgram(pathTracingRayGenProgram);
     // If an exception program is not set but exception flags are set,
