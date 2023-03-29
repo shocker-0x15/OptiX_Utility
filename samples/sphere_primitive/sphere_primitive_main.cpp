@@ -194,7 +194,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<Shared::SphereParameter> params;
         {
             std::mt19937 rng(390318410);
-            std::uniform_int_distribution<uint32_t> uSeg(3, 5);
             std::uniform_real_distribution<float> u01;
 
             constexpr uint32_t numSpheres = 100;
