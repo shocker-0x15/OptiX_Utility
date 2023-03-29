@@ -1173,6 +1173,10 @@ namespace optixu {
         }
         OPTIXU_DEFINE_THROW_RUNTIME_ERROR("Pipeline");
 
+        OptixPipeline getRawPipeline() const {
+            return rawPipeline;
+        }
+
 
 
         void markDirty();
@@ -1224,7 +1228,7 @@ namespace optixu {
         Priv(_Pipeline* pl, OptixProgramGroup _rawGroup, OptixProgramGroupKind kind) :
             pipeline(pl), rawGroup(_rawGroup) {
             OptixStackSizes stackSizes;
-            OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes));
+            OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes, pipeline->getRawPipeline()));
             if (kind == OPTIX_PROGRAM_GROUP_KIND_RAYGEN)
                 stackSize = stackSizes.cssRG;
             else if (kind == OPTIX_PROGRAM_GROUP_KIND_MISS)
@@ -1270,7 +1274,7 @@ namespace optixu {
         Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) :
             pipeline(pl), rawGroup(_rawGroup) {
             OptixStackSizes stackSizes;
-            OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes));
+            OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes, pipeline->getRawPipeline()));
             stackSizeCH = stackSizes.cssCH;
             stackSizeAH = stackSizes.cssAH;
             stackSizeIS = stackSizes.cssIS;
@@ -1310,7 +1314,7 @@ namespace optixu {
         Priv(_Pipeline* pl, OptixProgramGroup _rawGroup) :
             pipeline(pl), rawGroup(_rawGroup) {
             OptixStackSizes stackSizes;
-            OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes));
+            OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes, pipeline->getRawPipeline()));
             stackSizeDC = stackSizes.dssDC;
             stackSizeCC = stackSizes.cssCC;
         }

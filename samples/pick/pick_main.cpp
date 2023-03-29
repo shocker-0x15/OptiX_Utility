@@ -376,7 +376,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             p.module, RT_CH_NAME_STR("closesthit"),
             emptyModule, nullptr);
 
-        optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        optixPipeline.link(1);
 
         optixPipeline.setNumMissRayTypes(Shared::NumPickRayTypes);
         optixPipeline.setMissProgram(Shared::PickRayType_Primary, p.missProgram);
@@ -421,7 +421,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             p.module, RT_CH_NAME_STR("closesthit"),
             emptyModule, nullptr);
 
-        optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        optixPipeline.link(1);
 
         optixPipeline.setNumMissRayTypes(Shared::NumRayTypes);
         optixPipeline.setMissProgram(Shared::RayType_Primary, p.missProgram);

@@ -18,7 +18,7 @@ Add optix_util.h, optix_util_private.h and optix_util.cpp to your program which 
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
-Currently based on OptiX 7.6.0
+Currently based on OptiX 7.7.0
 - Traversable types
   - Single GAS
   - Single-level instancing
@@ -112,7 +112,7 @@ optixu::HitProgramGroup visibilityRayHitProgramGroup =
     pipeline.createHitProgramGroupForTriangleIS(
         emptyModule, nullptr, mainModule, RT_AH_NAME_STR("visibility"));
 // ...
-pipeline.link(2, OPTIX_COMPILE_DEBUG_LEVEL_FULL);
+pipeline.link(2);
 
 // Allocate a shader binding table (scene independent part).
 cudau::Buffer sbt;
@@ -274,7 +274,7 @@ I've confirmed that the program runs correctly in the following environment.
 It requires the following libraries.
 
 * CUDA 12.1
-* OptiX 7.6.0 (requires Maxwell or later generation NVIDIA GPU)
+* OptiX 7.7.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))

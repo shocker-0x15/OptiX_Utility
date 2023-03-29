@@ -73,7 +73,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
-    pipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    pipeline.link(1);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set,
