@@ -258,8 +258,10 @@ namespace optixu {
             geomType == GeometryType::Triangles ||
             geomType == GeometryType::LinearSegments ||
             geomType == GeometryType::QuadraticBSplines ||
+            geomType == GeometryType::FlatQuadraticBSplines ||
             geomType == GeometryType::CubicBSplines ||
             geomType == GeometryType::CatmullRomSplines ||
+            geomType == GeometryType::CubicBezier ||
             geomType == GeometryType::Spheres ||
             geomType == GeometryType::CustomPrimitives,
             "Invalid geometry type: %u.",
@@ -272,8 +274,10 @@ namespace optixu {
             geomType == GeometryType::Triangles ||
             geomType == GeometryType::LinearSegments ||
             geomType == GeometryType::QuadraticBSplines ||
+            geomType == GeometryType::FlatQuadraticBSplines ||
             geomType == GeometryType::CubicBSplines ||
             geomType == GeometryType::CatmullRomSplines ||
+            geomType == GeometryType::CubicBezier ||
             geomType == GeometryType::Spheres ||
             geomType == GeometryType::CustomPrimitives,
             "Invalid geometry type: %u.",
@@ -522,6 +526,13 @@ namespace optixu {
 
             uint32_t vertexStride = geom.vertexBuffers[0].stride();
             uint32_t widthStride = geom.widthBuffers[0].stride();
+            bool normalBufferAvailable = geomType == GeometryType::FlatQuadraticBSplines;
+            bool normalBufferSet = false;
+            uint32_t normalStride = 0;
+            if (normalBufferAvailable) {
+                normalBufferSet = geom.normalBuffers[0].isValid();
+                normalStride = geom.normalBuffers[0].stride();
+            }
             uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
@@ -550,6 +561,23 @@ namespace optixu {
                     geom.widthBuffers[i].stride() == widthStride,
                     "Width stride for motion step %u doesn't match that of 0.",
                     i);
+                if (normalBufferAvailable) {
+                    throwRuntimeError(
+                        normalBufferSet == geom.normalBuffers[i].isValid(),
+                        "Normal buffer for motion step %u is not set (/ set) while the step 0 is set (/ not set).",
+                        i);
+                    if (normalBufferSet) {
+                        geom.normalBufferArray[i] = geom.normalBuffers[i].getCUdeviceptr();
+                        throwRuntimeError(
+                            geom.normalBuffers[i].numElements() == numElements,
+                            "Num elements of the normal buffer for motion step %u doesn't match that of 0.",
+                            i);
+                        throwRuntimeError(
+                            geom.normalBuffers[i].stride() == normalStride,
+                            "Normal stride for motion step %u doesn't match that of 0.",
+                            i);
+                    }
+                }
             }
 
             input->type = OPTIX_BUILD_INPUT_TYPE_CURVES;
@@ -559,10 +587,14 @@ namespace optixu {
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR;
             else if (geomType == GeometryType::QuadraticBSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE;
+            else if (geomType == GeometryType::FlatQuadraticBSplines)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE;
             else if (geomType == GeometryType::CubicBSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE;
             else if (geomType == GeometryType::CatmullRomSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM;
+            else if (geomType == GeometryType::CubicBezier)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER;
             else
                 optixuAssert_ShouldNotBeCalled();
             curveArray.endcapFlags = geom.endcapFlags;
@@ -571,8 +603,10 @@ namespace optixu {
             curveArray.vertexStrideInBytes = vertexStride;
             curveArray.widthBuffers = geom.widthBufferArray;
             curveArray.widthStrideInBytes = widthStride;
-            curveArray.normalBuffers = 0; // Optix just reserves normal fields for future use.
-            curveArray.normalStrideInBytes = 0;
+            if (normalBufferSet) {
+                curveArray.normalBuffers = geom.normalBufferArray;
+                curveArray.normalStrideInBytes = normalStride;
+            }
             curveArray.numVertices = numElements;
 
             curveArray.indexBuffer = geom.segmentIndexBuffer.getCUdeviceptr();
@@ -748,6 +782,13 @@ namespace optixu {
 
             uint32_t vertexStride = geom.vertexBuffers[0].stride();
             uint32_t widthStride = geom.widthBuffers[0].stride();
+            bool normalBufferAvailable = geomType == GeometryType::FlatQuadraticBSplines;
+            bool normalBufferSet = false;
+            uint32_t normalStride = 0;
+            if (normalBufferAvailable) {
+                normalBufferSet = geom.normalBuffers[0].isValid();
+                normalStride = geom.normalBuffers[0].stride();
+            }
             uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
@@ -776,13 +817,33 @@ namespace optixu {
                     geom.widthBuffers[i].stride() == widthStride,
                     "Width stride for motion step %u doesn't match that of 0.",
                     i);
+                if (normalBufferAvailable) {
+                    throwRuntimeError(
+                        normalBufferSet == geom.normalBuffers[i].isValid(),
+                        "Normal buffer for motion step %u is not set (/ set) while the step 0 is set (/ not set).",
+                        i);
+                    if (normalBufferSet) {
+                        geom.normalBufferArray[i] = geom.normalBuffers[i].getCUdeviceptr();
+                        throwRuntimeError(
+                            geom.normalBuffers[i].numElements() == numElements,
+                            "Num elements of the normal buffer for motion step %u doesn't match that of 0.",
+                            i);
+                        throwRuntimeError(
+                            geom.normalBuffers[i].stride() == normalStride,
+                            "Normal stride for motion step %u doesn't match that of 0.",
+                            i);
+                    }
+                }
             }
 
             OptixBuildInputCurveArray &curveArray = input->curveArray;
 
             curveArray.vertexBuffers = geom.vertexBufferArray;
             curveArray.widthBuffers = geom.widthBufferArray;
-            curveArray.normalBuffers = 0; // Optix just reserves these fields for future use.
+            if (normalBufferSet) {
+                curveArray.normalBuffers = geom.normalBufferArray;
+                curveArray.normalStrideInBytes = normalStride;
+            }
 
             curveArray.indexBuffer = geom.segmentIndexBuffer.getCUdeviceptr();
         }
@@ -934,6 +995,10 @@ namespace optixu {
         }
         else if (std::holds_alternative<Priv::CurveGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+            if (m->geomType == GeometryType::FlatQuadraticBSplines) {
+                delete[] geom.normalBuffers;
+                delete[] geom.normalBufferArray;
+            }
             delete[] geom.widthBuffers;
             delete[] geom.widthBufferArray;
             delete[] geom.vertexBuffers;
@@ -942,6 +1007,10 @@ namespace optixu {
             geom.vertexBuffers = new BufferView[n];
             geom.widthBufferArray = new CUdeviceptr[n];
             geom.widthBuffers = new BufferView[n];
+            if (m->geomType == GeometryType::FlatQuadraticBSplines) {
+                geom.normalBufferArray = new CUdeviceptr[n];
+                geom.normalBuffers = new BufferView[n];
+            }
         }
         else if (std::holds_alternative<Priv::SphereGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::SphereGeometry>(m->geometry);
@@ -1005,6 +1074,16 @@ namespace optixu {
                              motionStep, m->numMotionSteps);
         auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
         geom.widthBuffers[motionStep] = widthBuffer;
+    }
+
+    void GeometryInstance::setNormalBuffer(const BufferView &normalBuffer, uint32_t motionStep) const {
+        m->throwRuntimeError(
+            m->geomType == GeometryType::FlatQuadraticBSplines,
+            "This geometry instance was created not for flat quadratic B-splines.");
+        m->throwRuntimeError(motionStep < m->numMotionSteps, "motionStep %u is out of bounds [0, %u).",
+                             motionStep, m->numMotionSteps);
+        auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+        geom.normalBuffers[motionStep] = normalBuffer;
     }
 
     void GeometryInstance::setRadiusBuffer(const BufferView &radiusBuffer, uint32_t motionStep) const {
@@ -1227,6 +1306,18 @@ namespace optixu {
             motionStep, m->numMotionSteps);
         const auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
         return geom.widthBuffers[motionStep];
+    }
+
+    BufferView GeometryInstance::getNormalBuffer(uint32_t motionStep) {
+        m->throwRuntimeError(
+            m->geomType == GeometryType::FlatQuadraticBSplines,
+            "This geometry instance was created not for flat quadratic B-splines.");
+        m->throwRuntimeError(
+            motionStep < m->numMotionSteps,
+            "motionStep %u is out of bounds [0, %u).",
+            motionStep, m->numMotionSteps);
+        const auto &geom = std::get<Priv::CurveGeometry>(m->geometry);
+        return geom.normalBuffers[motionStep];
     }
 
     BufferView GeometryInstance::getRadiusBuffer(uint32_t motionStep) {
@@ -1468,8 +1559,10 @@ namespace optixu {
             "triangles",
             "linear segments",
             "quadratic B-splines",
+            "flat quadratic B-splines",
             "cubic B-splines",
             "Catmull-Rom splines",
+            "cubic Bezier splines",
             "custom primitives" };
         m->throwRuntimeError(
             _geomInst->getGeometryType() == m->geomType,
@@ -2843,8 +2936,10 @@ namespace optixu {
         ASTradeoff tradeoff, bool allowUpdate, bool allowCompaction, bool allowRandomVertexAccess) {
         if (primType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE &&
+            primType != OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER &&
             primType != OPTIX_PRIMITIVE_TYPE_SPHERE)
             return nullptr;
 
@@ -3156,8 +3251,10 @@ namespace optixu {
         m->throwRuntimeError(
             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
+            curveType != OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE ||
             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM,
+            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
+            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER,
             "This is a hit program group for curves.");
         _Module* _module_CH = extract(module_CH);
         _Module* _module_AH = extract(module_AH);

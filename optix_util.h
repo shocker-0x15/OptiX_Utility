@@ -32,6 +32,13 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+  JP: - OptiX 7.7.0をサポート。
+      - Pipeline::link()のパラメターを変更。
+      - Displaced Micro-Meshは未対応。
+  EN: - Supported OptiX 7.7.0.
+      - Changed the parameters of Pipeline::link().
+      - Does not support displaced micro-mesh yet.
+- !!BREAKING
   JP: - ProgramGroupをProgram, HitProgramGroup, CallableProgramGroupに分割した。
   EN: - Separated ProgramGroup into Program, HitProgramGroup, CallableProgramGroup.
 
@@ -920,7 +927,11 @@ namespace optixu {
 
     Context --+-- Pipeline --+-- Module
               |              |
-              |              +-- ProgramGroup
+              |              +-- Program
+              |              |
+              |              +-- HitProgramGroup
+              |              |
+              |              +-- CallableProgramGroup
               |
               +-- Material
               |
@@ -1021,8 +1032,10 @@ namespace optixu {
         Triangles = 0,
         LinearSegments,
         QuadraticBSplines,
+        FlatQuadraticBSplines,
         CubicBSplines,
         CatmullRomSplines,
+        CubicBezier,
         Spheres,
         CustomPrimitives,
     };
@@ -1315,6 +1328,7 @@ namespace optixu {
         void setVertexFormat(OptixVertexFormat format) const;
         void setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep = 0) const;
         void setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep = 0) const;
+        void setNormalBuffer(const BufferView &normalBuffer, uint32_t motionStep = 0) const;
         void setRadiusBuffer(const BufferView &radiusBuffer, uint32_t motionStep = 0) const;
         void setTriangleBuffer(
             const BufferView &triangleBuffer,
@@ -1356,6 +1370,7 @@ namespace optixu {
         OptixVertexFormat getVertexFormat() const;
         BufferView getVertexBuffer(uint32_t motionStep = 0);
         BufferView getWidthBuffer(uint32_t motionStep = 0);
+        BufferView getNormalBuffer(uint32_t motionStep = 0);
         BufferView getRadiusBuffer(uint32_t motionStep = 0);
         BufferView getTriangleBuffer(OptixIndicesFormat* format = nullptr) const;
         OpacityMicroMapArray getOpacityMicroMapArray(

@@ -31,6 +31,12 @@ namespace Shared {
         float width;
     };
 
+    struct RibbonVertex {
+        float3 position;
+        float3 normal;
+        float width;
+    };
+
 
 
     class PCG32RNG {
@@ -75,6 +81,10 @@ namespace Shared {
         };
         struct {
             const CurveVertex* curveVertexBuffer;
+            const uint32_t* segmentIndexBuffer;
+        };
+        struct {
+            const RibbonVertex* ribbonVertexBuffer;
             const uint32_t* segmentIndexBuffer;
         };
     };

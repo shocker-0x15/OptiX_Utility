@@ -12,24 +12,45 @@ namespace curve {
 
 
     template <OptixPrimitiveType curveType>
-    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints() {
         static_assert(false, "Invalid curve type.");
         return 0;
     }
+
     template <>
-    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>() {
         return 2;
     }
+
     template <>
-    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>() {
         return 3;
     }
+
     template <>
-    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints<OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE>() {
+        return 3;
+    }
+
+    template <>
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>() {
         return 4;
     }
+
     template <>
-    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>() {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>() {
+        return 4;
+    }
+
+    template <>
+    CUDA_DEVICE_FUNCTION CUDA_INLINE constexpr uint32_t
+    getNumControlPoints<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER>() {
         return 4;
     }
 
@@ -38,23 +59,29 @@ namespace curve {
     template <OptixPrimitiveType curveType>
     struct Interpolator;
 
+    /*
+    p0, p1: control points
+    u: curve parameter
+    P(u) =   (-p0 + p1) * u
+           + p0
+    */
     template <>
     struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR> {
         float4 m_p[2];
 
         CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[2]) {
-            m_p[0] = cps[0];
             m_p[1] = cps[1] - cps[0];
+            m_p[0] = cps[0];
         }
 
         CUDA_DEVICE_FUNCTION float4 position_radius(float u) const {
-            return m_p[0] + u * m_p[1];
+            return m_p[1] * u + m_p[0];
         }
         CUDA_DEVICE_FUNCTION float3 position(float u) const {
-            return make_float3(m_p[0]) + u * make_float3(m_p[1]);
+            return make_float3(m_p[1]) * u + make_float3(m_p[0]);
         }
         CUDA_DEVICE_FUNCTION float radius(float u) const {
-            return m_p[0].w + u * m_p[1].w;
+            return m_p[1].w * u + m_p[0].w;
         }
 
         CUDA_DEVICE_FUNCTION float minRadius(float uA, float uB) const {
@@ -82,24 +109,31 @@ namespace curve {
         }
     };
 
+    /*
+    p0, p1, p2: control points
+    u: curve parameter
+    P(u) =   (0.5 * p0 - p1 + 0.5 * p2) * u^2
+           + (-p0 + p1) * u
+           + 0.5 * (p0 + p1)
+    */
     template <>
     struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE> {
         float4 m_p[3];
 
         CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[3]) {
-            m_p[0] = cps[1] / 2.0f + cps[0] / 2.0f;
-            m_p[1] = cps[1] - cps[0];
-            m_p[2] = cps[0] / 2.0f - cps[1] + cps[2] / 2.0f;
+            m_p[2] = 0.5f * cps[0] - cps[1] + 0.5f * cps[2];
+            m_p[1] = -cps[0] + cps[1];
+            m_p[0] = 0.5f * (cps[0] + cps[1]);
         }
 
         CUDA_DEVICE_FUNCTION float4 position_radius(float u) const {
-            return m_p[0] + u * m_p[1] + u * u * m_p[2];
+            return m_p[2] * u * u + m_p[1] * u + m_p[0];
         }
         CUDA_DEVICE_FUNCTION float3 position(float u) const {
-            return make_float3(m_p[0]) + u * make_float3(m_p[1]) + u * u * make_float3(m_p[2]);
+            return make_float3(m_p[2]) * u * u + make_float3(m_p[1]) * u + make_float3(m_p[0]);
         }
         CUDA_DEVICE_FUNCTION float radius(float u) const {
-            return m_p[0].w + u * m_p[1].w + u * u * m_p[2].w;
+            return m_p[2].w * u * u + m_p[1].w * u + m_p[0].w;
         }
 
         CUDA_DEVICE_FUNCTION float minRadius(float uA, float uB) const {
@@ -114,13 +148,13 @@ namespace curve {
         }
 
         CUDA_DEVICE_FUNCTION float4 dPosition_dRadius(float u) const {
-            return m_p[1] + 2 * u * m_p[2];
+            return 2 * m_p[2] * u + m_p[1];
         }
         CUDA_DEVICE_FUNCTION float3 dPosition(float u) const {
-            return make_float3(m_p[1]) + 2 * u * make_float3(m_p[2]);
+            return 2 * make_float3(m_p[2]) * u + make_float3(m_p[1]);
         }
         CUDA_DEVICE_FUNCTION float dRadius(float u) const {
-            return m_p[1].w + 2 * u * m_p[2].w;
+            return 2 * m_p[2].w * u + m_p[1].w;
         }
 
         CUDA_DEVICE_FUNCTION float4 ddPosition_ddRadius(float u) const {
@@ -131,71 +165,73 @@ namespace curve {
         }
     };
 
+    /*
+    p0, p1, p2, p3: control points
+    u: curve parameter
+    P(u) =   (-p0 + 3 * p1 - 3 * p2 + p3) / 6 * u^3
+           + (0.5 * p0 + p1 + 0.5 * p2) * u^2
+           + (-p0 + p2) / 2 * u
+           + (p0 + 4 * p1 + p2) / 6
+    */
     template <>
     struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE> {
         float4 m_p[4];
 
-        CUDA_DEVICE_FUNCTION static float3 coeffs(float u) {
-            float uu = u * u;
-            float u3 = (1 / 6.0f) * uu * u;
-            return make_float3(u3 + 0.5f * (u - uu), uu - 4 * u3, u3);
-        }
-
+        CUDA_DEVICE_FUNCTION Interpolator() {}
         CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[4]) {
-            m_p[0] = (cps[2] + cps[0]) / 6 + (4 / 6.0f) * cps[1];
-            m_p[1] = cps[2] - cps[0];
-            m_p[2] = cps[2] - cps[1];
-            m_p[3] = cps[3] - cps[1];
+            m_p[3] = (-cps[0] + 3 * cps[1] - 3 * cps[2] + cps[3]) / 6;
+            m_p[2] = (0.5f * cps[0] - cps[1] + 0.5f * cps[2]);
+            m_p[1] = (-cps[0] + cps[2]) * 0.5f;
+            m_p[0] = (cps[0] + 4 * cps[1] + cps[2]) / 6;
         }
 
         CUDA_DEVICE_FUNCTION float4 position_radius(float u) const {
-            float3 c = coeffs(u);
-            return m_p[0] + c.x * m_p[1] + c.y * m_p[2] + c.z * m_p[3];
+            return m_p[3] * u * u * u + m_p[2] * u * u + m_p[1] * u + m_p[0];
         }
         CUDA_DEVICE_FUNCTION float3 position(float u) const {
-            float3 c = coeffs(u);
-            return make_float3(m_p[0]) + c.x * make_float3(m_p[1]) + c.y * make_float3(m_p[2]) + c.z * make_float3(m_p[3]);
+            return
+                make_float3(m_p[3]) * u * u * u
+                + make_float3(m_p[2]) * u * u
+                + make_float3(m_p[1]) * u
+                + make_float3(m_p[0]);
         }
         CUDA_DEVICE_FUNCTION float radius(float u) const {
-            float3 c = coeffs(u);
-            return m_p[0].w + c.x * m_p[1].w + c.y * m_p[2].w + c.z * m_p[3].w;
+            return m_p[3].w * u * u * u + m_p[2].w * u * u + m_p[1].w * u + m_p[0].w;
         }
 
         CUDA_DEVICE_FUNCTION float minRadius(float uA, float uB) const {
-            // a + 2 b u - c u^2
-            float a = m_p[1].w;
-            float b = 2 * m_p[2].w - m_p[1].w;
-            float c = 4 * m_p[2].w - m_p[1].w - m_p[3].w;
+            float a = 3 * m_p[3].w;
+            float b = 2 * m_p[2].w;
+            float c = m_p[1].w;
             float rmin = fminf(radius(uA), radius(uB));
-            if (fabsf(c) < 1e-5f) {
-                float root1 = clamp(-0.5f * a / b, uA, uB);
+            if (fabsf(a) < 1e-5f) {
+                float root1 = clamp(-c / b, uA, uB);
                 return fminf(rmin, radius(root1));
             }
             else {
-                float det = b * b + a * c;
-                det = det <= 0.0f ? 0.0f : sqrt(det);
-                float root1 = clamp((b + det) / c, uA, uB);
-                float root2 = clamp((b - det) / c, uA, uB);
+                float det = b * b - 4 * a * c;
+                det = det <= 0.0f ? 0.0f : sqrtf(det);
+                float root1 = clamp((-b + det) / (2 * a), uA, uB);
+                float root2 = clamp((-b - det) / (2 * a), uA, uB);
                 return fminf(rmin, fminf(radius(root1), radius(root2)));
             }
         }
         CUDA_DEVICE_FUNCTION float maxRadius(float uA, float uB) const {
             if (m_p[1].w == 0 && m_p[2].w == 0 && m_p[3].w == 0)
                 return m_p[0].w; // constant width
-            // a + 2 b u - c u^2
-            float a = m_p[1].w;
-            float b = 2 * m_p[2].w - m_p[1].w;
-            float c = 4 * m_p[2].w - m_p[1].w - m_p[3].w;
+            float a = 3 * m_p[3].w;
+            float b = 2 * m_p[2].w;
+            float c = m_p[1].w;
             float rmax = fmaxf(radius(uA), radius(uB));
-            if (fabsf(c) < 1e-5f) {
-                float root1 = clamp(-0.5f * a / b, uA, uB);
+            if (fabsf(a) < 1e-5f) {
+                float root1 = clamp(-c / b, uA, uB);
                 return fmaxf(rmax, radius(root1));
             }
             else {
-                float det = b * b + a * c;
-                det = det <= 0.0f ? 0.0f : sqrt(det);
-                float root1 = clamp((b + det) / c, uA, uB);
-                float root2 = clamp((b - det) / c, uA, uB);
+                float det = b * b - 4 * a * c;
+                det = det <= 0.0f ? 0.0f : sqrtf(det);
+                float root1 = clamp((-b + det) / (2 * a), uA, uB);
+                float root2 = clamp((-b - det) / (2 * a), uA, uB);
                 return fmaxf(rmax, fmaxf(radius(root1), radius(root2)));
             }
         }
@@ -206,8 +242,7 @@ namespace curve {
                 u = 0.000001f;
             if (u == 1)
                 u = 0.999999f;
-            float v = 1 - u;
-            return 0.5f * v * v * m_p[1] + 2 * v * u * m_p[2] + 0.5f * u * u * m_p[3];
+            return 3 * m_p[3] * u * u + 2 * m_p[2] * u + m_p[1];
         }
         CUDA_DEVICE_FUNCTION float3 dPosition(float u) const {
             // adjust u to avoid problems with tripple knots.
@@ -215,8 +250,7 @@ namespace curve {
                 u = 0.000001f;
             if (u == 1)
                 u = 0.999999f;
-            float v = 1 - u;
-            return 0.5f * v * v * make_float3(m_p[1]) + 2 * v * u * make_float3(m_p[2]) + 0.5f * u * u * make_float3(m_p[3]);
+            return 3 * make_float3(m_p[3]) * u * u + 2 * make_float3(m_p[2]) * u + make_float3(m_p[1]);
         }
         CUDA_DEVICE_FUNCTION float dRadius(float u) const {
             // adjust u to avoid problems with tripple knots.
@@ -224,115 +258,54 @@ namespace curve {
                 u = 0.000001f;
             if (u == 1)
                 u = 0.999999f;
-            float v = 1 - u;
-            return 0.5f * v * v * m_p[1].w + 2 * v * u * m_p[2].w + 0.5f * u * u * m_p[3].w;
+            return 3 * m_p[3].w * u * u + 2 * m_p[2].w * u + m_p[1].w;
         }
 
         CUDA_DEVICE_FUNCTION float4 ddPosition_ddRadius(float u) const {
-            return 2 * m_p[2] - m_p[1] + (m_p[1] - 4 * m_p[2] + m_p[3]) * u;
+            return 6 * m_p[3] * u + 2 * m_p[2];
         }
         CUDA_DEVICE_FUNCTION float3 ddPosition(float u) const {
-            return 2 * make_float3(m_p[2]) - make_float3(m_p[1]) + (make_float3(m_p[1]) - 4 * make_float3(m_p[2]) + make_float3(m_p[3])) * u;
+            return 6 * make_float3(m_p[3]) * u + 2 * make_float3(m_p[2]);
         }
     };
 
+    /*
+    p0, p1, p2, p3: control points
+    u: curve parameter
+    P(u) =   0.5 * (-p0 + 3 * p1 - 3 * p2 + p3) * u^3
+           + 0.5 * (2 * p0 - 5 * p1 + 4 * p2 - p3) * u^2
+           + 0.5 * (-p0 + p2) * u
+           + p1
+    */
     template <>
-    struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM> {
-        float4 m_p[4];
-
-        CUDA_DEVICE_FUNCTION static float3 coeffs(float u) {
-            return make_float3(u * u * u, u * u, u);
-        }
+    struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM> :
+        public Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE> {
 
         CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[4]) {
-            m_p[0] = -cps[0] + 3 * (cps[1] - cps[2]) + cps[3];
-            m_p[1] = 2 * cps[0] - 5 * cps[1] + 4 * cps[2] - cps[3];
-            m_p[2] = -cps[0] + cps[2];
-            m_p[3] = cps[1];
+            m_p[3] = 0.5f * (-cps[0] + 3 * (cps[1] - cps[2]) + cps[3]);
+            m_p[2] = 0.5f * (2 * cps[0] - 5 * cps[1] + 4 * cps[2] - cps[3]);
+            m_p[1] = 0.5f * (-cps[0] + cps[2]);
+            m_p[0] = cps[1];
         }
+    };
 
-        CUDA_DEVICE_FUNCTION float4 position_radius(float u) const {
-            float3 c = coeffs(u);
-            return 0.5f * (m_p[0] * c.x + m_p[1] * c.y + m_p[2] * c.z) + m_p[3];
-        }
-        CUDA_DEVICE_FUNCTION float3 position(float u) const {
-            float3 c = coeffs(u);
-            return 0.5f * (make_float3(m_p[0]) * c.x +
-                           make_float3(m_p[1]) * c.y +
-                           make_float3(m_p[2]) * c.z) + make_float3(m_p[3]);
-        }
-        CUDA_DEVICE_FUNCTION float radius(float u) const {
-            float3 c = coeffs(u);
-            return 0.5f * (m_p[0].w * c.x + m_p[1].w * c.y + m_p[2].w * c.z) + m_p[3].w;
-        }
+    /*
+    p0, p1, p2, p3: control points
+    u: curve parameter
+    P(u) =   (-p0 + 3 * p1 - 3 * p2 + p3) * u^3
+           + (3 * p0 - 6 * p1 + 3 * p2) * u^2
+           + (-3 * p0 + 3 * p1) * u
+           + p0
+    */
+    template <>
+    struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER> :
+        public Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE> {
 
-        CUDA_DEVICE_FUNCTION float minRadius(float uA, float uB) const {
-            float a = 1.5f * m_p[0].w;
-            float b = m_p[1].w;
-            float c = 0.5f * m_p[2].w;
-            float rmin = fminf(radius(uA), radius(uB));
-            if (fabsf(a) < 1e-5f) {
-                float root1 = -c / b;
-                return fminf(rmin, radius(root1));
-            }
-            else {
-                float det = b * b - 4 * a * c;
-                det = det <= 0.0f ? 0.0f : sqrt(det);
-                float root1 = clamp((-b + det) / (2 * a), uA, uB);
-                float root2 = clamp((-b - det) / (2 * a), uA, uB);
-                return fminf(rmin, fminf(radius(root1), radius(root2)));
-            }
-        }
-        CUDA_DEVICE_FUNCTION float maxRadius(float uA, float uB) const {
-            if (m_p[0].w == 0 && m_p[1].w == 0 && m_p[2].w == 0)
-                return m_p[3].w; // constant width
-            float a = 1.5f * m_p[0].w;
-            float b = m_p[1].w;
-            float c = 0.5f * m_p[2].w;
-            float rmax = fmaxf(radius(uA), radius(uB));
-            if (fabsf(a) < 1e-5f) {
-                float root1 = -c / b;
-                return fmaxf(rmax, radius(root1));
-            }
-            else {
-                float det = b * b - 4 * a * c;
-                det = det <= 0.0f ? 0.0f : sqrt(det);
-                float root1 = clamp((-b + det) / (2 * a), uA, uB);
-                float root2 = clamp((-b - det) / (2 * a), uA, uB);
-                return fmaxf(rmax, fmaxf(radius(root1), radius(root2)));
-            }
-        }
-
-        CUDA_DEVICE_FUNCTION float4 dPosition_dRadius(float u) const {
-            // adjust u to avoid problems with tripple knots.
-            if (u == 0)
-                u = 0.000001f;
-            if (u == 1)
-                u = 0.999999f;
-            return 1.5f * m_p[0] * u * u + m_p[1] * u + 0.5f * m_p[2];
-        }
-        CUDA_DEVICE_FUNCTION float3 dPosition(float u) const {
-            // adjust u to avoid problems with tripple knots.
-            if (u == 0)
-                u = 0.000001f;
-            if (u == 1)
-                u = 0.999999f;
-            return 1.5f * make_float3(m_p[0]) * u * u + make_float3(m_p[1]) * u + 0.5f * make_float3(m_p[2]);
-        }
-        CUDA_DEVICE_FUNCTION float dRadius(float u) const {
-            // adjust u to avoid problems with tripple knots.
-            if (u == 0)
-                u = 0.000001f;
-            if (u == 1)
-                u = 0.999999f;
-            return 1.5f * m_p[0].w * u * u + m_p[1].w * u + 0.5f * m_p[2].w;
-        }
-
-        CUDA_DEVICE_FUNCTION float4 ddPosition_ddRadius(float u) const {
-            return 3 * m_p[0] * u + m_p[1];
-        }
-        CUDA_DEVICE_FUNCTION float3 ddPosition(float u) const {
-            return 3 * make_float3(m_p[0]) * u + make_float3(m_p[1]);
+        CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[4]) {
+            m_p[3] = (-cps[0] + 3 * (cps[1] - cps[2]) + cps[3]);
+            m_p[2] = (3 * cps[0] - 6 * cps[1] + 3 * cps[2]);
+            m_p[1] = (-3 * cps[0] + 3 * cps[1]);
+            m_p[0] = cps[0];
         }
     };
 
