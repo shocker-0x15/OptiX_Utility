@@ -1841,6 +1841,7 @@ namespace optixu {
         BufferView albedo;
         BufferView normal;
         BufferView flow;
+        BufferView flowTrustworthiness;
         BufferView previousDenoisedBeauty;
         BufferView previousInternalGuideLayer;
         BufferView* noisyAovs;
@@ -1849,7 +1850,9 @@ namespace optixu {
         OptixPixelFormat albedoFormat;
         OptixPixelFormat normalFormat;
         OptixPixelFormat flowFormat;
+        OptixPixelFormat flowTrustworthinessFormat;
         OptixPixelFormat* aovFormats;
+        OptixDenoiserAOVType* aovTypes;
         uint32_t numAovs;
     };
 

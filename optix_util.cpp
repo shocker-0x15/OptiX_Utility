@@ -3965,6 +3965,9 @@ namespace optixu {
         m->throwRuntimeError(
             inputBuffers.numAovs == 0 || (inputBuffers.noisyAovs && denoisedAovs),
             "Both of noisy/denoised AOV buffers must be provided.");
+        m->throwRuntimeError(
+            inputBuffers.numAovs == 0 || (inputBuffers.aovTypes),
+            "AOV types must be provided.");
         for (uint32_t i = 0; i < inputBuffers.numAovs; ++i) {
             m->throwRuntimeError(
                 inputBuffers.noisyAovs[i].isValid() && denoisedAovs[i].isValid(),
@@ -4049,8 +4052,14 @@ namespace optixu {
             setUpInputLayer(inputBuffers.albedoFormat, inputBuffers.albedo.getCUdeviceptr(), &guideLayer.albedo);
         if (m->guideNormal)
             setUpInputLayer(inputBuffers.normalFormat, inputBuffers.normal.getCUdeviceptr(), &guideLayer.normal);
-        if (isTemporal)
+        if (isTemporal) {
             setUpInputLayer(inputBuffers.flowFormat, inputBuffers.flow.getCUdeviceptr(), &guideLayer.flow);
+            if (inputBuffers.flowTrustworthiness.isValid())
+                setUpInputLayer(
+                    inputBuffers.flowTrustworthinessFormat,
+                    inputBuffers.flowTrustworthiness.getCUdeviceptr(),
+                    &guideLayer.flowTrustworthiness);
+        }
         if (requireInternalGuideLayer) {
             setUpOutputLayer(
                 OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER,
@@ -4067,19 +4076,22 @@ namespace optixu {
             BufferView output;
             BufferView previousOuput;
             OptixPixelFormat format;
+            OptixDenoiserAOVType aovType;
         };
         std::vector<LayerInfo> layerInfos(1 + inputBuffers.numAovs);
         layerInfos[0] = LayerInfo{
             inputBuffers.noisyBeauty,
             denoisedBeauty,
             inputBuffers.previousDenoisedBeauty,
-            inputBuffers.beautyFormat };
+            inputBuffers.beautyFormat,
+            OPTIX_DENOISER_AOV_TYPE_BEAUTY };
         for (uint32_t i = 0; i < inputBuffers.numAovs; ++i) {
             layerInfos[i + 1] = LayerInfo{
                 inputBuffers.noisyAovs[i],
                 denoisedAovs[i],
                 inputBuffers.previousDenoisedAovs[i],
-                inputBuffers.aovFormats[i] };
+                inputBuffers.aovFormats[i],
+                inputBuffers.aovTypes[i] };
         }
 
         std::vector<OptixDenoiserLayer> denoiserLayers(1 + inputBuffers.numAovs);
@@ -4094,6 +4106,7 @@ namespace optixu {
                     layerInfo.format, layerInfo.previousOuput.getCUdeviceptr(),
                     &denoiserLayer.previousOutput);
             setUpOutputLayer(layerInfo.format, layerInfo.output.getCUdeviceptr(), &denoiserLayer.output);
+            denoiserLayer.type = layerInfo.aovType;
         }
 
         int32_t offsetXInWorkingTile = _task.outputOffsetX - _task.inputOffsetX;
