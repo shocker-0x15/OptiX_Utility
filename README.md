@@ -26,9 +26,9 @@ Currently based on OptiX 7.7.0
 - Primitive types
   - Triangles
   - Curves
-    - Linear Segments
-    - Quadratic B-Splines
-    - Cubic B-Splines, Catmull-Rom Splines, Cubic B&#233;zier Curves
+    - 1st Order: Linear Segments
+    - 2nd Order: Quadratic B-Splines
+    - 3rd Order Cubic B-Splines, Catmull-Rom Splines, Cubic B&#233;zier Curves
     - Ribbons (Quadratic B-Splines)
   - Spheres
   - User-defined custom primitives
