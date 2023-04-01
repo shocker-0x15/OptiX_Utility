@@ -27,8 +27,8 @@ Currently based on OptiX 7.7.0
   - Triangles
   - Curves
     - Linear Segments
-    - Quadratic/Cubic B-Splines
-    - Catmull-Rom Splines, Cubic B&#233;zier Curves
+    - Quadratic B-Splines
+    - Cubic B-Splines, Catmull-Rom Splines, Cubic B&#233;zier Curves
     - Ribbons (Quadratic B-Splines)
   - Spheres
   - User-defined custom primitives
