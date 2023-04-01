@@ -49,6 +49,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
             optixGetCubicBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
             optixGetCatmullRomVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
+            optixGetCubicBezierVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
     }
     else {
         uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
@@ -109,6 +111,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         float b0 = 1 - (hp.b1 + hp.b2);
         sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
     }
+    else if (primType == OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE) {
+        uint32_t primIndex = optixGetPrimitiveIndex();
+        float2 ribbonParam = optixGetRibbonParameters();
+        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
+        uint32_t sbtGasIndex = optixGetSbtGASIndex();
+        sn = optixGetRibbonNormal(gasHandle, primIndex, sbtGasIndex, 0.0f, ribbonParam);
+    }
     else {
         uint32_t primIndex = optixGetPrimitiveIndex();
         float curveParam = optixGetCurveParameter();
@@ -123,6 +132,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
             sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp);
         else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
             sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(geom, primIndex, curveParam, hp);
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER>(geom, primIndex, curveParam, hp);
     }
 
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));

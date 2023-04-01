@@ -2,17 +2,53 @@
 
 JP: このサンプルはカーブを扱う方法を示します。
     カーブとレイの交叉判定はOptiXによって内部的に扱われます。
-    OptiXがサポートするカーブにはリニア、二次、三次のBスプライン曲線があります。
+    OptiXがサポートするカーブは以下のとおりです。
+    - リニア
+    - 2次Bスプライン
+    - 3次Bスプライン
+    - Catmull-Romスプライン
+    - 3次ベジェ曲線
+    - リボン(2次Bスプライン)
     カーブは頂点バッファーと頂点ごとの幅を表すバッファー、そしてインデックスバッファーから構成されます。
+    リボンは加えて頂点ごとの法線ベクトルを表すバッファーを指定することができます。
 
 EN: This sample shows how to handle curves.
     Intersection test between a ray and a curve is handled internally by OptiX.
-    OptiX supports three types of curves, linear, quadratic, and cubic B-splines.
+    The curve supported by OptiX are the following:
+    - Linear
+    - Quadratic B-Spline
+    - Cubic B-Spline
+    - Catmull-Rom Spline
+    - Cubic Bezier Curves
+    - Ribbon (Quadratic B-Spline)
     Curves consist of a vertex buffer and a buffer for the width at each vertex and an index buffer.
+    Ribbon can takes an additional buffer for the normal at each vertex.
 
 */
 
 #include "curve_primitive_shared.h"
+
+template <OptixPrimitiveType curveType>
+static void generateCurves(
+    std::vector<Shared::CurveVertex>* vertices,
+    std::vector<uint32_t>* indices,
+    float xStart, float xEnd, uint32_t numX,
+    float zStart, float zEnd, uint32_t numZ,
+    float baseWidth);
+
+static void generateBezierCurves(
+    std::vector<Shared::CurveVertex>* vertices,
+    std::vector<uint32_t>* indices,
+    float xStart, float xEnd, uint32_t numX,
+    float zStart, float zEnd, uint32_t numZ,
+    float baseWidth);
+
+static void generateRibbons(
+    std::vector<Shared::RibbonVertex>* vertices,
+    std::vector<uint32_t>* indices,
+    float xStart, float xEnd, uint32_t numX,
+    float zStart, float zEnd, uint32_t numZ,
+    float width);
 
 int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
@@ -28,7 +64,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
 
-    optixu::Context optixContext = optixu::Context::create(cuContext);
+    optixu::Context optixContext = optixu::Context::create(
+        cuContext, 4, optixu::EnableValidation::DEBUG_SELECT(Yes, No));
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
@@ -51,8 +88,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_FLAT_QUADRATIC_BSPLINE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.optixir");
@@ -105,6 +144,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
+    optixu::HitProgramGroup hitProgramGroupForCubicBezierCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
+    optixu::HitProgramGroup hitProgramGroupForQuadraticRibbons = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
 
     // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
     // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
@@ -143,6 +192,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     matForCubicCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicCurves);
     optixu::Material matForCatmullRomCurves = optixContext.createMaterial();
     matForCatmullRomCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCatmullRomCurves);
+    optixu::Material matForCubicBezierCurves = optixContext.createMaterial();
+    matForCubicBezierCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicBezierCurves);
+    optixu::Material matForQuadraticRibbons = optixContext.createMaterial();
+    matForQuadraticRibbons.setHitGroup(Shared::RayType_Primary, hitProgramGroupForQuadraticRibbons);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -160,10 +213,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<Shared::Triangle> floorTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
-            { make_float3(-1.0f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-1.0f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
-            { make_float3(1.0f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
-            { make_float3(1.0f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
+            { make_float3(-1.5f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
+            { make_float3(-1.5f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
+            { make_float3(1.5f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
+            { make_float3(1.5f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
         };
 
         Shared::Triangle triangles[] = {
@@ -185,82 +238,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         floorGeomInst.setUserData(geomData);
     }
 
-    const auto generateCurves = []
-    (std::vector<Shared::CurveVertex>* vertices,
-     std::vector<uint32_t>* indices,
-     float xStart, float xEnd, uint32_t numX,
-     float zStart, float zEnd, uint32_t numZ,
-     float baseWidth, uint32_t curveDegree)
-    {
-        std::mt19937 rng(390318410);
-        std::uniform_int_distribution<uint32_t> uSeg(3, 5);
-        std::uniform_real_distribution<float> u01;
-
-        vertices->clear();
-        indices->clear();
-
-        const float deltaX = (xEnd - xStart) / numX;
-        const float deltaZ = (zEnd - zStart) / numZ;
-        for (int iz = 0; iz < numZ; ++iz) {
-            float pz = (iz + 0.5f) / numZ;
-            float z = (1 - pz) * zStart + pz * zEnd;
-            for (int ix = 0; ix < numX; ++ix) {
-                float px = (ix + 0.5f) / numX;
-                float x = (1 - px) * xStart + px * xEnd;
-
-                uint32_t numSegments = uSeg(rng);
-                uint32_t indexStart = vertices->size();
-
-                // Beginning phantom points
-                if (curveDegree > 1) {
-                    float3 pos = float3(0.0f, 0.0f, 0.0f);
-                    float width = baseWidth;
-                    vertices->push_back(Shared::CurveVertex{ pos, width });
-                }
-
-                // Base
-                {
-                    float3 pos = float3(x, 0.0f, z);
-                    float width = baseWidth;
-                    vertices->push_back(Shared::CurveVertex{ pos, width });
-                }
-                for (int s = 0; s < numSegments; ++s) {
-                    float p = (float)(s + 1) / numSegments;
-                    float3 pos = float3(x + 0.6f * deltaX * (u01(rng) - 0.5f),
-                                        0.1f * (s + 1),
-                                        z + 0.6f * deltaZ * (u01(rng) - 0.5f));
-                    float width = baseWidth * (1 - p);
-                    vertices->push_back(Shared::CurveVertex{ pos, width });
-                }
-
-                // Ending phantom points
-                if (curveDegree > 1) {
-                    float width = 0.0f;
-                    float3 pm1 = (*vertices)[vertices->size() - 1].position;
-                    float3 pm2 = (*vertices)[vertices->size() - 2].position;
-                    float3 d = pm1 - pm2;
-                    if (curveDegree == 2)
-                        d *= 1e-3f;
-                    float3 pos = pm1 + d;
-                    vertices->push_back(Shared::CurveVertex{ pos, width });
-                }
-
-                // Modify the beginning phantom points
-                if (curveDegree > 1) {
-                    float3 p1 = (*vertices)[indexStart + 1].position;
-                    float3 p2 = (*vertices)[indexStart + 2].position;
-                    float3 d = p1 - p2;
-                    if (curveDegree == 2)
-                        d *= 1e-3f;
-                    (*vertices)[indexStart].position = p1 + d;
-                }
-
-                for (int s = 0; s < vertices->size() - indexStart - curveDegree; ++s)
-                    indices->push_back(indexStart + s);
-            }
-        }
-    };
-
     uint32_t numX = 5;
     uint32_t numZ = 15;
     float baseWidth = 0.03f;
@@ -276,11 +253,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
             -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-            baseWidth, 1);
+            baseWidth);
 
         linearCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         linearCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -309,11 +286,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
             -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-            baseWidth, 2);
+            baseWidth);
 
         quadraticCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         quadraticCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -343,11 +320,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
             -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-            baseWidth, 3);
+            baseWidth);
 
         cubicCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         cubicCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -377,11 +354,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateCurves(
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
             -1.0f + 0.05f, 1.0f - 0.05f, numZ,
-            baseWidth, 3);
+            baseWidth);
 
         catmullRomCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
         catmullRomCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
@@ -401,6 +378,79 @@ int32_t main(int32_t argc, const char* argv[]) try {
         catmullRomCurveGeomInst.setMaterial(0, 0, matForCatmullRomCurves);
         catmullRomCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         catmullRomCurveGeomInst.setUserData(geomData);
+    }
+
+    // Cubic Bezier Curves
+    optixu::GeometryInstance cubicBezierCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CubicBezier);
+    cudau::TypedBuffer<Shared::CurveVertex> cubicBezierCurveVertexBuffer;
+    cudau::TypedBuffer<uint32_t> cubicBezierCurveSegmentIndexBuffer;
+    {
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateBezierCurves(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            baseWidth);
+
+        cubicBezierCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        cubicBezierCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.curveVertexBuffer = cubicBezierCurveVertexBuffer.getDevicePointer();
+        geomData.segmentIndexBuffer = cubicBezierCurveSegmentIndexBuffer.getDevicePointer();
+
+        cubicBezierCurveGeomInst.setVertexBuffer(optixu::BufferView(
+            cubicBezierCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            cubicBezierCurveVertexBuffer.numElements(), cubicBezierCurveVertexBuffer.stride()));
+        cubicBezierCurveGeomInst.setWidthBuffer(optixu::BufferView(
+            cubicBezierCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            cubicBezierCurveVertexBuffer.numElements(), cubicBezierCurveVertexBuffer.stride()));
+        cubicBezierCurveGeomInst.setSegmentIndexBuffer(cubicBezierCurveSegmentIndexBuffer);
+        cubicBezierCurveGeomInst.setCurveEndcapFlags(curveEndcap);
+        cubicBezierCurveGeomInst.setMaterial(0, 0, matForCubicBezierCurves);
+        cubicBezierCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        cubicBezierCurveGeomInst.setUserData(geomData);
+    }
+
+    // Flat Quadratic B-Splines
+    optixu::GeometryInstance quadraticRibbonGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::FlatQuadraticBSplines);
+    cudau::TypedBuffer<Shared::RibbonVertex> quadraticRibbonVertexBuffer;
+    cudau::TypedBuffer<uint32_t> quadraticRibbonSegmentIndexBuffer;
+    {
+        std::vector<Shared::RibbonVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateRibbons(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            0.6f * baseWidth);
+
+        quadraticRibbonVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        quadraticRibbonSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.ribbonVertexBuffer = quadraticRibbonVertexBuffer.getDevicePointer();
+        geomData.segmentIndexBuffer = quadraticRibbonSegmentIndexBuffer.getDevicePointer();
+
+        quadraticRibbonGeomInst.setVertexBuffer(optixu::BufferView(
+            quadraticRibbonVertexBuffer.getCUdeviceptr() + offsetof(Shared::RibbonVertex, position),
+            quadraticRibbonVertexBuffer.numElements(), quadraticRibbonVertexBuffer.stride()));
+        // JP: リボンは法線を設定できる。
+        // EN: Ribbon can set normals.
+        quadraticRibbonGeomInst.setNormalBuffer(optixu::BufferView(
+            quadraticRibbonVertexBuffer.getCUdeviceptr() + offsetof(Shared::RibbonVertex, normal),
+            quadraticRibbonVertexBuffer.numElements(), quadraticRibbonVertexBuffer.stride()));
+        quadraticRibbonGeomInst.setWidthBuffer(optixu::BufferView(
+            quadraticRibbonVertexBuffer.getCUdeviceptr() + offsetof(Shared::RibbonVertex, width),
+            quadraticRibbonVertexBuffer.numElements(), quadraticRibbonVertexBuffer.stride()));
+        quadraticRibbonGeomInst.setSegmentIndexBuffer(quadraticRibbonSegmentIndexBuffer);
+        quadraticRibbonGeomInst.setCurveEndcapFlags(curveEndcap);
+        quadraticRibbonGeomInst.setMaterial(0, 0, matForQuadraticRibbons);
+        quadraticRibbonGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        quadraticRibbonGeomInst.setUserData(geomData);
     }
 
 
@@ -483,6 +533,32 @@ int32_t main(int32_t argc, const char* argv[]) try {
     catmullRomCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+    optixu::GeometryAccelerationStructure cubicBezierCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBezier);
+    cudau::Buffer cubicBezierCurvesGasMem;
+    cubicBezierCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        useEmbeddedVertexData);
+    cubicBezierCurvesGas.setNumMaterialSets(1);
+    cubicBezierCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicBezierCurvesGas.addChild(cubicBezierCurveGeomInst);
+    cubicBezierCurvesGas.prepareForBuild(&asMemReqs);
+    cubicBezierCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::GeometryAccelerationStructure quadraticRibbonsGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::FlatQuadraticBSplines);
+    cudau::Buffer quadraticRibbonsGasMem;
+    quadraticRibbonsGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable,
+        useEmbeddedVertexData);
+    quadraticRibbonsGas.setNumMaterialSets(1);
+    quadraticRibbonsGas.setNumRayTypes(0, Shared::NumRayTypes);
+    quadraticRibbonsGas.addChild(quadraticRibbonGeomInst);
+    quadraticRibbonsGas.prepareForBuild(&asMemReqs);
+    quadraticRibbonsGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
 
 
     // JP: GASを元にインスタンスを作成する。
@@ -491,7 +567,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorInst.setChild(floorGas);
 
     float linearCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, -3.0f / 4.0f,
+        1.0f, 0.0f, 0.0f, -1.25f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
@@ -500,7 +576,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     linearCurvesInst.setTransform(linearCurvesInstXfm);
 
     float quadraticCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, -1.0f / 4.0f,
+        1.0f, 0.0f, 0.0f, -0.75f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
@@ -509,7 +585,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticCurvesInst.setTransform(quadraticCurvesInstXfm);
 
     float cubicCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, 1.0f / 4.0f,
+        1.0f, 0.0f, 0.0f, -0.25f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
@@ -518,13 +594,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cubicCurvesInst.setTransform(cubicCurvesInstXfm);
 
     float catmullRomCurvesInstXfm[] = {
-        1.0f, 0.0f, 0.0f, 3.0f / 4.0f,
+        1.0f, 0.0f, 0.0f, 0.25f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance catmullRomCurvesInst = scene.createInstance();
     catmullRomCurvesInst.setChild(catmullRomCurvesGas);
     catmullRomCurvesInst.setTransform(catmullRomCurvesInstXfm);
+
+    float cubicBezierCurvesInstXfm[] = {
+        1.0f, 0.0f, 0.0f, 0.75f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance cubicBezierCurvesInst = scene.createInstance();
+    cubicBezierCurvesInst.setChild(cubicBezierCurvesGas);
+    cubicBezierCurvesInst.setTransform(cubicBezierCurvesInstXfm);
+
+    float quadraticRibbonsInstXfm[] = {
+        1.0f, 0.0f, 0.0f, 1.25f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance quadraticRibbonsInst = scene.createInstance();
+    quadraticRibbonsInst.setChild(quadraticRibbonsGas);
+    quadraticRibbonsInst.setTransform(quadraticRibbonsInstXfm);
 
 
 
@@ -539,6 +633,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(quadraticCurvesInst);
     ias.addChild(cubicCurvesInst);
     ias.addChild(catmullRomCurvesInst);
+    ias.addChild(cubicBezierCurvesInst);
+    ias.addChild(quadraticRibbonsInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
@@ -559,6 +655,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticCurvesGas.rebuild(cuStream, quadraticCurvesGasMem, asBuildScratchMem);
     cubicCurvesGas.rebuild(cuStream, cubicCurvesGasMem, asBuildScratchMem);
     catmullRomCurvesGas.rebuild(cuStream, catmullRomCurvesGasMem, asBuildScratchMem);
+    cubicBezierCurvesGas.rebuild(cuStream, cubicBezierCurvesGasMem, asBuildScratchMem);
+    quadraticRibbonsGas.rebuild(cuStream, quadraticRibbonsGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -576,6 +674,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         { quadraticCurvesGas, &quadraticCurvesGasMem, 0, 0 },
         { cubicCurvesGas, &cubicCurvesGasMem, 0, 0 },
         { catmullRomCurvesGas, &catmullRomCurvesGasMem, 0, 0 },
+        { cubicBezierCurvesGas, &cubicBezierCurvesGasMem, 0, 0 },
+        { quadraticRibbonsGas, &quadraticRibbonsGasMem, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
     for (int i = 0; i < lengthof(gasList); ++i) {
@@ -622,8 +722,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    constexpr uint32_t renderTargetSizeX = 1024;
-    constexpr uint32_t renderTargetSizeY = 1024;
+    constexpr uint32_t renderTargetSizeX = 1280;
+    constexpr uint32_t renderTargetSizeY = 720;
     optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
     accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
 
@@ -636,8 +736,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.resultBuffer = accumBuffer.getBlockBuffer2D();
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 1.0f, 3.0f);
-    plp.camera.orientation = rotateX3x3(-pi_v<float> / 9) * rotateY3x3(pi_v<float>);
+    plp.camera.position = make_float3(0, 1.3f, 2.6f);
+    plp.camera.orientation = rotateX3x3(-pi_v<float> / 7) * rotateY3x3(pi_v<float>);
     //plp.camera.position = make_float3(0, 0.01f, 2.5f);
     //plp.camera.orientation = rotateY3x3(pi_v<float>);
 
@@ -673,6 +773,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
+    quadraticRibbonsInst.destroy();
+    cubicBezierCurvesInst.destroy();
     catmullRomCurvesInst.destroy();
     cubicCurvesInst.destroy();
     quadraticCurvesInst.destroy();
@@ -680,11 +782,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorInst.destroy();
 
     asBuildScratchMem.finalize();
+    quadraticRibbonsGas.destroy();
+    cubicBezierCurvesGas.destroy();
     catmullRomCurvesGas.destroy();
     cubicCurvesGas.destroy();
     quadraticCurvesGas.destroy();
     linearCurvesGas.destroy();
     floorGas.destroy();
+
+    quadraticRibbonSegmentIndexBuffer.finalize();
+    quadraticRibbonVertexBuffer.finalize();
+    quadraticRibbonGeomInst.destroy();
+
+    cubicBezierCurveSegmentIndexBuffer.finalize();
+    cubicBezierCurveVertexBuffer.finalize();
+    cubicBezierCurveGeomInst.destroy();
 
     catmullRomCurveSegmentIndexBuffer.finalize();
     catmullRomCurveVertexBuffer.finalize();
@@ -708,6 +820,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     scene.destroy();
 
+    matForQuadraticRibbons.destroy();
+    matForCubicBezierCurves.destroy();
     matForCatmullRomCurves.destroy();
     matForCubicCurves.destroy();
     matForQuadraticCurves.destroy();
@@ -718,6 +832,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
+    hitProgramGroupForQuadraticRibbons.destroy();
+    hitProgramGroupForCubicBezierCurves.destroy();
     hitProgramGroupForCatmullRomCurves.destroy();
     hitProgramGroupForCubicCurves.destroy();
     hitProgramGroupForQuadraticCurves.destroy();
@@ -741,4 +857,241 @@ int32_t main(int32_t argc, const char* argv[]) try {
 catch (const std::exception &ex) {
     hpprintf("Error: %s\n", ex.what());
     return -1;
+}
+
+
+
+template <OptixPrimitiveType curveType>
+static void generateCurves(
+    std::vector<Shared::CurveVertex>* vertices,
+    std::vector<uint32_t>* indices,
+    float xStart, float xEnd, uint32_t numX,
+    float zStart, float zEnd, uint32_t numZ,
+    float baseWidth) {
+    std::mt19937 rng(390318410);
+    std::uniform_int_distribution<uint32_t> uSeg(3, 5);
+    std::uniform_real_distribution<float> u01;
+
+    uint32_t curveDegree;
+    if (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+        curveDegree = 1;
+    else if (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
+        curveDegree = 2;
+    else if (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
+             curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
+             curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
+        curveDegree = 3;
+    else
+        Assert_ShouldNotBeCalled();
+
+    vertices->clear();
+    indices->clear();
+
+    const float deltaX = (xEnd - xStart) / numX;
+    const float deltaZ = (zEnd - zStart) / numZ;
+    for (int iz = 0; iz < numZ; ++iz) {
+        float pz = (iz + 0.5f) / numZ;
+        float z = (1 - pz) * zStart + pz * zEnd;
+        for (int ix = 0; ix < numX; ++ix) {
+            float px = (ix + 0.5f) / numX;
+            float x = (1 - px) * xStart + px * xEnd;
+
+            uint32_t numSegments = uSeg(rng);
+            uint32_t indexStart = vertices->size();
+
+            // Beginning phantom points
+            if (curveDegree > 1) {
+                float3 pos = float3(0.0f, 0.0f, 0.0f);
+                float width = baseWidth;
+                vertices->push_back(Shared::CurveVertex{ pos, width });
+            }
+
+            // Base
+            {
+                float3 pos = float3(x, 0.0f, z);
+                float width = baseWidth;
+                vertices->push_back(Shared::CurveVertex{ pos, width });
+            }
+            for (int s = 0; s < numSegments; ++s) {
+                float p = (float)(s + 1) / numSegments;
+                float3 pos = float3(x + 0.6f * deltaX * (u01(rng) - 0.5f),
+                                    0.1f * (s + 1),
+                                    z + 0.6f * deltaZ * (u01(rng) - 0.5f));
+                float width = baseWidth * (1 - p);
+                vertices->push_back(Shared::CurveVertex{ pos, width });
+            }
+
+            // Ending phantom points
+            if (curveDegree > 1) {
+                float width = 0.0f;
+                float3 pm1 = (*vertices)[vertices->size() - 1].position;
+                float3 pm2 = (*vertices)[vertices->size() - 2].position;
+                float3 d = pm1 - pm2;
+                if (curveDegree == 2)
+                    d *= 1e-3f;
+                float3 pos = pm1 + d;
+                vertices->push_back(Shared::CurveVertex{ pos, width });
+            }
+
+            // Modify the beginning phantom points
+            if (curveDegree > 1) {
+                float3 p1 = (*vertices)[indexStart + 1].position;
+                float3 p2 = (*vertices)[indexStart + 2].position;
+                float3 d = p1 - p2;
+                if (curveDegree == 2)
+                    d *= 1e-3f;
+                (*vertices)[indexStart].position = p1 + d;
+            }
+
+            for (int s = 0; s < vertices->size() - indexStart - curveDegree; ++s)
+                indices->push_back(indexStart + s);
+        }
+    }
+}
+
+static void generateBezierCurves(
+    std::vector<Shared::CurveVertex>* vertices,
+    std::vector<uint32_t>* indices,
+    float xStart, float xEnd, uint32_t numX,
+    float zStart, float zEnd, uint32_t numZ,
+    float baseWidth) {
+    std::mt19937 rng(390318410);
+    std::uniform_int_distribution<uint32_t> uSeg(3, 5);
+    std::uniform_real_distribution<float> u01;
+
+    vertices->clear();
+    indices->clear();
+
+    const float deltaX = (xEnd - xStart) / numX;
+    const float deltaZ = (zEnd - zStart) / numZ;
+    for (int iz = 0; iz < numZ; ++iz) {
+        float pz = (iz + 0.5f) / numZ;
+        float z = (1 - pz) * zStart + pz * zEnd;
+        for (int ix = 0; ix < numX; ++ix) {
+            float px = (ix + 0.5f) / numX;
+            float x = (1 - px) * xStart + px * xEnd;
+
+            uint32_t numSegments = uSeg(rng);
+            uint32_t indexStart = vertices->size();
+
+
+            // Base
+            {
+                float3 pos = float3(x, 0.0f, z);
+                float width = baseWidth;
+                vertices->push_back(Shared::CurveVertex{ pos, width });
+            }
+            float3 lastHandleDir = normalize(float3(u01(rng) - 0.5f, 1.0f, u01(rng) - 0.5f));
+
+            for (int s = 0; s < numSegments; ++s) {
+                float3 nextPos(x + 0.6f * deltaX * (u01(rng) - 0.5f),
+                               0.1f * (s + 1),
+                               z + 0.6f * deltaZ * (u01(rng) - 0.5f));
+                float3 lastPos = vertices->back().position;
+                float lastWidth = vertices->back().width;
+                float p = (float)(s + 1) / numSegments;
+                float width = baseWidth * (1 - p);
+                float3 firstHandlePos = lastPos + 0.03f * lastHandleDir;
+                vertices->push_back(Shared::CurveVertex{ firstHandlePos, lastWidth * 2.0f / 3 + width * 1.0f / 3 });
+                lastHandleDir = normalize(float3(u01(rng) - 0.5f, 1.0f, u01(rng) - 0.5f));
+                float3 secondHandlePos = nextPos - 0.03f * lastHandleDir;
+                vertices->push_back(Shared::CurveVertex{ secondHandlePos, lastWidth * 1.0f / 3 + width * 2.0f / 3 });
+                vertices->push_back(Shared::CurveVertex{ nextPos, width });
+            }
+
+            for (int s = 0; s < vertices->size() - indexStart - 1; s += 3)
+                indices->push_back(indexStart + s);
+        }
+    }
+}
+
+void generateRibbons(
+    std::vector<Shared::RibbonVertex>* vertices,
+    std::vector<uint32_t>* indices,
+    float xStart, float xEnd, uint32_t numX,
+    float zStart, float zEnd, uint32_t numZ,
+    float width) {
+    std::mt19937 rng(390318410);
+    std::uniform_int_distribution<uint32_t> uSeg(3, 5);
+    std::uniform_real_distribution<float> u01;
+
+    vertices->clear();
+    indices->clear();
+
+    const float deltaX = (xEnd - xStart) / numX;
+    const float deltaZ = (zEnd - zStart) / numZ;
+    for (int iz = 0; iz < numZ; ++iz) {
+        float pz = (iz + 0.5f) / numZ;
+        float z = (1 - pz) * zStart + pz * zEnd;
+        for (int ix = 0; ix < numX; ++ix) {
+            float px = (ix + 0.5f) / numX;
+            float x = (1 - px) * xStart + px * xEnd;
+
+            uint32_t numSegments = uSeg(rng);
+            uint32_t indexStart = vertices->size();
+
+            float curNormalAngle = 2 * M_PI * u01(rng);
+
+            // Beginning phantom points
+            {
+                float3 pos = float3(0.0f, 0.0f, 0.0f);
+                float3 normal = float3(
+                    std::cos(curNormalAngle), 0.0f, std::sin(curNormalAngle));
+                vertices->push_back(Shared::RibbonVertex{ pos, normal, width });
+            }
+
+            // Base
+            {
+                float3 pos = float3(x, 0.0f, z);
+                float3 normal = float3(
+                    std::cos(curNormalAngle), 0.0f, std::sin(curNormalAngle));
+                vertices->push_back(Shared::RibbonVertex{ pos, normal, width });
+            }
+            for (int s = 0; s < numSegments; ++s) {
+                float p = (float)(s + 1) / numSegments;
+                float3 pos = float3(x + 0.6f * deltaX * (u01(rng) - 0.5f),
+                                    0.1f * (s + 1),
+                                    z + 0.6f * deltaZ * (u01(rng) - 0.5f));
+                curNormalAngle += M_PI / 3 * (u01(rng) - 0.5f);
+                float3 normal = float3(
+                    std::cos(curNormalAngle), 0.0f, std::sin(curNormalAngle));
+                vertices->push_back(Shared::RibbonVertex{ pos, normal, width });
+            }
+
+            // Ending phantom points
+            {
+                float3 pm1 = (*vertices)[vertices->size() - 1].position;
+                float3 pm2 = (*vertices)[vertices->size() - 2].position;
+                float3 d = pm1 - pm2;
+                float3 pos = pm1 + d;
+                float3 normal = float3(
+                    std::cos(curNormalAngle), 0.0f, std::sin(curNormalAngle));
+                vertices->push_back(Shared::RibbonVertex{ pos, normal, width });
+            }
+
+            // Modify the beginning phantom points
+            {
+                float3 p1 = (*vertices)[indexStart + 1].position;
+                float3 p2 = (*vertices)[indexStart + 2].position;
+                float3 d = p1 - p2;
+                (*vertices)[indexStart].position = p1 + d;
+            }
+
+            // Fix normal vector to be parpendicular to the curve.
+            // TODO: still seems not smooth looking.
+            for (int s = 0; s <= numSegments; ++s) {
+                float3 p0 = (*vertices)[indexStart + s].position;
+                float3 p1 = (*vertices)[indexStart + s + 1].position;
+                float3 p2 = (*vertices)[indexStart + s + 2].position;
+                float3 dir = normalize((p0 - 2 * p1 + p2) * 0.5f + (-p0 + p1));
+                float3 &n = (*vertices)[indexStart + s + 1].normal;
+                n = normalize(n - dot(dir, n) * dir);
+            }
+            (*vertices)[indexStart].normal = (*vertices)[indexStart + 1].normal;
+            (*vertices)[indexStart + numSegments + 2].normal = (*vertices)[indexStart + 1].normal;
+
+            for (int s = 0; s < vertices->size() - indexStart - 3; ++s)
+                indices->push_back(indexStart + s);
+        }
+    }
 }

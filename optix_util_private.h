@@ -566,8 +566,10 @@ namespace optixu {
         struct CurveGeometry {
             CUdeviceptr* vertexBufferArray;
             CUdeviceptr* widthBufferArray;
+            CUdeviceptr* normalBufferArray;
             BufferView* vertexBuffers;
             BufferView* widthBuffers;
+            BufferView* normalBuffers;
             BufferView segmentIndexBuffer;
             OptixCurveEndcapFlags endcapFlags;
         };
@@ -627,14 +629,20 @@ namespace optixu {
             }
             else if (geomType == GeometryType::LinearSegments ||
                      geomType == GeometryType::QuadraticBSplines ||
+                     geomType == GeometryType::FlatQuadraticBSplines ||
                      geomType == GeometryType::CubicBSplines ||
-                     geomType == GeometryType::CatmullRomSplines) {
+                     geomType == GeometryType::CatmullRomSplines ||
+                     geomType == GeometryType::CubicBezier) {
                 geometry = CurveGeometry{};
                 auto &geom = std::get<CurveGeometry>(geometry);
                 geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
                 geom.vertexBuffers = new BufferView[numMotionSteps];
                 geom.widthBufferArray = new CUdeviceptr[numMotionSteps];
                 geom.widthBuffers = new BufferView[numMotionSteps];
+                if (geomType == GeometryType::FlatQuadraticBSplines) {
+                    geom.normalBufferArray = new CUdeviceptr[numMotionSteps];
+                    geom.normalBuffers = new BufferView[numMotionSteps];
+                }
                 geom.endcapFlags = OPTIX_CURVE_ENDCAP_DEFAULT;
             }
             else if (geomType == GeometryType::Spheres) {
@@ -665,6 +673,10 @@ namespace optixu {
             }
             else if (std::holds_alternative<CurveGeometry>(geometry)) {
                 auto &geom = std::get<CurveGeometry>(geometry);
+                if (geomType == GeometryType::FlatQuadraticBSplines) {
+                    delete[] geom.normalBuffers;
+                    delete[] geom.normalBufferArray;
+                }
                 delete[] geom.widthBuffers;
                 delete[] geom.widthBufferArray;
                 delete[] geom.vertexBuffers;
