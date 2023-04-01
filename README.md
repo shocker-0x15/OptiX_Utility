@@ -55,11 +55,13 @@ Currently based on OptiX 7.7.0
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
-- Parallel Module Compilation
-- AS Relocation
-- OMM Relocation
+- Displaced Micro-Mesh (DMM)
+- Test flow vector trustworthiness guiding
 - Test AOV denoisers
-- Test Linux Environment
+- Test Linux environment
+- Parallel module compilation
+- AS relocation
+- OMM relocation
 - Multi-GPU
 
 ## 構成要素 / Components
@@ -268,12 +270,12 @@ I've confirmed that the program runs correctly in the following environment.
 
 * Windows 11 (22H2) & Visual Studio Community 2022 (17.5.3)
 * Core i9-9900K, 32GB, RTX 4080 16GB
-* NVIDIA Driver 531.29
+* NVIDIA Driver 531.41
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 12.1
+* CUDA 12.0
 * OptiX 7.7.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
