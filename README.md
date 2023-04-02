@@ -26,10 +26,9 @@ Currently based on OptiX 7.7.0
 - Primitive types
   - Triangles
   - Curves
-    - 1st Order: Linear Segments
-    - 2nd Order: Quadratic B-Splines
-    - 3rd Order Cubic B-Splines, Catmull-Rom Splines, Cubic B&#233;zier Curves
-    - Ribbons (Quadratic B-Splines)
+    - 1st order: Round linear segments
+    - 2nd order: Round quadratic B-splines, Ribbons (Flat quadratic B-splines)
+    - 3rd order Round cubic B-splines, Round Catmull-Rom splines, Round cubic B&#233;zier curves
   - Spheres
   - User-defined custom primitives
 - Opacity micro-map
@@ -60,6 +59,7 @@ Currently based on OptiX 7.7.0
 
 ### TODO
 - Displaced Micro-Mesh (DMM)
+- Support SBT offset summation accross all instances in the traversal graph
 - Test flow vector trustworthiness guiding
 - Test AOV denoisers
 - Test Linux environment

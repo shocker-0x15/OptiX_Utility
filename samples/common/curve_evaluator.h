@@ -2,8 +2,6 @@
 
 #include "common.h"
 
-// Based on OptiX SDK/cuda/curve.h
-
 namespace curve {
     CUDA_DEVICE_FUNCTION CUDA_INLINE float clamp(float x, float minx, float maxx) {
         return fminf(fmaxf(x, minx), maxx);
@@ -280,7 +278,6 @@ namespace curve {
     template <>
     struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM> :
         public Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE> {
-
         CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[4]) {
             m_p[3] = 0.5f * (-cps[0] + 3 * (cps[1] - cps[2]) + cps[3]);
             m_p[2] = 0.5f * (2 * cps[0] - 5 * cps[1] + 4 * cps[2] - cps[3]);
@@ -300,7 +297,6 @@ namespace curve {
     template <>
     struct Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER> :
         public Interpolator<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE> {
-
         CUDA_DEVICE_FUNCTION Interpolator(const float4 cps[4]) {
             m_p[3] = (-cps[0] + 3 * (cps[1] - cps[2]) + cps[3]);
             m_p[2] = (3 * cps[0] - 6 * cps[1] + 3 * cps[2]);
@@ -311,6 +307,7 @@ namespace curve {
 
 
 
+    // Based on OptiX SDK/cuda/curve.h
     template <OptixPrimitiveType curveType>
     class Evaluator {
         Interpolator<curveType> m_interpolator;
