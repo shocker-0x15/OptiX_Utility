@@ -543,6 +543,57 @@ namespace optixu {
 
 
     template <>
+    class Object<DisplacementMicroMapArray>::Priv : public PrivateObject {
+        _Scene* scene;
+        OptixDisplacementMicromapFlags flags;
+
+        BufferView rawDmmBuffer;
+        BufferView perMicroMapDescBuffer;
+        BufferView outputBuffer;
+        std::vector<OptixDisplacementMicromapHistogramEntry> microMapHistogramEntries;
+
+        OptixDisplacementMicromapArrayBuildInput buildInput;
+        OptixMicromapBufferSizes memoryRequirement;
+
+        struct {
+            unsigned int memoryUsageComputed : 1;
+            unsigned int buffersSet : 1;
+            unsigned int available : 1;
+        };
+
+    public:
+        OPTIXU_OPAQUE_BRIDGE(DisplacementMicroMapArray);
+
+        Priv(_Scene* _scene) :
+            scene(_scene),
+            memoryUsageComputed(false), buffersSet(false),
+            available(false) {
+        }
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
+
+        const _Scene* getScene() const {
+            return scene;
+        }
+        _Context* getContext() const {
+            return scene->getContext();
+        }
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("DMM");
+
+        bool isReady() const {
+            return available;
+        }
+
+        BufferView getBuffer() const {
+            throwRuntimeError(outputBuffer.isValid(), "Output buffer has not been set.");
+            return outputBuffer;
+        }
+    };
+
+
+
+    template <>
     class Object<GeometryInstance>::Priv : public PrivateObject {
         _Scene* scene;
         SizeAlign userDataSizeAlign;
@@ -553,15 +604,29 @@ namespace optixu {
             BufferView* vertexBuffers;
             BufferView triangleBuffer;
             BufferView materialIndexBuffer;
+            OptixVertexFormat vertexFormat;
+            OptixIndicesFormat indexFormat;
+
             _OpacityMicroMapArray* opacityMicroMapArray;
             BufferView opacityMicroMapIndexBuffer;
             std::vector<OptixOpacityMicromapUsageCount> opacityMicroMapUsageCounts;
-            OptixVertexFormat vertexFormat;
-            OptixIndicesFormat indexFormat;
             OptixOpacityMicromapArrayIndexingMode opacityMicroMapIndexingMode;
             uint32_t opacityMicroMapIndexOffset;
+
+            BufferView displacementVertexDirectionBuffer;
+            BufferView displacementVertexBiasAndScaleBuffer;
+            BufferView displacementTriangleFlagsBuffer;
+            _DisplacementMicroMapArray* displacementMicroMapArray;
+            BufferView displacementMicroMapIndexBuffer;
+            std::vector<OptixDisplacementMicromapUsageCount> displacementMicroMapUsageCounts;
+            OptixDisplacementMicromapArrayIndexingMode displacementMicroMapIndexingMode;
+            uint32_t displacementMicroMapIndexOffset;
+            OptixDisplacementMicromapDirectionFormat displacementVertexDirectionFormat;
+            OptixDisplacementMicromapBiasAndScaleFormat displacementVertexBiasAndScaleFormat;
+
             unsigned int materialIndexSize : 3;
             unsigned int opacityMicroMapIndexSize : 3;
+            unsigned int displacementMicroMapIndexSize : 3;
         };
         struct CurveGeometry {
             CUdeviceptr* vertexBufferArray;
@@ -619,13 +684,20 @@ namespace optixu {
                 auto &geom = std::get<TriangleGeometry>(geometry);
                 geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
                 geom.vertexBuffers = new BufferView[numMotionSteps];
-                geom.opacityMicroMapArray = nullptr;
                 geom.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
                 geom.indexFormat = OPTIX_INDICES_FORMAT_NONE;
+
+                geom.opacityMicroMapArray = nullptr;
                 geom.opacityMicroMapIndexingMode = OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_NONE;
                 geom.opacityMicroMapIndexOffset = 0;
+
+                geom.displacementMicroMapArray = nullptr;
+                geom.displacementMicroMapIndexingMode = OPTIX_DISPLACEMENT_MICROMAP_ARRAY_INDEXING_MODE_NONE;
+                geom.displacementMicroMapIndexOffset = 0;
+
                 geom.materialIndexSize = 0;
                 geom.opacityMicroMapIndexSize = 0;
+                geom.displacementMicroMapIndexSize = 0;
             }
             else if (geomType == GeometryType::LinearSegments ||
                      geomType == GeometryType::QuadraticBSplines ||

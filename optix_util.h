@@ -1004,6 +1004,7 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECT(Material); \
     OPTIXU_PREPROCESS_OBJECT(Scene); \
     OPTIXU_PREPROCESS_OBJECT(OpacityMicroMapArray); \
+    OPTIXU_PREPROCESS_OBJECT(DisplacementMicroMapArray); \
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
     OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
     OPTIXU_PREPROCESS_OBJECT(Transform); \
@@ -1144,6 +1145,8 @@ namespace optixu {
 
 #undef OPTIXU_DECLARE_TYPED_BOOL
 
+#define OPTIXU_EN_PRM(Type, Name, Value) Type Name = Type::Value
+
 
 
     class Context {
@@ -1257,10 +1260,10 @@ namespace optixu {
         OpacityMicroMapArray createOpacityMicroMapArray() const;
         [[nodiscard]]
         GeometryInstance createGeometryInstance(
-            GeometryType geomType = GeometryType::Triangles) const;
+            OPTIXU_EN_PRM(GeometryType, geomType, Triangles)) const;
         [[nodiscard]]
         GeometryAccelerationStructure createGeometryAccelerationStructure(
-            GeometryType geomType = GeometryType::Triangles) const;
+            OPTIXU_EN_PRM(GeometryType, geomType, Triangles)) const;
         [[nodiscard]]
         Transform createTransform() const;
         [[nodiscard]]
@@ -1312,6 +1315,39 @@ namespace optixu {
 
 
 
+    class DisplacementMicroMapArray : public Object<DisplacementMicroMapArray> {
+    public:
+        void destroy();
+
+        // JP: 以下のAPIを呼んだ場合はDMM Arrayが自動でdirty状態になる。
+        // EN: Calling the following APIs automatically marks the DMM array dirty.
+        void setConfiguration(OptixDisplacementMicromapFlags config) const;
+        void computeMemoryUsage(
+            const OptixDisplacementMicromapHistogramEntry* microMapHistogramEntries,
+            uint32_t numMicroMapHistogramEntries,
+            OptixMicromapBufferSizes* memoryRequirement) const;
+        void setBuffers(
+            const BufferView &rawDmmBuffer, const BufferView &perMicroMapDescBuffer,
+            const BufferView &outputBuffer) const;
+
+        // JP: DMM Arrayをdirty状態にする。
+        // EN: Mark the DMM array dirty.
+        void markDirty() const;
+
+        // JP: DMM Arrayをリビルドした場合、それを参照するGASのリビルド、もしくはアップデートが必要。
+        //     アップデートを使う場合は予めGASの設定でDMM Arrayのアップデートを許可する必要がある。
+        // EN: If the DMM array is rebuilt, GASs refering the DMM array need to be rebuilt or updated.
+        //     Allowing DMM array update is required in the GAS setttings when using updating.
+        void rebuild(CUstream stream, const BufferView &scratchBuffer) const;
+
+        bool isReady() const;
+        BufferView getOutputBuffer() const;
+
+        OptixDisplacementMicromapFlags getConfiguration() const;
+    };
+
+
+
     class GeometryInstance : public Object<GeometryInstance> {
     public:
         void destroy();
@@ -1337,7 +1373,17 @@ namespace optixu {
             OpacityMicroMapArray opacityMicroMapArray,
             const OptixOpacityMicromapUsageCount* ommUsageCounts, uint32_t numOmmUsageCounts,
             const BufferView &ommIndexBuffer,
-            IndexSize indexSize = IndexSize::k4Bytes, uint32_t indexOffset = 0) const;
+            OPTIXU_EN_PRM(IndexSize, indexSize, k4Bytes), uint32_t indexOffset = 0) const;
+        void setDisplacementMicroMapArray(
+            const BufferView &vertexDirectionBuffer,
+            const BufferView &vertexBiasAndScaleBuffer,
+            const BufferView &triangleFlagsBuffer,
+            DisplacementMicroMapArray displacementMicroMapArray,
+            const OptixDisplacementMicromapUsageCount* dmmUsageCounts, uint32_t numDmmUsageCounts,
+            const BufferView &dmmIndexBuffer,
+            OPTIXU_EN_PRM(IndexSize, indexSize, k4Bytes), uint32_t indexOffset = 0,
+            OptixDisplacementMicromapDirectionFormat vertexDirectionFormat = OPTIX_DISPLACEMENT_MICROMAP_DIRECTION_FORMAT_FLOAT3,
+            OptixDisplacementMicromapBiasAndScaleFormat vertexBiasAndScaleFormat = OPTIX_DISPLACEMENT_MICROMAP_BIAS_AND_SCALE_FORMAT_FLOAT2) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setSingleRadius(UseSingleRadius useSingleRadius) const;
@@ -1346,7 +1392,7 @@ namespace optixu {
         void setPrimitiveIndexOffset(uint32_t offset) const;
         void setNumMaterials(
             uint32_t numMaterials, const BufferView &matIndexBuffer,
-            IndexSize indexSize = IndexSize::k4Bytes) const;
+            OPTIXU_EN_PRM(IndexSize, indexSize, k4Bytes)) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
 
         /*
@@ -1376,6 +1422,14 @@ namespace optixu {
         OpacityMicroMapArray getOpacityMicroMapArray(
             BufferView* ommIndexBuffer = nullptr,
             IndexSize* indexSize = nullptr, uint32_t* indexOffset = nullptr) const;
+        DisplacementMicroMapArray getDisplacementMicroMapArray(
+            BufferView* vertexDirectionBuffer = nullptr,
+            BufferView* vertexBiasAndScaleBuffer = nullptr,
+            BufferView* triangleFlagsBuffer = nullptr,
+            BufferView* dmmIndexBuffer = nullptr,
+            IndexSize* indexSize = nullptr, uint32_t* indexOffset = nullptr,
+            OptixDisplacementMicromapDirectionFormat* vertexDirectionFormat = nullptr,
+            OptixDisplacementMicromapBiasAndScaleFormat* vertexBiasAndScaleFormat = nullptr) const;
         BufferView getSegmentIndexBuffer() const;
         BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
         uint32_t getPrimitiveIndexOffset() const;
@@ -1401,11 +1455,11 @@ namespace optixu {
         //     Changing the number of children invalidates the shader binding table layout of hit group.
         void setConfiguration(
             ASTradeoff tradeoff,
-            AllowUpdate allowUpdate = AllowUpdate::No,
-            AllowCompaction allowCompaction = AllowCompaction::No,
-            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
-            AllowOpacityMicroMapUpdate allowOpacityMicroMapUpdate = AllowOpacityMicroMapUpdate::No,
-            AllowDisableOpacityMicroMaps allowDisableOpacityMicroMaps = AllowDisableOpacityMicroMaps::No) const;
+            OPTIXU_EN_PRM(AllowUpdate, allowUpdate, No),
+            OPTIXU_EN_PRM(AllowCompaction, allowCompaction, No),
+            OPTIXU_EN_PRM(AllowRandomVertexAccess, allowRandomVertexAccess, No),
+            OPTIXU_EN_PRM(AllowOpacityMicroMapUpdate, allowOpacityMicroMapUpdate, No),
+            OPTIXU_EN_PRM(AllowDisableOpacityMicroMaps, allowDisableOpacityMicroMaps, No)) const;
         void setMotionOptions(
             uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(
@@ -1596,9 +1650,9 @@ namespace optixu {
         // EN: Calling the following APIs automatically marks the IAS dirty.
         void setConfiguration(
             ASTradeoff tradeoff,
-            AllowUpdate allowUpdate = AllowUpdate::No,
-            AllowCompaction allowCompaction = AllowCompaction::No,
-            AllowRandomInstanceAccess allowRandomInstanceAccess = AllowRandomInstanceAccess::No) const;
+            OPTIXU_EN_PRM(AllowUpdate, allowUpdate, No),
+            OPTIXU_EN_PRM(AllowCompaction, allowCompaction, No),
+            OPTIXU_EN_PRM(AllowRandomInstanceAccess, allowRandomInstanceAccess, No)) const;
         void setMotionOptions(uint32_t numKeys, float timeBegin, float timeEnd, OptixMotionFlags flags) const;
         void addChild(Instance instance) const;
         void removeChildAt(uint32_t index) const;
@@ -1657,8 +1711,8 @@ namespace optixu {
             OptixTraversableGraphFlags traversableGraphFlags,
             OptixExceptionFlags exceptionFlags,
             OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
-            UseMotionBlur useMotionBlur = UseMotionBlur::No,
-            UseOpacityMicroMaps useOpacityMicroMaps = UseOpacityMicroMaps::No) const;
+            OPTIXU_EN_PRM(UseMotionBlur, useMotionBlur, No),
+            OPTIXU_EN_PRM(UseOpacityMicroMaps, useOpacityMicroMaps, No)) const;
 
         [[nodiscard]]
         Module createModuleFromPTXString(
@@ -1692,18 +1746,18 @@ namespace optixu {
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
             ASTradeoff tradeoff,
-            AllowUpdate allowUpdate = AllowUpdate::No,
-            AllowCompaction allowCompaction = AllowCompaction::No,
-            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
+            OPTIXU_EN_PRM(AllowUpdate, allowUpdate, No),
+            OPTIXU_EN_PRM(AllowCompaction, allowCompaction, No),
+            OPTIXU_EN_PRM(AllowRandomVertexAccess, allowRandomVertexAccess, No),
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         HitProgramGroup createHitProgramGroupForSphereIS(
             Module module_CH, const char* entryFunctionNameCH,
             Module module_AH, const char* entryFunctionNameAH,
             ASTradeoff tradeoff,
-            AllowUpdate allowUpdate = AllowUpdate::No,
-            AllowCompaction allowCompaction = AllowCompaction::No,
-            AllowRandomVertexAccess allowRandomVertexAccess = AllowRandomVertexAccess::No,
+            OPTIXU_EN_PRM(AllowUpdate, allowUpdate, No),
+            OPTIXU_EN_PRM(AllowCompaction, allowCompaction, No),
+            OPTIXU_EN_PRM(AllowRandomVertexAccess, allowRandomVertexAccess, No),
             const PayloadType &payloadType = PayloadType()) const;
         [[nodiscard]]
         HitProgramGroup createHitProgramGroupForCustomIS(
@@ -1877,6 +1931,8 @@ namespace optixu {
             const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
             const BufferView &internalGuideLayerForNextFrame) const;
     };
+
+#undef OPTIXU_EN_PRM
 
 #endif // #if !defined(__CUDA_ARCH__)
     // END: Host-side API
