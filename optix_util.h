@@ -31,6 +31,9 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- JP: - Displacement Micro-Mapをサポート。
+  EN: - Supported displacement micro-map.
+
 - !!BREAKING
   JP: - OptiX 7.7.0をサポート。
       - Pipeline::link()のパラメターを変更。
@@ -948,6 +951,8 @@ namespace optixu {
               |              +-- GeomInst
               |              |
               |              +-- OMMArray
+              |              |
+              |              +-- DMMArray
               |
               +-- Denoiser
 
@@ -1258,6 +1263,8 @@ namespace optixu {
 
         [[nodiscard]]
         OpacityMicroMapArray createOpacityMicroMapArray() const;
+        [[nodiscard]]
+        DisplacementMicroMapArray createDisplacementMicroMapArray() const;
         [[nodiscard]]
         GeometryInstance createGeometryInstance(
             OPTIXU_EN_PRM(GeometryType, geomType, Triangles)) const;
