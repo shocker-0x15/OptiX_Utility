@@ -253,6 +253,10 @@ namespace optixu {
         return (new _OpacityMicroMapArray(m))->getPublicType();
     }
 
+    DisplacementMicroMapArray Scene::createDisplacementMicroMapArray() const {
+        return (new _DisplacementMicroMapArray(m))->getPublicType();
+    }
+
     GeometryInstance Scene::createGeometryInstance(GeometryType geomType) const {
         m->throwRuntimeError(
             geomType == GeometryType::Triangles ||
