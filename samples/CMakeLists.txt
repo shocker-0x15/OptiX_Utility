@@ -178,6 +178,7 @@ add_subdirectory(denoiser)
 add_subdirectory(temporal_denoiser)
 add_subdirectory(payload_annotation)
 add_subdirectory(opacity_micro_map)
+add_subdirectory(displacement_micro_map)
 
 add_subdirectory(pick)
 add_subdirectory(scene_edit)

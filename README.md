@@ -28,10 +28,11 @@ Currently based on OptiX 7.7.0
   - Curves
     - 1st order: Round linear segments
     - 2nd order: Round quadratic B-splines, Ribbons (Flat quadratic B-splines)
-    - 3rd order Round cubic B-splines, Round Catmull-Rom splines, Round cubic B&#233;zier curves
+    - 3rd order: Round cubic B-splines, Round Catmull-Rom splines, Round cubic B&#233;zier curves
   - Spheres
   - User-defined custom primitives
 - Opacity micro-map
+- Displacement micro-map
 - Motion blur types
   - Instance motion blur
   - Deformation blur
@@ -58,7 +59,6 @@ Currently based on OptiX 7.7.0
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
-- Displaced Micro-Mesh (DMM)
 - Support SBT offset summation accross all instances in the traversal graph
 - Test flow vector trustworthiness guiding
 - Test AOV denoisers
