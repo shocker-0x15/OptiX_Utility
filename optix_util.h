@@ -1165,7 +1165,7 @@ namespace optixu {
         static Context create(
             CUcontext cuContext,
             uint32_t logLevel = 4,
-            EnableValidation enableValidation = EnableValidation::No);
+            OPTIXU_EN_PRM(EnableValidation, enableValidation, No));
         void destroy();
 
         CUcontext getCUcontext() const;
