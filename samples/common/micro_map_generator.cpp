@@ -1,4 +1,4 @@
-#include "micro_map_generator_private.h"
+﻿#include "micro_map_generator_private.h"
 
 static CUmodule s_mmModule;
 cudau::Kernel g_initializeHalfEdges;

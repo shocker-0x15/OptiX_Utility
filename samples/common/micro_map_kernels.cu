@@ -1,4 +1,4 @@
-#include "micro_map_generator_private.h"
+﻿#include "micro_map_generator_private.h"
 
 using namespace shared;
 

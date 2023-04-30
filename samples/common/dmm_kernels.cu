@@ -110,6 +110,8 @@ CUDA_DEVICE_KERNEL void determineTargetSubdivLevels(
     atomicOr(&perTriInfos[triInfoBinIdx], triInfo.asUInt << offsetInTriInfoBin);
 }
 
+
+
 CUDA_DEVICE_KERNEL void adjustSubdivLevels(
     const TriNeighborList* triNeighborLists, uint32_t numTriangles,
     const uint32_t* srcPerTriInfos, uint32_t* dstPerTriInfos) {
