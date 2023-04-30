@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "micro_map_generator_private.h"
 #include "dmm_generator.h"
