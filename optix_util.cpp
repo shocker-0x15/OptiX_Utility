@@ -549,7 +549,7 @@ namespace optixu {
                 "otherwise must not be provided.");
 
             uint32_t vertexStride = geom.vertexBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -557,7 +557,7 @@ namespace optixu {
                     "Vertex buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.vertexBuffers[i].numElements() == numElements,
+                    geom.vertexBuffers[i].numElements() == numVertices,
                     "Num elements for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -570,16 +570,19 @@ namespace optixu {
             OptixBuildInputTriangleArray &triArray = input->triangleArray;
 
             triArray.vertexBuffers = geom.vertexBufferArray;
-            triArray.numVertices = numElements;
+            triArray.numVertices = numVertices;
             triArray.vertexFormat = geom.vertexFormat;
             triArray.vertexStrideInBytes = vertexStride;
 
+            uint32_t numTriangles;
             if (geom.indexFormat != OPTIX_INDICES_FORMAT_NONE) {
+                numTriangles = static_cast<uint32_t>(geom.triangleBuffer.numElements());
                 triArray.indexBuffer = geom.triangleBuffer.getCUdeviceptr();
                 triArray.indexStrideInBytes = geom.triangleBuffer.stride();
-                triArray.numIndexTriplets = static_cast<uint32_t>(geom.triangleBuffer.numElements());
+                triArray.numIndexTriplets = numTriangles;
             }
             else {
+                numTriangles = numVertices / 3;
                 triArray.indexBuffer = 0;
                 triArray.indexStrideInBytes = 0;
                 triArray.numIndexTriplets = 0;
@@ -602,6 +605,25 @@ namespace optixu {
             }
 
             if (geom.displacementMicroMapArray) {
+                throwRuntimeError(
+                    geom.displacementVertexDirectionBuffer.isValid(),
+                    "Vertex direction buffer must be provided.");
+                throwRuntimeError(
+                    geom.displacementVertexDirectionBuffer.numElements() == numVertices,
+                    "Num elements of the vertex direction buffer doesn't match that of the vertices.");
+                throwRuntimeError(
+                    geom.displacementVertexBiasAndScaleBuffer.isValid(),
+                    "Vertex bias and scale buffer must be provided.");
+                throwRuntimeError(
+                    geom.displacementVertexBiasAndScaleBuffer.numElements() == numVertices,
+                    "Num elements of the vertex bias and scale buffer doesn't match that of the vertices.");
+                throwRuntimeError(
+                    geom.displacementTriangleFlagsBuffer.isValid(),
+                    "Triangle flags buffer must be provided.");
+                throwRuntimeError(
+                    geom.displacementTriangleFlagsBuffer.numElements() == numTriangles,
+                    "Num elements of the triangle flags buffer doesn't match that of the triangles.");
+
                 OptixBuildInputDisplacementMicromap &dmmInput = triArray.displacementMicromap;
                 dmmInput.vertexDirectionsBuffer = geom.displacementVertexDirectionBuffer.getCUdeviceptr();
                 dmmInput.vertexDirectionStrideInBytes = geom.displacementVertexDirectionBuffer.stride();
@@ -655,7 +677,7 @@ namespace optixu {
                 normalBufferSet = geom.normalBuffers[0].isValid();
                 normalStride = geom.normalBuffers[0].stride();
             }
-            uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 geom.widthBufferArray[i] = geom.widthBuffers[i].getCUdeviceptr();
@@ -664,7 +686,7 @@ namespace optixu {
                     "Vertex buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.vertexBuffers[i].numElements() == numElements,
+                    geom.vertexBuffers[i].numElements() == numVertices,
                     "Num elements of the vertex buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -676,7 +698,7 @@ namespace optixu {
                     "Width buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.widthBuffers[i].numElements() == numElements,
+                    geom.widthBuffers[i].numElements() == numVertices,
                     "Num elements of the width buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -691,7 +713,7 @@ namespace optixu {
                     if (normalBufferSet) {
                         geom.normalBufferArray[i] = geom.normalBuffers[i].getCUdeviceptr();
                         throwRuntimeError(
-                            geom.normalBuffers[i].numElements() == numElements,
+                            geom.normalBuffers[i].numElements() == numVertices,
                             "Num elements of the normal buffer for motion step %u doesn't match that of 0.",
                             i);
                         throwRuntimeError(
@@ -729,7 +751,7 @@ namespace optixu {
                 curveArray.normalBuffers = geom.normalBufferArray;
                 curveArray.normalStrideInBytes = normalStride;
             }
-            curveArray.numVertices = numElements;
+            curveArray.numVertices = numVertices;
 
             curveArray.indexBuffer = geom.segmentIndexBuffer.getCUdeviceptr();
             curveArray.indexStrideInBytes = geom.segmentIndexBuffer.stride();
@@ -743,7 +765,7 @@ namespace optixu {
 
             uint32_t centerStride = geom.centerBuffers[0].stride();
             uint32_t radiusStride = geom.radiusBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
+            uint32_t numSpheres = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.centerBufferArray[i] = geom.centerBuffers[i].getCUdeviceptr();
                 geom.radiusBufferArray[i] = geom.radiusBuffers[i].getCUdeviceptr();
@@ -752,7 +774,7 @@ namespace optixu {
                     "Center buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.centerBuffers[i].numElements() == numElements,
+                    geom.centerBuffers[i].numElements() == numSpheres,
                     "Num elements of the center buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -764,7 +786,7 @@ namespace optixu {
                     "Radius buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.radiusBuffers[i].numElements() == numElements,
+                    geom.radiusBuffers[i].numElements() == numSpheres,
                     "Num elements of the radius buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -780,7 +802,7 @@ namespace optixu {
             sphereArray.vertexStrideInBytes = centerStride;
             sphereArray.radiusBuffers = geom.radiusBufferArray;
             sphereArray.radiusStrideInBytes = radiusStride;
-            sphereArray.numVertices = numElements;
+            sphereArray.numVertices = numSpheres;
             sphereArray.singleRadius = geom.useSingleRadius;
 
             sphereArray.primitiveIndexOffset = primitiveIndexOffset;
@@ -803,7 +825,7 @@ namespace optixu {
             auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
 
             uint32_t stride = geom.primitiveAabbBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
+            uint32_t numPrimitives = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.primitiveAabbBufferArray[i] = geom.primitiveAabbBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -811,7 +833,7 @@ namespace optixu {
                     "AABB buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.primitiveAabbBuffers[i].numElements() == numElements,
+                    geom.primitiveAabbBuffers[i].numElements() == numPrimitives,
                     "Num elements for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -824,7 +846,7 @@ namespace optixu {
             OptixBuildInputCustomPrimitiveArray &customPrimArray = input->customPrimitiveArray;
 
             customPrimArray.aabbBuffers = geom.primitiveAabbBufferArray;
-            customPrimArray.numPrimitives = numElements;
+            customPrimArray.numPrimitives = numPrimitives;
             customPrimArray.strideInBytes = stride;
             customPrimArray.primitiveIndexOffset = primitiveIndexOffset;
 
@@ -852,7 +874,7 @@ namespace optixu {
             auto &geom = std::get<TriangleGeometry>(geometry);
 
             uint32_t vertexStride = geom.vertexBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -860,7 +882,7 @@ namespace optixu {
                     "Vertex buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.vertexBuffers[i].numElements() == numElements,
+                    geom.vertexBuffers[i].numElements() == numVertices,
                     "Num elements for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -873,8 +895,14 @@ namespace optixu {
 
             triArray.vertexBuffers = geom.vertexBufferArray;
 
-            if (geom.indexFormat != OPTIX_INDICES_FORMAT_NONE)
+            uint32_t numTriangles;
+            if (geom.indexFormat != OPTIX_INDICES_FORMAT_NONE) {
+                numTriangles = static_cast<uint32_t>(geom.triangleBuffer.numElements());
                 triArray.indexBuffer = geom.triangleBuffer.getCUdeviceptr();
+            }
+            else {
+                numTriangles = numVertices / 3;
+            }
 
             if (geom.opacityMicroMapArray) {
                 // TODO: どの情報が更新可能なのか調べる。
@@ -893,6 +921,25 @@ namespace optixu {
             }
 
             if (geom.displacementMicroMapArray) {
+                throwRuntimeError(
+                    geom.displacementVertexDirectionBuffer.isValid(),
+                    "Vertex direction buffer must be provided.");
+                throwRuntimeError(
+                    geom.displacementVertexDirectionBuffer.numElements() == numVertices,
+                    "Num elements of the vertex direction buffer doesn't match that of the vertices.");
+                throwRuntimeError(
+                    geom.displacementVertexBiasAndScaleBuffer.isValid(),
+                    "Vertex bias and scale buffer must be provided.");
+                throwRuntimeError(
+                    geom.displacementVertexBiasAndScaleBuffer.numElements() == numVertices,
+                    "Num elements of the vertex bias and scale buffer doesn't match that of the vertices.");
+                throwRuntimeError(
+                    geom.displacementTriangleFlagsBuffer.isValid(),
+                    "Triangle flags buffer must be provided.");
+                throwRuntimeError(
+                    geom.displacementTriangleFlagsBuffer.numElements() == numTriangles,
+                    "Num elements of the triangle flags buffer doesn't match that of the triangles.");
+
                 // TODO: どの情報が更新可能なのか調べる。
                 throwRuntimeError(geom.displacementMicroMapArray->isReady(), "DMM array is not ready.");
                 OptixBuildInputDisplacementMicromap &dmmInput = triArray.displacementMicromap;
@@ -936,7 +983,7 @@ namespace optixu {
                 normalBufferSet = geom.normalBuffers[0].isValid();
                 normalStride = geom.normalBuffers[0].stride();
             }
-            uint32_t numElements = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 geom.widthBufferArray[i] = geom.widthBuffers[i].getCUdeviceptr();
@@ -945,7 +992,7 @@ namespace optixu {
                     "Vertex buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.vertexBuffers[i].numElements() == numElements,
+                    geom.vertexBuffers[i].numElements() == numVertices,
                     "Num elements of the vertex buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -957,7 +1004,7 @@ namespace optixu {
                     "Width buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.widthBuffers[i].numElements() == numElements,
+                    geom.widthBuffers[i].numElements() == numVertices,
                     "Num elements of the width buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -972,7 +1019,7 @@ namespace optixu {
                     if (normalBufferSet) {
                         geom.normalBufferArray[i] = geom.normalBuffers[i].getCUdeviceptr();
                         throwRuntimeError(
-                            geom.normalBuffers[i].numElements() == numElements,
+                            geom.normalBuffers[i].numElements() == numVertices,
                             "Num elements of the normal buffer for motion step %u doesn't match that of 0.",
                             i);
                         throwRuntimeError(
@@ -999,7 +1046,7 @@ namespace optixu {
 
             uint32_t centerStride = geom.centerBuffers[0].stride();
             uint32_t radiusStride = geom.radiusBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
+            uint32_t numSpheres = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.centerBufferArray[i] = geom.centerBuffers[i].getCUdeviceptr();
                 geom.radiusBufferArray[i] = geom.radiusBuffers[i].getCUdeviceptr();
@@ -1008,7 +1055,7 @@ namespace optixu {
                     "Center buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.centerBuffers[i].numElements() == numElements,
+                    geom.centerBuffers[i].numElements() == numSpheres,
                     "Num elements of the center buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -1020,7 +1067,7 @@ namespace optixu {
                     "Radius buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.radiusBuffers[i].numElements() == numElements,
+                    geom.radiusBuffers[i].numElements() == numSpheres,
                     "Num elements of the radius buffer for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
@@ -1038,7 +1085,7 @@ namespace optixu {
             auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
 
             uint32_t stride = geom.primitiveAabbBuffers[0].stride();
-            uint32_t numElements = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
+            uint32_t numPrimitives = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.primitiveAabbBufferArray[i] = geom.primitiveAabbBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -1046,7 +1093,7 @@ namespace optixu {
                     "AABB buffer for motion step %u is not set.",
                     i);
                 throwRuntimeError(
-                    geom.primitiveAabbBuffers[i].numElements() == numElements,
+                    geom.primitiveAabbBuffers[i].numElements() == numPrimitives,
                     "Num elements for motion step %u doesn't match that of 0.",
                     i);
                 throwRuntimeError(
