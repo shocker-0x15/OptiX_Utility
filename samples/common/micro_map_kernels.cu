@@ -2,12 +2,6 @@
 
 using namespace shared;
 
-struct Triangle {
-    uint32_t indices[3];
-};
-
-
-
 CUDA_DEVICE_KERNEL void initializeHalfEdges(
     const uint8_t* triangles, uint64_t triangleStride, uint32_t numTriangles,
     DirectedEdge* edges, uint32_t* halfEdgeIndices, HalfEdge* halfEdges) {

@@ -150,8 +150,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         struct MaterialGroup {
             cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
             optixu::GeometryInstance optixGeomInst;
-            cudau::Array texArray;
-            CUtexObject texObj;
+            cudau::Array heightTexArray;
+            CUtexObject heightTexObj;
 
             optixu::OpacityMicroMapArray optixDmmArray;
             cudau::Buffer rawDmmArray;
@@ -174,9 +174,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 it->rawDmmArray.finalize();
                 it->optixDmmArray.destroy();
 
-                if (it->texObj) {
-                    CUDADRV_CHECK(cuTexObjectDestroy(it->texObj));
-                    it->texArray.finalize();
+                if (it->heightTexObj) {
+                    CUDADRV_CHECK(cuTexObjectDestroy(it->heightTexObj));
+                    it->heightTexArray.finalize();
                 }
                 it->triangleBuffer.finalize();
                 it->optixGeomInst.destroy();
@@ -272,6 +272,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
             geomData.texture = 0;
             geomData.albedo = float3(0.8f, 0.8f, 0.8f);
 
+            std::filesystem::path heightMapPath = R"(../../data/mountain_heightmap.png)";
+            {
+                int32_t width, height, n;
+                uint8_t* linearImageData = stbi_load(
+                    heightMapPath.string().c_str(),
+                    &width, &height, &n, 1);
+                group.heightTexArray.initialize2D(
+                    cuContext, cudau::ArrayElementType::UInt8, 1,
+                    cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                    width, height, 1);
+                group.heightTexArray.write<uint8_t>(linearImageData, width * height);
+                stbi_image_free(linearImageData);
+
+                cudau::TextureSampler texSampler;
+                texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
+                texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Point);
+                texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat);
+                texSampler.setWrapMode(0, cudau::TextureWrapMode::Repeat);
+                texSampler.setWrapMode(1, cudau::TextureWrapMode::Repeat);
+                group.heightTexObj = texSampler.createTextureObject(group.heightTexArray);
+                //geomData.heightTexture = group.heightTexObj;
+            }
+
             size_t scratchMemSizeForDMM = getScratchMemSizeForDMMGenerator(lengthof(triangles));
             cudau::Buffer scratchMemForDMM;
             scratchMemForDMM.initialize(cuContext, cudau::BufferType::Device, scratchMemSizeForDMM, 1);
@@ -283,11 +306,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (useDMM) {
                 initializeDMMGeneratorContext(
                     getExecutableDirectory() / "displacement_micro_map/ptxes",
+                    displacedMesh.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, position),
                     displacedMesh.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord),
                     sizeof(Shared::Vertex),
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), lengthof(triangles),
-                    group.texObj,
-                    make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 1, 0,
+                    group.heightTexObj,
+                    make_uint2(group.heightTexArray.getWidth(), group.heightTexArray.getHeight()), 1, 0,
                     shared::DMMFormat_Level0, shared::DMMFormat_Level5, 0,
                     useDmmIndexBuffer, 1 << static_cast<uint32_t>(dmmIndexSize),
                     scratchMemForDMM.getCUdeviceptr(), scratchMemForDMM.sizeInBytes(),

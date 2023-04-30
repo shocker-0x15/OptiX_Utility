@@ -3,6 +3,10 @@
 #include "common.h"
 
 namespace shared {
+    struct Triangle {
+        uint32_t indices[3];
+    };
+
     struct DirectedEdge {
         uint32_t vertexIndexA;
         uint32_t vertexIndexB;

@@ -109,6 +109,16 @@ namespace shared {
 
 
 
+#if __CUDA_ARCH__ < 600
+#   define atomicOr_block atomicOr
+#   define atomicAnd_block atomicAnd
+#   define atomicAdd_block atomicAdd
+#   define atomicMin_block atomicMin
+#   define atomicMax_block atomicMax
+#endif
+
+
+
 template <typename T>
 CUDA_COMMON_FUNCTION CUDA_INLINE T alignUp(T value, uint32_t alignment) {
     return (value + alignment - 1) / alignment * alignment;
@@ -694,6 +704,9 @@ CUDA_COMMON_FUNCTION CUDA_INLINE float2 max(const float2 &v0, const float2 &v1) 
     return make_float2(shared::max(v0.x, v1.x),
                        shared::max(v0.y, v1.y));
 }
+CUDA_COMMON_FUNCTION CUDA_INLINE float cross(const float2 &v0, const float2 &v1) {
+    return v0.x * v1.y - v0.y * v1.x;
+}
 
 CUDA_COMMON_FUNCTION CUDA_INLINE float3 min(const float3 &v0, const float3 &v1) {
     return make_float3(std::fmin(v0.x, v1.x),
@@ -797,11 +810,47 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 sRGB_degamma(const float3 &value) {
 
 
 
+CUDA_COMMON_FUNCTION CUDA_INLINE int32_t floatToOrderedInt(float fVal) {
+#if defined(__CUDA_ARCH__)
+    int32_t iVal = __float_as_int(fVal);
+#else
+    int32_t iVal = *reinterpret_cast<int32_t*>(&fVal);
+#endif
+    return (iVal >= 0) ? iVal : iVal ^ 0x7FFFFFFF;
+}
+
+CUDA_COMMON_FUNCTION CUDA_INLINE float orderedIntToFloat(int32_t iVal) {
+    int32_t orgVal = (iVal >= 0) ? iVal : iVal ^ 0x7FFFFFFF;
+#if defined(__CUDA_ARCH__)
+    return __int_as_float(orgVal);
+#else
+    return *reinterpret_cast<float*>(&orgVal);
+#endif
+}
+
+struct float3AsOrderedInt {
+    int32_t x, y, z;
+
+    CUDA_COMMON_FUNCTION float3AsOrderedInt() : x(0), y(0), z(0) {
+    }
+    CUDA_COMMON_FUNCTION float3AsOrderedInt(const float3 &v) :
+        x(floatToOrderedInt(v.x)), y(floatToOrderedInt(v.y)), z(floatToOrderedInt(v.z)) {
+    }
+
+    CUDA_COMMON_FUNCTION explicit operator float3() const {
+        return make_float3(orderedIntToFloat(x), orderedIntToFloat(y), orderedIntToFloat(z));
+    }
+};
+
+
+
 struct AABB {
     float3 minP;
     float3 maxP;
 
     CUDA_COMMON_FUNCTION AABB() : minP(make_float3(INFINITY)), maxP(make_float3(-INFINITY)) {}
+    CUDA_COMMON_FUNCTION AABB(const float3 &_minP, const float3 &_maxP) :
+        minP(_minP), maxP(_maxP) {}
 
     CUDA_COMMON_FUNCTION AABB &unify(const float3 &p) {
         minP = min(minP, p);
@@ -814,6 +863,35 @@ struct AABB {
         minP -= 0.5f * (scale - 1) * d;
         maxP += 0.5f * (scale - 1) * d;
         return *this;
+    }
+
+    CUDA_COMMON_FUNCTION float calcHalfSurfaceArea() const {
+        float3 d = maxP - minP;
+        return d.x * d.y + d.y * d.z + d.z * d.x;
+    }
+};
+
+
+
+struct AABBAsOrderedInt {
+    float3AsOrderedInt minP;
+    float3AsOrderedInt maxP;
+
+    CUDA_COMMON_FUNCTION AABBAsOrderedInt() :
+        minP(make_float3(INFINITY)), maxP(make_float3(-INFINITY)) {
+    }
+    CUDA_COMMON_FUNCTION AABBAsOrderedInt(const AABB &v) :
+        minP(v.minP), maxP(v.maxP) {
+    }
+
+    CUDA_COMMON_FUNCTION AABBAsOrderedInt& operator=(const AABBAsOrderedInt &v) {
+        minP = v.minP;
+        maxP = v.maxP;
+        return *this;
+    }
+
+    CUDA_COMMON_FUNCTION explicit operator AABB() const {
+        return AABB(static_cast<float3>(minP), static_cast<float3>(maxP));
     }
 };
 
