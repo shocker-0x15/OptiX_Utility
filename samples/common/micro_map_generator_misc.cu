@@ -1,4 +1,4 @@
-#include "omm_generator_private.h"
+#include "micro_map_generator_private.h"
 #if !defined(__INTELLISENSE__)
 #include <cub/cub.cuh>
 #endif

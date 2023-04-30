@@ -79,13 +79,32 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         const Vertex &v0 = geomInst.vertexBuffer[tri.index0];
         const Vertex &v1 = geomInst.vertexBuffer[tri.index1];
         const Vertex &v2 = geomInst.vertexBuffer[tri.index2];
+
         float b1 = hp.b1;
         float b2 = hp.b2;
         float b0 = 1 - (b1 + b2);
 
-        p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
-        sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
         texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+
+        if (optixIsTriangleHit()) { // Vanilla Triangle
+            p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
+            sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+        }
+        else /*if (optixIsDisplacedMicromeshTriangleHit())*/ { // Displaced Micro-Mesh Triangle
+            float3 microTriPositions[3];
+            optixGetMicroTriangleVertexData(microTriPositions);
+            float2 microTriBcCoords[3];
+            optixGetMicroTriangleBarycentricsData(microTriBcCoords);
+
+            float2 bcInMicroTri = optixBaseBarycentricsToMicroBarycentrics(make_float2(b1, b2), microTriBcCoords);
+            float mb1 = bcInMicroTri.x;
+            float mb2 = bcInMicroTri.y;
+            float mb0 = 1 - (mb1 + mb2);
+
+            p = mb0 * microTriPositions[0] + mb1 * microTriPositions[1] + mb2 * microTriPositions[2];
+            sn = cross(microTriPositions[2] - microTriPositions[0],
+                       microTriPositions[1] - microTriPositions[0]);
+        }
 
         p = optixTransformPointFromObjectToWorldSpace(p);
         sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));

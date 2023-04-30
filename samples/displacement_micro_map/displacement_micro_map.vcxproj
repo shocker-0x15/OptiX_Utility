@@ -16,6 +16,7 @@
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
+    <ClCompile Include="..\common\dmm_generator.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="displacement_micro_map_main.cpp" />
   </ItemGroup>
@@ -28,10 +29,33 @@
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
+    <ClInclude Include="..\common\dmm_generator.h" />
+    <ClInclude Include="..\common\dmm_generator_private.h" />
+    <ClInclude Include="..\common\micro_map_generator_private.h" />
     <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="displacement_micro_map_shared.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="..\common\dmm_kernels.cu">
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
+    </CudaCompile>
+    <CudaCompile Include="..\common\micro_map_generator_misc.cu">
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">compile</NvccCompilation>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">compile</NvccCompilation>
+      <GenerateRelocatableDeviceCode Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GenerateRelocatableDeviceCode>
+      <GenerateRelocatableDeviceCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</GenerateRelocatableDeviceCode>
+    </CudaCompile>
+    <CudaCompile Include="..\common\micro_map_kernels.cu">
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
+    </CudaCompile>
     <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
