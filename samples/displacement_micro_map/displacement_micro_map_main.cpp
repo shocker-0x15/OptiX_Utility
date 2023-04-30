@@ -237,6 +237,58 @@ int32_t main(int32_t argc, const char* argv[]) try {
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
     }
 
+    Geometry displacedMesh;
+    {
+        Shared::Vertex vertices[] = {
+            { make_float3(-1.0f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 1) },
+            { make_float3(1.0f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(1, 1) },
+            { make_float3(1.0f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(1, 0) },
+        };
+
+        Shared::Triangle triangles[] = {
+            { 0, 1, 2 }, { 0, 2, 3 },
+        };
+
+        displacedMesh.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+
+        // JP: DMMを適用するジオメトリやそれを含むGASは通常の三角形用のもので良い。
+        // EN: 
+        displacedMesh.optixGas = scene.createGeometryAccelerationStructure();
+        displacedMesh.optixGas.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes);
+        displacedMesh.optixGas.setNumMaterialSets(1);
+        displacedMesh.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+
+        Geometry::MaterialGroup group;
+        {
+            group.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+
+            Shared::GeometryInstanceData geomData = {};
+            geomData.vertexBuffer = floor.vertexBuffer.getDevicePointer();
+            geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
+            geomData.texture = 0;
+            geomData.albedo = float3(0.8f, 0.8f, 0.8f);
+
+            group.optixGeomInst = scene.createGeometryInstance();
+            group.optixGeomInst.setVertexBuffer(floor.vertexBuffer);
+            group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
+            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterial(0, 0, defaultMat);
+            group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+            group.optixGeomInst.setUserData(geomData);
+
+            floor.optixGas.addChild(group.optixGeomInst);
+            floor.matGroups.push_back(std::move(group));
+        }
+
+        floor.optixGas.prepareForBuild(&asMemReqs);
+        floor.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    }
+
 
 
     // JP: GASを基にインスタンスを作成する。
@@ -405,6 +457,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     floorInst.destroy();
 
+    displacedMesh.finalize();
     floor.finalize();
 
     scene.destroy();

@@ -1,6 +1,7 @@
 ﻿#include "omm_generator_private.h"
 #include "../../ext/cubd/cubd.h"
 
+static CUmodule s_mmModule;
 static CUmodule s_ommModule;
 static cudau::Kernel s_extractTexCoords;
 static cudau::Kernel s_testIfTCTupleIsUnique;
@@ -31,12 +32,16 @@ size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles) {
     static bool isInitialized = false;
     if (!isInitialized) {
         CUDADRV_CHECK(cuModuleLoad(
+            &s_mmModule,
+            (getExecutableDirectory() / "opacity_micro_map/ptxes/micro_map_kernels.ptx").string().c_str()));
+        s_extractTexCoords.set(
+            s_mmModule, "extractTexCoords", cudau::dim3(32), 0);
+        s_testIfTCTupleIsUnique.set(
+            s_mmModule, "testIfTCTupleIsUnique", cudau::dim3(32), 0);
+
+        CUDADRV_CHECK(cuModuleLoad(
             &s_ommModule,
             (getExecutableDirectory() / "opacity_micro_map/ptxes/omm_kernels.ptx").string().c_str()));
-        s_extractTexCoords.set(
-            s_ommModule, "extractTexCoords", cudau::dim3(32), 0);
-        s_testIfTCTupleIsUnique.set(
-            s_ommModule, "testIfTCTupleIsUnique", cudau::dim3(32), 0);
         s_countOMMFormats.set(
             s_ommModule, "countOMMFormats", cudau::dim3(32), 0);
         s_fillNonUniqueEntries.set(

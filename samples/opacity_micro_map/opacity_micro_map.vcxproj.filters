@@ -70,6 +70,9 @@
     <ClInclude Include="..\common\omm_generator.h">
       <Filter>omm_generator</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\micro_map_generator_private.h">
+      <Filter>omm_generator</Filter>
+    </ClInclude>
     <ClInclude Include="..\common\omm_generator_private.h">
       <Filter>omm_generator</Filter>
     </ClInclude>
@@ -79,7 +82,10 @@
     <CudaCompile Include="..\common\omm_kernels.cu">
       <Filter>omm_generator</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\common\omm_generator_misc.cu">
+    <CudaCompile Include="..\common\micro_map_generator_misc.cu">
+      <Filter>omm_generator</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\common\micro_map_kernels.cu">
       <Filter>omm_generator</Filter>
     </CudaCompile>
   </ItemGroup>
