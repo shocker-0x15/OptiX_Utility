@@ -37,6 +37,9 @@
     <ClCompile Include="..\common\dmm_generator.cpp">
       <Filter>dmm_generator</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\micro_map_generator.cpp">
+      <Filter>dmm_generator</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">

@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "displacement_micro_map_shared.h"
+#include <optix_micromap.h>
 
 using namespace Shared;
 

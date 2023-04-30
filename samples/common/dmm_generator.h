@@ -24,6 +24,7 @@ struct DMMGeneratorContext {
 size_t getScratchMemSizeForDMMGenerator(uint32_t numTriangles);
 
 void initializeDMMGeneratorContext(
+    const std::filesystem::path &ptxDirPath,
     CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
@@ -31,5 +32,11 @@ void initializeDMMGeneratorContext(
     bool useIndexBuffer, uint32_t indexSize,
     CUdeviceptr scratchMem, size_t scratchMemSize,
     DMMGeneratorContext* context);
+
+void countDMMFormats(
+    const DMMGeneratorContext &context,
+    uint32_t histInDmmArray[shared::NumDMMFormats],
+    uint32_t histInMesh[shared::NumDMMFormats],
+    uint64_t* rawDmmArraySize);
 
 #endif // #if !defined(__CUDA_ARCH__)

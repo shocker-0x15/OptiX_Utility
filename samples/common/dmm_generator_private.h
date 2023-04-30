@@ -22,6 +22,13 @@ struct Context {
     uint32_t indexSize;
     CUdeviceptr scratchMem;
     size_t scratchMemSize;
+
+    shared::DirectedEdge* directedEdges;
+    uint32_t* halfEdgeIndices;
+    shared::HalfEdge* halfEdges;
+    CUdeviceptr memForSortDirectedEdges;
+    size_t memSizeForSortDirectedEdges;
+    shared::TriNeighborList* triNeighborLists;
 };
 
 #endif

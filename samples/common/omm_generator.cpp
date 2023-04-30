@@ -1,10 +1,10 @@
 ﻿#include "omm_generator_private.h"
 #include "../../ext/cubd/cubd.h"
 
-static CUmodule s_mmModule;
+extern cudau::Kernel g_extractTexCoords;
+extern cudau::Kernel g_testIfTCTupleIsUnique;
+
 static CUmodule s_ommModule;
-static cudau::Kernel s_extractTexCoords;
-static cudau::Kernel s_testIfTCTupleIsUnique;
 static cudau::Kernel s_countOMMFormats;
 static cudau::Kernel s_fillNonUniqueEntries;
 static cudau::Kernel s_createOMMDescriptors;
@@ -13,48 +13,7 @@ static cudau::Kernel s_copyOpacityMicroMaps;
 
 static bool enableDebugPrint = false;
 
-template <typename T = void>
-inline auto allocate(uintptr_t &curOffset, size_t numElems = 1, size_t alignment = alignof(T))
--> std::conditional_t<std::is_same_v<T, void>, uintptr_t, T*> {
-    uint64_t mask = alignment - 1;
-    uintptr_t ret = (curOffset + mask) & ~mask;
-    if constexpr (std::is_same_v<T, void>) {
-        curOffset = ret + numElems;
-        return ret;
-    }
-    else {
-        curOffset = ret + sizeof(T) * numElems;
-        return reinterpret_cast<T*>(ret);
-    }
-}
-
 size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles) {
-    static bool isInitialized = false;
-    if (!isInitialized) {
-        CUDADRV_CHECK(cuModuleLoad(
-            &s_mmModule,
-            (getExecutableDirectory() / "opacity_micro_map/ptxes/micro_map_kernels.ptx").string().c_str()));
-        s_extractTexCoords.set(
-            s_mmModule, "extractTexCoords", cudau::dim3(32), 0);
-        s_testIfTCTupleIsUnique.set(
-            s_mmModule, "testIfTCTupleIsUnique", cudau::dim3(32), 0);
-
-        CUDADRV_CHECK(cuModuleLoad(
-            &s_ommModule,
-            (getExecutableDirectory() / "opacity_micro_map/ptxes/omm_kernels.ptx").string().c_str()));
-        s_countOMMFormats.set(
-            s_ommModule, "countOMMFormats", cudau::dim3(32), 0);
-        s_fillNonUniqueEntries.set(
-            s_ommModule, "fillNonUniqueEntries", cudau::dim3(32), 0);
-        s_createOMMDescriptors.set(
-            s_ommModule, "createOMMDescriptors", cudau::dim3(32), 0);
-        s_evaluateMicroTriangleTransparencies.set(
-            s_ommModule, "evaluateMicroTriangleTransparencies", cudau::dim3(32), 0);
-        s_copyOpacityMicroMaps.set(
-            s_ommModule, "copyOpacityMicroMaps", cudau::dim3(32), 0);
-        isInitialized = true;
-    }
-
     size_t curOffset = 0;
 
     // triTcTuples
@@ -100,6 +59,7 @@ size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles) {
 }
 
 void initializeOMMGeneratorContext(
+    const std::filesystem::path &ptxDirPath,
     CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
@@ -107,6 +67,27 @@ void initializeOMMGeneratorContext(
     bool useIndexBuffer, uint32_t indexSize,
     CUdeviceptr scratchMem, size_t scratchMemSize,
     OMMGeneratorContext* context) {
+    static bool isInitialized = false;
+    if (!isInitialized) {
+        initializeMicroMapGeneratorKernels(ptxDirPath);
+
+        CUDADRV_CHECK(cuModuleLoad(
+            &s_ommModule,
+            (ptxDirPath / "omm_kernels.ptx").string().c_str()));
+        s_countOMMFormats.set(
+            s_ommModule, "countOMMFormats", cudau::dim3(32), 0);
+        s_fillNonUniqueEntries.set(
+            s_ommModule, "fillNonUniqueEntries", cudau::dim3(32), 0);
+        s_createOMMDescriptors.set(
+            s_ommModule, "createOMMDescriptors", cudau::dim3(32), 0);
+        s_evaluateMicroTriangleTransparencies.set(
+            s_ommModule, "evaluateMicroTriangleTransparencies", cudau::dim3(32), 0);
+        s_copyOpacityMicroMaps.set(
+            s_ommModule, "copyOpacityMicroMaps", cudau::dim3(32), 0);
+
+        isInitialized = true;
+    }
+
     context->internalState.resize(sizeof(Context), 0);
     auto &_context = *reinterpret_cast<Context*>(context->internalState.data());
     _context.texCoords = texCoords;
@@ -173,7 +154,7 @@ void countOMMFormats(
 
     // JP: 三角形ごと3頂点のテクスチャー座標を抽出する。
     // EN: Extract texture coordinates of three vertices for each triangle.
-    s_extractTexCoords.launchWithThreadDim(
+    g_extractTexCoords.launchWithThreadDim(
         stream, cudau::dim3(_context.numTriangles),
         _context.texCoords, _context.vertexStride,
         _context.triangles, _context.triangleStride, _context.numTriangles,
@@ -182,12 +163,8 @@ void countOMMFormats(
         CUDADRV_CHECK(cuStreamSynchronize(stream));
         std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
         std::vector<uint32_t> triIndices(_context.numTriangles);
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triTcTuples.data(), reinterpret_cast<CUdeviceptr>(_context.triTcTuples),
-            sizeof(shared::TriTexCoordTuple) * _context.numTriangles));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triIndices.data(), reinterpret_cast<CUdeviceptr>(_context.triIndices),
-            sizeof(uint32_t) * _context.numTriangles));
+        read(triTcTuples, _context.triTcTuples);
+        read(triIndices, _context.triIndices);
         printf("");
     }
 
@@ -201,18 +178,14 @@ void countOMMFormats(
         CUDADRV_CHECK(cuStreamSynchronize(stream));
         std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
         std::vector<uint32_t> triIndices(_context.numTriangles);
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triTcTuples.data(), reinterpret_cast<CUdeviceptr>(_context.triTcTuples),
-            sizeof(shared::TriTexCoordTuple) * _context.numTriangles));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triIndices.data(), reinterpret_cast<CUdeviceptr>(_context.triIndices),
-            sizeof(uint32_t) * _context.numTriangles));
+        read(triTcTuples, _context.triTcTuples);
+        read(triIndices, _context.triIndices);
         printf("");
     }
 
     // JP: 同じテクスチャー座標を持つ連続する要素の中から先頭の要素を見つける。
     // EN: Find the head elements in the consecutive elements with the same texture coordinates.
-    s_testIfTCTupleIsUnique.launchWithThreadDim(
+    g_testIfTCTupleIsUnique.launchWithThreadDim(
         stream, cudau::dim3(_context.numTriangles),
         _context.triTcTuples, _context.refTupleIndices, _context.numTriangles);
     if (enableDebugPrint) {
@@ -220,15 +193,9 @@ void countOMMFormats(
         std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
         std::vector<uint32_t> triIndices(_context.numTriangles);
         std::vector<uint32_t> refTupleIndices(_context.numTriangles);
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triTcTuples.data(), reinterpret_cast<CUdeviceptr>(_context.triTcTuples),
-            sizeof(shared::TriTexCoordTuple) * _context.numTriangles));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triIndices.data(), reinterpret_cast<CUdeviceptr>(_context.triIndices),
-            sizeof(uint32_t) * _context.numTriangles));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            refTupleIndices.data(), reinterpret_cast<CUdeviceptr>(_context.refTupleIndices),
-            sizeof(uint32_t) * _context.numTriangles));
+        read(triTcTuples, _context.triTcTuples);
+        read(triIndices, _context.triIndices);
+        read(refTupleIndices, _context.refTupleIndices);
         printf("");
     }
 
@@ -244,15 +211,9 @@ void countOMMFormats(
         std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
         std::vector<uint32_t> triIndices(_context.numTriangles);
         std::vector<uint32_t> refTupleIndices(_context.numTriangles);
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triTcTuples.data(), reinterpret_cast<CUdeviceptr>(_context.triTcTuples),
-            sizeof(shared::TriTexCoordTuple) * _context.numTriangles));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            triIndices.data(), reinterpret_cast<CUdeviceptr>(_context.triIndices),
-            sizeof(uint32_t) * _context.numTriangles));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            refTupleIndices.data(), reinterpret_cast<CUdeviceptr>(_context.refTupleIndices),
-            sizeof(uint32_t) * _context.numTriangles));
+        read(triTcTuples, _context.triTcTuples);
+        read(triIndices, _context.triIndices);
+        read(refTupleIndices, _context.refTupleIndices);
         printf("");
     }
 
@@ -296,21 +257,11 @@ void countOMMFormats(
         std::vector<uint32_t> perTriInfos((_context.numTriangles + 3) / 4);
         std::vector<uint32_t> hasOmmFlags(_context.numTriangles);
         std::vector<uint64_t> ommSizes(_context.numTriangles + 1);
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            histInOmmArray.data(), reinterpret_cast<CUdeviceptr>(_context.histInOmmArray),
-            histInOmmArray.size() * sizeof(histInOmmArray[0])));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            histInMesh.data(), reinterpret_cast<CUdeviceptr>(_context.histInMesh),
-            histInMesh.size() * sizeof(histInMesh[0])));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            perTriInfos.data(), reinterpret_cast<CUdeviceptr>(_context.perTriInfos),
-            perTriInfos.size() * sizeof(perTriInfos[0])));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            hasOmmFlags.data(), reinterpret_cast<CUdeviceptr>(_context.hasOmmFlags),
-            hasOmmFlags.size() * sizeof(hasOmmFlags[0])));
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            ommSizes.data(), reinterpret_cast<CUdeviceptr>(_context.ommSizes),
-            ommSizes.size() * sizeof(ommSizes[0])));
+        read(histInOmmArray, _context.histInOmmArray);
+        read(histInMesh, _context.histInMesh);
+        read(perTriInfos, _context.perTriInfos);
+        read(hasOmmFlags, _context.hasOmmFlags);
+        read(ommSizes, _context.ommSizes);
         static bool printPerTriInfos = false;
         if (printPerTriInfos) {
             for (uint32_t triIdx = 0; triIdx < _context.numTriangles; ++triIdx) {
@@ -376,12 +327,14 @@ void generateOMMArray(
             if (_context.useIndexBuffer)
                 CUDADRV_CHECK(cuMemcpyDtoH(
                     ommIndices.data(), ommIndexBuffer.getCUdeviceptr(), ommIndexBuffer.sizeInBytes()));
+            printf("");
         }
         else if (_context.indexSize == 2) {
             std::vector<int16_t> ommIndices(_context.numTriangles);
             if (_context.useIndexBuffer)
                 CUDADRV_CHECK(cuMemcpyDtoH(
                     ommIndices.data(), ommIndexBuffer.getCUdeviceptr(), ommIndexBuffer.sizeInBytes()));
+            printf("");
         }
         printf("");
     }

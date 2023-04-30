@@ -16,6 +16,7 @@
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
+    <ClCompile Include="..\common\micro_map_generator.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="..\common\omm_generator.cpp" />
     <CudaCompile Include="..\common\micro_map_generator_misc.cu">
