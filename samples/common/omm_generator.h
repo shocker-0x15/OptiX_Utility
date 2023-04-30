@@ -31,6 +31,7 @@ struct OMMGeneratorContext {
 size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles);
 
 void initializeOMMGeneratorContext(
+    const std::filesystem::path &ptxDirPath,
     CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,

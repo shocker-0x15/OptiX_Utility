@@ -65,7 +65,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         "plp", sizeof(Shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_EXCEPTION_FLAG_NONE/*DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE)*/,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_DISPLACED_MICROMESH_TRIANGLE,
         optixu::UseMotionBlur::No);
@@ -74,8 +74,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         readBinaryFile(getExecutableDirectory() / "displacement_micro_map/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+        OPTIX_COMPILE_OPTIMIZATION_DEFAULT/*DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT)*/,
+        OPTIX_COMPILE_DEBUG_LEVEL_NONE/*DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE)*/);
 
     optixu::Module emptyModule;
 
@@ -271,6 +271,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
             geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
             geomData.texture = 0;
             geomData.albedo = float3(0.8f, 0.8f, 0.8f);
+
+            size_t scratchMemSizeForDMM = getScratchMemSizeForDMMGenerator(lengthof(triangles));
+            cudau::Buffer scratchMemForDMM;
+            scratchMemForDMM.initialize(cuContext, cudau::BufferType::Device, scratchMemSizeForDMM, 1);
+
+            DMMGeneratorContext dmmContext;
+            uint32_t histInDMMArray[shared::NumDMMFormats];
+            uint32_t histInMesh[shared::NumDMMFormats];
+            uint64_t rawDmmArraySize = 0;
+            if (useDMM) {
+                initializeDMMGeneratorContext(
+                    getExecutableDirectory() / "displacement_micro_map/ptxes",
+                    displacedMesh.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord),
+                    sizeof(Shared::Vertex),
+                    group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), lengthof(triangles),
+                    group.texObj,
+                    make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 1, 0,
+                    shared::DMMFormat_Level0, shared::DMMFormat_Level5, 0,
+                    useDmmIndexBuffer, 1 << static_cast<uint32_t>(dmmIndexSize),
+                    scratchMemForDMM.getCUdeviceptr(), scratchMemForDMM.sizeInBytes(),
+                    &dmmContext);
+
+                countDMMFormats(dmmContext, histInDMMArray, histInMesh, &rawDmmArraySize);
+            }
 
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(floor.vertexBuffer);

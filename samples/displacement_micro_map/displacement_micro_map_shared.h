@@ -1,10 +1,7 @@
 ﻿#pragma once
 
 #include "../common/common.h"
-#if !defined(__CUDA_ARCH__)
-#  define OPTIX_DONT_INCLUDE_CUDA
-#endif
-#include <optix_micromap.h>
+#include "../common/dmm_generator.h"
 
 namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;

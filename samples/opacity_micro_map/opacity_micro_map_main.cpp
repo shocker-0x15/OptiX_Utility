@@ -399,6 +399,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             uint64_t rawOmmArraySize = 0;
             if (useOMM) {
                 initializeOMMGeneratorContext(
+                    getExecutableDirectory() / "opacity_micro_map/ptxes",
                     alphaTestGeom.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord),
                     sizeof(Shared::Vertex),
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,

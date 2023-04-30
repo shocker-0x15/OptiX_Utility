@@ -17,6 +17,7 @@
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\common\dmm_generator.cpp" />
+    <ClCompile Include="..\common\micro_map_generator.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="displacement_micro_map_main.cpp" />
   </ItemGroup>
@@ -56,7 +57,9 @@
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
     </CudaCompile>
-    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="optix_kernels.cu">
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
+    </CudaCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
