@@ -3,9 +3,20 @@
 #include "micro_map_generator_private.h"
 #include "dmm_generator.h"
 
+namespace shared {
+    union PerTriInfo {
+        struct {
+            uint32_t level : 3;
+            uint32_t placeHolder : 29;
+        };
+        uint32_t asUInt;
+    };
+}
+
 #if !defined(__CUDA_ARCH__)
 
 struct Context {
+    CUdeviceptr positions;
     CUdeviceptr texCoords;
     size_t vertexStride;
     CUdeviceptr triangles;
@@ -29,6 +40,12 @@ struct Context {
     CUdeviceptr memForSortDirectedEdges;
     size_t memSizeForSortDirectedEdges;
     shared::TriNeighborList* triNeighborLists;
+
+    AABBAsOrderedInt* meshAabbAsOrderedInt;
+    AABB* meshAabb;
+    float* meshAabbArea;
+    uint32_t* perTriInfos;
+    uint32_t* perTriInfosShadow;
 };
 
 #endif

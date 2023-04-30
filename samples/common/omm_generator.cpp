@@ -13,6 +13,7 @@ static cudau::Kernel s_copyOpacityMicroMaps;
 
 static bool enableDebugPrint = false;
 
+// TODO: Overlap scratch memory allocations that do not overlap others in life time.
 size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles) {
     size_t curOffset = 0;
 
@@ -238,7 +239,7 @@ void countOMMFormats(
         _context.numTriangles,
         _context.texture, _context.texSize, _context.numChannels, _context.alphaChannelIndex,
         _context.minSubdivLevel, maxSubdivLevel, _context.subdivLevelBias,
-        static_cast<bool>(_context.useIndexBuffer), _context.counter,
+        _context.useIndexBuffer, _context.counter,
         _context.histInOmmArray, _context.histInMesh,
         _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes);
 
@@ -247,7 +248,7 @@ void countOMMFormats(
     s_fillNonUniqueEntries.launchWithThreadDim(
         stream, cudau::dim3(_context.numTriangles),
         _context.triTcTuples, _context.refTupleIndices, _context.triIndices,
-        _context.numTriangles, static_cast<bool>(_context.useIndexBuffer),
+        _context.numTriangles, _context.useIndexBuffer,
         _context.histInOmmArray, _context.histInMesh,
         _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes);
     if (enableDebugPrint) {
@@ -269,7 +270,7 @@ void countOMMFormats(
                 const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
                 shared::PerTriInfo triInfo = {};
                 triInfo.asUInt = (perTriInfos[triInfoBinIdx] >> offsetInTriInfoBin) & 0xFF;
-                hpprintf("%5u: %u, %u\n", triIdx, triInfo.state, triInfo.level);
+                hpprintf("%5u: state %u, level %u\n", triIdx, triInfo.state, triInfo.level);
             }
         }
         printf("");
@@ -317,7 +318,7 @@ void generateOMMArray(
         stream, cudau::dim3(_context.numTriangles),
         _context.refTupleIndices, _context.triIndices,
         _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes, _context.numTriangles,
-        static_cast<bool>(_context.useIndexBuffer),
+        _context.useIndexBuffer,
         ommDescs, ommIndexBuffer, _context.indexSize);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));

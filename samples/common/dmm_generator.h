@@ -25,7 +25,7 @@ size_t getScratchMemSizeForDMMGenerator(uint32_t numTriangles);
 
 void initializeDMMGeneratorContext(
     const std::filesystem::path &ptxDirPath,
-    CUdeviceptr texCoords, size_t vertexStride,
+    CUdeviceptr positions, CUdeviceptr texCoords, size_t vertexStride,
     CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
     shared::DMMFormat minSubdivLevel, shared::DMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
