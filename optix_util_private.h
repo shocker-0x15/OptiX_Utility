@@ -616,13 +616,13 @@ namespace optixu {
             BufferView displacementVertexDirectionBuffer;
             BufferView displacementVertexBiasAndScaleBuffer;
             BufferView displacementTriangleFlagsBuffer;
+            OptixDisplacementMicromapDirectionFormat displacementVertexDirectionFormat;
+            OptixDisplacementMicromapBiasAndScaleFormat displacementVertexBiasAndScaleFormat;
             _DisplacementMicroMapArray* displacementMicroMapArray;
             BufferView displacementMicroMapIndexBuffer;
             std::vector<OptixDisplacementMicromapUsageCount> displacementMicroMapUsageCounts;
             OptixDisplacementMicromapArrayIndexingMode displacementMicroMapIndexingMode;
             uint32_t displacementMicroMapIndexOffset;
-            OptixDisplacementMicromapDirectionFormat displacementVertexDirectionFormat;
-            OptixDisplacementMicromapBiasAndScaleFormat displacementVertexBiasAndScaleFormat;
 
             unsigned int materialIndexSize : 3;
             unsigned int opacityMicroMapIndexSize : 3;

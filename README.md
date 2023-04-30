@@ -218,22 +218,22 @@ pipeline.launch(cuStream, plpOnDevice, width, height, 1);
 ### デバイス側 / Device-side
 OptiX Utilityはペイロードのパッキングを簡単にしたりカーネル間通信における型の不一致を回避するため、デバイス側の組み込み関数のラッパーを提供しています。
 
-OptiX utility provides template wrapper for device-side built-in functions to ease packing of payloads and to avoid type inconsistency for inter-kernel communications.
+OptiX utility provides template wrappers for device-side built-in functions to ease packing of payloads and to avoid type inconsistency for inter-kernel communications.
 ```cpp
 // Define payload signatures.
-using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, SearchRayPayload*>;
+using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, ExtraPayload*>;
 using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 // ...
 CUDA_DEVICE_KERNEL void RT_RG_NAME(pathtracing)() {
     // ...
-    SearchRayPayload* payloadPtr = &payload;
+    ExtraPayload* exPayloadPtr = &exPayload;
     while (true) {
         // ...
         SearchRayPayloadSignature::trace(
             traversable, origin, direction,
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
-            rng, payloadPtr);
+            rng, exPayloadPtr);
         // ...
     }
     // ...
@@ -243,8 +243,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     auto sbtr = reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
     // ...
     PCG32RNG rng;
-    SearchRayPayload* payload;
-    SearchRayPayloadSignature::get(&rng, &payload);
+    ExtraPayload* exPayloadPtr;
+    SearchRayPayloadSignature::get(&rng, &exPayloadPtr);
     // ...
     {
         // ...

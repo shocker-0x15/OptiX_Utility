@@ -2029,6 +2029,7 @@ bool optixIsBackFaceHit(unsigned int hitKind);
 bool optixIsBackFaceHit();
 bool optixIsDisplacedMicromeshTriangleBackFaceHit();
 bool optixIsDisplacedMicromeshTriangleFrontFaceHit();
+bool optixIsDisplacedMicromeshTriangleHit();
 bool optixIsFrontFaceHit(unsigned int hitKind);
 bool optixIsFrontFaceHit();
 bool optixIsTriangleBackFaceHit();
