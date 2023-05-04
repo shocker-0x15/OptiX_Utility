@@ -17,11 +17,8 @@ namespace shared {
 #if !defined(__CUDA_ARCH__)
 
 struct Context {
-    CUdeviceptr texCoords;
-    size_t vertexStride;
-    CUdeviceptr triangles;
-    size_t triangleStride;
-    uint32_t numTriangles;
+    shared::StridedBuffer<float2> texCoords;
+    shared::StridedBuffer<shared::Triangle> triangles;
     CUtexObject texture;
     uint2 texSize;
     uint32_t numChannels;

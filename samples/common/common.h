@@ -67,7 +67,11 @@
 
 
 #ifdef HP_Platform_Windows_MSVC
+#   if defined(__CUDA_ARCH__)
+#   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
+#else
 void devPrintf(const char* fmt, ...);
+#   endif
 #else
 #   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #endif

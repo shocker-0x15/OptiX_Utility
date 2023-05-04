@@ -401,7 +401,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 initializeOMMGeneratorContext(
                     getExecutableDirectory() / "opacity_micro_map/ptxes",
                     alphaTestGeom.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord),
-                    sizeof(Shared::Vertex),
+                    sizeof(Shared::Vertex), vertices.size(),
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                     group.texObj,
                     make_uint2(group.texArray.getWidth(), group.texArray.getHeight()), 4, 3,

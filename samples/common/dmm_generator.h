@@ -25,8 +25,8 @@ size_t getScratchMemSizeForDMMGenerator(uint32_t numTriangles);
 
 void initializeDMMGeneratorContext(
     const std::filesystem::path &ptxDirPath,
-    CUdeviceptr positions, CUdeviceptr texCoords, size_t vertexStride,
-    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
+    CUdeviceptr positions, CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
+    CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
     shared::DMMFormat minSubdivLevel, shared::DMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
@@ -38,5 +38,12 @@ void countDMMFormats(
     uint32_t histInDmmArray[shared::NumDMMFormats],
     uint32_t histInMesh[shared::NumDMMFormats],
     uint64_t* rawDmmArraySize);
+
+void generateDMMArray(
+    const DMMGeneratorContext &context,
+    const cudau::Buffer &dmmArray,
+    const cudau::TypedBuffer<OptixDisplacementMicromapDesc> &dmmDescs,
+    const cudau::Buffer &dmmIndexBuffer,
+    const cudau::Buffer &dmmTriangleFlagsBuffer);
 
 #endif // #if !defined(__CUDA_ARCH__)

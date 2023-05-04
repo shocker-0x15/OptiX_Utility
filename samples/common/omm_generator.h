@@ -32,8 +32,8 @@ size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles);
 
 void initializeOMMGeneratorContext(
     const std::filesystem::path &ptxDirPath,
-    CUdeviceptr texCoords, size_t vertexStride,
-    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
+    CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
+    CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
     shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
