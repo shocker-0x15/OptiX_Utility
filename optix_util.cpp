@@ -1313,10 +1313,10 @@ namespace optixu {
             "This geometry instance was created not for triangles.");
         m->throwRuntimeError(
             indexSize == IndexSize::k2Bytes || indexSize == IndexSize::k4Bytes,
-            "Invalid index offset size.");
+            "Invalid index size.");
         m->throwRuntimeError(
             !ommIndexBuffer.isValid() || ommIndexBuffer.stride() >= indexSizeInBytes,
-            "Buffer's stride is smaller than the given index offset size.");
+            "Buffer's stride is smaller than the given index size.");
         auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
         geom.opacityMicroMapArray = extract(opacityMicroMapArray);
         if (opacityMicroMapArray) {
@@ -1353,10 +1353,10 @@ namespace optixu {
             "This geometry instance was created not for triangles.");
         m->throwRuntimeError(
             indexSize == IndexSize::k2Bytes || indexSize == IndexSize::k4Bytes,
-            "Invalid index offset size.");
+            "Invalid index size.");
         m->throwRuntimeError(
             !dmmIndexBuffer.isValid() || dmmIndexBuffer.stride() >= indexSizeInBytes,
-            "Buffer's stride is smaller than the given index offset size.");
+            "Buffer's stride is smaller than the given index size.");
         auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);
         geom.displacementVertexDirectionBuffer = vertexDirectionBuffer;
         geom.displacementVertexBiasAndScaleBuffer = vertexBiasAndScaleBuffer;
@@ -1439,7 +1439,7 @@ namespace optixu {
             "Invalid index size.");
         m->throwRuntimeError(
             !matIndexBuffer.isValid() || matIndexBuffer.stride() >= indexSizeInBytes,
-            "Buffer's stride is smaller than the given index offset size.");
+            "Buffer's stride is smaller than the given index size.");
         m->buildInputFlags.resize(numMaterials, OPTIX_GEOMETRY_FLAG_NONE);
         if (std::holds_alternative<Priv::TriangleGeometry>(m->geometry)) {
             auto &geom = std::get<Priv::TriangleGeometry>(m->geometry);

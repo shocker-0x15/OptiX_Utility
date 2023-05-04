@@ -270,9 +270,9 @@ CUDA_DEVICE_KERNEL void countOMMFormats(
                     state = OPTIX_OPACITY_MICROMAP_STATE_UNKNOWN_TRANSPARENT;
 
                 // JP: ラスタライズされた結果のテクセル数から分割レベルを計算する。
-                //     他にも良い指標があるかもしれない。
+                //     メッシュ中の相対的な三角形サイズなども考慮にいれたほうが良いかもしれない。
                 // EN: Determine the subdivision level from the number of texels computed from the rasterization.
-                //     There may be other good parameters.
+                //     We may want to take the relative triangle size in the mesh into account.
                 const bool isSingleState =
                     state == OPTIX_OPACITY_MICROMAP_STATE_OPAQUE ||
                     state == OPTIX_OPACITY_MICROMAP_STATE_TRANSPARENT;

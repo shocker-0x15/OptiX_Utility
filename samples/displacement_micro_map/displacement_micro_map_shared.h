@@ -46,6 +46,14 @@ namespace Shared {
 
 
 
+    enum VisualizationMode : uint32_t {
+        VisualizationMode_Final = 0,
+        VisualizationMode_Barycentric,
+        VisualizationMode_MicroBarycentric,
+    };
+
+
+
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
         int2 imageSize;
@@ -54,6 +62,7 @@ namespace Shared {
         float3 lightDirection;
         float3 lightRadiance;
         float3 envRadiance;
+        unsigned int visualizationMode : 2;
         unsigned int sampleIndex : 8;
         unsigned int superSampleSizeMinus1 : 4;
     };

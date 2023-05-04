@@ -61,8 +61,8 @@ size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles) {
 
 void initializeOMMGeneratorContext(
     const std::filesystem::path &ptxDirPath,
-    CUdeviceptr texCoords, size_t vertexStride,
-    CUdeviceptr triangles, size_t triangleStride, uint32_t numTriangles,
+    CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
+    CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t alphaChannelIndex,
     shared::OMMFormat minSubdivLevel, shared::OMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
@@ -91,11 +91,8 @@ void initializeOMMGeneratorContext(
 
     context->internalState.resize(sizeof(Context), 0);
     auto &_context = *reinterpret_cast<Context*>(context->internalState.data());
-    _context.texCoords = texCoords;
-    _context.vertexStride = vertexStride;
-    _context.triangles = triangles;
-    _context.triangleStride = triangleStride;
-    _context.numTriangles = numTriangles;
+    _context.texCoords = shared::StridedBuffer<float2>(texCoords, numVertices, vertexStride);
+    _context.triangles = shared::StridedBuffer<shared::Triangle>(triangles, numTriangles, triangleStride);
 
     _context.texture = texture;
     _context.texSize = texSize;
@@ -153,17 +150,18 @@ void countOMMFormats(
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
     size_t cubScratchMemSize;
 
+    const uint32_t numTriangles = _context.triangles.numElements;
+
     // JP: 三角形ごと3頂点のテクスチャー座標を抽出する。
     // EN: Extract texture coordinates of three vertices for each triangle.
     g_extractTexCoords.launchWithThreadDim(
-        stream, cudau::dim3(_context.numTriangles),
-        _context.texCoords, _context.vertexStride,
-        _context.triangles, _context.triangleStride, _context.numTriangles,
+        stream, cudau::dim3(numTriangles),
+        _context.texCoords, _context.triangles,
         _context.triTcTuples, _context.triIndices);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
-        std::vector<uint32_t> triIndices(_context.numTriangles);
+        std::vector<shared::TriTexCoordTuple> triTcTuples(numTriangles);
+        std::vector<uint32_t> triIndices(numTriangles);
         read(triTcTuples, _context.triTcTuples);
         read(triIndices, _context.triIndices);
         printf("");
@@ -173,12 +171,12 @@ void countOMMFormats(
     // EN: Sort the arrays of texture coordinates and triangle indices.
     cubScratchMemSize = _context.memSizeForSortTuples;
     __sortTriTexCoordTuples(
-        _context.triTcTuples, _context.triIndices, _context.numTriangles,
+        _context.triTcTuples, _context.triIndices, numTriangles,
         reinterpret_cast<void*>(_context.memForSortTuples), _context.memSizeForSortTuples);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
-        std::vector<uint32_t> triIndices(_context.numTriangles);
+        std::vector<shared::TriTexCoordTuple> triTcTuples(numTriangles);
+        std::vector<uint32_t> triIndices(numTriangles);
         read(triTcTuples, _context.triTcTuples);
         read(triIndices, _context.triIndices);
         printf("");
@@ -187,13 +185,13 @@ void countOMMFormats(
     // JP: 同じテクスチャー座標を持つ連続する要素の中から先頭の要素を見つける。
     // EN: Find the head elements in the consecutive elements with the same texture coordinates.
     g_testIfTCTupleIsUnique.launchWithThreadDim(
-        stream, cudau::dim3(_context.numTriangles),
-        _context.triTcTuples, _context.refTupleIndices, _context.numTriangles);
+        stream, cudau::dim3(numTriangles),
+        _context.triTcTuples, _context.refTupleIndices, numTriangles);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
-        std::vector<uint32_t> triIndices(_context.numTriangles);
-        std::vector<uint32_t> refTupleIndices(_context.numTriangles);
+        std::vector<shared::TriTexCoordTuple> triTcTuples(numTriangles);
+        std::vector<uint32_t> triIndices(numTriangles);
+        std::vector<uint32_t> refTupleIndices(numTriangles);
         read(triTcTuples, _context.triTcTuples);
         read(triIndices, _context.triIndices);
         read(refTupleIndices, _context.refTupleIndices);
@@ -206,12 +204,12 @@ void countOMMFormats(
     cubd::DeviceScan::InclusiveMax(
         reinterpret_cast<void*>(_context.memForScanRefTupleIndices), cubScratchMemSize,
         _context.refTupleIndices, _context.refTupleIndices,
-        _context.numTriangles, stream);
+        numTriangles, stream);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<shared::TriTexCoordTuple> triTcTuples(_context.numTriangles);
-        std::vector<uint32_t> triIndices(_context.numTriangles);
-        std::vector<uint32_t> refTupleIndices(_context.numTriangles);
+        std::vector<shared::TriTexCoordTuple> triTcTuples(numTriangles);
+        std::vector<uint32_t> triIndices(numTriangles);
+        std::vector<uint32_t> refTupleIndices(numTriangles);
         read(triTcTuples, _context.triTcTuples);
         read(triIndices, _context.triIndices);
         read(refTupleIndices, _context.refTupleIndices);
@@ -219,7 +217,7 @@ void countOMMFormats(
     }
 
     CUDADRV_CHECK(cuMemsetD32Async(
-        reinterpret_cast<CUdeviceptr>(_context.perTriInfos), 0, (_context.numTriangles + 3) / 4, stream));
+        reinterpret_cast<CUdeviceptr>(_context.perTriInfos), 0, (numTriangles + 3) / 4, stream));
     CUDADRV_CHECK(cuMemsetD32Async(
         reinterpret_cast<CUdeviceptr>(_context.histInOmmArray), 0, shared::NumOMMFormats, stream));
     CUDADRV_CHECK(cuMemsetD32Async(
@@ -236,7 +234,7 @@ void countOMMFormats(
     s_countOMMFormats(
         stream, cudau::dim3(1024),
         _context.triTcTuples, _context.refTupleIndices, _context.triIndices,
-        _context.numTriangles,
+        numTriangles,
         _context.texture, _context.texSize, _context.numChannels, _context.alphaChannelIndex,
         _context.minSubdivLevel, maxSubdivLevel, _context.subdivLevelBias,
         _context.useIndexBuffer, _context.counter,
@@ -246,18 +244,18 @@ void countOMMFormats(
     // JP: 先頭ではない三角形においてメタデータのコピーを行う。
     // EN: Copy meta data for non-head triangles.
     s_fillNonUniqueEntries.launchWithThreadDim(
-        stream, cudau::dim3(_context.numTriangles),
+        stream, cudau::dim3(numTriangles),
         _context.triTcTuples, _context.refTupleIndices, _context.triIndices,
-        _context.numTriangles, _context.useIndexBuffer,
+        numTriangles, _context.useIndexBuffer,
         _context.histInOmmArray, _context.histInMesh,
         _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
         std::vector<uint32_t> histInOmmArray(shared::NumOMMFormats);
         std::vector<uint32_t> histInMesh(shared::NumOMMFormats);
-        std::vector<uint32_t> perTriInfos((_context.numTriangles + 3) / 4);
-        std::vector<uint32_t> hasOmmFlags(_context.numTriangles);
-        std::vector<uint64_t> ommSizes(_context.numTriangles + 1);
+        std::vector<uint32_t> perTriInfos((numTriangles + 3) / 4);
+        std::vector<uint32_t> hasOmmFlags(numTriangles);
+        std::vector<uint64_t> ommSizes(numTriangles + 1);
         read(histInOmmArray, _context.histInOmmArray);
         read(histInMesh, _context.histInMesh);
         read(perTriInfos, _context.perTriInfos);
@@ -265,7 +263,7 @@ void countOMMFormats(
         read(ommSizes, _context.ommSizes);
         static bool printPerTriInfos = false;
         if (printPerTriInfos) {
-            for (uint32_t triIdx = 0; triIdx < _context.numTriangles; ++triIdx) {
+            for (uint32_t triIdx = 0; triIdx < numTriangles; ++triIdx) {
                 const uint32_t triInfoBinIdx = triIdx / 4;
                 const uint32_t offsetInTriInfoBin = 8 * (triIdx % 4);
                 shared::PerTriInfo triInfo = {};
@@ -284,12 +282,12 @@ void countOMMFormats(
     cubd::DeviceScan::ExclusiveSum(
         reinterpret_cast<void*>(_context.memForScanOmmSizes), cubScratchMemSize,
         _context.ommSizes, _context.ommSizes,
-        _context.numTriangles + 1, stream);
+        numTriangles + 1, stream);
     cubScratchMemSize = _context.memSizeForScanHasOmmFlags;
     cubd::DeviceScan::ExclusiveSum(
       reinterpret_cast<void*>(_context.memForScanHasOmmFlags), cubScratchMemSize,
       _context.hasOmmFlags, _context.hasOmmFlags,
-      _context.numTriangles, stream);
+      numTriangles, stream);
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));
 
@@ -300,7 +298,7 @@ void countOMMFormats(
         histInMesh, reinterpret_cast<uintptr_t>(_context.histInMesh),
         sizeof(uint32_t) * shared::NumOMMFormats));
     CUDADRV_CHECK(cuMemcpyDtoH(
-        rawOmmArraySize, reinterpret_cast<uintptr_t>(&_context.ommSizes[_context.numTriangles]),
+        rawOmmArraySize, reinterpret_cast<uintptr_t>(&_context.ommSizes[numTriangles]),
         sizeof(uint64_t)));
 }
 
@@ -312,26 +310,28 @@ void generateOMMArray(
     CUstream stream = 0;
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
 
+    const uint32_t numTriangles = _context.triangles.numElements;
+
     // JP: OMMデスクリプターと各三角形のOMMインデックスを計算する。
     // EN: Compute the OMM descriptors and the OMM index for each triangle.
     s_createOMMDescriptors.launchWithThreadDim(
-        stream, cudau::dim3(_context.numTriangles),
+        stream, cudau::dim3(numTriangles),
         _context.refTupleIndices, _context.triIndices,
-        _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes, _context.numTriangles,
+        _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes, numTriangles,
         _context.useIndexBuffer,
         ommDescs, ommIndexBuffer, _context.indexSize);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
         std::vector<OptixOpacityMicromapDesc> ommDescsOnHost = ommDescs;
         if (_context.indexSize == 4) {
-            std::vector<int32_t> ommIndices(_context.numTriangles);
+            std::vector<int32_t> ommIndices(numTriangles);
             if (_context.useIndexBuffer)
                 CUDADRV_CHECK(cuMemcpyDtoH(
                     ommIndices.data(), ommIndexBuffer.getCUdeviceptr(), ommIndexBuffer.sizeInBytes()));
             printf("");
         }
         else if (_context.indexSize == 2) {
-            std::vector<int16_t> ommIndices(_context.numTriangles);
+            std::vector<int16_t> ommIndices(numTriangles);
             if (_context.useIndexBuffer)
                 CUDADRV_CHECK(cuMemcpyDtoH(
                     ommIndices.data(), ommIndexBuffer.getCUdeviceptr(), ommIndexBuffer.sizeInBytes()));
@@ -347,7 +347,7 @@ void generateOMMArray(
     s_evaluateMicroTriangleTransparencies(
         stream, cudau::dim3(1024),
         _context.triTcTuples, _context.refTupleIndices, _context.triIndices,
-        _context.numTriangles,
+        numTriangles,
         _context.texture, _context.texSize, _context.numChannels, _context.alphaChannelIndex,
         _context.perTriInfos, _context.ommSizes, _context.counter,
         ommArray);
@@ -360,7 +360,7 @@ void generateOMMArray(
         s_copyOpacityMicroMaps(
             stream, cudau::dim3(1024),
             _context.refTupleIndices, _context.triIndices, _context.ommSizes,
-            _context.numTriangles, _context.counter,
+            numTriangles, _context.counter,
             ommArray);
     }
 

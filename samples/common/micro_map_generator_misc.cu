@@ -52,3 +52,29 @@ void __sortTriTexCoordTuples(
         scratchMem, scratchMemSize,
         tuples, triIndices, numTriangles, TriTexCoordTupleLessOp());
 }
+
+
+
+struct MicroMapKeyLessOp {
+    CUDA_DEVICE_FUNCTION CUDA_INLINE bool operator()(
+        const shared::MicroMapKey &l, const shared::MicroMapKey &r) const {
+        return l < r;
+    }
+};
+
+size_t __getScratchMemSizeForSortMicroMapKeys(uint32_t numTriangles) {
+    size_t size;
+    cub::DeviceMergeSort::StableSortPairs<shared::MicroMapKey*, uint32_t*>(
+        nullptr, size,
+        nullptr, nullptr, numTriangles, MicroMapKeyLessOp());
+    return size;
+}
+
+// TODO: Use radix sort?
+void __sortMicroMapKeys(
+    shared::MicroMapKey* microMapKeys, uint32_t* triIndices, uint32_t numTriangles,
+    void* scratchMem, size_t scratchMemSize) {
+    cub::DeviceMergeSort::StableSortPairs<shared::MicroMapKey*, uint32_t*>(
+        scratchMem, scratchMemSize,
+        microMapKeys, triIndices, numTriangles, MicroMapKeyLessOp());
+}
