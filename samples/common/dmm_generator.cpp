@@ -259,8 +259,8 @@ void countDMMFormats(
         hpprintf("");
     }
 
-    // JP: 
-    // EN: 
+    // JP: メッシュのAABBを計算する。
+    // EN: Compute the AABB of the mesh.
     AABBAsOrderedInt initAabb;
     CUDADRV_CHECK(cuMemcpyHtoDAsync(
         reinterpret_cast<CUdeviceptr>(_context.meshAabbAsOrderedInt),
@@ -270,8 +270,8 @@ void countDMMFormats(
         _context.positions, _context.triangles,
         _context.meshAabbAsOrderedInt);
 
-    // JP: 
-    // EN: 
+    // JP: メッシュのAABB計算を完了させる。
+    // EN: Complete the mesh AABB computation.
     g_finalizeMeshAABB.launchWithThreadDim(
         stream, cudau::dim3(1),
         _context.meshAabbAsOrderedInt,
@@ -293,8 +293,8 @@ void countDMMFormats(
         hpprintf("");
     }
 
-    // JP: 
-    // EN: 
+    // JP: 三角形ごとの目標分割レベルを計算する。
+    // EN: Determine the target subdivision level for each triangle.
     auto maxSubdivLevel =
         static_cast<shared::DMMFormat>(std::max(_context.minSubdivLevel, _context.maxSubdivLevel));
     s_determineTargetSubdivLevels.launchWithThreadDim(
@@ -318,8 +318,10 @@ void countDMMFormats(
         hpprintf("");
     }
 
-    // JP:
-    // EN:
+    // JP: DMMでは隣り合う三角形の分割レベル差は1以内である必要があるため、
+    //     それを満たすように分割レベルを調整する。
+    // EN: Adjust the subdivision level of each triangle so that it meets the condition that
+    //     the difference in subdivision levels of neighboring triangle must not exceed one.
     for (uint32_t i = 0; i < 4; ++i) {
         s_adjustSubdivLevels.launchWithThreadDim(
             stream, cudau::dim3(numTriangles),
@@ -340,8 +342,8 @@ void countDMMFormats(
         hpprintf("");
     }
 
-    // JP:
-    // EN:
+    // JP: 各三角形のDMMフォーマットを確定させる。
+    // EN: Finalize the DMM format of each triangle.
     s_finalizeMicroMapFormats.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.microMapKeys, _context.microMapFormats, numTriangles);
@@ -400,8 +402,10 @@ void countDMMFormats(
     CUDADRV_CHECK(cuMemsetD32Async(
         reinterpret_cast<CUdeviceptr>(_context.histInMesh), 0, shared::NumDMMFormats, stream));
 
-    // JP:
-    // EN:
+    // JP: 先頭である三角形においてラスタライズを行いDMMのメタデータを決定する。
+    //     2つのヒストグラムのカウントも行う。
+    // EN: Rasterize each of head triangles and determine the DMM meta data.
+    //     Count for the two histograms as well.
     s_countDMMFormats.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.microMapKeys, _context.refKeyIndices, _context.triIndices,
@@ -409,8 +413,8 @@ void countDMMFormats(
         _context.histInDmmArray, _context.histInMesh,
         _context.hasDmmFlags, _context.dmmSizes);
 
-    // JP:
-    // EN:
+    // JP: 先頭ではない三角形においてメタデータのコピーを行う。
+    // EN: Copy meta data for non-head triangles.
     s_fillNonUniqueEntries.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.microMapKeys, _context.refKeyIndices, _context.triIndices,
@@ -470,8 +474,8 @@ void generateDMMArray(
 
     const uint32_t numTriangles = _context.triangles.numElements;
 
-    // JP: DMMデスクリプターと各三角形のDMMインデックスを計算する。
-    // EN: Compute the DMM descriptors and the DMM index for each triangle.
+    // JP: DMMデスクリプターと各三角形のDMMインデックス、フラグを計算する。
+    // EN: Compute the DMM descriptor, DMM index and flags for each triangle.
     s_createDMMDescriptors.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.refKeyIndices, _context.triIndices,
@@ -512,8 +516,8 @@ void generateDMMArray(
         hpprintf("");
     }
 
-    // JP: 
-    // EN: 
+    // JP: 先頭である三角形においてMicro-Vertex上でハイトマップの評価を行いDMMを計算する。
+    // EN: Evaluate the height map at the micro-vertices of each head triangle to compute the DMM.
     CUDADRV_CHECK(cuMemsetD32Async(
         reinterpret_cast<CUdeviceptr>(_context.counter), 0, 1, stream));
     s_evaluateMicroVertexHeights(

@@ -50,6 +50,7 @@ namespace Shared {
         VisualizationMode_Final = 0,
         VisualizationMode_Barycentric,
         VisualizationMode_MicroBarycentric,
+        VisualizationMode_Normal,
     };
 
 

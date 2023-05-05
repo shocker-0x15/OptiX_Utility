@@ -237,6 +237,16 @@ CUDA_COMMON_FUNCTION CUDA_INLINE uint32_t nthSetBit(uint32_t value, int32_t n) {
     return idx;
 }
 
+template <typename T>
+CUDA_COMMON_FUNCTION CUDA_INLINE T pow2(const T &x) {
+    return x * x;
+}
+
+template <typename T>
+CUDA_COMMON_FUNCTION CUDA_INLINE T pow3(const T &x) {
+    return x * x * x;
+}
+
 
 
 // JP: CUDAビルトインに対応する型・関数をホスト側で定義しておく。

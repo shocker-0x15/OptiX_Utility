@@ -79,8 +79,13 @@ CUDA_DEVICE_KERNEL void determineTargetSubdivLevels(
         texSizeF * (tcTuple.tcC - tcTuple.tcA),
         texSizeF * (tcTuple.tcB - tcTuple.tcA)));
 
-    const float targetSubdivLevelF = std::log(numTexelsF) / std::log(4.0f)
-        + std::log(normTriArea) / std::log(4.0f) + 4; // +4: ad-hoc offset
+    // JP: 三角形のテクセル数とメッシュ中の相対的な三角形の大きさから目標分割レベルを決定する。
+    //     サンプルコード用の計算式であって熟考されたものではないことに注意。
+    // EN: Determine the target subdivision level based on the number of texels and the relative size of
+    //     the triangle in the mesh.
+    //     Note that this formula is just for sample code and not a well considered one.
+    const float targetSubdivLevelF =
+        std::log(numTexelsF * normTriArea) / std::log(4.0f) + 4; // +4: ad-hoc offset
     //printf("Tri %u: tgt level: %g (%.1f texels)\n", triIdx, targetSubdivLevelF, numTexelsF);
     const int32_t minLevel = static_cast<int32_t>(minSubdivLevel);
     const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
@@ -237,7 +242,7 @@ CUDA_DEVICE_KERNEL void createDMMDescriptors(
     if (keyIdx == refKeyIdx || !useIndexBuffer) {
         OptixDisplacementMicromapDesc &dmmDesc = dmmDescs[dmmIdx];
         dmmDesc.byteOffset = dmmOffsets[triIdx];
-        dmmDesc.format = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
+        dmmDesc.format = mmFormat.encoding;
         dmmDesc.subdivisionLevel = mmFormat.level;
     }
 
@@ -250,6 +255,9 @@ CUDA_DEVICE_KERNEL void createDMMDescriptors(
             dmmIndices32[triIdx] = dmmIdx;
     }
 
+    // JP: 隣接三角形の分割レベルが低い場合、対応するエッジのデシメートフラグを立てておく必要がある。
+    // EN: Edge has to be marked for decimation when the corresponding neighboring triangle has lower
+    //     subdivision level.
     static_assert(
         OPTIX_DISPLACEMENT_MICROMAP_TRIANGLE_FLAG_DECIMATE_EDGE_01 == (1 << 0) &&
         OPTIX_DISPLACEMENT_MICROMAP_TRIANGLE_FLAG_DECIMATE_EDGE_12 == (1 << 1) &&

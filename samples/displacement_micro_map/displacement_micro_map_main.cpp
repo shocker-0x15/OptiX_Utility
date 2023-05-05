@@ -46,6 +46,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 visualizationMode = Shared::VisualizationMode_Barycentric;
             else if (visType == "micro-barycentric")
                 visualizationMode = Shared::VisualizationMode_MicroBarycentric;
+            else if (visType == "normal")
+                visualizationMode = Shared::VisualizationMode_Normal;
             else
                 throw std::runtime_error("Argument for --visualize is invalid.");
             argIdx += 1;
@@ -291,7 +293,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::Vertex> vertices;
         std::vector<Shared::Triangle> triangles;
-        constexpr uint32_t gridSize = 16;
+        constexpr uint32_t gridSize = 4;
         for (int iz = 0; iz <= gridSize; ++iz) {
             float pz = static_cast<float>(iz) / gridSize;
             float z = -2.0f + 4.0f * pz;

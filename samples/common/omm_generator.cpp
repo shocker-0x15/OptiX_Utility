@@ -227,7 +227,7 @@ void countOMMFormats(
 
     // JP: 先頭である三角形においてラスタライズを行いOMMのメタデータを決定する。
     //     2つのヒストグラムのカウントも行う。
-    // EN: Rasterize each of head triangles and determine the meta data.
+    // EN: Rasterize each of head triangles and determine the OMM meta data.
     //     Count for the two histograms as well.
     auto maxSubdivLevel =
         static_cast<shared::OMMFormat>(std::max(_context.minSubdivLevel, _context.maxSubdivLevel));
@@ -313,7 +313,7 @@ void generateOMMArray(
     const uint32_t numTriangles = _context.triangles.numElements;
 
     // JP: OMMデスクリプターと各三角形のOMMインデックスを計算する。
-    // EN: Compute the OMM descriptors and the OMM index for each triangle.
+    // EN: Compute the OMM descriptor and the OMM index for each triangle.
     s_createOMMDescriptors.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.refTupleIndices, _context.triIndices,
