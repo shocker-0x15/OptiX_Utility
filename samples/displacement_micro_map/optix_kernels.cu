@@ -84,19 +84,23 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float b1 = hp.b1;
         float b2 = hp.b2;
         float b0 = 1 - (b1 + b2);
+        if (plp.visualizationMode == VisualizationMode_Barycentric) {
+            float3 result = make_float3(b0, b1, b2);
+            PrimaryRayPayloadSignature::set(&result);
+            return;
+        }
 
         texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
 
         if (optixIsTriangleHit()) { // Vanilla Triangle
-            if (plp.visualizationMode == VisualizationMode_Barycentric ||
-                plp.visualizationMode == VisualizationMode_MicroBarycentric) {
+            p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
+            sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+
+            if (plp.visualizationMode == VisualizationMode_MicroBarycentric) {
                 float3 result = make_float3(b0, b1, b2);
                 PrimaryRayPayloadSignature::set(&result);
                 return;
             }
-
-            p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
-            sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
         }
         else /*if (optixIsDisplacedMicromeshTriangleHit())*/ { // Displaced Micro-Mesh Triangle
             float3 microTriPositions[3];
@@ -109,20 +113,25 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
             float mb2 = bcInMicroTri.y;
             float mb0 = 1 - (mb1 + mb2);
 
-            if (plp.visualizationMode == VisualizationMode_Barycentric ||
-                plp.visualizationMode == VisualizationMode_MicroBarycentric) {
+            if (plp.visualizationMode == VisualizationMode_MicroBarycentric) {
                 float3 result = make_float3(mb0, mb1, mb2);
                 PrimaryRayPayloadSignature::set(&result);
                 return;
             }
 
             p = mb0 * microTriPositions[0] + mb1 * microTriPositions[1] + mb2 * microTriPositions[2];
-            sn = cross(microTriPositions[2] - microTriPositions[0],
-                       microTriPositions[1] - microTriPositions[0]);
+            sn = cross(microTriPositions[1] - microTriPositions[0],
+                       microTriPositions[2] - microTriPositions[0]);
         }
 
         p = optixTransformPointFromObjectToWorldSpace(p);
         sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
+
+        if (plp.visualizationMode == VisualizationMode_Normal) {
+            float3 result = 0.5f * sn + make_float3(0.5f);
+            PrimaryRayPayloadSignature::set(&result);
+            return;
+        }
     }
 
     float3 vOut = -optixGetWorldRayDirection();
