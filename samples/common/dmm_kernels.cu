@@ -5,28 +5,6 @@ using namespace shared;
 
 static constexpr uint32_t WarpSize = 32;
 
-CUDA_CONSTANT_MEM constexpr float2 microVertBarycentricsFor64MicroTris[] = {
-    // Level 0
-    float2{ 0.0f, 0.0f }, float2{ 1.0f, 0.0f }, float2{ 0.0f, 1.0f },
-    // + Level 1
-    float2{ 0.0f, 0.5f }, float2{ 0.5f, 0.5f }, float2{ 0.5f, 0.0f },
-    // + Level 2
-    float2{ 0.0f, 0.25f }, float2{ 0.25f, 0.25f }, float2{ 0.25f, 0.0f },
-    float2{ 0.5f, 0.25f }, float2{ 0.75f, 0.25f }, float2{ 0.75f, 0.0f },
-    float2{ 0.0f, 0.75f }, float2{ 0.25f, 0.75f }, float2{ 0.25f, 0.5f },
-    // + Level 3
-    float2{ 0.0f, 0.125f }, float2{ 0.125f, 0.125f }, float2{ 0.125f, 0.0f },
-    float2{ 0.25f, 0.125f }, float2{ 0.375f, 0.125f }, float2{ 0.375f, 0.0f },
-    float2{ 0.0f, 0.375f }, float2{ 0.125f, 0.375f }, float2{ 0.125f, 0.25f },
-    float2{ 0.25f, 0.375f }, float2{ 0.375f, 0.375f }, float2{ 0.375f, 0.25f },
-    float2{ 0.5f, 0.125f }, float2{ 0.625f, 0.125f }, float2{ 0.625f, 0.0f },
-    float2{ 0.75f, 0.125f }, float2{ 0.875f, 0.125f }, float2{ 0.875f, 0.0f },
-    float2{ 0.5f, 0.375f }, float2{ 0.625f, 0.375f }, float2{ 0.625f, 0.25f },
-    float2{ 0.25f, 0.625f }, float2{ 0.375f, 0.625f }, float2{ 0.375f, 0.5f },
-    float2{ 0.0f, 0.625f }, float2{ 0.125f, 0.625f }, float2{ 0.125f, 0.5f },
-    float2{ 0.0f, 0.875f }, float2{ 0.125f, 0.875f }, float2{ 0.125f, 0.75f },
-};
-
 CUDA_DEVICE_FUNCTION CUDA_INLINE void getInfoForMicroMapEncoding(
     OptixDisplacementMicromapFormat encoding,
     uint32_t* maxNumMicroTris, uint32_t* numBytes) {
@@ -53,7 +31,7 @@ CUDA_DEVICE_KERNEL void determineTargetSubdivLevels(
     const float* meshAabbArea,
     StridedBuffer<float3> positions, StridedBuffer<float2> texCoords, StridedBuffer<Triangle> triangles,
     uint2 texSize,
-    DMMFormat minSubdivLevel, DMMFormat maxSubdivLevel, int32_t subdivLevelBias,
+    DMMSubdivLevel minSubdivLevel, DMMSubdivLevel maxSubdivLevel, int32_t subdivLevelBias,
     MicroMapKey* microMapKeys, uint32_t* triIndices) {
     const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= triangles.numElements)
@@ -135,13 +113,22 @@ CUDA_DEVICE_KERNEL void adjustSubdivLevels(
 
 
 CUDA_DEVICE_KERNEL void finalizeMicroMapFormats(
-    MicroMapKey* microMapKeys, MicroMapFormat* microMapFormats, uint32_t numTriangles) {
+    MicroMapKey* microMapKeys, MicroMapFormat* microMapFormats, uint32_t numTriangles,
+    DMMEncoding forceEncoding) {
     const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
         return;
 
     MicroMapKey &mmKey = microMapKeys[triIdx];
-    mmKey.format.encoding = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
+    if (forceEncoding == DMMEncoding_None) {
+        mmKey.format.encoding =
+            mmKey.format.level == 5 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES :
+            mmKey.format.level == 4 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES :
+            OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
+    }
+    else {
+        mmKey.format.encoding = forceEncoding;
+    }
     microMapFormats[triIdx] = mmKey.format;
 }
 
@@ -163,8 +150,8 @@ CUDA_DEVICE_KERNEL void countDMMFormats(
     const MicroMapKey &mmKey = microMapKeys[keyIdx];
     const uint32_t triIdx = triIndices[keyIdx];
 
-    atomicAdd(&histInDmmArray[mmKey.format.level], 1u);
-    atomicAdd(&histInMesh[mmKey.format.level], 1u);
+    atomicAdd(&histInDmmArray[mmKey.format.encoding * NumDMMSubdivLevels + mmKey.format.level], 1u);
+    atomicAdd(&histInMesh[mmKey.format.encoding * NumDMMSubdivLevels + mmKey.format.level], 1u);
 
     uint32_t numMicroTrisPerSubTri;
     uint32_t numBytesPerSubTri;
@@ -195,13 +182,13 @@ CUDA_DEVICE_KERNEL void fillNonUniqueEntries(
     const MicroMapKey &mmKey = microMapKeys[keyIdx];
     const uint32_t triIdx = triIndices[keyIdx];
     if (useIndexBuffer) {
-        atomicAdd(&histInDmmArray[DMMFormat_None], 1u);
+        atomicAdd(&histInDmmArray[DMMEncoding_None], 1u);
 
         hasDmmFlags[triIdx] = 0;
         dmmSizes[triIdx] = 0;
     }
     else {
-        atomicAdd(&histInDmmArray[mmKey.format.level], 1u);
+        atomicAdd(&histInDmmArray[mmKey.format.encoding * NumDMMSubdivLevels + mmKey.format.level], 1u);
 
         uint32_t numMicroTrisPerSubTri;
         uint32_t numBytesPerSubTri;
@@ -214,7 +201,7 @@ CUDA_DEVICE_KERNEL void fillNonUniqueEntries(
         dmmSizes[triIdx] = numBytesPerSubTri * numSubTris;
     }
 
-    atomicAdd(&histInMesh[mmKey.format.level], 1u);
+    atomicAdd(&histInMesh[mmKey.format.encoding * NumDMMSubdivLevels + mmKey.format.level], 1u);
 }
 
 
@@ -303,16 +290,16 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float fetchHeight(
         height = tex2DLod<float>(texture, texCoords.x, texCoords.y, 0.0f);
     }
     return height;
+
+    //const float dist = std::sqrt(pow2(texCoords.x - 0.5f) + pow2(texCoords.y - 0.5f));
+    //return 0.5f * std::cos(2 * 3.14159265 * 6 * dist) + 0.5f;
 }
 
 template <OptixDisplacementMicromapFormat encoding>
 CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIdx,
-    uint32_t /*dmmIdx*/, const TriTexCoordTuple &tcTuple, uint32_t subdivLevel,
+    uint32_t dmmIdx, const TriTexCoordTuple &tcTuple, uint32_t subdivLevel,
     uint8_t* const displacementMicroMap) {
-    Assert(
-        encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES,
-        "DMM format supported now is only 64-byte one.");
     using DispBlock = DisplacementBlock<encoding>;
     auto displacementBlocks = reinterpret_cast<DispBlock*>(displacementMicroMap);
 
@@ -322,8 +309,15 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
     const uint32_t numEdgeVerticesInBlock = (1 << subdivLevelInBlock) + 1;
     const uint32_t numMicroVerticesInBlock = (1 + numEdgeVerticesInBlock) * numEdgeVerticesInBlock / 2;
 
+    CUDA_SHARED_MEM uint32_t b_mem[sizeof(DispBlock) / sizeof(uint32_t)];
+    DispBlock &b_dispBlock = reinterpret_cast<DispBlock &>(b_mem);
+
     for (uint32_t subTriIdx = 0; subTriIdx < numSubTris; ++subTriIdx) {
-        DispBlock &displacementBlock = displacementBlocks[subTriIdx];
+        // JP: シェアードメモリ上のDisplacementBlockをクリア。
+        // EN: Clear the displacement block on the shared memory.
+        for (uint32_t dwIdx = threadIdx.x; dwIdx < DispBlock::numDwords; dwIdx += WarpSize)
+            b_mem[dwIdx] = 0;
+        __syncwarp();
 
         float2 stBcs[3];
         optixMicromapIndexToBaseBarycentrics(subTriIdx, stSubdivLevel, stBcs[0], stBcs[1], stBcs[2]);
@@ -334,20 +328,102 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
             stTcs[i] = (1 - (stBc.x + stBc.y)) * tcTuple.tcA + stBc.x * tcTuple.tcB + stBc.y * tcTuple.tcC;
         }
 
-        const float2* microVertBarycentrics;
-        if constexpr (encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES)
-            microVertBarycentrics = microVertBarycentricsFor64MicroTris;
-
-        for (uint32_t microVtxIdx = threadIdx.x; microVtxIdx < numMicroVerticesInBlock; microVtxIdx += WarpSize) {
-            const float2 microVtxBc = microVertBarycentrics[microVtxIdx];
-            const float2 microVtxTc =
-                (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
-                + microVtxBc.x * stTcs[1]
-                + microVtxBc.y * stTcs[2];
-            const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
-            //printf("%4u-%2u-%4u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
-            displacementBlock.setValue(microVtxIdx, height);
+        if constexpr (encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES) {
+            for (uint32_t microVtxIdx = threadIdx.x;
+                 microVtxIdx < numMicroVerticesInBlock; microVtxIdx += WarpSize) {
+                const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                const float2 microVtxTc =
+                    (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
+                    + microVtxBc.x * stTcs[1]
+                    + microVtxBc.y * stTcs[2];
+                const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
+                //printf("%4u-%2u-%2u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
+                b_dispBlock.setValue(microVtxIdx, height);
+            }
         }
+        else {
+            constexpr uint32_t maxNumEdgeVerticesForPrevLevel = (1 << (DispBlock::maxSubdivLevel - 1)) + 1;
+            constexpr uint32_t maxNumMicroVerticesForPrevLevel =
+                (1 + maxNumEdgeVerticesForPrevLevel) * maxNumEdgeVerticesForPrevLevel / 2;
+            constexpr uint32_t anchorBitWidth = DispBlock::anchorBitWidth;
+            constexpr uint32_t numBitsOfValueCache = anchorBitWidth * maxNumMicroVerticesForPrevLevel;
+            constexpr uint32_t numDwordsOfValueCache = (numBitsOfValueCache + 31) / 32;
+            CUDA_SHARED_MEM uint32_t b_valueCache[numDwordsOfValueCache];
+            for (uint32_t dwIdx = threadIdx.x; dwIdx < numDwordsOfValueCache; dwIdx += WarpSize)
+                b_valueCache[dwIdx] = 0;
+            __syncwarp();
+
+            const auto storeValue = [&]
+            (uint32_t idx, uint32_t value) {
+                const uint32_t bitOffset = anchorBitWidth * idx;
+                const uint32_t binIdx = bitOffset / 32;
+                const uint32_t bitOffsetInBin = bitOffset % 32;
+                const uint32_t numLowerBits = min(32 - bitOffsetInBin, anchorBitWidth);
+                atomicOr(&b_valueCache[binIdx], (value & ((1 << numLowerBits) - 1)) << bitOffsetInBin);
+                if (numLowerBits < anchorBitWidth)
+                    atomicOr(&b_valueCache[binIdx + 1], value >> numLowerBits);
+            };
+            const auto loadValue = [&]
+            (uint32_t idx) {
+                const uint32_t bitOffset = anchorBitWidth * idx;
+                const uint32_t binIdx = bitOffset / 32;
+                const uint32_t bitOffsetInBin = bitOffset % 32;
+                const uint32_t numLowerBits = min(32 - bitOffsetInBin, anchorBitWidth);
+                uint32_t value = 0;
+                value |= ((b_valueCache[binIdx] >> bitOffsetInBin) & ((1 << numLowerBits) - 1));
+                if (numLowerBits < anchorBitWidth) {
+                    const uint32_t numRemBits = anchorBitWidth - numLowerBits;
+                    value |= (b_valueCache[binIdx + 1] & ((1 << numRemBits) - 1)) << numLowerBits;
+                }
+                return value;
+            };
+
+            if (threadIdx.x < 3) {
+                const uint32_t microVtxIdx = threadIdx.x;
+                const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                const float2 microVtxTc =
+                    (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
+                    + microVtxBc.x * stTcs[1]
+                    + microVtxBc.y * stTcs[2];
+                const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
+                printf("%4u-%2u-%4u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
+                const uint32_t value = DispBlock::encode(height);
+                storeValue(microVtxIdx, value);
+            }
+
+            uint32_t microVtxBaseIdx = 3;
+            for (uint32_t curLevel = 1; curLevel < subdivLevelInBlock; ++curLevel) {
+                const uint32_t numEdgeVerticesForLevel = (1 << curLevel) + 1;
+                const uint32_t numMicroVerticesForLevel =
+                    (1 + numEdgeVerticesForLevel) * numEdgeVerticesForLevel / 2;
+                for (uint32_t microVtxIdx = microVtxBaseIdx + threadIdx.x;
+                     microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
+                    const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                    const float2 microVtxTc =
+                        (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
+                        + microVtxBc.x * stTcs[1]
+                        + microVtxBc.y * stTcs[2];
+                    const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
+                    printf("%4u-%2u-%4u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
+                    const uint32_t value = DispBlock::encode(height);
+
+                    MicroVertexInfo info = microVertexInfos[microVtxIdx];
+                    const uint32_t adjValueA = loadValue(info.adjA);
+                    const uint32_t adjValueB = loadValue(info.adjB);
+                    const uint32_t predValue = (adjValueA + adjValueB + 1) / 2;
+                    const uint32_t correction = value - predValue;
+                }
+
+                microVtxBaseIdx = numMicroVerticesForLevel;
+            }
+        }
+        __syncwarp();
+
+        // JP: シェアードメモリ上のDisplacementBlockをメモリに書き出す。
+        // EN: Write out the displacement block on the shared memory to the memory.
+        DispBlock &displacementBlock = displacementBlocks[subTriIdx];
+        for (uint32_t dwIdx = threadIdx.x; dwIdx < DispBlock::numDwords; dwIdx += WarpSize)
+            displacementBlock.data[dwIdx] = b_dispBlock.data[dwIdx];
     }
 }
 
@@ -387,15 +463,6 @@ CUDA_DEVICE_KERNEL void evaluateMicroVertexHeights(
             const uint64_t dmmOffset = dmmOffsets[triIdx];
             const uint32_t dmmSize = static_cast<uint32_t>(dmmOffsets[triIdx + 1] - dmmOffset);
             uint8_t* const displacementMicroMap = displacementMicroMaps + dmmOffset;
-
-            // JP: Displacement Micro-Mapのクリア。
-            // EN: Clear the displacement micro-map.
-            const uint32_t numDwords = dmmSize / 4;
-            for (uint32_t dwBaseIdx = 0; dwBaseIdx < numDwords; dwBaseIdx += WarpSize) {
-                const uint32_t dwIdx = dwBaseIdx + threadIdx.x;
-                if (dwIdx < numDwords)
-                    reinterpret_cast<uint32_t*>(displacementMicroMap)[dwIdx] = 0;
-            }
 
             if (mmKey.format.encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES)
                 buildSingleDisplacementMicroMap<OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES>(

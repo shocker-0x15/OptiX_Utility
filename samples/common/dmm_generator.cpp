@@ -66,9 +66,9 @@ size_t getScratchMemSizeForDMMGenerator(uint32_t numTriangles) {
     // hasDmmFlags
     allocate<uint32_t>(curOffset, numTriangles);
     // histInDmmArray
-    allocate<uint32_t>(curOffset, shared::NumDMMFormats);
+    allocate<uint32_t>(curOffset, shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels);
     // histInMesh
-    allocate<uint32_t>(curOffset, shared::NumDMMFormats);
+    allocate<uint32_t>(curOffset, shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels);
     // scratchMemForScan
     size_t memSizeForScanDmmSizes;
     cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
@@ -90,7 +90,8 @@ void initializeDMMGeneratorContext(
     CUdeviceptr positions, CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
     CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
-    shared::DMMFormat minSubdivLevel, shared::DMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
+    shared::DMMEncoding forceEncoding,
+    shared::DMMSubdivLevel minSubdivLevel, shared::DMMSubdivLevel maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
     CUdeviceptr scratchMem, size_t scratchMemSize,
     DMMGeneratorContext* context) {
@@ -132,6 +133,7 @@ void initializeDMMGeneratorContext(
     _context.numChannels = numChannels;
     _context.alphaChannelIndex = heightChannelIndex;
 
+    _context.forceEncoding = forceEncoding;
     _context.minSubdivLevel = minSubdivLevel;
     _context.maxSubdivLevel = maxSubdivLevel;
     _context.subdivLevelBias = subdivLevelBias;
@@ -171,8 +173,10 @@ void initializeDMMGeneratorContext(
 
     _context.dmmSizes = allocate<uint64_t>(curScratchMemHead, numTriangles + 1);
     _context.hasDmmFlags = allocate<uint32_t>(curScratchMemHead, numTriangles);
-    _context.histInDmmArray = allocate<uint32_t>(curScratchMemHead, shared::NumDMMFormats);
-    _context.histInMesh = allocate<uint32_t>(curScratchMemHead, shared::NumDMMFormats);
+    _context.histInDmmArray = allocate<uint32_t>(
+        curScratchMemHead, shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels);
+    _context.histInMesh = allocate<uint32_t>(
+        curScratchMemHead, shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels);
     cubd::DeviceScan::ExclusiveSum<const uint64_t*, uint64_t*>(
         nullptr, _context.memSizeForScanDmmSizes,
         nullptr, nullptr, numTriangles + 1);
@@ -188,8 +192,8 @@ void initializeDMMGeneratorContext(
 
 void countDMMFormats(
     const DMMGeneratorContext &context,
-    uint32_t histInDmmArray[shared::NumDMMFormats],
-    uint32_t histInMesh[shared::NumDMMFormats],
+    uint32_t histInDmmArray[shared::NumDMMEncodingTypes][shared::NumDMMSubdivLevels],
+    uint32_t histInMesh[shared::NumDMMEncodingTypes][shared::NumDMMSubdivLevels],
     uint64_t* rawDmmArraySize) {
     CUstream stream = 0;
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
@@ -296,7 +300,7 @@ void countDMMFormats(
     // JP: 三角形ごとの目標分割レベルを計算する。
     // EN: Determine the target subdivision level for each triangle.
     auto maxSubdivLevel =
-        static_cast<shared::DMMFormat>(std::max(_context.minSubdivLevel, _context.maxSubdivLevel));
+        static_cast<shared::DMMSubdivLevel>(std::max(_context.minSubdivLevel, _context.maxSubdivLevel));
     s_determineTargetSubdivLevels.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.meshAabbArea,
@@ -346,7 +350,8 @@ void countDMMFormats(
     // EN: Finalize the DMM format of each triangle.
     s_finalizeMicroMapFormats.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
-        _context.microMapKeys, _context.microMapFormats, numTriangles);
+        _context.microMapKeys, _context.microMapFormats, numTriangles,
+        _context.forceEncoding);
 
     // JP: マイクロマップキーとキーインデックスの配列をソートする。
     // EN: Sort the arrays of micro map keys and key indices.
@@ -398,9 +403,11 @@ void countDMMFormats(
     }
 
     CUDADRV_CHECK(cuMemsetD32Async(
-        reinterpret_cast<CUdeviceptr>(_context.histInDmmArray), 0, shared::NumDMMFormats, stream));
+        reinterpret_cast<CUdeviceptr>(_context.histInDmmArray), 0,
+        shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels, stream));
     CUDADRV_CHECK(cuMemsetD32Async(
-        reinterpret_cast<CUdeviceptr>(_context.histInMesh), 0, shared::NumDMMFormats, stream));
+        reinterpret_cast<CUdeviceptr>(_context.histInMesh), 0,
+        shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels, stream));
 
     // JP: 先頭である三角形においてラスタライズを行いDMMのメタデータを決定する。
     //     2つのヒストグラムのカウントも行う。
@@ -424,12 +431,14 @@ void countDMMFormats(
 
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<uint32_t> histInDmmArray(shared::NumDMMFormats);
-        std::vector<uint32_t> histInMesh(shared::NumDMMFormats);
         std::vector<uint32_t> hasDmmFlags(numTriangles);
         std::vector<uint64_t> dmmSizes(numTriangles + 1);
-        read(histInDmmArray, _context.histInDmmArray);
-        read(histInMesh, _context.histInMesh);
+        CUDADRV_CHECK(cuMemcpyDtoH(
+            histInDmmArray, reinterpret_cast<uintptr_t>(_context.histInDmmArray),
+            sizeof(uint32_t) * shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels));
+        CUDADRV_CHECK(cuMemcpyDtoH(
+            histInMesh, reinterpret_cast<uintptr_t>(_context.histInMesh),
+            sizeof(uint32_t) * shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels));
         read(hasDmmFlags, _context.hasDmmFlags);
         read(dmmSizes, _context.dmmSizes);
         hpprintf("");
@@ -454,10 +463,10 @@ void countDMMFormats(
 
     CUDADRV_CHECK(cuMemcpyDtoH(
         histInDmmArray, reinterpret_cast<uintptr_t>(_context.histInDmmArray),
-        sizeof(uint32_t) * shared::NumDMMFormats));
+        sizeof(uint32_t) * shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels));
     CUDADRV_CHECK(cuMemcpyDtoH(
         histInMesh, reinterpret_cast<uintptr_t>(_context.histInMesh),
-        sizeof(uint32_t) * shared::NumDMMFormats));
+        sizeof(uint32_t) * shared::NumDMMEncodingTypes * shared::NumDMMSubdivLevels));
     CUDADRV_CHECK(cuMemcpyDtoH(
         rawDmmArraySize, reinterpret_cast<uintptr_t>(&_context.dmmSizes[numTriangles]),
         sizeof(uint64_t)));
@@ -573,7 +582,23 @@ void generateDMMArray(
 
             }
             else if (desc.format == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES) {
-
+                using DispBlock = shared::DisplacementBlock<OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES>;
+                auto dispBlocks = reinterpret_cast<const DispBlock*>(&dmmArrayOnHost[desc.byteOffset]);
+                const uint32_t stSubdivLevel =
+                    std::max<uint32_t>(desc.subdivisionLevel, DispBlock::maxSubdivLevel) - DispBlock::maxSubdivLevel;
+                const uint32_t numSubTris = 1 << (2 * stSubdivLevel);
+                const uint32_t subdivLevelInBlock =
+                    std::min<uint32_t>(desc.subdivisionLevel, DispBlock::maxSubdivLevel);
+                const uint32_t numEdgeVerticesInBlock = (1 << subdivLevelInBlock) + 1;
+                const uint32_t numMicroVerticesInBlock = (1 + numEdgeVerticesInBlock) * numEdgeVerticesInBlock / 2;
+                for (uint32_t subTriIdx = 0; subTriIdx < numSubTris; ++subTriIdx) {
+                    const DispBlock &dispBlock = dispBlocks[subTriIdx];
+                    hpprintf("%4u-%2u\n", dmmIdx, subTriIdx);
+                    //hpprintf("anchor 0: %g\n", dispBlock.getAnchor(0));
+                    //hpprintf("       1: %g\n", dispBlock.getAnchor(1));
+                    //hpprintf("       2: %g\n", dispBlock.getAnchor(2));
+                    hpprintf("");
+                }
             }
         }
         hpprintf("");
