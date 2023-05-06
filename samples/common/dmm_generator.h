@@ -3,15 +3,22 @@
 #include "common.h"
 
 namespace shared {
-    enum DMMFormat : uint32_t {
-        DMMFormat_Level0 = 0, //    1 micro-tris
-        DMMFormat_Level1,     //    4 micro-tris
-        DMMFormat_Level2,     //   16 micro-tris
-        DMMFormat_Level3,     //   64 micro-tris
-        DMMFormat_Level4,     //  256 micro-tris
-        DMMFormat_Level5,     // 1024 micro-tris
-        DMMFormat_None,
-        NumDMMFormats
+    enum DMMEncoding : uint32_t {
+        DMMEncoding_None = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_NONE,
+        DMMEncoding_64B_per_64MicroTris = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES,
+        DMMEncoding_128B_per_256MicroTris = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES,
+        DMMEncoding_128B_per_1024MicroTris = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES,
+        NumDMMEncodingTypes
+    };
+
+    enum DMMSubdivLevel : uint32_t {
+        DMMSubdivLevel_0 = 0, //    1 micro-tris
+        DMMSubdivLevel_1,     //    4 micro-tris
+        DMMSubdivLevel_2,     //   16 micro-tris
+        DMMSubdivLevel_3,     //   64 micro-tris
+        DMMSubdivLevel_4,     //  256 micro-tris
+        DMMSubdivLevel_5,     // 1024 micro-tris
+        NumDMMSubdivLevels
     };
 }
 
@@ -28,15 +35,16 @@ void initializeDMMGeneratorContext(
     CUdeviceptr positions, CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
     CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
-    shared::DMMFormat minSubdivLevel, shared::DMMFormat maxSubdivLevel, uint32_t subdivLevelBias,
+    shared::DMMEncoding forceEncoding,
+    shared::DMMSubdivLevel minSubdivLevel, shared::DMMSubdivLevel maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
     CUdeviceptr scratchMem, size_t scratchMemSize,
     DMMGeneratorContext* context);
 
 void countDMMFormats(
     const DMMGeneratorContext &context,
-    uint32_t histInDmmArray[shared::NumDMMFormats],
-    uint32_t histInMesh[shared::NumDMMFormats],
+    uint32_t histInDmmArray[shared::NumDMMEncodingTypes][shared::NumDMMSubdivLevels],
+    uint32_t histInMesh[shared::NumDMMEncodingTypes][shared::NumDMMSubdivLevels],
     uint64_t* rawDmmArraySize);
 
 void generateDMMArray(

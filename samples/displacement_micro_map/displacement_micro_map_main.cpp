@@ -1,15 +1,63 @@
 ﻿/*
 
-JP: 
+JP: このサンプルはディスプレイスメントマッピングによる高密度ジオメトリを効率的に表現するための
+    Displacement Micro-Map (OMM)の使用方法を示します。
+    DMMは三角形メッシュにおけるハイトマップなどによる凹凸情報を三角形ごとにコンパクトに格納したものです。
+    GASの生成時に追加情報として渡すことで三角形メッシュに高密度な凹凸を較的省メモリに追加することができます。
+    逆に粗いメッシュにDMMを付加することで、通常の三角形メッシュよりも遥かに省メモリなGASで同様のジオメトリを
+    表現することができますしGASのビルドも高速になります。
+    OptiXのAPIにはDMM自体の生成処理は含まれていないため、何らかの手段を用いて生成する必要があります。
+    DMM生成処理はテクスチャーとメッシュ間のマッピング、テクスチャー自体が静的な場合オフラインで予め行うことも可能です。
+    このサンプルにはDMMの生成処理も含まれていますが、
+    おそらくDisplacement Micro-Map SDK [1]などのツールを使うほうが良いでしょう。
 
     --no-dmm: DMMを無効化する。
+    --visualize ***: 可視化モードを切り替える。
+      - final: 最終レンダリング。
+      - barycentric: 重心座標の可視化。ベース三角形の形状を確認できる。
+      - micro-barycentric: マイクロ三角形の重心座標の可視化。
+      - normal: 法線ベクトルの可視化。
+    --force-encoding ***: DMMのエンコードを強制的に指定する。
+      - none: 強制しない。(自動的に決定される)
+      - 64utris: DMMあたり64マイクロ三角形64Bのフォーマットを使う。
+      - 256utris: DMMあたり256マイクロ三角形128Bのフォーマットを使う。
+      - 1024utris: DMMあたり1024マイクロ三角形128Bのフォーマットを使う。
+    --max-subdiv-level *: DMMの最大分割レベル。
+    --subdiv-level-bias *: DMMの分割レベルへのバイアス。
+    --displacement-bias *: ベース頂点のディスプレイスメントベクター方向への事前の移動量。
+    --displacement-scale *: ベース頂点のディスプレイスメントベクター方向の変位スケール。
     --no-index-buffer: DMM用のインデックスバッファーを使用しない。
 
-EN: 
+EN: This sample shows how to use Displacement Micro-Map (DMM) with which high-definition geometry by
+    displacement mapping can be efficiently represented.
+    DMM is a data structure which compactly stores per-triangle displacement information by height map or
+    something else for a triangle mesh.
+    Providing DMM as additional information when building a GAS adds high frequency geometric detail to
+    a triangle mesh with relatively low additional memory.
+    In other words, a geometry with similar complexity as a normal triangle mesh can be represented with
+    a GAS with much less memory by adding DMM to a coarse mesh. This makes GAS build faster also.
+    OptiX API doesn't provide generation of DMM itself, so DMM generation by some means is required.
+    DMM generation can be offline pre-computation if the mapping between a texture and a mesh and
+    the texture itself are static.
+    This sample provides DMM generation also, but you may want to use a tool like Displacement Micro-Map SDK [1].
 
     [1] Displacement Micro-Map SDK: https://github.com/NVIDIAGameWorks/Displacement-MicroMap-SDK/
 
     --no-dmm: Disable DMM.
+    --visualize ***: You can change visualizing mode.
+      - final: Final rendering.
+      - barycentric: Visualize barycentric coordinates, can be used to see the shapes of base triangles.
+      - micro-barycentric: Visualize barycentric coordinates of micro-triangles.
+      - normal: Visualize normal vectors.
+    --force-encoding ***: Forcefully specify a DMM encoding.
+      - none: Do not force (encodings are automatically determined)
+      - 64utris: Use an encoding with 64 micro triangles, 64B per triangle.
+      - 256utris: Use an encoding with 256 micro triangles, 128B per triangle.
+      - 1024utris: Use an encoding with 1024 micro triangles, 128B per triangle.
+    --max-subdiv-level *: The maximum DMM subdivision level.
+    --subdiv-level-bias *: The bias to DMM subdivision level.
+    --displacement-bias *: The amount of pre-movement of base vertices along displacement vectors.
+    --displacement-scale *: The amount of displacement of base vertices along displacement vectors.
     --no-index-buffer: Specify not to use index buffers for DMM.
 
 */
@@ -21,10 +69,147 @@ EN:
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
+#include "../common/vdb_interface.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
+    //{
+    //    const auto calcTriOrientation = []
+    //    (uint32_t triIdx, uint32_t level) {
+    //        constexpr uint32_t table[] = {
+    //            0b00,
+    //            0b01,
+    //            0b00,
+    //            0b10,
+    //        };
+    //        uint32_t flags = 0; // bit1: horizontal flip, bit0: vertical flip
+    //        uint32_t b = triIdx;
+    //        for (int l = 0; l < level; ++l) {
+    //            flags ^= table[b & 0b11];
+    //            b >>= 2;
+    //        }
+    //        return flags;
+    //    };
+
+    //    struct Triangle {
+    //        uint32_t indices[3];
+    //        Triangle() : indices{ 0xFFFFFFFF, 0xFFFFFFFF , 0xFFFFFFFF } {}
+    //        Triangle(uint32_t a, uint32_t b, uint32_t c) : indices{ a, b, c } {}
+    //    };
+
+    //    struct MicroVertexInfo {
+    //        uint32_t adjA : 10; // to support the max vertex index 560
+    //        uint32_t adjB : 10;
+    //        uint32_t level : 3;
+    //        uint32_t placeHolder : 9;
+    //    };
+
+    //    std::vector<float2> vertices;
+    //    std::vector<MicroVertexInfo> vertInfos;
+    //    vertices.push_back(float2(0.0f, 0.0f));
+    //    vertices.push_back(float2(1.0f, 0.0f));
+    //    vertices.push_back(float2(0.0f, 1.0f));
+    //    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    //    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    //    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    //    std::vector<Triangle> triangles[2];
+    //    triangles[0].push_back(Triangle(0, 1, 2));
+
+    //    std::map<std::pair<uint32_t, uint32_t>, uint32_t> vertexMap;
+
+    //    uint32_t curBufIdx = 0;
+    //    for (uint32_t level = 1; level <= 5; ++level) {
+    //        const std::vector<Triangle> &srcTriangles = triangles[curBufIdx];
+    //        std::vector<Triangle> &dstTriangles = triangles[(curBufIdx + 1) % 2];
+    //        const uint32_t numSubdivTris = 1 << (2 * (level - 1));
+    //        dstTriangles.resize(numSubdivTris << 2);
+    //        uint32_t curNumVertices = vertices.size();
+    //        for (int triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
+    //            const Triangle &srcTri = srcTriangles[triIdx];
+    //            const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
+    //            const bool isUprightTri = (triOriFlags & 0b1) == 0;
+    //            if (isUprightTri) {
+    //                const float2 vA = 0.5f * (vertices[srcTri.indices[0]] + vertices[srcTri.indices[2]]);
+    //                const float2 vB = 0.5f * (vertices[srcTri.indices[1]] + vertices[srcTri.indices[2]]);
+    //                const float2 vC = 0.5f * (vertices[srcTri.indices[0]] + vertices[srcTri.indices[1]]);
+    //                const bool isNormal = (triOriFlags & 0b10) == 0;
+    //                vertices.resize(curNumVertices + 3);
+    //                vertInfos.resize(curNumVertices + 3);
+    //                const uint32_t vAIdx = curNumVertices + (isNormal ? 0 : 1);
+    //                const uint32_t vBIdx = curNumVertices + (isNormal ? 1 : 0);
+    //                const uint32_t vCIdx = curNumVertices + 2;
+    //                vertices[vAIdx] = vA;
+    //                vertices[vBIdx] = vB;
+    //                vertices[vCIdx] = vC;
+    //                vertInfos[vAIdx] = MicroVertexInfo{ srcTri.indices[0] , srcTri.indices[2], level, 0 };
+    //                vertInfos[vBIdx] = MicroVertexInfo{ srcTri.indices[1] , srcTri.indices[2], level, 0 };
+    //                vertInfos[vCIdx] = MicroVertexInfo{ srcTri.indices[0] , srcTri.indices[1], level, 0 };
+    //                vertexMap[std::make_pair(std::min(srcTri.indices[0], srcTri.indices[2]), std::max(srcTri.indices[0], srcTri.indices[2]))] = vAIdx;
+    //                vertexMap[std::make_pair(std::min(srcTri.indices[1], srcTri.indices[2]), std::max(srcTri.indices[2], srcTri.indices[1]))] = vBIdx;
+    //                vertexMap[std::make_pair(std::min(srcTri.indices[0], srcTri.indices[1]), std::max(srcTri.indices[0], srcTri.indices[1]))] = vCIdx;
+    //                dstTriangles[4 * triIdx + 0] = Triangle(srcTri.indices[0], vCIdx, vAIdx);
+    //                dstTriangles[4 * triIdx + 1] = Triangle(vAIdx, vBIdx, vCIdx);
+    //                dstTriangles[4 * triIdx + 2] = Triangle(vCIdx, srcTri.indices[1], vBIdx);
+    //                dstTriangles[4 * triIdx + 3] = Triangle(vBIdx, vAIdx, srcTri.indices[2]);
+
+    //                curNumVertices += 3;
+    //            }
+    //        }
+    //        for (int triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
+    //            const Triangle &srcTri = srcTriangles[triIdx];
+    //            const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
+    //            const bool isUprightTri = (triOriFlags & 0b1) == 0;
+    //            if (!isUprightTri) {
+    //                const uint32_t vAIdx = vertexMap.at(std::make_pair(std::min(srcTri.indices[0], srcTri.indices[2]), std::max(srcTri.indices[0], srcTri.indices[2])));
+    //                const uint32_t vBIdx = vertexMap.at(std::make_pair(std::min(srcTri.indices[1], srcTri.indices[2]), std::max(srcTri.indices[2], srcTri.indices[1])));
+    //                const uint32_t vCIdx = vertexMap.at(std::make_pair(std::min(srcTri.indices[0], srcTri.indices[1]), std::max(srcTri.indices[0], srcTri.indices[1])));
+    //                dstTriangles[4 * triIdx + 0] = Triangle(srcTri.indices[0], vCIdx, vAIdx);
+    //                dstTriangles[4 * triIdx + 1] = Triangle(vAIdx, vBIdx, vCIdx);
+    //                dstTriangles[4 * triIdx + 2] = Triangle(vCIdx, srcTri.indices[1], vBIdx);
+    //                dstTriangles[4 * triIdx + 3] = Triangle(vBIdx, vAIdx, srcTri.indices[2]);
+    //            }
+    //        }
+    //        curBufIdx = (curBufIdx + 1) % 2;
+    //    }
+
+    //    //const float3 pA = float3(-1.0f, 0.0f, 0.0f);
+    //    //const float3 pB = float3(1.0f, 0.0f, 0.0f);
+    //    //const float3 pC = float3(0.0f, 1.7f, 0.0f);
+    //    //vdb_frame();
+    //    //for (int i = 0; i < vertices.size(); ++i) {
+    //    //    vdb_color(
+    //    //        i % 3 == 0 ? 1 : 0,
+    //    //        i % 3 == 1 ? 1 : 0,
+    //    //        i % 3 == 2 ? 1 : 0);
+    //    //    const float2 v = vertices[i];
+    //    //    const float3 p = (1 - (v.x + v.y)) * pA + v.x * pB + v.y * pC;
+    //    //    vdb_point(p.x, p.y, p.z);
+
+    //    //    //std::this_thread::sleep_for(std::chrono::microseconds(10));
+    //    //    uint32_t temp = 0;
+    //    //    while (temp++ < 2000000);
+    //    //}
+
+    //    for (int i = 0; i < vertices.size(); i += 3)
+    //        hpprintf(
+    //            "float2{ %.6ff, %.6ff }, float2{ %.6ff, %.6ff }, float2{ %.6ff, %.6ff },\n",
+    //            vertices[i].x, vertices[i].y,
+    //            vertices[i + 1].x, vertices[i + 1].y,
+    //            vertices[i + 2].x, vertices[i + 2].y);
+
+    //    for (int i = 0; i < vertices.size(); i += 3)
+    //        hpprintf(
+    //            "{ %3u, %3u, %u }, { %3u, %3u, %u }, { %3u, %3u, %u },\n",
+    //            vertInfos[i].adjA, vertInfos[i].adjB, vertInfos[i].level,
+    //            vertInfos[i + 1].adjA, vertInfos[i + 1].adjB, vertInfos[i + 1].level,
+    //            vertInfos[i + 2].adjA, vertInfos[i + 2].adjB, vertInfos[i + 2].level);
+
+    //    printf("");
+    //}
+
     bool useDMM = true;
     auto visualizationMode = Shared::VisualizationMode_Final;
-    shared::DMMFormat maxDmmSubDivLevel = shared::DMMFormat_Level5;
+    shared::DMMEncoding forceEncoding = shared::DMMEncoding_None;
+    shared::DMMSubdivLevel maxDmmSubDivLevel = shared::DMMSubdivLevel_5;
     int32_t dmmSubdivLevelBias = 0;
     bool useDmmIndexBuffer = true;
     float displacementBias = 0.0f;
@@ -52,13 +237,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 throw std::runtime_error("Argument for --visualize is invalid.");
             argIdx += 1;
         }
+        else if (arg == "--force-encoding") {
+            if (argIdx + 1 >= argc)
+                throw std::runtime_error("Argument for --force-encoding is not complete.");
+            std::string_view visType = argv[argIdx + 1];
+            if (visType == "none")
+                forceEncoding = shared::DMMEncoding_None;
+            else if (visType == "64utris")
+                forceEncoding = shared::DMMEncoding_64B_per_64MicroTris;
+            else if (visType == "256utris")
+                forceEncoding = shared::DMMEncoding_128B_per_256MicroTris;
+            else if (visType == "1024utris")
+                forceEncoding = shared::DMMEncoding_128B_per_1024MicroTris;
+            else
+                throw std::runtime_error("Argument for --force-encoding is invalid.");
+            argIdx += 1;
+        }
         else if (arg == "--max-subdiv-level") {
             if (argIdx + 1 >= argc)
                 throw std::runtime_error("Argument for --max-subdiv-level is not complete.");
             int32_t level = std::atoi(argv[argIdx + 1]);
-            if (level < 0 || level > shared::DMMFormat_Level5)
+            if (level < 0 || level > shared::DMMSubdivLevel_5)
                 throw std::runtime_error("Invalid DMM subdivision level.");
-            maxDmmSubDivLevel = static_cast<shared::DMMFormat>(level);
+            maxDmmSubDivLevel = static_cast<shared::DMMSubdivLevel>(level);
             argIdx += 1;
         }
         else if (arg == "--subdiv-level-bias") {
@@ -377,7 +578,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         displacedMesh.vertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
 
         // JP: DMMを適用するジオメトリやそれを含むGASは通常の三角形用のもので良い。
-        // EN: 
+        // EN: Geometry and GAS to which DMM applied are ones for ordinary triangle mesh.
         displacedMesh.optixGas = scene.createGeometryAccelerationStructure();
         displacedMesh.optixGas.setConfiguration(
             optixu::ASTradeoff::PreferFastTrace,
@@ -424,9 +625,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cudau::Buffer scratchMemForDMM;
             scratchMemForDMM.initialize(cuContext, cudau::BufferType::Device, scratchMemSizeForDMM, 1);
 
+            // JP: まずは各三角形のDMMフォーマットを決定する。
+            // EN: Fisrt, determine the DMM format of each triangle.
             DMMGeneratorContext dmmContext;
-            uint32_t histInDMMArray[shared::NumDMMFormats];
-            uint32_t histInMesh[shared::NumDMMFormats];
+            uint32_t histInDMMArray[shared::NumDMMEncodingTypes][shared::NumDMMSubdivLevels];
+            uint32_t histInMesh[shared::NumDMMEncodingTypes][shared::NumDMMSubdivLevels];
             uint64_t rawDmmArraySize = 0;
             if (useDMM) {
                 initializeDMMGeneratorContext(
@@ -437,7 +640,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                     group.heightTexObj,
                     make_uint2(group.heightTexArray.getWidth(), group.heightTexArray.getHeight()), 1, 0,
-                    shared::DMMFormat_Level0, maxDmmSubDivLevel, dmmSubdivLevelBias,
+                    forceEncoding,
+                    shared::DMMSubdivLevel_0, maxDmmSubDivLevel, dmmSubdivLevelBias,
                     useDmmIndexBuffer, 1 << static_cast<uint32_t>(dmmIndexSize),
                     scratchMemForDMM.getCUdeviceptr(), scratchMemForDMM.sizeInBytes(),
                     &dmmContext);
@@ -453,29 +657,32 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 uint32_t numDmms = 0;
                 std::vector<OptixDisplacementMicromapHistogramEntry> dmmHistogramEntries;
                 hpprintf("Histogram in DMM Array, Mesh\n");
-                hpprintf("  None    : %5u, %5u\n",
-                         histInDMMArray[shared::DMMFormat_None], histInMesh[shared::DMMFormat_None]);
-                for (int i = shared::DMMFormat_Level0; i <= shared::DMMFormat_Level5; ++i) {
-                    uint32_t countInDmmArray = histInDMMArray[i];
-                    uint32_t countInMesh = histInMesh[i];
-                    hpprintf("  Level %2u: %5u, %5u\n", i, countInDmmArray, countInMesh);
+                hpprintf("         None    : %5u, %5u\n",
+                         histInDMMArray[shared::DMMEncoding_None][0],
+                         histInMesh[shared::DMMEncoding_None][0]);
+                for (int enc = shared::DMMEncoding_64B_per_64MicroTris; enc <= shared::DMMEncoding_128B_per_1024MicroTris; ++enc) {
+                    for (int level = shared::DMMSubdivLevel_0; level <= shared::DMMSubdivLevel_5; ++level) {
+                        uint32_t countInDmmArray = histInDMMArray[enc][level];
+                        uint32_t countInMesh = histInMesh[enc][level];
+                        hpprintf("  Enc %u - Level %u: %5u, %5u\n", enc, level, countInDmmArray, countInMesh);
 
-                    if (countInDmmArray > 0) {
-                        OptixDisplacementMicromapHistogramEntry histEntry;
-                        histEntry.count = countInDmmArray;
-                        histEntry.format = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
-                        histEntry.subdivisionLevel = i;
-                        dmmHistogramEntries.push_back(histEntry);
+                        if (countInDmmArray > 0) {
+                            OptixDisplacementMicromapHistogramEntry histEntry;
+                            histEntry.count = countInDmmArray;
+                            histEntry.format = static_cast<OptixDisplacementMicromapFormat>(enc);
+                            histEntry.subdivisionLevel = level;
+                            dmmHistogramEntries.push_back(histEntry);
 
-                        numDmms += histInDMMArray[i];
-                    }
+                            numDmms += histInDMMArray[enc][level];
+                        }
 
-                    if (countInMesh > 0) {
-                        OptixDisplacementMicromapUsageCount histEntry;
-                        histEntry.count = countInMesh;
-                        histEntry.format = OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
-                        histEntry.subdivisionLevel = i;
-                        dmmUsageCounts.push_back(histEntry);
+                        if (countInMesh > 0) {
+                            OptixDisplacementMicromapUsageCount histEntry;
+                            histEntry.count = countInMesh;
+                            histEntry.format = static_cast<OptixDisplacementMicromapFormat>(enc);
+                            histEntry.subdivisionLevel = level;
+                            dmmUsageCounts.push_back(histEntry);
+                        }
                     }
                 }
                 hpprintf("\n");
@@ -512,8 +719,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     group.rawDmmArray, group.dmmDescs, group.dmmIndexBuffer,
                     group.dmmTriangleFlagsBuffer);
 
-                // JP: 
-                // EN: 
+                /*
+                JP: 頂点ごとにディスプレイスメントのスケールと事前移動量を指定できる。
+                    DMMに記録されているマイクロ頂点ごとの変位量と併せて、ディスプレイスメント適用後
+                    のメッシュを最小限に含むように調節することでより高効率かつ高精度なレイトレースが可能となる。
+                    が、このサンプルではシンプルにグローバルな値を指定する。
+                EN: Specify displacement scale and the amount of pre-movement per vertex.
+                    These amounts should be adjusted along with displacement amounts per micro-vertices in DMM
+                    so that these tightly encapsulates the diplaced mesh for faster and more precise ray tracing.
+                    However, this sample simply specifies globally uniform values.
+                */
                 std::vector<float2> vertexBiasAndScaleBuffer(
                     vertices.size(), float2(displacementBias, displacementScale));
                 group.dmmVertexBiasAndScaleBuffer.initialize(
@@ -528,6 +743,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (useDMM && group.optixDmmArray &&
                 visualizationMode != Shared::VisualizationMode_Barycentric)
                 group.optixGeomInst.setDisplacementMicroMapArray(
+                    // JP: 頂点ごとのディスプレイスメント方向として法線ベクトルを再利用する。
+                    // EN: Reuse the normal vectors as displacement directions per vertex.
                     optixu::BufferView(
                         displacedMesh.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, normal),
                         displacedMesh.vertexBuffer.numElements(),
