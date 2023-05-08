@@ -309,7 +309,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
     const uint32_t numEdgeVerticesInBlock = (1 << subdivLevelInBlock) + 1;
     const uint32_t numMicroVerticesInBlock = (1 + numEdgeVerticesInBlock) * numEdgeVerticesInBlock / 2;
 
-    CUDA_SHARED_MEM uint32_t b_mem[sizeof(DispBlock) / sizeof(uint32_t)];
+    CUDA_SHARED_MEM uint32_t b_mem[DispBlock::numDwords];
     DispBlock &b_dispBlock = reinterpret_cast<DispBlock &>(b_mem);
 
     for (uint32_t subTriIdx = 0; subTriIdx < numSubTris; ++subTriIdx) {
@@ -342,6 +342,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
             }
         }
         else {
+            const DisplacementBlockLayoutInfo &layoutInfo = getDisplacementBlockLayoutInfo<encoding>();
+
             constexpr uint32_t maxNumEdgeVerticesForPrevLevel = (1 << (DispBlock::maxSubdivLevel - 1)) + 1;
             constexpr uint32_t maxNumMicroVerticesForPrevLevel =
                 (1 + maxNumEdgeVerticesForPrevLevel) * maxNumEdgeVerticesForPrevLevel / 2;
@@ -349,8 +351,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
             constexpr uint32_t numBitsOfValueCache = anchorBitWidth * maxNumMicroVerticesForPrevLevel;
             constexpr uint32_t numDwordsOfValueCache = (numBitsOfValueCache + 31) / 32;
             CUDA_SHARED_MEM uint32_t b_valueCache[numDwordsOfValueCache];
+            CUDA_SHARED_MEM uint32_t b_shifts[DispBlock::maxSubdivLevel + 1];
             for (uint32_t dwIdx = threadIdx.x; dwIdx < numDwordsOfValueCache; dwIdx += WarpSize)
                 b_valueCache[dwIdx] = 0;
+            if (threadIdx.x < (DispBlock::maxSubdivLevel + 1))
+                b_shifts[threadIdx.x] = 0;
             __syncwarp();
 
             const auto storeValue = [&]
@@ -359,9 +364,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                 const uint32_t binIdx = bitOffset / 32;
                 const uint32_t bitOffsetInBin = bitOffset % 32;
                 const uint32_t numLowerBits = min(32 - bitOffsetInBin, anchorBitWidth);
-                atomicOr(&b_valueCache[binIdx], (value & ((1 << numLowerBits) - 1)) << bitOffsetInBin);
-                if (numLowerBits < anchorBitWidth)
+                const uint32_t lowerMask = (1 << numLowerBits) - 1;
+                atomicAnd(&b_valueCache[binIdx], ~(lowerMask << bitOffsetInBin));
+                atomicOr(&b_valueCache[binIdx], (value & lowerMask) << bitOffsetInBin);
+                if (numLowerBits < anchorBitWidth) {
+                    const uint32_t higherMask = (1 << (anchorBitWidth - numLowerBits)) - 1;
+                    atomicAnd(&b_valueCache[binIdx + 1], ~higherMask);
                     atomicOr(&b_valueCache[binIdx + 1], value >> numLowerBits);
+                }
             };
             const auto loadValue = [&]
             (uint32_t idx) {
@@ -378,21 +388,35 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                 return value;
             };
 
-            if (threadIdx.x < 3) {
+            constexpr bool enableDebugPrint = false;
+
+            // Anchors
+            {
                 const uint32_t microVtxIdx = threadIdx.x;
-                const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
-                const float2 microVtxTc =
-                    (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
-                    + microVtxBc.x * stTcs[1]
-                    + microVtxBc.y * stTcs[2];
-                const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
-                printf("%4u-%2u-%4u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
-                const uint32_t value = DispBlock::encode(height);
-                storeValue(microVtxIdx, value);
+                if (microVtxIdx < 3){
+                    const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                    const float2 microVtxTc =
+                        (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
+                        + microVtxBc.x * stTcs[1]
+                        + microVtxBc.y * stTcs[2];
+                    const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
+                    const uint32_t value = DispBlock::quantize(height);
+                    storeValue(microVtxIdx, value);
+                    b_dispBlock.setValue(0, microVtxIdx, value);
+
+                    if constexpr (enableDebugPrint) {
+                        printf(
+                            "%4u-%2u-%4u (lv %u): %g (%4u)\n",
+                            dmmIdx, subTriIdx, microVtxIdx, 0,
+                            height, value);
+                    }
+                }
+                __syncwarp();
             }
 
+            // Corrections
             uint32_t microVtxBaseIdx = 3;
-            for (uint32_t curLevel = 1; curLevel < subdivLevelInBlock; ++curLevel) {
+            for (uint32_t curLevel = 1; curLevel <= subdivLevelInBlock; ++curLevel) {
                 const uint32_t numEdgeVerticesForLevel = (1 << curLevel) + 1;
                 const uint32_t numMicroVerticesForLevel =
                     (1 + numEdgeVerticesForLevel) * numEdgeVerticesForLevel / 2;
@@ -404,17 +428,91 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                         + microVtxBc.x * stTcs[1]
                         + microVtxBc.y * stTcs[2];
                     const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
-                    printf("%4u-%2u-%4u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
-                    const uint32_t value = DispBlock::encode(height);
+                    const uint32_t value = DispBlock::quantize(height);
+                    storeValue(microVtxIdx, value);
 
                     MicroVertexInfo info = microVertexInfos[microVtxIdx];
                     const uint32_t adjValueA = loadValue(info.adjA);
                     const uint32_t adjValueB = loadValue(info.adjB);
                     const uint32_t predValue = (adjValueA + adjValueB + 1) / 2;
-                    const uint32_t correction = value - predValue;
+                    const int32_t correction = value - predValue;
+                    const int32_t msSetPos = 31 - __clz(correction >= 0 ? correction : ~correction);
+                    const int32_t reqShift = static_cast<uint32_t>(max(
+                        msSetPos + 2 - static_cast<int32_t>(layoutInfo.correctionBitWidths[curLevel]), 0));
+                    atomicMax(&b_shifts[curLevel],
+                              min(reqShift, static_cast<int32_t>(layoutInfo.maxShifts[curLevel])));
+
+                    if constexpr (enableDebugPrint) {
+                        printf(
+                            "%4u-%2u-%4u (lv %u): %g (%4u), pred: %4u (%4u, %4u), corr: %5d, reqShift: %u\n",
+                            dmmIdx, subTriIdx, microVtxIdx, curLevel,
+                            height, value, predValue, adjValueA, adjValueB, correction, reqShift);
+                    }
+                }
+                __syncwarp();
+
+                for (uint32_t microVtxIdx = microVtxBaseIdx + threadIdx.x;
+                        microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
+                    const uint32_t value = loadValue(microVtxIdx);
+
+                    MicroVertexInfo info = microVertexInfos[microVtxIdx];
+                    const uint32_t adjValueA = loadValue(info.adjA);
+                    const uint32_t adjValueB = loadValue(info.adjB);
+                    const uint32_t predValue = (adjValueA + adjValueB + 1) / 2;
+                    int32_t correction = value - predValue;
+                    const int32_t msSetPos = 31 - __clz(correction >= 0 ? correction : ~correction);
+                    const int32_t reqShift = static_cast<uint32_t>(max(
+                        msSetPos + 2 - static_cast<int32_t>(layoutInfo.correctionBitWidths[curLevel]), 0));
+                    const uint32_t shift = b_shifts[curLevel];
+                    // JP: 必要なシフト量が達成できない場合は可能な限り大きなcorrectionに設定する。
+                    // EN: Set the correction to the maximum value as much as possible if
+                    //     the required shift cannot be applied.
+                    if (reqShift > shift) {
+                        correction = correction > 0 ?
+                            ((1 << anchorBitWidth) - 1) :
+                            ~((1 << (anchorBitWidth - 1)) - 1);
+                    }
+                    // JP: デコード値が負にならないようにcorrectionを丸める。
+                    // EN: Round off the correction so that the decoded value will not be negative.
+                    if (correction < 0) {
+                        const uint32_t mask = (1 << shift) - 1;
+                        correction = (correction + mask) & ~mask;
+                    }
+                    correction >>= shift;
+                    const uint32_t decodedValue = predValue + (correction << shift);
+                    storeValue(microVtxIdx, decodedValue);
+                    b_dispBlock.setValue(curLevel, microVtxIdx - microVtxBaseIdx, correction);
+
+                    if constexpr (enableDebugPrint) {
+                        const float relErr = (static_cast<float>(decodedValue) - value) / value * 100;
+                        if (relErr > 1000)
+                            printf("Error\n");
+                        printf(
+                            "%4u-%2u-%4u (lv %u): %4u (%6.2f%%), corr: %5d, shift: %u, OF: %u\n",
+                            dmmIdx, subTriIdx, microVtxIdx, curLevel,
+                            decodedValue, relErr, correction,
+                            shift, reqShift > shift ? 1 : 0);
+                    }
                 }
 
                 microVtxBaseIdx = numMicroVerticesForLevel;
+                __syncwarp();
+            }
+
+            // Shifts
+            if (threadIdx.x <= 5) {
+                const uint32_t level = threadIdx.x;
+                const uint32_t shiftBitOffset = layoutInfo.shiftBitOffsets[level];
+                if (shiftBitOffset != 0xFFFFFFFF) {
+                    const uint32_t shift = b_shifts[level];
+                    if constexpr (enableDebugPrint) {
+                        printf("Shift for level %u: %u\n", level, shift);
+                    }
+                    b_dispBlock.setShift(level, 0, shift);
+                    b_dispBlock.setShift(level, 1, shift);
+                    b_dispBlock.setShift(level, 2, shift);
+                    b_dispBlock.setShift(level, 3, shift);
+                }
             }
         }
         __syncwarp();
