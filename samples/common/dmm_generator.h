@@ -25,7 +25,7 @@ namespace shared {
 #if !defined(__CUDA_ARCH__)
 
 struct DMMGeneratorContext {
-    std::vector<uint8_t> internalState;
+    std::vector<uint8_t> internalState; // TODO: use a more proper implementation.
 };
 
 size_t getScratchMemSizeForDMMGenerator(uint32_t numTriangles);

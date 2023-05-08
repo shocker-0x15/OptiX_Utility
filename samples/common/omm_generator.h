@@ -25,7 +25,7 @@ namespace shared {
 #if !defined(__CUDA_ARCH__)
 
 struct OMMGeneratorContext {
-    std::vector<uint8_t> internalState;
+    std::vector<uint8_t> internalState; // TODO: use a more proper implementation.
 };
 
 size_t getScratchMemSizeForOMMGenerator(uint32_t numTriangles);

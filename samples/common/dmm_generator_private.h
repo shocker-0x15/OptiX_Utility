@@ -399,6 +399,41 @@ CUDA_CONSTANT_MEM constexpr MicroVertexInfo microVertexInfos[] = {
 #endif
 
 namespace shared {
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+    struct DisplacementBlockLayoutInfo {
+        uint32_t correctionBitOffsets[6];
+        uint32_t correctionBitWidths[6];
+        uint32_t shiftBitOffsets[6];
+        uint32_t shiftBitWidths[6];
+        uint32_t maxShifts[6];
+    };
+
+    CUDA_CONSTANT_MEM DisplacementBlockLayoutInfo displacementBlock256MicroTrisLayoutInfo = {
+        { 0, 33, 66, 165, 465, 0xFFFFFFFF },
+        { 11, 11, 11, 10, 5, 0xFFFFFFFF },
+        { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 1018, 1006, 0xFFFFFFFF },
+        { 0, 0, 0, 1, 3, 0xFFFFFFFF },
+        { 0, 0, 0, 1, 6, 0xFFFFFFFF },
+    };
+    CUDA_CONSTANT_MEM DisplacementBlockLayoutInfo displacementBlock1024MicroTrisLayoutInfo = {
+        { 0, 33, 66, 138, 258, 474 },
+        { 11, 11, 8, 4, 2, 1 },
+        { 0xFFFFFFFF, 0xFFFFFFFF, 1014, 1002, 986, 970 },
+        { 0, 0, 2, 3, 4, 4 },
+        { 0, 0, 3, 7, 9, 10 },
+    };
+
+    template <OptixDisplacementMicromapFormat encoding>
+    CUDA_DEVICE_FUNCTION const DisplacementBlockLayoutInfo &getDisplacementBlockLayoutInfo() {
+        if constexpr (encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES)
+            return displacementBlock256MicroTrisLayoutInfo;
+        else /*if constexpr (OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES)*/
+            return displacementBlock1024MicroTrisLayoutInfo;
+    }
+#endif
+
+
+
     template <OptixDisplacementMicromapFormat encoding>
     struct DisplacementBlock;
 
@@ -457,27 +492,62 @@ namespace shared {
         static constexpr uint32_t maxAnchorValue = (1 << anchorBitWidth) - 1;
 
         static constexpr uint32_t correctionBitOffsets[] = {
-            0xFFFFFFFF, 33, 66, 165, 465, 0xFFFFFFFF
+            0, 33, 66, 165, 465, 0xFFFFFFFF
         };
         static constexpr uint32_t correctionBitWidths[] = {
-            0xFFFFFFFF, 11, 11, 10, 5, 0xFFFFFFFF
+            11, 11, 11, 10, 5, 0xFFFFFFFF
         };
         static constexpr uint32_t shiftBitOffsets[] = {
             0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 1018, 1006, 0xFFFFFFFF
         };
         static constexpr uint32_t shiftBitWidths[] = {
-            0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 1, 3, 0xFFFFFFFF
+            0, 0, 0, 1, 3, 0xFFFFFFFF
+        };
+        static constexpr uint32_t maxShifts[] = {
+            0, 0, 0, 1, 6, 0xFFFFFFFF
         };
 
         uint32_t data[numDwords];
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t encode(float value) {
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t quantize(float value) {
             Assert(value <= 1.0f, "Height value must be normalized: %g", value);
-            constexpr uint32_t _anchorBitWidth = anchorBitWidth;
             constexpr uint32_t _maxAnchorValue = maxAnchorValue; // workaround for NVCC bug? (CUDA 11.7)
             const uint32_t uiValue = min(static_cast<uint32_t>(maxAnchorValue * value), _maxAnchorValue);
             return uiValue;
+        }
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t dequantize(uint32_t value) {
+            Assert(value <= maxAnchorValue, "OOB quantized value: %u", value);
+            const float fValue = static_cast<float>(value) / maxAnchorValue;
+            return fValue;
+        }
+
+        CUDA_DEVICE_FUNCTION void setValue(uint32_t level, uint32_t microVtxIdxInLevel, uint32_t value) {
+            const DisplacementBlockLayoutInfo &layoutInfo = displacementBlock256MicroTrisLayoutInfo;
+            const uint32_t bitWidth = layoutInfo.correctionBitWidths[level];
+            const uint32_t mask = (1 << bitWidth) - 1;
+            value &= mask;
+            const uint32_t bitOffset = layoutInfo.correctionBitOffsets[level] + bitWidth * microVtxIdxInLevel;
+            const uint32_t binIdx = bitOffset / 32;
+            const uint32_t bitOffsetInBin = bitOffset % 32;
+            const uint32_t numLowerBits = min(32 - bitOffsetInBin, bitWidth);
+            atomicOr(&data[binIdx], (value & ((1 << numLowerBits) - 1)) << bitOffsetInBin);
+            if (numLowerBits < bitWidth)
+                atomicOr(&data[binIdx + 1], value >> numLowerBits);
+        }
+
+        CUDA_DEVICE_FUNCTION void setShift(uint32_t level, uint32_t vtxType, uint32_t value) {
+            const DisplacementBlockLayoutInfo &layoutInfo = displacementBlock256MicroTrisLayoutInfo;
+            const uint32_t bitWidth = layoutInfo.shiftBitWidths[level];
+            const uint32_t mask = (1 << bitWidth) - 1;
+            value &= mask;
+            const uint32_t bitOffset = layoutInfo.shiftBitOffsets[level] + bitWidth * vtxType;
+            const uint32_t binIdx = bitOffset / 32;
+            const uint32_t bitOffsetInBin = bitOffset % 32;
+            const uint32_t numLowerBits = min(32 - bitOffsetInBin, bitWidth);
+            atomicOr(&data[binIdx], (value & ((1 << numLowerBits) - 1)) << bitOffsetInBin);
+            if (numLowerBits < bitWidth)
+                atomicOr(&data[binIdx + 1], value >> numLowerBits);
         }
 #endif
     };
@@ -494,29 +564,89 @@ namespace shared {
         static constexpr uint32_t maxAnchorValue = (1 << anchorBitWidth) - 1;
 
         static constexpr uint32_t correctionBitOffsets[] = {
-            0xFFFFFFFF, 33, 66, 138, 258, 474,
+            0, 33, 66, 138, 258, 474
         };
         static constexpr uint32_t correctionBitWidths[] = {
-            0xFFFFFFFF, 11, 8, 4, 2, 1
+            11, 11, 8, 4, 2, 1
         };
         static constexpr uint32_t shiftBitOffsets[] = {
             0xFFFFFFFF, 0xFFFFFFFF, 1014, 1002, 986, 970
         };
         static constexpr uint32_t shiftBitWidths[] = {
-            0xFFFFFFFF, 0xFFFFFFFF, 2, 3, 4, 4
+            0, 0, 2, 3, 4, 4
+        };
+        static constexpr uint32_t maxShifts[] = {
+            0, 0, 3, 7, 9, 10
         };
 
         uint32_t data[numDwords];
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t encode(float value) {
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t quantize(float value) {
             Assert(value <= 1.0f, "Height value must be normalized: %g", value);
-            constexpr uint32_t _anchorBitWidth = anchorBitWidth;
             constexpr uint32_t _maxAnchorValue = maxAnchorValue; // workaround for NVCC bug? (CUDA 11.7)
             const uint32_t uiValue = min(static_cast<uint32_t>(maxAnchorValue * value), _maxAnchorValue);
             return uiValue;
         }
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t dequantize(uint32_t value) {
+            Assert(value <= maxAnchorValue, "OOB quantized value: %u", value);
+            const float fValue = static_cast<float>(value) / maxAnchorValue;
+            return fValue;
+        }
+
+        CUDA_DEVICE_FUNCTION void setValue(uint32_t level, uint32_t microVtxIdxInLevel, uint32_t value) {
+            const DisplacementBlockLayoutInfo &layoutInfo = displacementBlock1024MicroTrisLayoutInfo;
+            const uint32_t bitWidth = layoutInfo.correctionBitWidths[level];
+            const uint32_t mask = (1 << bitWidth) - 1;
+            value &= mask;
+            const uint32_t bitOffset = layoutInfo.correctionBitOffsets[level] + bitWidth * microVtxIdxInLevel;
+            const uint32_t binIdx = bitOffset / 32;
+            const uint32_t bitOffsetInBin = bitOffset % 32;
+            const uint32_t numLowerBits = min(32 - bitOffsetInBin, bitWidth);
+            atomicOr(&data[binIdx], (value & ((1 << numLowerBits) - 1)) << bitOffsetInBin);
+            if (numLowerBits < bitWidth)
+                atomicOr(&data[binIdx + 1], value >> numLowerBits);
+        }
+
+        CUDA_DEVICE_FUNCTION void setShift(uint32_t level, uint32_t vtxType, uint32_t value) {
+            const DisplacementBlockLayoutInfo &layoutInfo = displacementBlock1024MicroTrisLayoutInfo;
+            const uint32_t bitWidth = layoutInfo.shiftBitWidths[level];
+            const uint32_t mask = (1 << bitWidth) - 1;
+            value &= mask;
+            const uint32_t bitOffset = layoutInfo.shiftBitOffsets[level] + bitWidth * vtxType;
+            const uint32_t binIdx = bitOffset / 32;
+            const uint32_t bitOffsetInBin = bitOffset % 32;
+            const uint32_t numLowerBits = min(32 - bitOffsetInBin, bitWidth);
+            atomicOr(&data[binIdx], (value & ((1 << numLowerBits) - 1)) << bitOffsetInBin);
+            if (numLowerBits < bitWidth)
+                atomicOr(&data[binIdx + 1], value >> numLowerBits);
+        }
 #endif
+
+        CUDA_COMMON_FUNCTION void setBits(uint32_t value, uint32_t bitOffset, uint32_t bitWidth) {
+            const uint32_t binIdx = bitOffset / 32;
+            const uint32_t bitOffsetInBin = bitOffset % 32;
+            const uint32_t numLowerBits = min(32 - bitOffsetInBin, bitWidth);
+            const uint32_t lowerMask = (1 << numLowerBits) - 1;
+            data[binIdx] &= ~(lowerMask << bitOffsetInBin);
+            data[binIdx] |= (value & lowerMask) << bitOffsetInBin;
+            if (numLowerBits < bitWidth) {
+                const uint32_t higherMask = (1 << (bitWidth - numLowerBits)) - 1;
+                data[binIdx + 1] &= ~higherMask;
+                data[binIdx + 1] |= value >> numLowerBits;
+            }
+        }
+
+        CUDA_COMMON_FUNCTION uint32_t getBits(uint32_t bitOffset, uint32_t bitWidth) const {
+            const uint32_t binIdx = bitOffset / 32;
+            const uint32_t bitOffsetInBin = bitOffset % 32;
+            const uint32_t numLowerBits = min(32 - bitOffsetInBin, bitWidth);
+            uint32_t value = 0;
+            value |= ((data[binIdx] >> bitOffsetInBin) & ((1 << numLowerBits) - 1));
+            if (numLowerBits < bitWidth)
+                value |= (data[binIdx + 1] & ((1 << (bitWidth - numLowerBits)) - 1)) << numLowerBits;
+            return value;
+        }
     };
 }
 
