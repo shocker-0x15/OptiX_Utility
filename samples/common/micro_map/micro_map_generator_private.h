@@ -34,6 +34,11 @@ namespace shared {
 
     struct Triangle {
         uint32_t indices[3];
+
+        CUDA_COMMON_FUNCTION Triangle() :
+            indices{ 0xFFFFFFFF, 0xFFFFFFFF , 0xFFFFFFFF } {}
+        CUDA_COMMON_FUNCTION Triangle(uint32_t a, uint32_t b, uint32_t c) :
+            indices{ a, b, c } {}
     };
 
     struct DirectedEdge {
