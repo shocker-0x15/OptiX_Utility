@@ -114,11 +114,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //        uint32_t placeHolder : 11;
     //    };
 
-    //    std::vector<float2> vertices;
+    //    constexpr uint32_t maxLevel = 5;
+
+    //    std::vector<uint2> vertices;
     //    std::vector<MicroVertexInfo> vertInfos;
-    //    vertices.push_back(float2(0.0f, 0.0f));
-    //    vertices.push_back(float2(1.0f, 0.0f));
-    //    vertices.push_back(float2(0.0f, 1.0f));
+    //    vertices.push_back(uint2(0, 0));
+    //    vertices.push_back(uint2(1 << maxLevel, 0));
+    //    vertices.push_back(uint2(0, 1 << maxLevel));
     //    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
     //    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
     //    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
@@ -131,7 +133,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //    edgeInfos[makeEdgeKey(2, 0)] = EdgeInfo{ 0xFFFFFFFF, 3 };
 
     //    uint32_t curBufIdx = 0;
-    //    for (uint32_t level = 1; level <= 5; ++level) {
+    //    for (uint32_t level = 1; level <= maxLevel; ++level) {
     //        const std::vector<Triangle> &srcTriangles = triangles[curBufIdx];
     //        std::vector<Triangle> &dstTriangles = triangles[(curBufIdx + 1) % 2];
     //        const uint32_t numSubdivTris = 1 << (2 * (level - 1));
@@ -142,9 +144,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //            const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
     //            const bool isUprightTri = (triOriFlags & 0b1) == 0;
     //            if (isUprightTri) {
-    //                const float2 vA = 0.5f * (vertices[srcTri.indices[0]] + vertices[srcTri.indices[2]]);
-    //                const float2 vB = 0.5f * (vertices[srcTri.indices[1]] + vertices[srcTri.indices[2]]);
-    //                const float2 vC = 0.5f * (vertices[srcTri.indices[0]] + vertices[srcTri.indices[1]]);
+    //                const uint2 vA = (vertices[srcTri.indices[0]] + vertices[srcTri.indices[2]]) / 2;
+    //                const uint2 vB = (vertices[srcTri.indices[1]] + vertices[srcTri.indices[2]]) / 2;
+    //                const uint2 vC = (vertices[srcTri.indices[0]] + vertices[srcTri.indices[1]]) / 2;
     //                const bool isNormal = (triOriFlags & 0b10) == 0;
     //                vertices.resize(curNumVertices + 3);
     //                vertInfos.resize(curNumVertices + 3);
@@ -227,6 +229,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //        curBufIdx = (curBufIdx + 1) % 2;
     //    }
 
+    //    constexpr uint32_t normalizer = 1 << maxLevel;
+
     //    //const float3 pA = float3(-1.0f, 0.0f, 0.0f);
     //    //const float3 pB = float3(1.0f, 0.0f, 0.0f);
     //    //const float3 pC = float3(0.0f, 1.7f, 0.0f);
@@ -236,8 +240,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //    //        i % 3 == 0 ? 1 : 0,
     //    //        i % 3 == 1 ? 1 : 0,
     //    //        i % 3 == 2 ? 1 : 0);
-    //    //    const float2 v = vertices[i];
-    //    //    const float3 p = (1 - (v.x + v.y)) * pA + v.x * pB + v.y * pC;
+    //    //    const uint2 v = vertices[i];
+    //    //    const float bcB = static_cast<float>(v.x) / normalizer;
+    //    //    const float bcC = static_cast<float>(v.y) / normalizer;
+    //    //    const float bcA = 1 - (bcB + bcC);
+    //    //    const float3 p = bcA * pA + bcB * pB + bcC * pC;
     //    //    vdb_point(p.x, p.y, p.z);
 
     //    //    //std::this_thread::sleep_for(std::chrono::microseconds(10));
@@ -245,12 +252,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //    //    while (temp++ < 2000000);
     //    //}
 
-    //    for (int i = 0; i < vertices.size(); i += 3)
+    //    for (int i = 0; i < vertices.size(); i += 3) {
     //        hpprintf(
-    //            "float2{ %.6ff, %.6ff }, float2{ %.6ff, %.6ff }, float2{ %.6ff, %.6ff },\n",
+    //            "{ %2u, %2u }, { %2u, %2u }, { %2u, %2u },\n",
     //            vertices[i + 0].x, vertices[i + 0].y,
     //            vertices[i + 1].x, vertices[i + 1].y,
     //            vertices[i + 2].x, vertices[i + 2].y);
+    //    }
 
     //    for (int i = 0; i < vertices.size(); i += 3) {
     //        const MicroVertexInfo &info0 = vertInfos[i + 0];
