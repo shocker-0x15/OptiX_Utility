@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "../common/common.h"
-#include "../common/dmm_generator.h"
+#include "../common/micro_map/dmm_generator.h"
 
 namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;
