@@ -90,7 +90,7 @@ void initializeDMMGeneratorContext(
     CUdeviceptr positions, CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
     CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
-    shared::DMMEncoding forceEncoding,
+    shared::DMMEncoding maxCompressedFormat,
     shared::DMMSubdivLevel minSubdivLevel, shared::DMMSubdivLevel maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
     CUdeviceptr scratchMem, size_t scratchMemSize,
@@ -133,7 +133,7 @@ void initializeDMMGeneratorContext(
     _context.numChannels = numChannels;
     _context.alphaChannelIndex = heightChannelIndex;
 
-    _context.forceEncoding = forceEncoding;
+    _context.maxCompressedFormat = maxCompressedFormat;
     _context.minSubdivLevel = minSubdivLevel;
     _context.maxSubdivLevel = maxSubdivLevel;
     _context.subdivLevelBias = subdivLevelBias;
@@ -351,7 +351,7 @@ void countDMMFormats(
     s_finalizeMicroMapFormats.launchWithThreadDim(
         stream, cudau::dim3(numTriangles),
         _context.microMapKeys, _context.microMapFormats, numTriangles,
-        _context.forceEncoding);
+        _context.maxCompressedFormat);
 
     // JP: マイクロマップキーとキーインデックスの配列をソートする。
     // EN: Sort the arrays of micro map keys and key indices.

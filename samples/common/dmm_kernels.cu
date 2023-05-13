@@ -114,21 +114,23 @@ CUDA_DEVICE_KERNEL void adjustSubdivLevels(
 
 CUDA_DEVICE_KERNEL void finalizeMicroMapFormats(
     MicroMapKey* microMapKeys, MicroMapFormat* microMapFormats, uint32_t numTriangles,
-    DMMEncoding forceEncoding) {
+    DMMEncoding maxCompressedFormat) {
     const uint32_t triIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (triIdx >= numTriangles)
         return;
 
+    static_assert(
+        OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES == 1 &&
+        OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES == 2 &&
+        OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES == 3,
+        "Assumption for the enum values breaks.");
+
     MicroMapKey &mmKey = microMapKeys[triIdx];
-    if (forceEncoding == DMMEncoding_None) {
-        mmKey.format.encoding =
-            mmKey.format.level == 5 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES :
-            mmKey.format.level == 4 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES :
-            OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
-    }
-    else {
-        mmKey.format.encoding = forceEncoding;
-    }
+    mmKey.format.encoding =
+        mmKey.format.level == 5 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES :
+        mmKey.format.level == 4 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES :
+        OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
+    mmKey.format.encoding = min(mmKey.format.encoding, static_cast<uint32_t>(maxCompressedFormat));
     microMapFormats[triIdx] = mmKey.format;
 }
 
@@ -305,9 +307,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
 
     const uint32_t stSubdivLevel = max(subdivLevel, DispBlock::maxSubdivLevel) - DispBlock::maxSubdivLevel;
     const uint32_t numSubTris = 1 << (2 * stSubdivLevel);
-    const uint32_t subdivLevelInBlock = min(subdivLevel, DispBlock::maxSubdivLevel);
-    const uint32_t numEdgeVerticesInBlock = (1 << subdivLevelInBlock) + 1;
-    const uint32_t numMicroVerticesInBlock = (1 + numEdgeVerticesInBlock) * numEdgeVerticesInBlock / 2;
 
     CUDA_SHARED_MEM uint32_t b_mem[DispBlock::numDwords];
     DispBlock &b_dispBlock = reinterpret_cast<DispBlock &>(b_mem);
@@ -316,7 +315,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
         // JP: シェアードメモリ上のDisplacementBlockをクリア。
         // EN: Clear the displacement block on the shared memory.
         for (uint32_t dwIdx = threadIdx.x; dwIdx < DispBlock::numDwords; dwIdx += WarpSize)
-            b_mem[dwIdx] = 0;
+            b_dispBlock.data[dwIdx] = 0;
         __syncwarp();
 
         float2 stBcs[3];
@@ -328,7 +327,13 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
             stTcs[i] = (1 - (stBc.x + stBc.y)) * tcTuple.tcA + stBc.x * tcTuple.tcB + stBc.y * tcTuple.tcC;
         }
 
+        constexpr bool enableDebugPrint = false;
+
         if constexpr (encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES) {
+            const uint32_t subdivLevelInBlock = min(subdivLevel, DispBlock::maxSubdivLevel);
+            const uint32_t numEdgeVerticesInBlock = (1 << subdivLevelInBlock) + 1;
+            const uint32_t numMicroVerticesInBlock = (1 + numEdgeVerticesInBlock) * numEdgeVerticesInBlock / 2;
+
             for (uint32_t microVtxIdx = threadIdx.x;
                  microVtxIdx < numMicroVerticesInBlock; microVtxIdx += WarpSize) {
                 const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
@@ -337,18 +342,20 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     + microVtxBc.x * stTcs[1]
                     + microVtxBc.y * stTcs[2];
                 const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
-                //printf("%4u-%2u-%2u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
+                if constexpr (enableDebugPrint) {
+                    printf("%4u-%2u-%2u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
+                }
                 b_dispBlock.setValue(microVtxIdx, height);
             }
         }
         else {
             const DisplacementBlockLayoutInfo &layoutInfo = getDisplacementBlockLayoutInfo<encoding>();
 
-            constexpr uint32_t maxNumEdgeVerticesForPrevLevel = (1 << (DispBlock::maxSubdivLevel - 1)) + 1;
-            constexpr uint32_t maxNumMicroVerticesForPrevLevel =
-                (1 + maxNumEdgeVerticesForPrevLevel) * maxNumEdgeVerticesForPrevLevel / 2;
+            constexpr uint32_t maxNumEdgeVerticesInBlock = (1 << DispBlock::maxSubdivLevel) + 1;
+            constexpr uint32_t maxNumMicroVerticesInBlock =
+                (1 + maxNumEdgeVerticesInBlock) * maxNumEdgeVerticesInBlock / 2;
             constexpr uint32_t anchorBitWidth = DispBlock::anchorBitWidth;
-            constexpr uint32_t numBitsOfValueCache = anchorBitWidth * maxNumMicroVerticesForPrevLevel;
+            constexpr uint32_t numBitsOfValueCache = anchorBitWidth * maxNumMicroVerticesInBlock;
             constexpr uint32_t numDwordsOfValueCache = (numBitsOfValueCache + 31) / 32;
             CUDA_SHARED_MEM uint32_t b_valueCache[numDwordsOfValueCache];
             CUDA_SHARED_MEM uint32_t b_shifts[DispBlock::maxSubdivLevel + 1];
@@ -388,8 +395,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                 return value;
             };
 
-            constexpr bool enableDebugPrint = false;
-
             // Anchors
             {
                 const uint32_t microVtxIdx = threadIdx.x;
@@ -416,12 +421,19 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
 
             // Corrections
             uint32_t microVtxBaseIdx = 3;
-            for (uint32_t curLevel = 1; curLevel <= subdivLevelInBlock; ++curLevel) {
+            for (uint32_t curLevel = 1; curLevel <= DispBlock::maxSubdivLevel; ++curLevel) {
                 const uint32_t numEdgeVerticesForLevel = (1 << curLevel) + 1;
                 const uint32_t numMicroVerticesForLevel =
                     (1 + numEdgeVerticesForLevel) * numEdgeVerticesForLevel / 2;
+
+                // JP: まずは現在のレベル共通のシフト量を求める。
+                // EN: First, determine the common shift amount for the current level.
                 for (uint32_t microVtxIdx = microVtxBaseIdx + threadIdx.x;
                      microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
+                    // JP: 実際のディスプレイスメント量を計算する。
+                    //     後段のために値をキャッシュしておく。
+                    // EN: Calculate the actual displacement amount.
+                    //     Cache the value for the subsequent process.
                     const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
                     const float2 microVtxTc =
                         (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
@@ -431,7 +443,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     const uint32_t value = DispBlock::quantize(height);
                     storeValue(microVtxIdx, value);
 
-                    MicroVertexInfo info = microVertexInfos[microVtxIdx];
+                    // JP: 下位レベルのディスプレイスメントからの予測値と実際の値の差分を求め、
+                    //     シフト量を算出する。
+                    // EN: Compute the difference between a predicted value from the lower level and
+                    //     the actual value, then calculate the shift amount.
+                    const MicroVertexInfo info = microVertexInfos[microVtxIdx];
                     const uint32_t adjValueA = loadValue(info.adjA);
                     const uint32_t adjValueB = loadValue(info.adjB);
                     const uint32_t predValue = (adjValueA + adjValueB + 1) / 2;
@@ -452,10 +468,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                 __syncwarp();
 
                 for (uint32_t microVtxIdx = microVtxBaseIdx + threadIdx.x;
-                        microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
+                     microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
                     const uint32_t value = loadValue(microVtxIdx);
 
-                    MicroVertexInfo info = microVertexInfos[microVtxIdx];
+                    // JP: 下位レベルのディスプレイスメントからの予測値と実際の値の差分を求め、
+                    //     シフト量を算出する。
+                    // EN: Compute the difference between a predicted value from the lower level and
+                    //     the actual value, then calculate the shift amount.
+                    const MicroVertexInfo info = microVertexInfos[microVtxIdx];
                     const uint32_t adjValueA = loadValue(info.adjA);
                     const uint32_t adjValueB = loadValue(info.adjB);
                     const uint32_t predValue = (adjValueA + adjValueB + 1) / 2;
@@ -463,10 +483,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     const int32_t msSetPos = 31 - __clz(correction >= 0 ? correction : ~correction);
                     const int32_t reqShift = static_cast<uint32_t>(max(
                         msSetPos + 2 - static_cast<int32_t>(layoutInfo.correctionBitWidths[curLevel]), 0));
-                    const uint32_t shift = b_shifts[curLevel];
+
                     // JP: 必要なシフト量が達成できない場合は可能な限り大きなcorrectionに設定する。
                     // EN: Set the correction to the maximum value as much as possible if
                     //     the required shift cannot be applied.
+                    const uint32_t shift = b_shifts[curLevel];
                     if (reqShift > shift) {
                         correction = correction > 0 ?
                             ((1 << anchorBitWidth) - 1) :
@@ -478,15 +499,20 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                         const uint32_t mask = (1 << shift) - 1;
                         correction = (correction + mask) & ~mask;
                     }
+
+                    // JP: 補正値を記録する。
+                    //     また、補正値を用いたディスプレイスメントのデコード値を求めて次のレベルの計算のために
+                    //     キャッシュに記録する。
+                    // EN: Store the correction value.
+                    //     And store a decoded displacement value using the correction to the cache as well
+                    //     for the next level computation.
                     correction >>= shift;
+                    b_dispBlock.setValue(curLevel, microVtxIdx - microVtxBaseIdx, correction);
                     const uint32_t decodedValue = predValue + (correction << shift);
                     storeValue(microVtxIdx, decodedValue);
-                    b_dispBlock.setValue(curLevel, microVtxIdx - microVtxBaseIdx, correction);
 
                     if constexpr (enableDebugPrint) {
                         const float relErr = (static_cast<float>(decodedValue) - value) / value * 100;
-                        if (relErr > 1000)
-                            printf("Error\n");
                         printf(
                             "%4u-%2u-%4u (lv %u): %4u (%6.2f%%), corr: %5d, shift: %u, OF: %u\n",
                             dmmIdx, subTriIdx, microVtxIdx, curLevel,
@@ -558,9 +584,7 @@ CUDA_DEVICE_KERNEL void evaluateMicroVertexHeights(
             const uint32_t triIdx = triIndices[keyIdx];
             const MicroMapKey &mmKey = microMapKeys[keyIdx];
 
-            const uint64_t dmmOffset = dmmOffsets[triIdx];
-            const uint32_t dmmSize = static_cast<uint32_t>(dmmOffsets[triIdx + 1] - dmmOffset);
-            uint8_t* const displacementMicroMap = displacementMicroMaps + dmmOffset;
+            uint8_t* const displacementMicroMap = displacementMicroMaps + dmmOffsets[triIdx];
 
             if (mmKey.format.encoding == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES)
                 buildSingleDisplacementMicroMap<OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES>(

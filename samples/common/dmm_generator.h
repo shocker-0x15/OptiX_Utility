@@ -35,7 +35,7 @@ void initializeDMMGeneratorContext(
     CUdeviceptr positions, CUdeviceptr texCoords, uint32_t vertexStride, uint32_t numVertices,
     CUdeviceptr triangles, uint32_t triangleStride, uint32_t numTriangles,
     CUtexObject texture, uint2 texSize, uint32_t numChannels, uint32_t heightChannelIndex,
-    shared::DMMEncoding forceEncoding,
+    shared::DMMEncoding maxCompressedFormat,
     shared::DMMSubdivLevel minSubdivLevel, shared::DMMSubdivLevel maxSubdivLevel, uint32_t subdivLevelBias,
     bool useIndexBuffer, uint32_t indexSize,
     CUdeviceptr scratchMem, size_t scratchMemSize,
