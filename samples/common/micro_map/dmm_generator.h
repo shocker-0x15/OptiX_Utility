@@ -54,4 +54,9 @@ void generateDMMArray(
     const cudau::Buffer &dmmIndexBuffer,
     const cudau::Buffer &dmmTriangleFlagsBuffer);
 
+
+
+// Used for generating constants for CUDA kernels.
+void printConstants();
+
 #endif // #if !defined(__CUDA_ARCH__)

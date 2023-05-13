@@ -1,6 +1,11 @@
 ﻿#include "dmm_generator_private.h"
 #include "../../ext/cubd/cubd.h"
 
+#define VISUALIZE_MICRO_VERTICES_WITH_VDB 0
+#if VISUALIZE_MICRO_VERTICES_WITH_VDB
+#   include "../vdb_interface.h"
+#endif
+
 extern cudau::Kernel g_computeMeshAABB;
 extern cudau::Kernel g_finalizeMeshAABB;
 extern cudau::Kernel g_initializeHalfEdges;
@@ -537,6 +542,16 @@ void generateDMMArray(
         _context.dmmSizes, _context.counter,
         dmmArray);
 
+    /*
+    TODO:
+    JP: Watertightnessのために隣り合うサブ三角形やDMM間でシフト量を一致させる。
+        これを考える場合マイクロマップキーには隣り合う三角形のエンコーディングと分割レベルも
+        加えないといけないかもしれない。
+    EN: Matching shift amounts between neighboring sub-triangles and DMMs for watertightness.
+        It probably needs to take neighboring triangles' encodings and subdivision levels into account
+        for micro map keys.
+    */
+
     if (!_context.useIndexBuffer) {
         // JP: 先頭ではない三角形においてDMMのコピーを行う。
         // EN: Copy the DMMs for non-head triangles.
@@ -603,4 +618,202 @@ void generateDMMArray(
         }
         hpprintf("");
     }
+}
+
+
+
+void printConstants() {
+    const auto calcTriOrientation = []
+    (uint32_t triIdx, uint32_t level) {
+        constexpr uint32_t table[] = {
+            0b00,
+            0b01,
+            0b00,
+            0b10,
+        };
+        uint32_t flags = 0; // bit1: horizontal flip, bit0: vertical flip
+        uint32_t b = triIdx;
+        for (int l = 0; l < level; ++l) {
+            flags ^= table[b & 0b11];
+            b >>= 2;
+        }
+        return flags;
+    };
+
+    struct Triangle {
+        uint32_t indices[3];
+        Triangle() : indices{ 0xFFFFFFFF, 0xFFFFFFFF , 0xFFFFFFFF } {}
+        Triangle(uint32_t a, uint32_t b, uint32_t c) : indices{ a, b, c } {}
+    };
+
+    struct EdgeInfo {
+        uint32_t childVertexIndex;
+        uint32_t edgeIdx : 2;
+    };
+
+    const auto makeEdgeKey = []
+    (uint32_t vAIdx, uint32_t vBIdx) {
+        return std::make_pair(std::min(vAIdx, vBIdx), std::max(vAIdx, vBIdx));
+    };
+
+    constexpr uint32_t maxLevel = 5;
+
+    std::vector<uint2> vertices;
+    std::vector<shared::MicroVertexInfo> vertInfos;
+    vertices.push_back(uint2(0, 0));
+    vertices.push_back(uint2(1 << maxLevel, 0));
+    vertices.push_back(uint2(0, 1 << maxLevel));
+    vertInfos.push_back(shared::MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    vertInfos.push_back(shared::MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    vertInfos.push_back(shared::MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    std::vector<Triangle> triangles[2];
+    triangles[0].push_back(Triangle(0, 1, 2));
+
+    std::map<std::pair<uint32_t, uint32_t>, EdgeInfo> edgeInfos;
+    edgeInfos[makeEdgeKey(0, 1)] = EdgeInfo{ 0xFFFFFFFF, 1 };
+    edgeInfos[makeEdgeKey(1, 2)] = EdgeInfo{ 0xFFFFFFFF, 2 };
+    edgeInfos[makeEdgeKey(2, 0)] = EdgeInfo{ 0xFFFFFFFF, 3 };
+
+    uint32_t curBufIdx = 0;
+    for (uint32_t level = 1; level <= maxLevel; ++level) {
+        const std::vector<Triangle> &srcTriangles = triangles[curBufIdx];
+        std::vector<Triangle> &dstTriangles = triangles[(curBufIdx + 1) % 2];
+        const uint32_t numSubdivTris = 1 << (2 * (level - 1));
+        dstTriangles.resize(numSubdivTris << 2);
+        uint32_t curNumVertices = vertices.size();
+        for (int triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
+            const Triangle &srcTri = srcTriangles[triIdx];
+            const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
+            const bool isUprightTri = (triOriFlags & 0b1) == 0;
+            if (isUprightTri) {
+                const uint2 vA = (vertices[srcTri.indices[0]] + vertices[srcTri.indices[2]]) / 2;
+                const uint2 vB = (vertices[srcTri.indices[1]] + vertices[srcTri.indices[2]]) / 2;
+                const uint2 vC = (vertices[srcTri.indices[0]] + vertices[srcTri.indices[1]]) / 2;
+                const bool isNormal = (triOriFlags & 0b10) == 0;
+                vertices.resize(curNumVertices + 3);
+                vertInfos.resize(curNumVertices + 3);
+                const uint32_t vAIdx = curNumVertices + (isNormal ? 0 : 1);
+                const uint32_t vBIdx = curNumVertices + (isNormal ? 1 : 0);
+                const uint32_t vCIdx = curNumVertices + 2;
+                vertices[vAIdx] = vA;
+                vertices[vBIdx] = vB;
+                vertices[vCIdx] = vC;
+
+                EdgeInfo &srcEdgeInfoA = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[2]));
+                EdgeInfo &srcEdgeInfoB = edgeInfos.at(makeEdgeKey(srcTri.indices[1], srcTri.indices[2]));
+                EdgeInfo &srcEdgeInfoC = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[1]));
+                srcEdgeInfoA.childVertexIndex = vAIdx;
+                srcEdgeInfoB.childVertexIndex = vBIdx;
+                srcEdgeInfoC.childVertexIndex = vCIdx;
+
+                vertInfos[vAIdx] = shared::MicroVertexInfo{
+                    srcTri.indices[0], srcTri.indices[2],
+                    srcEdgeInfoA.edgeIdx, level, 0
+                };
+                vertInfos[vBIdx] = shared::MicroVertexInfo{
+                    srcTri.indices[1], srcTri.indices[2],
+                    srcEdgeInfoB.edgeIdx, level, 0
+                };
+                vertInfos[vCIdx] = shared::MicroVertexInfo{
+                    srcTri.indices[0], srcTri.indices[1],
+                    srcEdgeInfoC.edgeIdx, level, 0
+                };
+                dstTriangles[4 * triIdx + 0] = Triangle(srcTri.indices[0], vCIdx, vAIdx);
+                dstTriangles[4 * triIdx + 1] = Triangle(vAIdx, vBIdx, vCIdx);
+                dstTriangles[4 * triIdx + 2] = Triangle(vCIdx, srcTri.indices[1], vBIdx);
+                dstTriangles[4 * triIdx + 3] = Triangle(vBIdx, vAIdx, srcTri.indices[2]);
+
+                edgeInfos[makeEdgeKey(srcTri.indices[0], vAIdx)] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoA.edgeIdx };
+                edgeInfos[makeEdgeKey(vAIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoA.edgeIdx };
+                edgeInfos[makeEdgeKey(srcTri.indices[1], vBIdx)] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoB.edgeIdx };
+                edgeInfos[makeEdgeKey(vBIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoB.edgeIdx };
+                edgeInfos[makeEdgeKey(srcTri.indices[0], vCIdx)] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoC.edgeIdx };
+                edgeInfos[makeEdgeKey(vCIdx, srcTri.indices[1])] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoC.edgeIdx };
+                edgeInfos[makeEdgeKey(vAIdx, vBIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vBIdx, vCIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vCIdx, vAIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+
+                curNumVertices += 3;
+            }
+        }
+        for (int triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
+            const Triangle &srcTri = srcTriangles[triIdx];
+            const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
+            const bool isUprightTri = (triOriFlags & 0b1) == 0;
+            if (!isUprightTri) {
+                const uint32_t vAIdx =
+                    edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[2])).childVertexIndex;
+                const uint32_t vBIdx =
+                    edgeInfos.at(makeEdgeKey(srcTri.indices[1], srcTri.indices[2])).childVertexIndex;
+                const uint32_t vCIdx =
+                    edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[1])).childVertexIndex;
+
+                const EdgeInfo &srcEdgeInfoA = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[2]));
+                const EdgeInfo &srcEdgeInfoB = edgeInfos.at(makeEdgeKey(srcTri.indices[1], srcTri.indices[2]));
+                const EdgeInfo &srcEdgeInfoC = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[1]));
+
+                dstTriangles[4 * triIdx + 0] = Triangle(srcTri.indices[0], vCIdx, vAIdx);
+                dstTriangles[4 * triIdx + 1] = Triangle(vAIdx, vBIdx, vCIdx);
+                dstTriangles[4 * triIdx + 2] = Triangle(vCIdx, srcTri.indices[1], vBIdx);
+                dstTriangles[4 * triIdx + 3] = Triangle(vBIdx, vAIdx, srcTri.indices[2]);
+
+                edgeInfos[makeEdgeKey(srcTri.indices[0], vAIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vAIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(srcTri.indices[1], vBIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vBIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(srcTri.indices[0], vCIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vCIdx, srcTri.indices[1])] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vAIdx, vBIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vBIdx, vCIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+                edgeInfos[makeEdgeKey(vCIdx, vAIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+            }
+        }
+        curBufIdx = (curBufIdx + 1) % 2;
+    }
+
+    constexpr uint32_t normalizer = 1 << maxLevel;
+
+#if VISUALIZE_MICRO_VERTICES_WITH_VDB
+    const float3 pA = float3(-1.0f, 0.0f, 0.0f);
+    const float3 pB = float3(1.0f, 0.0f, 0.0f);
+    const float3 pC = float3(0.0f, 1.7f, 0.0f);
+    vdb_frame();
+    for (int i = 0; i < vertices.size(); ++i) {
+        vdb_color(
+            i % 3 == 0 ? 1 : 0,
+            i % 3 == 1 ? 1 : 0,
+            i % 3 == 2 ? 1 : 0);
+        const uint2 v = vertices[i];
+        const float bcB = static_cast<float>(v.x) / normalizer;
+        const float bcC = static_cast<float>(v.y) / normalizer;
+        const float bcA = 1 - (bcB + bcC);
+        const float3 p = bcA * pA + bcB * pB + bcC * pC;
+        vdb_point(p.x, p.y, p.z);
+
+        //std::this_thread::sleep_for(std::chrono::microseconds(10));
+        uint32_t temp = 0;
+        while (temp++ < 2000000);
+    }
+#endif
+
+    for (int i = 0; i < vertices.size(); i += 3) {
+        hpprintf(
+            "{ %2u, %2u }, { %2u, %2u }, { %2u, %2u },\n",
+            vertices[i + 0].x, vertices[i + 0].y,
+            vertices[i + 1].x, vertices[i + 1].y,
+            vertices[i + 2].x, vertices[i + 2].y);
+    }
+
+    for (int i = 0; i < vertices.size(); i += 3) {
+        const shared::MicroVertexInfo &info0 = vertInfos[i + 0];
+        const shared::MicroVertexInfo &info1 = vertInfos[i + 1];
+        const shared::MicroVertexInfo &info2 = vertInfos[i + 2];
+        hpprintf(
+            "{ %3u, %3u, %u, %u }, { %3u, %3u, %u, %u }, { %3u, %3u, %u, %u },\n",
+            info0.adjA, info0.adjB, info0.vtxType, info0.level,
+            info1.adjA, info1.adjB, info1.vtxType, info1.level,
+            info2.adjA, info2.adjB, info2.vtxType, info2.level);
+    }
+
+    printf("");
 }
