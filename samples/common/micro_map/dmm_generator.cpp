@@ -633,18 +633,15 @@ void printConstants() {
         };
         uint32_t flags = 0; // bit1: horizontal flip, bit0: vertical flip
         uint32_t b = triIdx;
-        for (int l = 0; l < level; ++l) {
+        for (uint32_t l = 0; l < level; ++l) {
             flags ^= table[b & 0b11];
             b >>= 2;
         }
         return flags;
     };
 
-    struct Triangle {
-        uint32_t indices[3];
-        Triangle() : indices{ 0xFFFFFFFF, 0xFFFFFFFF , 0xFFFFFFFF } {}
-        Triangle(uint32_t a, uint32_t b, uint32_t c) : indices{ a, b, c } {}
-    };
+    using shared::Triangle;
+    using shared::MicroVertexInfo;
 
     struct EdgeInfo {
         uint32_t childVertexIndex;
@@ -659,13 +656,13 @@ void printConstants() {
     constexpr uint32_t maxLevel = 5;
 
     std::vector<uint2> vertices;
-    std::vector<shared::MicroVertexInfo> vertInfos;
+    std::vector<MicroVertexInfo> vertInfos;
     vertices.push_back(uint2(0, 0));
     vertices.push_back(uint2(1 << maxLevel, 0));
     vertices.push_back(uint2(0, 1 << maxLevel));
-    vertInfos.push_back(shared::MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
-    vertInfos.push_back(shared::MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
-    vertInfos.push_back(shared::MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
+    vertInfos.push_back(MicroVertexInfo{ 0xFF, 0xFF, 0, 0 });
     std::vector<Triangle> triangles[2];
     triangles[0].push_back(Triangle(0, 1, 2));
 
@@ -680,8 +677,8 @@ void printConstants() {
         std::vector<Triangle> &dstTriangles = triangles[(curBufIdx + 1) % 2];
         const uint32_t numSubdivTris = 1 << (2 * (level - 1));
         dstTriangles.resize(numSubdivTris << 2);
-        uint32_t curNumVertices = vertices.size();
-        for (int triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
+        uint32_t curNumVertices = static_cast<uint32_t>(vertices.size());
+        for (uint32_t triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
             const Triangle &srcTri = srcTriangles[triIdx];
             const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
             const bool isUprightTri = (triOriFlags & 0b1) == 0;
@@ -706,15 +703,15 @@ void printConstants() {
                 srcEdgeInfoB.childVertexIndex = vBIdx;
                 srcEdgeInfoC.childVertexIndex = vCIdx;
 
-                vertInfos[vAIdx] = shared::MicroVertexInfo{
+                vertInfos[vAIdx] = MicroVertexInfo{
                     srcTri.indices[0], srcTri.indices[2],
                     srcEdgeInfoA.edgeIdx, level, 0
                 };
-                vertInfos[vBIdx] = shared::MicroVertexInfo{
+                vertInfos[vBIdx] = MicroVertexInfo{
                     srcTri.indices[1], srcTri.indices[2],
                     srcEdgeInfoB.edgeIdx, level, 0
                 };
-                vertInfos[vCIdx] = shared::MicroVertexInfo{
+                vertInfos[vCIdx] = MicroVertexInfo{
                     srcTri.indices[0], srcTri.indices[1],
                     srcEdgeInfoC.edgeIdx, level, 0
                 };
@@ -736,7 +733,7 @@ void printConstants() {
                 curNumVertices += 3;
             }
         }
-        for (int triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
+        for (uint32_t triIdx = 0; triIdx < numSubdivTris; ++triIdx) {
             const Triangle &srcTri = srcTriangles[triIdx];
             const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
             const bool isUprightTri = (triOriFlags & 0b1) == 0;
@@ -805,9 +802,9 @@ void printConstants() {
     }
 
     for (int i = 0; i < vertices.size(); i += 3) {
-        const shared::MicroVertexInfo &info0 = vertInfos[i + 0];
-        const shared::MicroVertexInfo &info1 = vertInfos[i + 1];
-        const shared::MicroVertexInfo &info2 = vertInfos[i + 2];
+        const MicroVertexInfo &info0 = vertInfos[i + 0];
+        const MicroVertexInfo &info1 = vertInfos[i + 1];
+        const MicroVertexInfo &info2 = vertInfos[i + 2];
         hpprintf(
             "{ %3u, %3u, %u, %u }, { %3u, %3u, %u, %u }, { %3u, %3u, %u, %u },\n",
             info0.adjA, info0.adjB, info0.vtxType, info0.level,
