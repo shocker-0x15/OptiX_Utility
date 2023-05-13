@@ -34,10 +34,10 @@
     <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
       <Filter>non-essentials\ext</Filter>
     </ClCompile>
-    <ClCompile Include="..\common\omm_generator.cpp">
+    <ClCompile Include="..\common\micro_map\omm_generator.cpp">
       <Filter>omm_generator</Filter>
     </ClCompile>
-    <ClCompile Include="..\common\micro_map_generator.cpp">
+    <ClCompile Include="..\common\micro_map\micro_map_generator.cpp">
       <Filter>omm_generator</Filter>
     </ClCompile>
   </ItemGroup>
@@ -70,25 +70,25 @@
     <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\omm_generator.h">
+    <ClInclude Include="..\common\micro_map\omm_generator.h">
       <Filter>omm_generator</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\micro_map_generator_private.h">
+    <ClInclude Include="..\common\micro_map\micro_map_generator_private.h">
       <Filter>omm_generator</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\omm_generator_private.h">
+    <ClInclude Include="..\common\micro_map\omm_generator_private.h">
       <Filter>omm_generator</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu" />
-    <CudaCompile Include="..\common\omm_kernels.cu">
+    <CudaCompile Include="..\common\micro_map\omm_kernels.cu">
       <Filter>omm_generator</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\common\micro_map_generator_misc.cu">
+    <CudaCompile Include="..\common\micro_map\micro_map_generator_misc.cu">
       <Filter>omm_generator</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\common\micro_map_kernels.cu">
+    <CudaCompile Include="..\common\micro_map\micro_map_kernels.cu">
       <Filter>omm_generator</Filter>
     </CudaCompile>
   </ItemGroup>

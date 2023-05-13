@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "common.h"
+#include "../common.h"
 
 namespace shared {
     enum OMMFormat : uint32_t {

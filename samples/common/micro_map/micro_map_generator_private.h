@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "common.h"
+#include "../common.h"
 
 namespace shared {
     template <typename T>

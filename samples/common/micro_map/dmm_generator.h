@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "common.h"
+#include "../common.h"
 
 namespace shared {
     enum DMMEncoding : uint32_t {

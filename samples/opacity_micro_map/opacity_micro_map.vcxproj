@@ -16,10 +16,10 @@
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
-    <ClCompile Include="..\common\micro_map_generator.cpp" />
+    <ClCompile Include="..\common\micro_map\micro_map_generator.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
-    <ClCompile Include="..\common\omm_generator.cpp" />
-    <CudaCompile Include="..\common\micro_map_generator_misc.cu">
+    <ClCompile Include="..\common\micro_map\omm_generator.cpp" />
+    <CudaCompile Include="..\common\micro_map\micro_map_generator_misc.cu">
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">compile</NvccCompilation>
@@ -38,20 +38,20 @@
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
-    <ClInclude Include="..\common\micro_map_generator_private.h" />
+    <ClInclude Include="..\common\micro_map\micro_map_generator_private.h" />
     <ClInclude Include="..\common\obj_loader.h" />
-    <ClInclude Include="..\common\omm_generator.h" />
-    <ClInclude Include="..\common\omm_generator_private.h" />
+    <ClInclude Include="..\common\micro_map\omm_generator.h" />
+    <ClInclude Include="..\common\micro_map\omm_generator_private.h" />
     <ClInclude Include="opacity_micro_map_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="..\common\micro_map_kernels.cu">
+    <CudaCompile Include="..\common\micro_map\micro_map_kernels.cu">
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
     </CudaCompile>
-    <CudaCompile Include="..\common\omm_kernels.cu">
+    <CudaCompile Include="..\common\micro_map\omm_kernels.cu">
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
