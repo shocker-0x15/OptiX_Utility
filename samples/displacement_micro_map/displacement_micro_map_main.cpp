@@ -96,11 +96,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //        Triangle(uint32_t a, uint32_t b, uint32_t c) : indices{ a, b, c } {}
     //    };
 
+    //    struct EdgeInfo {
+    //        uint32_t childVertexIndex;
+    //        uint32_t edgeIdx : 2;
+    //    };
+
+    //    const auto makeEdgeKey = []
+    //    (uint32_t vAIdx, uint32_t vBIdx) {
+    //        return std::make_pair(std::min(vAIdx, vBIdx), std::max(vAIdx, vBIdx));
+    //    };
+
     //    struct MicroVertexInfo {
-    //        uint32_t adjA : 10; // to support the max vertex index 560
-    //        uint32_t adjB : 10;
+    //        uint32_t adjA : 8; // to support the max vertex index 152
+    //        uint32_t adjB : 8;
+    //        uint32_t vtxType : 2;
     //        uint32_t level : 3;
-    //        uint32_t placeHolder : 9;
+    //        uint32_t placeHolder : 11;
     //    };
 
     //    std::vector<float2> vertices;
@@ -114,7 +125,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //    std::vector<Triangle> triangles[2];
     //    triangles[0].push_back(Triangle(0, 1, 2));
 
-    //    std::map<std::pair<uint32_t, uint32_t>, uint32_t> vertexMap;
+    //    std::map<std::pair<uint32_t, uint32_t>, EdgeInfo> edgeInfos;
+    //    edgeInfos[makeEdgeKey(0, 1)] = EdgeInfo{ 0xFFFFFFFF, 1 };
+    //    edgeInfos[makeEdgeKey(1, 2)] = EdgeInfo{ 0xFFFFFFFF, 2 };
+    //    edgeInfos[makeEdgeKey(2, 0)] = EdgeInfo{ 0xFFFFFFFF, 3 };
 
     //    uint32_t curBufIdx = 0;
     //    for (uint32_t level = 1; level <= 5; ++level) {
@@ -140,16 +154,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //                vertices[vAIdx] = vA;
     //                vertices[vBIdx] = vB;
     //                vertices[vCIdx] = vC;
-    //                vertInfos[vAIdx] = MicroVertexInfo{ srcTri.indices[0] , srcTri.indices[2], level, 0 };
-    //                vertInfos[vBIdx] = MicroVertexInfo{ srcTri.indices[1] , srcTri.indices[2], level, 0 };
-    //                vertInfos[vCIdx] = MicroVertexInfo{ srcTri.indices[0] , srcTri.indices[1], level, 0 };
-    //                vertexMap[std::make_pair(std::min(srcTri.indices[0], srcTri.indices[2]), std::max(srcTri.indices[0], srcTri.indices[2]))] = vAIdx;
-    //                vertexMap[std::make_pair(std::min(srcTri.indices[1], srcTri.indices[2]), std::max(srcTri.indices[2], srcTri.indices[1]))] = vBIdx;
-    //                vertexMap[std::make_pair(std::min(srcTri.indices[0], srcTri.indices[1]), std::max(srcTri.indices[0], srcTri.indices[1]))] = vCIdx;
+
+    //                EdgeInfo &srcEdgeInfoA = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[2]));
+    //                EdgeInfo &srcEdgeInfoB = edgeInfos.at(makeEdgeKey(srcTri.indices[1], srcTri.indices[2]));
+    //                EdgeInfo &srcEdgeInfoC = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[1]));
+    //                srcEdgeInfoA.childVertexIndex = vAIdx;
+    //                srcEdgeInfoB.childVertexIndex = vBIdx;
+    //                srcEdgeInfoC.childVertexIndex = vCIdx;
+
+    //                vertInfos[vAIdx] = MicroVertexInfo{
+    //                    srcTri.indices[0], srcTri.indices[2],
+    //                    srcEdgeInfoA.edgeIdx, level, 0
+    //                };
+    //                vertInfos[vBIdx] = MicroVertexInfo{
+    //                    srcTri.indices[1], srcTri.indices[2],
+    //                    srcEdgeInfoB.edgeIdx, level, 0
+    //                };
+    //                vertInfos[vCIdx] = MicroVertexInfo{
+    //                    srcTri.indices[0], srcTri.indices[1],
+    //                    srcEdgeInfoC.edgeIdx, level, 0
+    //                };
     //                dstTriangles[4 * triIdx + 0] = Triangle(srcTri.indices[0], vCIdx, vAIdx);
     //                dstTriangles[4 * triIdx + 1] = Triangle(vAIdx, vBIdx, vCIdx);
     //                dstTriangles[4 * triIdx + 2] = Triangle(vCIdx, srcTri.indices[1], vBIdx);
     //                dstTriangles[4 * triIdx + 3] = Triangle(vBIdx, vAIdx, srcTri.indices[2]);
+
+    //                edgeInfos[makeEdgeKey(srcTri.indices[0], vAIdx)] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoA.edgeIdx };
+    //                edgeInfos[makeEdgeKey(vAIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoA.edgeIdx };
+    //                edgeInfos[makeEdgeKey(srcTri.indices[1], vBIdx)] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoB.edgeIdx };
+    //                edgeInfos[makeEdgeKey(vBIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoB.edgeIdx };
+    //                edgeInfos[makeEdgeKey(srcTri.indices[0], vCIdx)] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoC.edgeIdx };
+    //                edgeInfos[makeEdgeKey(vCIdx, srcTri.indices[1])] = EdgeInfo{ 0xFFFFFFFF, srcEdgeInfoC.edgeIdx };
+    //                edgeInfos[makeEdgeKey(vAIdx, vBIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vBIdx, vCIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vCIdx, vAIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
 
     //                curNumVertices += 3;
     //            }
@@ -159,13 +197,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //            const uint32_t triOriFlags = calcTriOrientation(triIdx, level - 1);
     //            const bool isUprightTri = (triOriFlags & 0b1) == 0;
     //            if (!isUprightTri) {
-    //                const uint32_t vAIdx = vertexMap.at(std::make_pair(std::min(srcTri.indices[0], srcTri.indices[2]), std::max(srcTri.indices[0], srcTri.indices[2])));
-    //                const uint32_t vBIdx = vertexMap.at(std::make_pair(std::min(srcTri.indices[1], srcTri.indices[2]), std::max(srcTri.indices[2], srcTri.indices[1])));
-    //                const uint32_t vCIdx = vertexMap.at(std::make_pair(std::min(srcTri.indices[0], srcTri.indices[1]), std::max(srcTri.indices[0], srcTri.indices[1])));
+    //                const uint32_t vAIdx =
+    //                    edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[2])).childVertexIndex;
+    //                const uint32_t vBIdx =
+    //                    edgeInfos.at(makeEdgeKey(srcTri.indices[1], srcTri.indices[2])).childVertexIndex;
+    //                const uint32_t vCIdx =
+    //                    edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[1])).childVertexIndex;
+
+    //                const EdgeInfo &srcEdgeInfoA = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[2]));
+    //                const EdgeInfo &srcEdgeInfoB = edgeInfos.at(makeEdgeKey(srcTri.indices[1], srcTri.indices[2]));
+    //                const EdgeInfo &srcEdgeInfoC = edgeInfos.at(makeEdgeKey(srcTri.indices[0], srcTri.indices[1]));
+
     //                dstTriangles[4 * triIdx + 0] = Triangle(srcTri.indices[0], vCIdx, vAIdx);
     //                dstTriangles[4 * triIdx + 1] = Triangle(vAIdx, vBIdx, vCIdx);
     //                dstTriangles[4 * triIdx + 2] = Triangle(vCIdx, srcTri.indices[1], vBIdx);
     //                dstTriangles[4 * triIdx + 3] = Triangle(vBIdx, vAIdx, srcTri.indices[2]);
+
+    //                edgeInfos[makeEdgeKey(srcTri.indices[0], vAIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vAIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(srcTri.indices[1], vBIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vBIdx, srcTri.indices[2])] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(srcTri.indices[0], vCIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vCIdx, srcTri.indices[1])] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vAIdx, vBIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vBIdx, vCIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
+    //                edgeInfos[makeEdgeKey(vCIdx, vAIdx)] = EdgeInfo{ 0xFFFFFFFF, 0 };
     //            }
     //        }
     //        curBufIdx = (curBufIdx + 1) % 2;
@@ -192,16 +248,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //    for (int i = 0; i < vertices.size(); i += 3)
     //        hpprintf(
     //            "float2{ %.6ff, %.6ff }, float2{ %.6ff, %.6ff }, float2{ %.6ff, %.6ff },\n",
-    //            vertices[i].x, vertices[i].y,
+    //            vertices[i + 0].x, vertices[i + 0].y,
     //            vertices[i + 1].x, vertices[i + 1].y,
     //            vertices[i + 2].x, vertices[i + 2].y);
 
-    //    for (int i = 0; i < vertices.size(); i += 3)
+    //    for (int i = 0; i < vertices.size(); i += 3) {
+    //        const MicroVertexInfo &info0 = vertInfos[i + 0];
+    //        const MicroVertexInfo &info1 = vertInfos[i + 1];
+    //        const MicroVertexInfo &info2 = vertInfos[i + 2];
     //        hpprintf(
-    //            "{ %3u, %3u, %u }, { %3u, %3u, %u }, { %3u, %3u, %u },\n",
-    //            vertInfos[i].adjA, vertInfos[i].adjB, vertInfos[i].level,
-    //            vertInfos[i + 1].adjA, vertInfos[i + 1].adjB, vertInfos[i + 1].level,
-    //            vertInfos[i + 2].adjA, vertInfos[i + 2].adjB, vertInfos[i + 2].level);
+    //            "{ %3u, %3u, %u, %u }, { %3u, %3u, %u, %u }, { %3u, %3u, %u, %u },\n",
+    //            info0.adjA, info0.adjB, info0.vtxType, info0.level,
+    //            info1.adjA, info1.adjB, info1.vtxType, info1.level,
+    //            info2.adjA, info2.adjB, info2.vtxType, info2.level);
+    //    }
 
     //    printf("");
     //}

@@ -1,5 +1,8 @@
 ﻿#include "dmm_generator_private.h"
 #include "optix_micromap.h"
+#if !defined(OPTIXU_Platform_CodeCompletion)
+#include <cub/cub.cuh>
+#endif
 
 using namespace shared;
 
@@ -344,7 +347,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     + microVtxBc.y * stTcs[2];
                 const float height = fetchHeight(texture, numChannels, heightChannelIdx, microVtxTc);
                 if constexpr (enableDebugPrint) {
-                    printf("%4u-%2u-%2u: %g\n", dmmIdx, subTriIdx, microVtxIdx, height);
+                    printf("%4u-%2u-%2u: %.6f\n", dmmIdx, subTriIdx, microVtxIdx, height);
                 }
                 b_dispBlock.setValue(microVtxIdx, height);
             }
@@ -359,11 +362,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
             constexpr uint32_t numBitsOfValueCache = anchorBitWidth * maxNumMicroVerticesInBlock;
             constexpr uint32_t numDwordsOfValueCache = (numBitsOfValueCache + 31) / 32;
             CUDA_SHARED_MEM uint32_t b_valueCache[numDwordsOfValueCache];
-            CUDA_SHARED_MEM uint32_t b_shifts[DispBlock::maxSubdivLevel + 1];
+            using WarpReduce = typename cub::WarpReduce<int32_t>;
+            CUDA_SHARED_MEM typename WarpReduce::TempStorage b_tempStorage;
             for (uint32_t dwIdx = threadIdx.x; dwIdx < numDwordsOfValueCache; dwIdx += WarpSize)
                 b_valueCache[dwIdx] = 0;
-            if (threadIdx.x < (DispBlock::maxSubdivLevel + 1))
-                b_shifts[threadIdx.x] = 0;
             __syncwarp();
 
             const auto storeValue = [&]
@@ -412,7 +414,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
 
                     if constexpr (enableDebugPrint) {
                         printf(
-                            "%4u-%2u-%4u (lv %u): %g (%4u)\n",
+                            "%4u-%2u-%4u (lv %u): %.6f (%4u)\n",
                             dmmIdx, subTriIdx, microVtxIdx, 0,
                             height, value);
                     }
@@ -427,8 +429,41 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                 const uint32_t numMicroVerticesForLevel =
                     (1 + numEdgeVerticesForLevel) * numEdgeVerticesForLevel / 2;
 
+                union Shift {
+                    struct {
+                        int32_t interior : 8;
+                        int32_t edge0 : 8;
+                        int32_t edge1 : 8;
+                        int32_t edge2 : 8;
+                    };
+                    uint32_t asUInt;
+
+                    CUDA_DEVICE_FUNCTION void update(uint32_t vtxType, int32_t value) {
+                        if (vtxType == 0)
+                            interior = max(value, interior);
+                        else if (vtxType == 1)
+                            edge0 = max(value, edge0);
+                        else if (vtxType == 2)
+                            edge1 = max(value, edge1);
+                        else if (vtxType == 3)
+                            edge2 = max(value, edge2);
+                    }
+                    CUDA_DEVICE_FUNCTION int32_t get(uint32_t vtxType) const {
+                        if (vtxType == 0)
+                            return interior;
+                        else if (vtxType == 1)
+                            return edge0;
+                        else if (vtxType == 2)
+                            return edge1;
+                        else if (vtxType == 3)
+                            return edge2;
+                        return -1;
+                    }
+                };
+
                 // JP: まずは現在のレベル共通のシフト量を求める。
                 // EN: First, determine the common shift amount for the current level.
+                Shift maxReqShifts = { 0, 0, 0, 0 };
                 for (uint32_t microVtxIdx = microVtxBaseIdx + threadIdx.x;
                      microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
                     // JP: 実際のディスプレイスメント量を計算する。
@@ -456,17 +491,25 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     const int32_t msSetPos = 31 - __clz(correction >= 0 ? correction : ~correction);
                     const int32_t reqShift = static_cast<uint32_t>(max(
                         msSetPos + 2 - static_cast<int32_t>(layoutInfo.correctionBitWidths[curLevel]), 0));
-                    atomicMax(&b_shifts[curLevel],
-                              min(reqShift, static_cast<int32_t>(layoutInfo.maxShifts[curLevel])));
+                    maxReqShifts.update(info.vtxType, reqShift);
 
                     if constexpr (enableDebugPrint) {
                         printf(
-                            "%4u-%2u-%4u (lv %u): %g (%4u), pred: %4u (%4u, %4u), corr: %5d, reqShift: %u\n",
+                            "%4u-%2u-%4u (lv %u): %.6f (%4u), pred: %4u (%4u, %4u), corr: %5d, reqShift: %u\n",
                             dmmIdx, subTriIdx, microVtxIdx, curLevel,
                             height, value, predValue, adjValueA, adjValueB, correction, reqShift);
                     }
                 }
+                Shift commonShifts;
+                commonShifts.interior = WarpReduce(b_tempStorage).Reduce(maxReqShifts.interior, cub::Max());
                 __syncwarp();
+                commonShifts.edge0 = WarpReduce(b_tempStorage).Reduce(maxReqShifts.edge0, cub::Max());
+                __syncwarp();
+                commonShifts.edge1 = WarpReduce(b_tempStorage).Reduce(maxReqShifts.edge1, cub::Max());
+                __syncwarp();
+                commonShifts.edge2 = WarpReduce(b_tempStorage).Reduce(maxReqShifts.edge2, cub::Max());
+                __syncwarp();
+                commonShifts.asUInt = __shfl_sync(0xFFFFFFFF, commonShifts.asUInt, 0);
 
                 for (uint32_t microVtxIdx = microVtxBaseIdx + threadIdx.x;
                      microVtxIdx < numMicroVerticesForLevel; microVtxIdx += WarpSize) {
@@ -488,7 +531,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     // JP: 必要なシフト量が達成できない場合は可能な限り大きなcorrectionに設定する。
                     // EN: Set the correction to the maximum value as much as possible if
                     //     the required shift cannot be applied.
-                    const uint32_t shift = b_shifts[curLevel];
+                    const uint32_t shift = commonShifts.get(info.vtxType);
                     if (reqShift > shift) {
                         correction = correction > 0 ?
                             ((1 << anchorBitWidth) - 1) :
@@ -522,24 +565,25 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     }
                 }
 
+                if (threadIdx.x == 0) {
+                    const uint32_t shiftBitOffset = layoutInfo.shiftBitOffsets[curLevel];
+                    if (shiftBitOffset != 0xFFFFFFFF) {
+                        if constexpr (enableDebugPrint) {
+                            printf(
+                                "Shift for level %u: %u, %u, %u, %u\n",
+                                curLevel,
+                                commonShifts.interior,
+                                commonShifts.edge0, commonShifts.edge1, commonShifts.edge2);
+                        }
+                        b_dispBlock.setShift(curLevel, 0, commonShifts.interior);
+                        b_dispBlock.setShift(curLevel, 1, commonShifts.edge0);
+                        b_dispBlock.setShift(curLevel, 2, commonShifts.edge1);
+                        b_dispBlock.setShift(curLevel, 3, commonShifts.edge2);
+                    }
+                }
+
                 microVtxBaseIdx = numMicroVerticesForLevel;
                 __syncwarp();
-            }
-
-            // Shifts
-            if (threadIdx.x <= 5) {
-                const uint32_t level = threadIdx.x;
-                const uint32_t shiftBitOffset = layoutInfo.shiftBitOffsets[level];
-                if (shiftBitOffset != 0xFFFFFFFF) {
-                    const uint32_t shift = b_shifts[level];
-                    if constexpr (enableDebugPrint) {
-                        printf("Shift for level %u: %u\n", level, shift);
-                    }
-                    b_dispBlock.setShift(level, 0, shift);
-                    b_dispBlock.setShift(level, 1, shift);
-                    b_dispBlock.setShift(level, 2, shift);
-                    b_dispBlock.setShift(level, 3, shift);
-                }
             }
         }
         __syncwarp();
