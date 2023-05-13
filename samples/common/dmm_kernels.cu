@@ -130,7 +130,8 @@ CUDA_DEVICE_KERNEL void finalizeMicroMapFormats(
         mmKey.format.level == 5 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_1024_MICRO_TRIS_128_BYTES :
         mmKey.format.level == 4 ? OPTIX_DISPLACEMENT_MICROMAP_FORMAT_256_MICRO_TRIS_128_BYTES :
         OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES;
-    mmKey.format.encoding = min(mmKey.format.encoding, static_cast<uint32_t>(maxCompressedFormat));
+    if (maxCompressedFormat != DMMEncoding_None)
+        mmKey.format.encoding = min(mmKey.format.encoding, static_cast<uint32_t>(maxCompressedFormat));
     microMapFormats[triIdx] = mmKey.format;
 }
 
