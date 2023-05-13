@@ -340,7 +340,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
 
             for (uint32_t microVtxIdx = threadIdx.x;
                  microVtxIdx < numMicroVerticesInBlock; microVtxIdx += WarpSize) {
-                const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                const QuantizedBarycentrics qMicroVtxBc = microVertexQuantizedBarycentricsList[microVtxIdx];
+                const float2 microVtxBc =
+                    make_float2(qMicroVtxBc.b * microBcNormalizer, qMicroVtxBc.c * microBcNormalizer);
                 const float2 microVtxTc =
                     (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
                     + microVtxBc.x * stTcs[1]
@@ -402,7 +404,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
             {
                 const uint32_t microVtxIdx = threadIdx.x;
                 if (microVtxIdx < 3){
-                    const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                    const QuantizedBarycentrics qMicroVtxBc = microVertexQuantizedBarycentricsList[microVtxIdx];
+                    const float2 microVtxBc =
+                        make_float2(qMicroVtxBc.b * microBcNormalizer, qMicroVtxBc.c * microBcNormalizer);
                     const float2 microVtxTc =
                         (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
                         + microVtxBc.x * stTcs[1]
@@ -470,7 +474,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     //     後段のために値をキャッシュしておく。
                     // EN: Calculate the actual displacement amount.
                     //     Cache the value for the subsequent process.
-                    const float2 microVtxBc = microVertexBarycentrics[microVtxIdx];
+                    const QuantizedBarycentrics qMicroVtxBc = microVertexQuantizedBarycentricsList[microVtxIdx];
+                    const float2 microVtxBc =
+                        make_float2(qMicroVtxBc.b * microBcNormalizer, qMicroVtxBc.c * microBcNormalizer);
                     const float2 microVtxTc =
                         (1 - (microVtxBc.x + microVtxBc.y)) * stTcs[0]
                         + microVtxBc.x * stTcs[1]
