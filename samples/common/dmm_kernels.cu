@@ -491,7 +491,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     const int32_t msSetPos = 31 - __clz(correction >= 0 ? correction : ~correction);
                     const int32_t reqShift = static_cast<uint32_t>(max(
                         msSetPos + 2 - static_cast<int32_t>(layoutInfo.correctionBitWidths[curLevel]), 0));
-                    maxReqShifts.update(info.vtxType, reqShift);
+                    maxReqShifts.update(
+                        info.vtxType,
+                        min(reqShift, static_cast<int32_t>(layoutInfo.maxShifts[curLevel])));
 
                     if constexpr (enableDebugPrint) {
                         printf(
