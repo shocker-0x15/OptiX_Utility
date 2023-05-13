@@ -660,7 +660,7 @@ struct Context {
     uint2 texSize;
     uint32_t numChannels;
     uint32_t alphaChannelIndex;
-    shared::DMMEncoding forceEncoding;
+    shared::DMMEncoding maxCompressedFormat;
     shared::DMMSubdivLevel minSubdivLevel;
     shared::DMMSubdivLevel maxSubdivLevel;
     uint32_t subdivLevelBias;

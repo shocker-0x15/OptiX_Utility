@@ -17,7 +17,7 @@ JP: このサンプルはディスプレイスメントマッピングによる�
       - barycentric: 重心座標の可視化。ベース三角形の形状を確認できる。
       - micro-barycentric: マイクロ三角形の重心座標の可視化。
       - normal: 法線ベクトルの可視化。
-    --force-encoding ***: DMMのエンコードを強制的に指定する。
+    --max-compressed-format ***: DMMのエンコードを強制的に指定する。
       - none: 強制しない。(自動的に決定される)
       - 64utris: DMMあたり64マイクロ三角形64Bのフォーマットを使う。
       - 256utris: DMMあたり256マイクロ三角形128Bのフォーマットを使う。
@@ -49,7 +49,7 @@ EN: This sample shows how to use Displacement Micro-Map (DMM) with which high-de
       - barycentric: Visualize barycentric coordinates, can be used to see the shapes of base triangles.
       - micro-barycentric: Visualize barycentric coordinates of micro-triangles.
       - normal: Visualize normal vectors.
-    --force-encoding ***: Forcefully specify a DMM encoding.
+    --max-compressed-format ***: Forcefully specify a DMM encoding.
       - none: Do not force (encodings are automatically determined)
       - 64utris: Use an encoding with 64 micro triangles, 64B per triangle.
       - 256utris: Use an encoding with 256 micro triangles, 128B per triangle.
@@ -208,7 +208,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     bool useDMM = true;
     auto visualizationMode = Shared::VisualizationMode_Final;
-    shared::DMMEncoding forceEncoding = shared::DMMEncoding_None;
+    shared::DMMEncoding maxCompressedFormat = shared::DMMEncoding_None;
     shared::DMMSubdivLevel maxDmmSubDivLevel = shared::DMMSubdivLevel_5;
     int32_t dmmSubdivLevelBias = 0;
     bool useDmmIndexBuffer = true;
@@ -237,20 +237,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 throw std::runtime_error("Argument for --visualize is invalid.");
             argIdx += 1;
         }
-        else if (arg == "--force-encoding") {
+        else if (arg == "--max-compressed-format") {
             if (argIdx + 1 >= argc)
-                throw std::runtime_error("Argument for --force-encoding is not complete.");
+                throw std::runtime_error("Argument for --max-compressed-format is not complete.");
             std::string_view visType = argv[argIdx + 1];
             if (visType == "none")
-                forceEncoding = shared::DMMEncoding_None;
+                maxCompressedFormat = shared::DMMEncoding_None;
             else if (visType == "64utris")
-                forceEncoding = shared::DMMEncoding_64B_per_64MicroTris;
+                maxCompressedFormat = shared::DMMEncoding_64B_per_64MicroTris;
             else if (visType == "256utris")
-                forceEncoding = shared::DMMEncoding_128B_per_256MicroTris;
+                maxCompressedFormat = shared::DMMEncoding_128B_per_256MicroTris;
             else if (visType == "1024utris")
-                forceEncoding = shared::DMMEncoding_128B_per_1024MicroTris;
+                maxCompressedFormat = shared::DMMEncoding_128B_per_1024MicroTris;
             else
-                throw std::runtime_error("Argument for --force-encoding is invalid.");
+                throw std::runtime_error("Argument for --max-compressed-format is invalid.");
             argIdx += 1;
         }
         else if (arg == "--max-subdiv-level") {
@@ -640,7 +640,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
                     group.heightTexObj,
                     make_uint2(group.heightTexArray.getWidth(), group.heightTexArray.getHeight()), 1, 0,
-                    forceEncoding,
+                    maxCompressedFormat,
                     shared::DMMSubdivLevel_0, maxDmmSubDivLevel, dmmSubdivLevelBias,
                     useDmmIndexBuffer, 1 << static_cast<uint32_t>(dmmIndexSize),
                     scratchMemForDMM.getCUdeviceptr(), scratchMemForDMM.sizeInBytes(),
