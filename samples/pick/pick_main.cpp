@@ -18,7 +18,7 @@ EN: This sample demonstrates an example of implementing object picking in an int
 #include "../common/gl_util.h"
 #include <GLFW/glfw3.h>
 
-#include "imgui.h"
+#include "../common/imgui_more.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
@@ -85,13 +85,6 @@ static void glfw_error_callback(int32_t error, const char* description) {
 }
 
 
-
-namespace ImGui {
-    template <typename EnumType>
-    bool RadioButtonE(const char* label, EnumType* v, EnumType v_button) {
-        return RadioButton(label, reinterpret_cast<int*>(v), static_cast<int>(v_button));
-    }
-}
 
 int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path exeDir = getExecutableDirectory();
@@ -311,12 +304,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUcontext cuContext;
     int32_t cuDeviceCount;
-    CUstream cuStream;
+    StreamChain<2> streamChain;
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
+    streamChain.initialize(cuContext);
+    CUstream stream = streamChain.waitAvailableAndGetCurrentStream();
 
     optixu::Context optixContext = optixu::Context::create(cuContext);
 
@@ -858,8 +852,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Mesh Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    roomGroup.optixGas.rebuild(cuStream, roomGroup.gasMem, asBuildScratchMem);
-    bunnyGroup.optixGas.rebuild(cuStream, bunnyGroup.gasMem, asBuildScratchMem);
+    roomGroup.optixGas.rebuild(stream, roomGroup.gasMem, asBuildScratchMem);
+    bunnyGroup.optixGas.rebuild(stream, bunnyGroup.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -886,8 +880,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     compactedASMem.initialize(cuContext, cudau::BufferType::Device, compactedASMemOffset, 1);
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
-        info.geomGroup->optixGas.compact(cuStream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset,
-                                                      info.size, 1));
+        info.geomGroup->optixGas.compact(
+            stream, optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
     // EN: removeUncompacted() waits on host-side until the compact() completes on the device,
@@ -911,9 +905,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     renderPipeline.hitGroupShaderBindingTable.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     renderPipeline.hitGroupShaderBindingTable.setMappedMemoryPersistent(true);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(stream, instanceBuffer, iasMem, asBuildScratchMem);
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -1020,6 +1014,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             break;
         glfwPollEvents();
 
+        CUstream curStream = streamChain.waitAvailableAndGetCurrentStream();
+
         bool resized = false;
         int32_t newFBWidth;
         int32_t newFBHeight;
@@ -1032,6 +1028,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             renderTargetSizeY = curFBHeight / UIScaling;
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
+
+            glFinish();
+            streamChain.waitAllWorkDone();
 
             outputTexture.finalize();
             outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
@@ -1272,25 +1271,25 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                      static_cast<int32_t>(g_mouseY));
         pickPlp.pickInfo = curPickInfo.getDevicePointer();
 
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(pickPlpOnDevice, &pickPlp, sizeof(pickPlp), cuStream));
-        pickPipeline.pipeline.launch(cuStream, pickPlpOnDevice, 1, 1, 1);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(pickPlpOnDevice, &pickPlp, sizeof(pickPlp), curStream));
+        pickPipeline.pipeline.launch(curStream, pickPlpOnDevice, 1, 1, 1);
 
         
         // Render
-        outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
+        outputBufferSurfaceHolder.beginCUDAAccess(curStream);
 
         renderPlp.position = g_cameraPosition;
         renderPlp.orientation = oriMat;
         renderPlp.pickInfo = curPickInfo.getDevicePointer();
         renderPlp.resultBuffer = outputBufferSurfaceHolder.getNext();
 
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(renderPlpOnDevice, &renderPlp, sizeof(renderPlp), cuStream));
-        renderPipeline.pipeline.launch(cuStream, renderPlpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(renderPlpOnDevice, &renderPlp, sizeof(renderPlp), curStream));
+        renderPipeline.pipeline.launch(curStream, renderPlpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
 
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
+        outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
 
         if (takeScreenShot && frameIndex + 1 == 60) {
-            CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
             auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
             glGetTextureSubImage(
                 outputTexture.getHandle(), 0,
@@ -1327,11 +1326,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // ----------------------------------------------------------------
 
         glfwSwapBuffers(window);
+        streamChain.swap();
 
         ++frameIndex;
     }
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    streamChain.waitAllWorkDone();
 
 
 
@@ -1388,7 +1388,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixContext.destroy();
 
-    CUDADRV_CHECK(cuStreamDestroy(cuStream));
+    streamChain.finalize();
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();

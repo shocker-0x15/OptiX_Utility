@@ -17,6 +17,7 @@ namespace obj {
     struct Material {
         float diffuse[3];
         std::filesystem::path diffuseTexPath;
+        std::filesystem::path bumpTexPath;
     };
 
     struct MaterialGroup {

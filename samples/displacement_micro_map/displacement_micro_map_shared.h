@@ -40,6 +40,7 @@ namespace Shared {
     struct GeometryInstanceData {
         const Vertex* vertexBuffer;
         const Triangle* triangleBuffer;
+        const uint32_t* subdivLevelBuffer;
         CUtexObject texture;
         float3 albedo;
     };
@@ -50,6 +51,7 @@ namespace Shared {
         VisualizationMode_Final = 0,
         VisualizationMode_Barycentric,
         VisualizationMode_MicroBarycentric,
+        VisualizationMode_SubdivLevel,
         VisualizationMode_Normal,
     };
 
@@ -63,7 +65,7 @@ namespace Shared {
         float3 lightDirection;
         float3 lightRadiance;
         float3 envRadiance;
-        unsigned int visualizationMode : 2;
+        unsigned int visualizationMode : 3;
         unsigned int sampleIndex : 8;
         unsigned int superSampleSizeMinus1 : 4;
     };

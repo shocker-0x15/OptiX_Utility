@@ -12,10 +12,19 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp" />
+    <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
+    <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="..\..\ext\imgui\imgui.cpp" />
+    <ClCompile Include="..\..\ext\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
+    <ClCompile Include="..\common\gl_util.cpp" />
     <ClCompile Include="..\common\micro_map\dmm_generator.cpp" />
     <ClCompile Include="..\common\micro_map\micro_map_generator.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
@@ -23,6 +32,20 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h" />
+    <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h" />
+    <ClInclude Include="..\..\ext\gl3w\include\GL\glcorearb.h" />
+    <ClInclude Include="..\..\ext\gl3w\include\KHR\khrplatform.h" />
+    <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3.h" />
+    <ClInclude Include="..\..\ext\glfw\include\GLFW\glfw3native.h" />
+    <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_opengl3.h" />
+    <ClInclude Include="..\..\ext\imgui\backends\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="..\..\ext\imgui\imconfig.h" />
+    <ClInclude Include="..\..\ext\imgui\imgui.h" />
+    <ClInclude Include="..\..\ext\imgui\imgui_internal.h" />
+    <ClInclude Include="..\..\ext\imgui\imstb_rectpack.h" />
+    <ClInclude Include="..\..\ext\imgui\imstb_textedit.h" />
+    <ClInclude Include="..\..\ext\imgui\imstb_truetype.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />
     <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
@@ -30,6 +53,8 @@
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
+    <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\imgui_more.h" />
     <ClInclude Include="..\common\micro_map\dmm_generator.h" />
     <ClInclude Include="..\common\micro_map\dmm_generator_private.h" />
     <ClInclude Include="..\common\micro_map\micro_map_generator_private.h" />
@@ -60,6 +85,20 @@
     <CudaCompile Include="optix_kernels.cu">
       <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
     </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+    </CopyFileToFolders>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.vert">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName)\shaders</DestinationFolders>
+    </CopyFileToFolders>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -120,7 +159,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cuda.lib;cudart_static.lib;libcubd_staticd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;libcubd_staticd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <PostBuildEvent>
@@ -162,7 +201,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cuda.lib;cudart_static.lib;libcubd_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cuda.lib;cudart_static.lib;glfw3.lib;opengl32.lib;libcubd_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>
