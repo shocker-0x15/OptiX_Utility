@@ -50,6 +50,7 @@
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\imgui_more.h" />
     <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="pick_shared.h" />
   </ItemGroup>

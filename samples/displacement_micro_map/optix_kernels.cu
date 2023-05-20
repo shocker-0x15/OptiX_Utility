@@ -132,6 +132,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
             PrimaryRayPayloadSignature::set(&result);
             return;
         }
+        else if (plp.visualizationMode == VisualizationMode_SubdivLevel) {
+            uint32_t subdivLevel = 0;
+            if (geomInst.subdivLevelBuffer)
+                subdivLevel = geomInst.subdivLevelBuffer[hp.primIndex];
+            float3 result = make_float3(subdivLevel / 5.0f);
+            PrimaryRayPayloadSignature::set(&result);
+            return;
+        }
     }
 
     float3 vOut = -optixGetWorldRayDirection();

@@ -482,7 +482,8 @@ void generateDMMArray(
     const cudau::Buffer &dmmArray,
     const cudau::TypedBuffer<OptixDisplacementMicromapDesc> &dmmDescs,
     const cudau::Buffer &dmmIndexBuffer,
-    const cudau::Buffer &dmmTriangleFlagsBuffer) {
+    const cudau::Buffer &dmmTriangleFlagsBuffer,
+    const cudau::Buffer &debugSubdivLevelBuffer) {
     CUstream stream = 0;
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
 
@@ -500,7 +501,8 @@ void generateDMMArray(
         shared::StridedBuffer<OptixDisplacementMicromapTriangleFlags>(
             dmmTriangleFlagsBuffer.getCUdeviceptr(),
             dmmTriangleFlagsBuffer.numElements(),
-            dmmTriangleFlagsBuffer.stride()));
+            dmmTriangleFlagsBuffer.stride()),
+        debugSubdivLevelBuffer);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
         std::vector<OptixDisplacementMicromapDesc> dmmDescsOnHost = dmmDescs;
@@ -547,9 +549,13 @@ void generateDMMArray(
     JP: Watertightnessのために隣り合うサブ三角形やDMM間でシフト量を一致させる。
         これを考える場合マイクロマップキーには隣り合う三角形のエンコーディングと分割レベルも
         加えないといけないかもしれない。
+        さらに頂点ごとのバイアスやスケールも考えるともはやジオメトリのまるごとコピーを除いて
+        DMMの再利用、つまり意味のあるインデックスバッファーは難しいかもしれない。
     EN: Matching shift amounts between neighboring sub-triangles and DMMs for watertightness.
         It probably needs to take neighboring triangles' encodings and subdivision levels into account
         for micro map keys.
+        Reusing DMMs, that is meaningful index buffer seems probably difficult if additionally
+        considering per-vertex bias and scale except for copying the entire geometry.
     */
 
     if (!_context.useIndexBuffer) {

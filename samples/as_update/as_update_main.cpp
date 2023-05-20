@@ -304,12 +304,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUcontext cuContext;
     int32_t cuDeviceCount;
-    CUstream cuStream;
+    StreamChain<2> streamChain;
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
+    streamChain.initialize(cuContext);
+    CUstream stream = streamChain.waitAvailableAndGetCurrentStream();
 
     optixu::Context optixContext = optixu::Context::create(cuContext);
 
@@ -697,9 +698,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    roomGas.rebuild(cuStream, roomGasMem, asBuildScratchMem);
-    areaLightGas.rebuild(cuStream, areaLightGasMem, asBuildScratchMem);
-    bunnyGas.rebuild(cuStream, bunnyGasMem, asBuildScratchMem);
+    roomGas.rebuild(stream, roomGasMem, asBuildScratchMem);
+    areaLightGas.rebuild(stream, areaLightGasMem, asBuildScratchMem);
+    bunnyGas.rebuild(stream, bunnyGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -728,7 +729,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
         info.gas.compact(
-            cuStream,
+            stream,
             optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
@@ -751,9 +752,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(stream, instanceBuffer, iasMem, asBuildScratchMem);
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -816,6 +817,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             break;
         glfwPollEvents();
 
+        CUstream curStream = streamChain.waitAvailableAndGetCurrentStream();
+
         bool resized = false;
         int32_t newFBWidth;
         int32_t newFBHeight;
@@ -828,6 +831,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             renderTargetSizeY = curFBHeight / UIScaling;
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
+
+            glFinish();
+            streamChain.waitAllWorkDone();
 
             outputTexture.finalize();
             outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
@@ -959,18 +965,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
         {
             float t = 0.5f + 0.5f * std::sin(2 * pi_v<float> * static_cast<float>(frameIndex % 180) / 180);
             deform.launchWithThreadDim(
-                cuStream, cudau::dim3(bunnyVertexBuffer.numElements()),
+                curStream, cudau::dim3(bunnyVertexBuffer.numElements()),
                 bunnyVertexBuffer, deformedBunnyVertexBuffer,
                 bunnyVertexBuffer.numElements(), 20.0f, t);
             accumulateVertexNormals.launchWithThreadDim(
-                cuStream, cudau::dim3(bunnyTriangleBuffer.numElements()),
+                curStream, cudau::dim3(bunnyTriangleBuffer.numElements()),
                 deformedBunnyVertexBuffer, bunnyTriangleBuffer,
                 bunnyTriangleBuffer.numElements());
             normalizeVertexNormals.launchWithThreadDim(
-                cuStream, cudau::dim3(bunnyVertexBuffer.numElements()),
+                curStream, cudau::dim3(bunnyVertexBuffer.numElements()),
                 deformedBunnyVertexBuffer,
                 bunnyVertexBuffer.numElements());
-            bunnyGas.update(cuStream, asBuildScratchMem);
+            bunnyGas.update(curStream, asBuildScratchMem);
         }
 
         // JP: 各インスタンスのトランスフォームを更新する。
@@ -990,22 +996,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
             so neither of markDirty() nor prepareForBuild() is required.
         */
         if (frameIndex % 10 == 0)
-            plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+            plp.travHandle = ias.rebuild(curStream, instanceBuffer, iasMem, asBuildScratchMem);
         else
-            ias.update(cuStream, asBuildScratchMem);
+            ias.update(curStream, asBuildScratchMem);
         
         // Render
-        outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
+        outputBufferSurfaceHolder.beginCUDAAccess(curStream);
 
         plp.resultBuffer = outputBufferSurfaceHolder.getNext();
 
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
+        pipeline.launch(curStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
 
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
+        outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
 
         if (takeScreenShot && frameIndex + 1 == 60) {
-            CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
             auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
             glGetTextureSubImage(
                 outputTexture.getHandle(), 0,
@@ -1042,11 +1048,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // ----------------------------------------------------------------
 
         glfwSwapBuffers(window);
+        streamChain.swap();
 
         ++frameIndex;
     }
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    streamChain.waitAllWorkDone();
 
 
 
@@ -1115,7 +1122,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixContext.destroy();
 
-    CUDADRV_CHECK(cuStreamDestroy(cuStream));
+    streamChain.finalize();
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();

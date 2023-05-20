@@ -31,6 +31,8 @@ namespace obj {
                 dstMat.diffuse[2] = srcMat.diffuse[2];
                 if (!srcMat.diffuse_texname.empty())
                     dstMat.diffuseTexPath = matBaseDir / srcMat.diffuse_texname;
+                if (!srcMat.bump_texname.empty())
+                    dstMat.bumpTexPath = matBaseDir / srcMat.bump_texname;
             }
         }
 

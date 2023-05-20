@@ -797,6 +797,24 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 HSVtoRGB(float h, float s, float v) {
     return make_float3(0, 0, 0);
 }
 
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcFalseColor(float value, float minValue, float maxValue) {
+    float t = (value - minValue) / (maxValue - minValue);
+    t = fmin(fmax(t, 0.0f), 1.0f);
+    constexpr float3 R = { 1.0f, 0.0f, 0.0f };
+    constexpr float3 G = { 0.0f, 1.0f, 0.0f };
+    constexpr float3 B = { 0.0f, 0.0f, 1.0f };
+    float3 ret;
+    if (t < 0.5f) {
+        t = (t - 0.0f) / 0.5f;
+        ret = B * (1 - t) + G * t;
+    }
+    else {
+        t = (t - 0.5f) / 0.5f;
+        ret = G * (1 - t) + R * t;
+    }
+    return ret;
+}
+
 CUDA_DEVICE_FUNCTION CUDA_INLINE float simpleToneMap_s(float value) {
     Assert(value >= 0, "Input value must be equal to or greater than 0: %g", value);
     return 1 - std::exp(-value);
@@ -1522,5 +1540,60 @@ void saveImage(const std::filesystem::path &filepath,
     saveImage(filepath, width, height, data, applyToneMap, apply_sRGB_gammaCorrection);
     delete[] data;
 }
+
+
+
+template <uint32_t numBuffers>
+class StreamChain {
+    std::array<CUstream, numBuffers> m_streams;
+    std::array<CUevent, numBuffers> m_endEvents;
+    uint32_t m_curBufIdx;
+
+public:
+    StreamChain() {
+        for (int i = 0; i < numBuffers; ++i) {
+            m_streams[i] = nullptr;
+            m_endEvents[i] = nullptr;
+        }
+    }
+
+    void initialize(CUcontext cuContext) {
+        for (int i = 0; i < numBuffers; ++i) {
+            CUDADRV_CHECK(cuStreamCreate(&m_streams[i], 0));
+            CUDADRV_CHECK(cuEventCreate(&m_endEvents[i], 0));
+        }
+        m_curBufIdx = 0;
+    }
+
+    void finalize() {
+        for (int i = 1; i >= 0; --i) {
+            CUDADRV_CHECK(cuStreamSynchronize(m_streams[i]));
+            CUDADRV_CHECK(cuEventDestroy(m_endEvents[i]));
+            CUDADRV_CHECK(cuStreamDestroy(m_streams[i]));
+            m_endEvents[i] = nullptr;
+            m_streams[i] = nullptr;
+        }
+    }
+
+    void swap() {
+        CUstream curStream = m_streams[m_curBufIdx];
+        CUevent curEvent = m_endEvents[m_curBufIdx];
+        CUDADRV_CHECK(cuEventRecord(curEvent, curStream));
+        m_curBufIdx = (m_curBufIdx + 1) % numBuffers;
+    }
+
+    CUstream waitAvailableAndGetCurrentStream() const {
+        CUstream curStream = m_streams[m_curBufIdx];
+        CUevent prevStreamEndEvent = m_endEvents[(m_curBufIdx + numBuffers - 1) % numBuffers];
+        CUDADRV_CHECK(cuStreamSynchronize(curStream));
+        CUDADRV_CHECK(cuStreamWaitEvent(curStream, prevStreamEndEvent, 0));
+        return curStream;
+    }
+
+    void waitAllWorkDone() const {
+        for (int i = 0; i < numBuffers; ++i)
+            CUDADRV_CHECK(cuStreamSynchronize(m_streams[i]));
+    }
+};
 
 #endif

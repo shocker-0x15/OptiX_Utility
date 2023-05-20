@@ -29,7 +29,7 @@ EN: This sample shows how to use the temporal denoiser.
 #include "../common/gl_util.h"
 #include <GLFW/glfw3.h>
 
-#include "imgui.h"
+#include "../common/imgui_more.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
@@ -97,41 +97,6 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 
-namespace ImGui {
-    template <typename EnumType>
-    bool RadioButtonE(const char* label, EnumType* v, EnumType v_button) {
-        return RadioButton(label, reinterpret_cast<int*>(v), static_cast<int>(v_button));
-    }
-
-    bool InputLog2Int(const char* label, int* v, int max_v, int num_digits = 3) {
-        float buttonSize = GetFrameHeight();
-        float itemInnerSpacingX = GetStyle().ItemInnerSpacing.x;
-
-        BeginGroup();
-        PushID(label);
-
-        ImGui::AlignTextToFramePadding();
-        SetNextItemWidth(std::max(1.0f, CalcItemWidth() - (buttonSize + itemInnerSpacingX) * 2));
-        Text("%s: %*u", label, num_digits, 1 << *v);
-        bool changed = false;
-        SameLine(0, itemInnerSpacingX);
-        if (Button("-", ImVec2(buttonSize, buttonSize))) {
-            *v = std::max(*v - 1, 0);
-            changed = true;
-        }
-        SameLine(0, itemInnerSpacingX);
-        if (Button("+", ImVec2(buttonSize, buttonSize))) {
-            *v = std::min(*v + 1, max_v);
-            changed = true;
-        }
-
-        PopID();
-        EndGroup();
-
-        return changed;
-    }
-}
-
 int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path exeDir = getExecutableDirectory();
 
@@ -157,6 +122,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (performUpscale)
         useKernelPredictionMode = true;
     useLowResRendering = performUpscale;
+
+
 
     // ----------------------------------------------------------------
     // JP: OpenGL, GLFWの初期化。
@@ -368,12 +335,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUcontext cuContext;
     int32_t cuDeviceCount;
-    CUstream cuStream;
+    StreamChain<2> streamChain;
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
+    streamChain.initialize(cuContext);
+    CUstream stream = streamChain.waitAvailableAndGetCurrentStream();
 
     optixu::Context optixContext = optixu::Context::create(cuContext);
 
@@ -967,9 +935,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    room.optixGas.rebuild(cuStream, room.gasMem, asBuildScratchMem);
-    areaLight.optixGas.rebuild(cuStream, areaLight.gasMem, asBuildScratchMem);
-    bunny.optixGas.rebuild(cuStream, bunny.gasMem, asBuildScratchMem);
+    room.optixGas.rebuild(stream, room.gasMem, asBuildScratchMem);
+    areaLight.optixGas.rebuild(stream, areaLight.gasMem, asBuildScratchMem);
+    bunny.optixGas.rebuild(stream, bunny.gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
     //     複数のメッシュのASをひとつのバッファーに詰めて記録する。
@@ -998,7 +966,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(gasList); ++i) {
         const CompactedASInfo &info = gasList[i];
         info.geom->optixGas.compact(
-            cuStream,
+            stream,
             optixu::BufferView(compactedASMem.getCUdeviceptr() + info.offset, info.size, 1));
     }
     // JP: removeUncompacted()はcompact()がデバイス上で完了するまでホスト側で待つので呼び出しを分けたほうが良い。
@@ -1021,9 +989,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    OptixTraversableHandle travHandle = ias.rebuild(stream, instanceBuffer, iasMem, asBuildScratchMem);
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -1208,7 +1176,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         denoisingTasks.resize(numTasks);
         denoiser.getTasks(denoisingTasks.data());
 
-        denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+        denoiser.setupState(stream, denoiserStateBuffer, denoiserScratchBuffer);
 
         if (denoiserSizes.internalGuideLayerPixelSize > 0) {
             for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
@@ -1272,7 +1240,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
 
     const auto resizeDenoiser = [&]
-    (int32_t width, int32_t height, bool withUpscaleDenoiser) {
+    (int32_t width, int32_t height, bool withUpscaleDenoiser, CUstream stream) {
         int32_t denoiserScale = withUpscaleDenoiser ? 2 : 1;
         int32_t denoisedWidth = denoiserScale * width;
         int32_t denoisedHeight = denoiserScale * height;
@@ -1292,7 +1260,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         denoisingTasks.resize(numTasks);
         denoiser.getTasks(denoisingTasks.data());
 
-        denoiser.setupState(cuStream, denoiserStateBuffer, denoiserScratchBuffer);
+        denoiser.setupState(stream, denoiserStateBuffer, denoiserScratchBuffer);
 
         if (denoiserSizes.internalGuideLayerPixelSize > 0) {
             for (int bufIdx = 0; bufIdx < 2; ++bufIdx) {
@@ -1384,6 +1352,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             break;
         glfwPollEvents();
 
+        CUstream curStream = streamChain.waitAvailableAndGetCurrentStream();
+
         bool resized = false;
         int32_t newFBWidth;
         int32_t newFBHeight;
@@ -1405,8 +1375,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 renderTargetHeight = contentHeight / 2;
             }
 
+            glFinish();
+            streamChain.waitAllWorkDone();
+
             resizeRenderingResResources(renderTargetWidth, renderTargetHeight, useLowResRendering);
-            resizeDenoiser(renderTargetWidth, renderTargetHeight, performUpscale);
+            resizeDenoiser(renderTargetWidth, renderTargetHeight, performUpscale, curStream);
 
             resized = true;
         }
@@ -1565,7 +1538,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             if (denoiserModelChanged) {
                 glFinish();
-                CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+                CUDADRV_CHECK(cuStreamSynchronize(curStream));
 
                 Assert(!performUpscale || useLowResRendering, "Invalid configuration.");
 
@@ -1634,7 +1607,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-        curGPUTimer.frame.start(cuStream);
+        curGPUTimer.frame.start(curStream);
 
         // JP: 各インスタンスのトランスフォームを更新する。
         // EN: Update the transform of each instance.
@@ -1645,7 +1618,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 // TODO: まとめて送る。
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(
                     instDataBuffer.getCUdeviceptrAt(bunnyInst.ID),
-                    &bunnyInst.instData, sizeof(bunnyInsts[i].instData), cuStream));
+                    &bunnyInst.instData, sizeof(bunnyInsts[i].instData), curStream));
             }
         }
 
@@ -1658,10 +1631,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             add/remove of instances and changes of AS build settings
             so neither of markDirty() nor prepareForBuild() is required.
         */
-        curGPUTimer.update.start(cuStream);
+        curGPUTimer.update.start(curStream);
         if (animate)
-            plp.travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
-        curGPUTimer.update.stop(cuStream);
+            plp.travHandle = ias.rebuild(curStream, instanceBuffer, iasMem, asBuildScratchMem);
+        curGPUTimer.update.stop(curStream);
 
         bool firstAccumFrame =
             animate ||
@@ -1677,23 +1650,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
         plp.resetFlowBuffer = isNewSequence;
 
         // Render
-        curGPUTimer.render.start(cuStream);
+        curGPUTimer.render.start(curStream);
         uint32_t sppPerFrame = 1 << log2NumSamplesPerFrame;
         for (int smpIdx = 0; smpIdx < sppPerFrame; ++smpIdx) {
             plp.numAccumFrames = numAccumFrames;
-            CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-            pipeline.launch(cuStream, plpOnDevice, renderTargetWidth, renderTargetHeight, 1);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
+            pipeline.launch(curStream, plpOnDevice, renderTargetWidth, renderTargetHeight, 1);
             ++numAccumFrames;
             plp.resetFlowBuffer = false;
         }
-        curGPUTimer.render.stop(cuStream);
+        curGPUTimer.render.stop(curStream);
 
-        curGPUTimer.denoise.start(cuStream);
+        curGPUTimer.denoise.start(curStream);
 
         // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
         // EN: Copy the results to the linear buffers (and normalize normals).
         kernelCopyToLinearBuffers.launchWithThreadDim(
-            cuStream, cudau::dim3(renderTargetWidth, renderTargetHeight),
+            curStream, cudau::dim3(renderTargetWidth, renderTargetHeight),
             beautyAccumBuffer.getSurfaceObject(0),
             albedoAccumBuffer.getSurfaceObject(0),
             normalAccumBuffer.getSurfaceObject(0),
@@ -1714,7 +1687,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (isNewSequence)
                 CUDADRV_CHECK(cuMemsetD8Async(
                     inputBuffers.previousInternalGuideLayer.getCUdeviceptr(), 0,
-                    inputBuffers.previousInternalGuideLayer.sizeInBytes(), cuStream));
+                    inputBuffers.previousInternalGuideLayer.sizeInBytes(), curStream));
         }
 
         /*
@@ -1726,19 +1699,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
             Reusing the scratch buffer for denoising for computeNormalizer() is possible if its size is enough.
         */
         denoiser.computeNormalizer(
-            cuStream,
+            curStream,
             linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
             denoiserScratchBuffer, hdrNormalizer.getCUdeviceptr());
         for (int i = 0; i < denoisingTasks.size(); ++i)
             denoiser.invoke(
-                cuStream, denoisingTasks[i],
+                curStream, denoisingTasks[i],
                 inputBuffers, optixu::IsFirstFrame(isNewSequence),
                 OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer.getCUdeviceptr(), 0.0f,
                 linearDenoisedBeautyBuffer,
                 nullptr, // no AOV outputs
                 internalGuideLayerForNextFrame);
 
-        outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
+        outputBufferSurfaceHolder.beginCUDAAccess(curStream);
 
         // JP: デノイズ結果や中間バッファーの可視化。
         // EN: Visualize the denosed result or intermediate buffers.
@@ -1764,21 +1737,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
             break;
         }
         kernelVisualizeToOutputBuffer.launchWithThreadDim(
-            cuStream, cudau::dim3(contentWidth, contentHeight),
+            curStream, cudau::dim3(contentWidth, contentHeight),
             bufferToDisplay,
             bufferTypeToDisplay,
             0.5f, std::pow(10.0f, motionVectorScale),
             outputBufferSurfaceHolder.getNext(),
             int2(contentWidth, contentHeight), performUpscale, useLowResRendering);
 
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
+        outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
 
-        curGPUTimer.denoise.stop(cuStream);
+        curGPUTimer.denoise.stop(curStream);
 
-        curGPUTimer.frame.stop(cuStream);
+        curGPUTimer.frame.stop(curStream);
 
         if (takeScreenShot && frameIndex + 1 == 60) {
-            CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
             auto rawImage = new float4[contentWidth * contentHeight];
             glGetTextureSubImage(
                 outputTexture.getHandle(), 0,
@@ -1826,11 +1799,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // ----------------------------------------------------------------
 
         glfwSwapBuffers(window);
+        streamChain.swap();
 
         ++frameIndex;
     }
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    streamChain.waitAllWorkDone();
     gpuTimers[1].finalize();
     gpuTimers[0].finalize();
 
@@ -1910,7 +1884,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixContext.destroy();
 
-    CUDADRV_CHECK(cuStreamDestroy(cuStream));
+    streamChain.finalize();
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();

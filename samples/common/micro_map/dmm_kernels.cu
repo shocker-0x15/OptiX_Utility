@@ -66,7 +66,7 @@ CUDA_DEVICE_KERNEL void determineTargetSubdivLevels(
     //     the triangle in the mesh.
     //     Note that this formula is just for sample code and not a well considered one.
     const float targetSubdivLevelF =
-        std::log(numTexelsF * normTriArea) / std::log(4.0f) + 4; // +4: ad-hoc offset
+        std::log(numTexelsF * normTriArea) / std::log(4.0f) + 6; // +6: ad-hoc offset
     //printf("Tri %u: tgt level: %g (%.1f texels)\n", triIdx, targetSubdivLevelF, numTexelsF);
     const int32_t minLevel = static_cast<int32_t>(minSubdivLevel);
     const int32_t maxLevel = static_cast<int32_t>(maxSubdivLevel);
@@ -218,7 +218,8 @@ CUDA_DEVICE_KERNEL void createDMMDescriptors(
     bool useIndexBuffer,
     const MicroMapFormat* microMapFormats, const TriNeighborList* triNeighborLists,
     OptixDisplacementMicromapDesc* dmmDescs, void* dmmIndices, uint32_t dmmIndexSize,
-    StridedBuffer<OptixDisplacementMicromapTriangleFlags> triFlagsBuffer) {
+    StridedBuffer<OptixDisplacementMicromapTriangleFlags> triFlagsBuffer,
+    uint32_t* debugSubdivLevelBuffer) {
     const uint32_t keyIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (keyIdx >= numTriangles)
         return;
@@ -238,6 +239,9 @@ CUDA_DEVICE_KERNEL void createDMMDescriptors(
         dmmDesc.format = mmFormat.encoding;
         dmmDesc.subdivisionLevel = mmFormat.level;
     }
+
+    if (debugSubdivLevelBuffer)
+        debugSubdivLevelBuffer[triIdx] = mmFormat.level;
 
     if (useIndexBuffer) {
         if (dmmIndexSize == 1)

@@ -52,6 +52,7 @@
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\imgui_more.h" />
     <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="temporal_denoiser_shared.h" />
   </ItemGroup>

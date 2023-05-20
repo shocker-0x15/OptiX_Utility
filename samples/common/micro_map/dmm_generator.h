@@ -52,7 +52,8 @@ void generateDMMArray(
     const cudau::Buffer &dmmArray,
     const cudau::TypedBuffer<OptixDisplacementMicromapDesc> &dmmDescs,
     const cudau::Buffer &dmmIndexBuffer,
-    const cudau::Buffer &dmmTriangleFlagsBuffer);
+    const cudau::Buffer &dmmTriangleFlagsBuffer,
+    const cudau::Buffer &debugSubdivLevelBuffer = cudau::Buffer());
 
 
 
