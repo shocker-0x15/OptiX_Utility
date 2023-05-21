@@ -36,11 +36,8 @@ struct HitGroupSBTRecordData {
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
-    uint32_t superSampleSize = plp.superSampleSizeMinus1 + 1;
-    float dx = (static_cast<float>(plp.sampleIndex % superSampleSize) + 0.5f) / superSampleSize;
-    float dy = (static_cast<float>(plp.sampleIndex / superSampleSize) + 0.5f) / superSampleSize;
-    float x = static_cast<float>(launchIndex.x + dx) / plp.imageSize.x;
-    float y = static_cast<float>(launchIndex.y + dy) / plp.imageSize.y;
+    float x = static_cast<float>(launchIndex.x + plp.subPixelOffset.x) / plp.imageSize.x;
+    float y = static_cast<float>(launchIndex.y + plp.subPixelOffset.y) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
@@ -133,10 +130,18 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
             return;
         }
         else if (plp.visualizationMode == VisualizationMode_SubdivLevel) {
-            uint32_t subdivLevel = 0;
-            if (geomInst.subdivLevelBuffer)
-                subdivLevel = geomInst.subdivLevelBuffer[hp.primIndex];
-            float3 result = make_float3(subdivLevel / 5.0f);
+            OptixDisplacementMicromapDesc dmmDesc;
+            if (geomInst.dmmDescBuffer) {
+                uint32_t dmmIndex = hp.primIndex;
+                if (geomInst.dmmIndexSize) {
+                    if (geomInst.dmmIndexSize == 2)
+                        dmmIndex = reinterpret_cast<uint16_t*>(geomInst.dmmIndexBuffer)[hp.primIndex];
+                    else if (geomInst.dmmIndexSize == 4)
+                        dmmIndex = reinterpret_cast<uint32_t*>(geomInst.dmmIndexBuffer)[hp.primIndex];
+                }
+                dmmDesc = geomInst.dmmDescBuffer[dmmIndex];
+            }
+            float3 result = make_float3(dmmDesc.subdivisionLevel / 5.0f);
             PrimaryRayPayloadSignature::set(&result);
             return;
         }
