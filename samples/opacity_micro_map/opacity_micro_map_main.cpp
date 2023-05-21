@@ -232,10 +232,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
             CUtexObject texObj;
 
             optixu::OpacityMicroMapArray optixOmmArray;
+            cudau::Buffer ommArrayMem;
+
+            // JP: これらはOMM Arrayがビルドされた時点で不要になる。
+            // EN: These are disposable once the OMM array is built.
             cudau::Buffer rawOmmArray;
             cudau::TypedBuffer<OptixOpacityMicromapDesc> ommDescs;
+
+            // JP: これはOMM Arrayが関連づくGASがビルドされた時点で不要になる。
+            // EN: This is disposable once the GAS to which the OMM array associated is built.
             cudau::Buffer ommIndexBuffer;
-            cudau::Buffer ommArrayMem;
         };
         std::vector<MaterialGroup> matGroups;
         optixu::GeometryAccelerationStructure optixGas;

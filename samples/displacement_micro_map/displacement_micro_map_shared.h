@@ -40,9 +40,14 @@ namespace Shared {
     struct GeometryInstanceData {
         const Vertex* vertexBuffer;
         const Triangle* triangleBuffer;
-        const uint32_t* subdivLevelBuffer;
+
+        // Just for debug visualization
+        const OptixDisplacementMicromapDesc* dmmDescBuffer;
+        CUdeviceptr dmmIndexBuffer;
+
         CUtexObject texture;
         float3 albedo;
+        uint32_t dmmIndexSize : 3;
     };
 
 
@@ -65,9 +70,9 @@ namespace Shared {
         float3 lightDirection;
         float3 lightRadiance;
         float3 envRadiance;
+        float2 subPixelOffset;
         unsigned int visualizationMode : 3;
         unsigned int sampleIndex : 8;
-        unsigned int superSampleSizeMinus1 : 4;
     };
 
 

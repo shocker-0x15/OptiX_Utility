@@ -552,13 +552,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
             CUtexObject heightTexObj;
 
             optixu::DisplacementMicroMapArray optixDmmArray;
+            cudau::Buffer dmmArrayMem;
+
+            // JP: これらはDMM Arrayがビルドされた時点で不要になる。
+            // EN: These are disposable once the DMM array is built.
             cudau::Buffer rawDmmArray;
             cudau::TypedBuffer<OptixDisplacementMicromapDesc> dmmDescs;
+
+            // JP: これらはDMM Arrayが関連づくGASがビルドされた時点で不要になる。
+            // EN: These are disposable once the GAS to which the DMM array associated is built.
             cudau::Buffer dmmIndexBuffer;
-            cudau::Buffer dmmArrayMem;
             cudau::TypedBuffer<float2> dmmVertexBiasAndScaleBuffer;
             cudau::TypedBuffer<OptixDisplacementMicromapFlags> dmmTriangleFlagsBuffer;
-            cudau::TypedBuffer<uint32_t> debugSubdivLevelBuffer;
         };
         std::vector<MaterialGroup> matGroups;
         optixu::GeometryAccelerationStructure optixGas;
@@ -569,7 +574,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             gasMem.finalize();
             optixGas.destroy();
             for (auto it = matGroups.rbegin(); it != matGroups.rend(); ++it) {
-                it->debugSubdivLevelBuffer.finalize();
                 it->dmmTriangleFlagsBuffer.finalize();
                 it->dmmVertexBiasAndScaleBuffer.finalize();
                 it->dmmArrayMem.finalize();
@@ -739,9 +743,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 //geomData.heightTexture = group.heightTexObj;
             }
 
-            group.debugSubdivLevelBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles);
-            geomData.subdivLevelBuffer = group.debugSubdivLevelBuffer.getDevicePointer();
-
             // JP: まずは各三角形のDMMフォーマットを決定する。
             // EN: Fisrt, determine the DMM format of each triangle.
             DMMGeneratorContext dmmContext;
@@ -821,10 +822,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                 group.rawDmmArray.initialize(cuContext, cudau::BufferType::Device, rawDmmArraySize, 1);
                 group.dmmDescs.initialize(cuContext, cudau::BufferType::Device, numDmms);
-                if (useDmmIndexBuffer)
+                geomData.dmmDescBuffer = group.dmmDescs.getDevicePointer();
+                if (useDmmIndexBuffer) {
                     group.dmmIndexBuffer.initialize(
                         cuContext, cudau::BufferType::Device,
                         numTriangles, 1 << static_cast<uint32_t>(dmmIndexSize));
+                    geomData.dmmIndexBuffer = group.dmmIndexBuffer.getCUdeviceptr();
+                    geomData.dmmIndexSize = 1 << static_cast<uint32_t>(dmmIndexSize);
+                }
                 group.optixDmmArray.setBuffers(group.rawDmmArray, group.dmmDescs, group.dmmArrayMem);
 
                 group.dmmTriangleFlagsBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles);
@@ -834,8 +839,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 generateDMMArray(
                     dmmContext,
                     group.rawDmmArray, group.dmmDescs, group.dmmIndexBuffer,
-                    group.dmmTriangleFlagsBuffer,
-                    group.debugSubdivLevelBuffer);
+                    group.dmmTriangleFlagsBuffer);
 
                 /*
                 JP: 頂点ごとにディスプレイスメントのスケールと事前移動量を指定できる。
@@ -1034,6 +1038,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     
+    const auto computeHaltonSequence = []
+    (uint32_t base, uint32_t idx) {
+        const float recBase = 1.0f / base;
+        float ret = 0.0f;
+        float scale = 1.0f;
+        while (idx) {
+            scale *= recBase;
+            ret += (idx % base) * scale;
+            idx /= base;
+        }
+        return ret;
+    };
+    float2 subPixelOffsets[64];
+    for (int i = 0; i < lengthof(subPixelOffsets); ++i)
+        subPixelOffsets[i] = float2(computeHaltonSequence(2, i), computeHaltonSequence(3, i));
+
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
     plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
@@ -1042,7 +1062,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.lightDirection = normalize(float3(-2, 5, 2));
     plp.lightRadiance = float3(7.5f, 7.5f, 7.5f);
     plp.envRadiance = float3(0.10f, 0.13f, 0.9f);
-    plp.visualizationMode = visualizationMode;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -1204,8 +1223,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::End();
         }
 
+        bool visModeChanged = false;
         {
-            ImGui::Begin("Debug");
+            ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("Buffer to Display");
+            visModeChanged |= ImGui::RadioButtonE(
+                "Final", &visualizationMode, Shared::VisualizationMode_Final);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Barycentric", &visualizationMode, Shared::VisualizationMode_Barycentric);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Micro-Barycentric", &visualizationMode, Shared::VisualizationMode_MicroBarycentric);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Subdivision Level", &visualizationMode, Shared::VisualizationMode_SubdivLevel);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Normal", &visualizationMode, Shared::VisualizationMode_Normal);
+
             ImGui::End();
         }
 
@@ -1214,7 +1247,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bool firstAccumFrame =
             cameraIsActuallyMoving ||
             resized ||
-            frameIndex == 0;
+            frameIndex == 0 ||
+            visModeChanged;
         bool isNewSequence = resized || frameIndex == 0;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
@@ -1227,8 +1261,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             //curGPUTimer.render.start(curStream);
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
-            plp.superSampleSizeMinus1 = 0;
-            plp.sampleIndex = 0;
+            plp.visualizationMode = visualizationMode;
+            plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
+            plp.sampleIndex = numAccumFrames;
             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
             pipeline.launch(curStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
             ++numAccumFrames;

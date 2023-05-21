@@ -482,8 +482,7 @@ void generateDMMArray(
     const cudau::Buffer &dmmArray,
     const cudau::TypedBuffer<OptixDisplacementMicromapDesc> &dmmDescs,
     const cudau::Buffer &dmmIndexBuffer,
-    const cudau::Buffer &dmmTriangleFlagsBuffer,
-    const cudau::Buffer &debugSubdivLevelBuffer) {
+    const cudau::Buffer &dmmTriangleFlagsBuffer) {
     CUstream stream = 0;
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
 
@@ -501,8 +500,7 @@ void generateDMMArray(
         shared::StridedBuffer<OptixDisplacementMicromapTriangleFlags>(
             dmmTriangleFlagsBuffer.getCUdeviceptr(),
             dmmTriangleFlagsBuffer.numElements(),
-            dmmTriangleFlagsBuffer.stride()),
-        debugSubdivLevelBuffer);
+            dmmTriangleFlagsBuffer.stride()));
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
         std::vector<OptixDisplacementMicromapDesc> dmmDescsOnHost = dmmDescs;
