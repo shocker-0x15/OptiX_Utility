@@ -362,6 +362,15 @@ namespace cudau {
         Buffer();
         ~Buffer();
 
+        Buffer(CUcontext context, BufferType type,
+               uint32_t numElements, uint32_t stride) {
+            initialize(context, type, numElements, stride);
+        }
+        Buffer(CUcontext context, BufferType type,
+               const void* data, uint32_t numElements, uint32_t stride) {
+            initialize(context, type, data, numElements, stride);
+        }
+
         Buffer(Buffer &&b);
         Buffer &operator=(Buffer &&b);
 
@@ -372,6 +381,12 @@ namespace cudau {
             CUcontext context, BufferType type,
             uint32_t numElements, uint32_t stride) {
             initialize(context, type, numElements, stride, 0);
+        }
+        void initialize(
+            CUcontext context, BufferType type,
+            const void* data, uint32_t numElements, uint32_t stride, CUstream stream = 0) {
+            initialize(context, type, numElements, stride, 0);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(getCUdeviceptr(), data, numElements * stride, stream));
         }
         void initializeFromGLBuffer(CUcontext context, uint32_t stride, uint32_t glBufferID) {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)

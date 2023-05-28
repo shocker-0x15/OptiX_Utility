@@ -28,6 +28,9 @@
     <Filter Include="non-essentials\ext\glfw">
       <UniqueIdentifier>{1eed1318-43b0-4656-aa63-16355cd828df}</UniqueIdentifier>
     </Filter>
+    <Filter Include="non-essentials\ext\bary">
+      <UniqueIdentifier>{f8ff220b-5d42-4e8b-aeb7-f0c088fba58e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp">
@@ -81,6 +84,15 @@
     </ClCompile>
     <ClCompile Include="..\..\ext\gl3w\gl3w.c">
       <Filter>non-essentials\ext\gl3w</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\Displacement-MicroMap-BaryFile\src\bary_core.cpp">
+      <Filter>non-essentials\ext\bary</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\Displacement-MicroMap-BaryFile\src\bary_utils.cpp">
+      <Filter>non-essentials\ext\bary</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ext\tinygltf\tiny_gltf.cc">
+      <Filter>non-essentials\ext</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -168,6 +180,9 @@
     </ClInclude>
     <ClInclude Include="..\common\imgui_more.h">
       <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ext\tinygltf\tiny_gltf.h">
+      <Filter>non-essentials\ext</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

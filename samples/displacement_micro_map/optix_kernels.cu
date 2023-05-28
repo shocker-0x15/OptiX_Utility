@@ -45,11 +45,14 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
     float3 color;
+    HitPointFlags hpFlags = {};
     PrimaryRayPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
-        color);
+        color, hpFlags);
+    if (hpFlags.nearBaseTriEdge && plp.drawBaseEdges)
+        color *= 0.01f;
 
     float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.sampleIndex > 0)
@@ -61,12 +64,14 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     float3 contribution = plp.envRadiance;
-    PrimaryRayPayloadSignature::set(&contribution);
+    PrimaryRayPayloadSignature::set(&contribution, nullptr);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryInstanceData &geomInst = sbtr.geomInstData;
+
+    HitPointFlags hpFlags = {};
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -81,9 +86,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float b1 = hp.b1;
         float b2 = hp.b2;
         float b0 = 1 - (b1 + b2);
+        if (b0 < 0.01f || b1 < 0.01f || b2 < 0.01f) {
+            hpFlags.nearBaseTriEdge = true;
+            PrimaryRayPayloadSignature::set(nullptr, &hpFlags);
+        }
+
         if (plp.visualizationMode == VisualizationMode_Barycentric) {
             float3 result = make_float3(b0, b1, b2);
-            PrimaryRayPayloadSignature::set(&result);
+            PrimaryRayPayloadSignature::set(&result, nullptr);
             return;
         }
 
@@ -95,7 +105,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
             if (plp.visualizationMode == VisualizationMode_MicroBarycentric) {
                 float3 result = make_float3(b0, b1, b2);
-                PrimaryRayPayloadSignature::set(&result);
+                PrimaryRayPayloadSignature::set(&result, nullptr);
                 return;
             }
         }
@@ -112,7 +122,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
             if (plp.visualizationMode == VisualizationMode_MicroBarycentric) {
                 float3 result = make_float3(mb0, mb1, mb2);
-                PrimaryRayPayloadSignature::set(&result);
+                PrimaryRayPayloadSignature::set(&result, nullptr);
                 return;
             }
 
@@ -126,7 +136,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
         if (plp.visualizationMode == VisualizationMode_Normal) {
             float3 result = 0.5f * sn + make_float3(0.5f);
-            PrimaryRayPayloadSignature::set(&result);
+            PrimaryRayPayloadSignature::set(&result, nullptr);
             return;
         }
         else if (plp.visualizationMode == VisualizationMode_SubdivLevel) {
@@ -142,7 +152,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
                 dmmDesc = geomInst.dmmDescBuffer[dmmIndex];
             }
             float3 result = make_float3(dmmDesc.subdivisionLevel / 5.0f);
-            PrimaryRayPayloadSignature::set(&result);
+            PrimaryRayPayloadSignature::set(&result, nullptr);
             return;
         }
     }
@@ -175,7 +185,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     float3 fs = cosSP > 0 ? albedo / Pi : make_float3(0, 0, 0);
     result += fs * G * plp.lightRadiance;
 
-    PrimaryRayPayloadSignature::set(&result);
+    PrimaryRayPayloadSignature::set(&result, nullptr);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
