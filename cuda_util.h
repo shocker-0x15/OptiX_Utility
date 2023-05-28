@@ -363,11 +363,11 @@ namespace cudau {
         ~Buffer();
 
         Buffer(CUcontext context, BufferType type,
-               uint32_t numElements, uint32_t stride) {
+               uint32_t numElements, uint32_t stride) : Buffer() {
             initialize(context, type, numElements, stride);
         }
         Buffer(CUcontext context, BufferType type,
-               const void* data, uint32_t numElements, uint32_t stride) {
+               const void* data, uint32_t numElements, uint32_t stride) : Buffer() {
             initialize(context, type, data, numElements, stride);
         }
 
@@ -514,19 +514,19 @@ namespace cudau {
     class TypedBuffer : public Buffer {
     public:
         TypedBuffer() {}
-        TypedBuffer(CUcontext context, BufferType type, uint32_t numElements) {
+        TypedBuffer(CUcontext context, BufferType type, uint32_t numElements) : TypedBuffer() {
             Buffer::initialize(context, type, numElements, sizeof(T));
         }
-        TypedBuffer(CUcontext context, BufferType type, uint32_t numElements, const T &value) {
+        TypedBuffer(CUcontext context, BufferType type, uint32_t numElements, const T &value) : TypedBuffer() {
             std::vector<T> values(numElements, value);
             Buffer::initialize(context, type, static_cast<uint32_t>(values.size()), sizeof(T));
             CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getCUdeviceptr(), values.data(), values.size() * sizeof(T)));
         }
-        TypedBuffer(CUcontext context, BufferType type, const T* v, uint32_t numElements) {
+        TypedBuffer(CUcontext context, BufferType type, const T* v, uint32_t numElements) : TypedBuffer() {
             Buffer::initialize(context, type, numElements, sizeof(T));
             CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getCUdeviceptr(), v, numElements * sizeof(T)));
         }
-        TypedBuffer(CUcontext context, BufferType type, const std::vector<T> &v) {
+        TypedBuffer(CUcontext context, BufferType type, const std::vector<T> &v) : TypedBuffer() {
             Buffer::initialize(context, type, static_cast<uint32_t>(v.size()), sizeof(T));
             CUDADRV_CHECK(cuMemcpyHtoD(Buffer::getCUdeviceptr(), v.data(), v.size() * sizeof(T)));
         }

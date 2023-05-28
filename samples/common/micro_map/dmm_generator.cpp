@@ -1,5 +1,5 @@
 ﻿#include "dmm_generator_private.h"
-#include "../../ext/cubd/cubd.h"
+#include "../../../ext/cubd/cubd.h"
 
 #define VISUALIZE_MICRO_VERTICES_WITH_VDB 0
 #if VISUALIZE_MICRO_VERTICES_WITH_VDB

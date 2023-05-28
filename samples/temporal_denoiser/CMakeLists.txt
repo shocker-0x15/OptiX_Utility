@@ -21,7 +21,6 @@ file(
     "../../optix_util.h"
     "../../optixu_on_cudau.h"
     "../common/common.h"
-    "../common/curve_evaluator.h"
     "${TARGET_NAME}_shared.h"
 )
 

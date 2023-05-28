@@ -119,6 +119,8 @@ def run():
 
             # RGBAでdiffをとると差が無いことになってしまう。
             testImgPath = Path(test['image'])
+            if not (refImgDir / testDir).exists():
+                (refImgDir / testDir).mkdir(parents=True)
             refImgPath = refImgDir / testDir / test['reference']
 
             if testImgPath.exists() and refImgPath.exists():

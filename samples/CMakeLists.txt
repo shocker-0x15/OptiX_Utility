@@ -5,6 +5,10 @@ file(
     GLOB_RECURSE COMMON_SOURCES
     "common/common.h"
     "common/common.cpp"
+)
+set(
+    COMMON_SOURCES
+    ${COMMON_SOURCES}
     "${CMAKE_SOURCE_DIR}/ext/stb_image_write.h"
 )
 
@@ -27,6 +31,13 @@ file(
     "${CMAKE_SOURCE_DIR}/ext/tinyobjloader/tiny_obj_loader.cc"
     "common/obj_loader.h"
     "common/obj_loader.cpp"
+)
+
+# TinyGLTF
+file(
+    GLOB TINY_GLTF_SOURCES
+    "${CMAKE_SOURCE_DIR}/ext/tinygltf/tiny_gltf.h"
+    "${CMAKE_SOURCE_DIR}/ext/tinygltf/tiny_gltf.cc"
 )
 
 # OpenGL
