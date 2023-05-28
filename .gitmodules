@@ -13,3 +13,9 @@
 [submodule "ext/cubd"]
 	path = ext/cubd
 	url = https://github.com/shocker-0x15/CUBd.git
+[submodule "ext/Displacement-MicroMap-BaryFile"]
+	path = ext/Displacement-MicroMap-BaryFile
+	url = https://github.com/NVIDIAGameWorks/Displacement-MicroMap-BaryFile.git
+[submodule "ext/tinygltf"]
+	path = ext/tinygltf
+	url = https://github.com/syoyo/tinygltf.git

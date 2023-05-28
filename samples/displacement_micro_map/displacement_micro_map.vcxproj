@@ -12,6 +12,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp" />
+    <ClCompile Include="..\..\ext\Displacement-MicroMap-BaryFile\src\bary_core.cpp" />
+    <ClCompile Include="..\..\ext\Displacement-MicroMap-BaryFile\src\bary_utils.cpp" />
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
     <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_glfw.cpp" />
     <ClCompile Include="..\..\ext\imgui\backends\imgui_impl_opengl3.cpp" />
@@ -20,6 +22,7 @@
     <ClCompile Include="..\..\ext\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\ext\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\..\ext\tinygltf\tiny_gltf.cc" />
     <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\common.cpp" />
@@ -47,6 +50,7 @@
     <ClInclude Include="..\..\ext\imgui\imstb_textedit.h" />
     <ClInclude Include="..\..\ext\imgui\imstb_truetype.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h" />
+    <ClInclude Include="..\..\ext\tinygltf\tiny_gltf.h" />
     <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h" />
     <ClInclude Include="..\..\optixu_on_cudau.h" />
     <ClInclude Include="..\..\optix_util.h" />
@@ -138,13 +142,13 @@
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7\lib\x64;$(SolutionDir)..\ext\prebuilt\lib;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(IncludePath)</IncludePath>
     <TargetName>displacement_micro_map</TargetName>
-    <ExternalIncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.7.0\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <ExternalIncludePath>$(SolutionDir)..\ext\tinygltf;$(SolutionDir)..\ext\Displacement-MicroMap-BaryFile\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.7.0\include;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7\lib\x64;$(SolutionDir)..\ext\prebuilt\lib;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(IncludePath)</IncludePath>
     <TargetName>displacement_micro_map</TargetName>
-    <ExternalIncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.7.0\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <ExternalIncludePath>$(SolutionDir)..\ext\tinygltf;$(SolutionDir)..\ext\Displacement-MicroMap-BaryFile\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.7.0\include;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -152,7 +156,7 @@
       <Optimization>Disabled</Optimization>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <PreprocessorDefinitions>USE_CUBD_LIB;_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TINYGLTF_NO_STB_IMAGE;TINYGLTF_NO_STB_IMAGE_WRITE;USE_CUBD_LIB;_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -192,7 +196,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <PreprocessorDefinitions>USE_CUBD_LIB;_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TINYGLTF_NO_STB_IMAGE;TINYGLTF_NO_STB_IMAGE_WRITE;USE_CUBD_LIB;_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>

@@ -772,6 +772,25 @@ CUDA_COMMON_FUNCTION CUDA_INLINE float dot(const float4 &v0, const float4 &v1) {
 
 
 
+// ( 0, 0,  1) <=> phi:      0
+// (-1, 0,  0) <=> phi: 1/2 pi
+// ( 0, 0, -1) <=> phi:   1 pi
+// ( 1, 0,  0) <=> phi: 3/2 pi
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 fromPolarYUp(float phi, float theta) {
+    float sinPhi, cosPhi;
+    float sinTheta, cosTheta;
+#if defined(__CUDA_ARCH__)
+    sincosf(phi, &sinPhi, &cosPhi);
+    sincosf(theta, &sinTheta, &cosTheta);
+#else
+    sinPhi = std::sin(phi);
+    cosPhi = std::cos(phi);
+    sinTheta = std::sin(theta);
+    cosTheta = std::cos(theta);
+#endif
+    return make_float3(-sinPhi * sinTheta, cosTheta, cosPhi * sinTheta);
+}
+
 CUDA_DEVICE_FUNCTION CUDA_INLINE float3 HSVtoRGB(float h, float s, float v) {
     if (s == 0)
         return make_float3(v, v, v);
@@ -958,27 +977,37 @@ struct Matrix3x3 {
     CUDA_COMMON_FUNCTION Matrix3x3 operator+() const { return *this; }
     CUDA_COMMON_FUNCTION Matrix3x3 operator-() const { return Matrix3x3(-c0, -c1, -c2); }
 
-    CUDA_COMMON_FUNCTION Matrix3x3 operator+(const Matrix3x3 &mat) const { return Matrix3x3(c0 + mat.c0, c1 + mat.c1, c2 + mat.c2); }
-    CUDA_COMMON_FUNCTION Matrix3x3 operator-(const Matrix3x3 &mat) const { return Matrix3x3(c0 - mat.c0, c1 - mat.c1, c2 - mat.c2); }
-    CUDA_COMMON_FUNCTION Matrix3x3 operator*(const Matrix3x3 &mat) const {
-        const float3 r[] = { row(0), row(1), row(2) };
-        return Matrix3x3(make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0)),
-                         make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1)),
-                         make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2)));
+    CUDA_COMMON_FUNCTION Matrix3x3 &operator+=(const Matrix3x3 &mat) {
+        c0 += mat.c0;
+        c1 += mat.c1;
+        c2 += mat.c2;
+        return *this;
     }
-    CUDA_COMMON_FUNCTION float3 operator*(const float3 &v) const {
-        const float3 r[] = { row(0), row(1), row(2) };
-        return make_float3(dot(r[0], v),
-                           dot(r[1], v),
-                           dot(r[2], v));
+    CUDA_COMMON_FUNCTION Matrix3x3 &operator-=(const Matrix3x3 &mat) {
+        c0 -= mat.c0;
+        c1 -= mat.c1;
+        c2 -= mat.c2;
+        return *this;
     }
-
+    CUDA_COMMON_FUNCTION Matrix3x3 &operator*=(float s) {
+        c0 *= s;
+        c1 *= s;
+        c2 *= s;
+        return *this;
+    }
     CUDA_COMMON_FUNCTION Matrix3x3 &operator*=(const Matrix3x3 &mat) {
         const float3 r[] = { row(0), row(1), row(2) };
         c0 = make_float3(dot(r[0], mat.c0), dot(r[1], mat.c0), dot(r[2], mat.c0));
         c1 = make_float3(dot(r[0], mat.c1), dot(r[1], mat.c1), dot(r[2], mat.c1));
         c2 = make_float3(dot(r[0], mat.c2), dot(r[1], mat.c2), dot(r[2], mat.c2));
         return *this;
+    }
+
+    CUDA_COMMON_FUNCTION float3 operator*(const float3 &v) const {
+        const float3 r[] = { row(0), row(1), row(2) };
+        return make_float3(dot(r[0], v),
+                           dot(r[1], v),
+                           dot(r[2], v));
     }
 
     CUDA_COMMON_FUNCTION float3 row(unsigned int r) const {
@@ -1014,6 +1043,32 @@ struct Matrix3x3 {
         return *this;
     }
 };
+
+CUDA_COMMON_FUNCTION CUDA_INLINE Matrix3x3 operator+(const Matrix3x3 &a, const Matrix3x3 &b){
+    Matrix3x3 ret = a;
+    ret += b;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Matrix3x3 operator-(const Matrix3x3 &a, const Matrix3x3 &b) {
+    Matrix3x3 ret = a;
+    ret -= b;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Matrix3x3 operator*(const Matrix3x3 &a, float b) {
+    Matrix3x3 ret = a;
+    ret *= b;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Matrix3x3 operator*(float a, const Matrix3x3 &b) {
+    Matrix3x3 ret = b;
+    ret *= a;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Matrix3x3 operator*(const Matrix3x3 &a, const Matrix3x3 &b) {
+    Matrix3x3 ret = a;
+    ret *= b;
+    return ret;
+}
 
 CUDA_COMMON_FUNCTION CUDA_INLINE Matrix3x3 transpose(const Matrix3x3 &mat) {
     Matrix3x3 ret = mat;
@@ -1082,12 +1137,21 @@ struct Quaternion {
     CUDA_COMMON_FUNCTION Quaternion operator+() const { return *this; }
     CUDA_COMMON_FUNCTION Quaternion operator-() const { return Quaternion(-v, -w); }
 
-    CUDA_COMMON_FUNCTION Quaternion operator*(const Quaternion &q) const {
-        return Quaternion(cross(v, q.v) + w * q.v + q.w * v, w * q.w - dot(v, q.v));
+    CUDA_COMMON_FUNCTION Quaternion &operator*=(float s) {
+        v *= s;
+        w *= s;
+        return *this;
     }
-    CUDA_COMMON_FUNCTION Quaternion operator*(float s) const { return Quaternion(v * s, w * s); }
-    CUDA_COMMON_FUNCTION Quaternion operator/(float s) const { float r = 1 / s; return *this * r; }
-    CUDA_COMMON_FUNCTION friend Quaternion operator*(float s, const Quaternion &q) { return q * s; }
+    CUDA_COMMON_FUNCTION Quaternion &operator*=(const Quaternion &r) {
+        const float3 v_ = cross(v, r.v) + w * r.v + r.w * v;
+        w = w * r.w - dot(v, r.v);
+        v = v_;
+        return *this;
+    }
+    CUDA_COMMON_FUNCTION Quaternion &operator/=(float s) {
+        const float r = 1 / s;
+        return *this *= r;
+    }
 
     CUDA_COMMON_FUNCTION void toEulerAngles(float* roll, float* pitch, float* yaw) const {
         float xx = x * x;
@@ -1113,6 +1177,27 @@ struct Quaternion {
                          make_float3(2 * (zx + yw), 2 * (yz - xw), 1 - 2 * (xx + yy)));
     }
 };
+
+CUDA_COMMON_FUNCTION CUDA_INLINE Quaternion operator*(const Quaternion &a, float b){
+    Quaternion ret = a;
+    ret *= b;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Quaternion operator*(const Quaternion &a, const Quaternion &b) {
+    Quaternion ret = a;
+    ret *= b;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Quaternion operator/(const Quaternion &a, float b) {
+    Quaternion ret = a;
+    ret /= b;
+    return ret;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE Quaternion operator*(float a, const Quaternion &b) {
+    Quaternion ret = b;
+    ret *= a;
+    return ret;
+}
 
 CUDA_COMMON_FUNCTION CUDA_INLINE static Quaternion qRotate(float angle, const float3 &axis) {
     float ha = angle / 2;
@@ -1595,5 +1680,32 @@ public:
             CUDADRV_CHECK(cuStreamSynchronize(m_streams[i]));
     }
 };
+
+
+
+using BufferRef = std::shared_ptr<cudau::Buffer>;
+
+template <typename T>
+using TypedBufferRef = std::shared_ptr<cudau::TypedBuffer<T>>;
+
+using ArrayRef = std::shared_ptr<cudau::Array>;
+
+template <typename ...ArgTypes>
+BufferRef createBufferRef(ArgTypes&&... args) {
+    return BufferRef(
+        new cudau::Buffer(std::forward<ArgTypes>(args)...));
+}
+
+template <typename T, typename ...ArgTypes>
+TypedBufferRef<T> createTypedBufferRef(ArgTypes&&... args) {
+    return TypedBufferRef<T>(
+        new cudau::TypedBuffer<T>(std::forward<ArgTypes>(args)...));
+}
+
+template <typename ...ArgTypes>
+ArrayRef createArrayRef(ArgTypes&&... args) {
+    return ArrayRef(
+        new cudau::Array(std::forward<ArgTypes>(args)...));
+}
 
 #endif

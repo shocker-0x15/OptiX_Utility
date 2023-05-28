@@ -1,0 +1,224 @@
+{
+  "accessors": [
+    {
+      "bufferView": 2,
+      "componentType": 5125,
+      "count": 1758,
+      "max": [
+        323
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 324,
+      "max": [
+        0.6487216949462891,
+        0.6749942898750305,
+        -0.007601890712976456
+      ],
+      "min": [
+        -0.9545260071754456,
+        -0.5417338013648987,
+        -1.6447505950927734
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 12,
+      "componentType": 5126,
+      "count": 324,
+      "max": [
+        0.9966381192207336,
+        0.9988649487495422,
+        0.9999136924743652
+      ],
+      "min": [
+        -0.9953455924987793,
+        -0.9840937256813049,
+        -0.9962384104728699
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 24,
+      "componentType": 5126,
+      "count": 324,
+      "max": [
+        0.9879000186920166,
+        0.9645062685012817
+      ],
+      "min": [
+        0.011412501335144043,
+        0.06311562657356262
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 32,
+      "componentType": 5126,
+      "count": 324,
+      "max": [
+        0.0,
+        0.0,
+        -1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0,
+        -1.0,
+        1.0
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 48,
+      "componentType": 5126,
+      "count": 324,
+      "max": [
+        0.99658203125,
+        0.9990234375,
+        1.0
+      ],
+      "min": [
+        -0.99560546875,
+        -0.98388671875,
+        -0.99609375
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 60,
+      "componentType": 5126,
+      "count": 324,
+      "max": [
+        0.0010194368660449982,
+        0.3682010769844055
+      ],
+      "min": [
+        -0.2422810196876526,
+        9.999999974752427e-07
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5121,
+      "count": 586,
+      "max": [
+        7
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 22032,
+      "byteStride": 68,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 586,
+      "byteOffset": 22032,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 7032,
+      "byteOffset": 22618,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 29650,
+      "uri": "bunny_baked.bin"
+    }
+  ],
+  "extensions": {
+    "NV_micromaps": {
+      "micromaps": [
+        {
+          "uri": "bunny.bary"
+        }
+      ]
+    }
+  },
+  "extensionsUsed": [
+    "NV_displacement_micromap",
+    "NV_micromaps"
+  ],
+  "meshes": [
+    {
+      "name": "bunny",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 2,
+            "POSITION": 1,
+            "TANGENT": 4,
+            "TEXCOORD_0": 3
+          },
+          "extensions": {
+            "NV_displacement_micromap": {
+              "directionBounds": 6,
+              "directions": 5,
+              "micromap": 0,
+              "primitiveFlags": 7
+            }
+          },
+          "indices": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "bunny",
+      "rotation": [
+        0.7071068286895752,
+        0.0,
+        0.0,
+        0.7071067094802856
+      ],
+      "scale": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "translation": [
+        0.32801908254623413,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ]
+}

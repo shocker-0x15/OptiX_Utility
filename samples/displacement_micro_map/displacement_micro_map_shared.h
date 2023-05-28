@@ -73,10 +73,15 @@ namespace Shared {
         float2 subPixelOffset;
         unsigned int visualizationMode : 3;
         unsigned int sampleIndex : 8;
+        unsigned int drawBaseEdges : 1;
     };
 
 
 
-    using PrimaryRayPayloadSignature = optixu::PayloadSignature<float3>;
+    struct HitPointFlags {
+        uint32_t nearBaseTriEdge : 1;
+    };
+
+    using PrimaryRayPayloadSignature = optixu::PayloadSignature<float3, HitPointFlags>;
     using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 }
