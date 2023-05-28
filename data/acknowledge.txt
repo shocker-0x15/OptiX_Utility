@@ -1,7 +1,9 @@
 Acknowledgement:
 
 Stanford Bunny
-stanford_bunny_309_faces was created by reducing polygons of the original stanford bunny model downloaded from:
+stanford_bunny_309_faces
+dmm_sdk_test/bunny_baked.gltf/bin/bary
+were created by reducing polygons of the original stanford bunny model downloaded from:
 The Stanford 3D Scanning Repository
 http://graphics.stanford.edu/data/3Dscanrep/
 

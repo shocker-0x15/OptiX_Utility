@@ -1,0 +1,15 @@
+# Blender 3.3.0 MTL File: 'None'
+# www.blender.org
+
+newmtl Material.001
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.160000 0.020000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+map_Kd TexturesCom_Pavement_CobblestoneMedieval14_3x3_1K_albedo.png
+map_bump TexturesCom_Pavement_CobblestoneMedieval14_3x3_1K_height.png
