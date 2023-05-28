@@ -217,7 +217,8 @@ CUDA_DEVICE_KERNEL void createDMMDescriptors(
     const uint32_t* triToDmmMap, const uint64_t* dmmOffsets, uint32_t numTriangles,
     bool useIndexBuffer,
     const MicroMapFormat* microMapFormats, const TriNeighborList* triNeighborLists,
-    OptixDisplacementMicromapDesc* dmmDescs, void* dmmIndices, uint32_t dmmIndexSize,
+    StridedBuffer<OptixDisplacementMicromapDesc> dmmDescs,
+    void* dmmIndices, uint32_t dmmIndexSize,
     StridedBuffer<OptixDisplacementMicromapTriangleFlags> triFlagsBuffer) {
     const uint32_t keyIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (keyIdx >= numTriangles)

@@ -49,10 +49,10 @@ void countDMMFormats(
 
 void generateDMMArray(
     const DMMGeneratorContext &context,
-    const cudau::Buffer &dmmArray,
-    const cudau::TypedBuffer<OptixDisplacementMicromapDesc> &dmmDescs,
-    const cudau::Buffer &dmmIndexBuffer,
-    const cudau::Buffer &dmmTriangleFlagsBuffer);
+    const optixu::BufferView &dmmArray,
+    const optixu::BufferView &dmmDescs,
+    const optixu::BufferView &dmmIndexBuffer,
+    const optixu::BufferView &dmmTriangleFlagsBuffer);
 
 
 
