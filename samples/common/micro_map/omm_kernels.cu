@@ -367,7 +367,8 @@ CUDA_DEVICE_KERNEL void createOMMDescriptors(
     const uint32_t* refTupleIndices, const uint32_t* triIndices,
     const uint32_t* perTriInfos, const uint32_t* triToOmmMap, const uint64_t* ommOffsets, uint32_t numTriangles,
     bool useIndexBuffer,
-    OptixOpacityMicromapDesc* ommDescs, void* ommIndices, uint32_t ommIndexSize) {
+    StridedBuffer<OptixOpacityMicromapDesc> ommDescs,
+    void* ommIndices, uint32_t ommIndexSize) {
     const uint32_t tupleIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if (tupleIdx >= numTriangles)
         return;
