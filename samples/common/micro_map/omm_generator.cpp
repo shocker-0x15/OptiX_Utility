@@ -304,9 +304,9 @@ void countOMMFormats(
 
 void generateOMMArray(
     const OMMGeneratorContext &context,
-    const cudau::Buffer &ommArray,
-    const cudau::TypedBuffer<OptixOpacityMicromapDesc> &ommDescs,
-    const cudau::Buffer &ommIndexBuffer) {
+    const optixu::BufferView &ommArray,
+    const optixu::BufferView &ommDescs,
+    const optixu::BufferView &ommIndexBuffer) {
     CUstream stream = 0;
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
 
@@ -319,25 +319,47 @@ void generateOMMArray(
         _context.refTupleIndices, _context.triIndices,
         _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes, numTriangles,
         _context.useIndexBuffer,
-        ommDescs, ommIndexBuffer, _context.indexSize);
+        shared::StridedBuffer<OptixDisplacementMicromapDesc>(
+            ommDescs.getCUdeviceptr(),
+            ommDescs.numElements(),
+            ommDescs.stride()),
+        ommIndexBuffer.getCUdeviceptr(), _context.indexSize);
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<OptixOpacityMicromapDesc> ommDescsOnHost = ommDescs;
-        if (_context.indexSize == 4) {
-            std::vector<int32_t> ommIndices(numTriangles);
-            if (_context.useIndexBuffer)
-                CUDADRV_CHECK(cuMemcpyDtoH(
-                    ommIndices.data(), ommIndexBuffer.getCUdeviceptr(), ommIndexBuffer.sizeInBytes()));
-            printf("");
+
+        std::vector<OptixDisplacementMicromapDesc> ommDescsOnHost(ommDescs.numElements());
+        {
+            std::vector<uint8_t> stridedDmmDescs(ommDescs.sizeInBytes());
+            CUDADRV_CHECK(cuMemcpyDtoH(
+                stridedDmmDescs.data(),
+                ommDescs.getCUdeviceptr(),
+                stridedDmmDescs.size()));
+            for (uint32_t i = 0; i < ommDescs.numElements(); ++i) {
+                ommDescsOnHost[i] = reinterpret_cast<OptixDisplacementMicromapDesc &>(
+                    stridedDmmDescs[ommDescs.stride() * i]);
+            }
         }
-        else if (_context.indexSize == 2) {
-            std::vector<int16_t> ommIndices(numTriangles);
-            if (_context.useIndexBuffer)
-                CUDADRV_CHECK(cuMemcpyDtoH(
-                    ommIndices.data(), ommIndexBuffer.getCUdeviceptr(), ommIndexBuffer.sizeInBytes()));
-            printf("");
+
+        if (_context.useIndexBuffer) {
+            std::vector<uint8_t> stridedDmmIndices(ommIndexBuffer.sizeInBytes());
+            CUDADRV_CHECK(cuMemcpyDtoH(
+                stridedDmmIndices.data(),
+                ommIndexBuffer.getCUdeviceptr(),
+                stridedDmmIndices.size()));
+            if (_context.indexSize == 4) {
+                std::vector<int32_t> ommIndices(numTriangles);
+                for (uint32_t i = 0; i < numTriangles; ++i)
+                    ommIndices[i] = reinterpret_cast<int32_t &>(stridedDmmIndices[ommIndexBuffer.stride() * i]);
+                hpprintf("");
+            }
+            else if (_context.indexSize == 2) {
+                std::vector<int16_t> ommIndices(numTriangles);
+                for (uint32_t i = 0; i < numTriangles; ++i)
+                    ommIndices[i] = reinterpret_cast<int16_t &>(stridedDmmIndices[ommIndexBuffer.stride() * i]);
+                hpprintf("");
+            }
+            hpprintf("");
         }
-        printf("");
     }
 
     // JP: 先頭である三角形においてMicro Triangleレベルでラスタライズを行いOMMを生成する。
@@ -350,7 +372,7 @@ void generateOMMArray(
         numTriangles,
         _context.texture, _context.texSize, _context.numChannels, _context.alphaChannelIndex,
         _context.perTriInfos, _context.ommSizes, _context.counter,
-        ommArray);
+        ommArray.getCUdeviceptr());
 
     if (!_context.useIndexBuffer) {
         // JP: 先頭ではない三角形においてOMMのコピーを行う。
@@ -361,7 +383,7 @@ void generateOMMArray(
             stream, cudau::dim3(1024),
             _context.refTupleIndices, _context.triIndices, _context.ommSizes,
             numTriangles, _context.counter,
-            ommArray);
+            ommArray.getCUdeviceptr());
     }
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));

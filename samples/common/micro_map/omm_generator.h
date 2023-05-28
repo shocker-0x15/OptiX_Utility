@@ -48,8 +48,8 @@ void countOMMFormats(
 
 void generateOMMArray(
     const OMMGeneratorContext &context,
-    const cudau::Buffer &ommArray,
-    const cudau::TypedBuffer<OptixOpacityMicromapDesc> &ommDescs,
-    const cudau::Buffer &ommIndexBuffer);
+    const optixu::BufferView &ommArray,
+    const optixu::BufferView &ommDescs,
+    const optixu::BufferView &ommIndexBuffer);
 
 #endif // #if !defined(__CUDA_ARCH__)
