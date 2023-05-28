@@ -7,15 +7,18 @@ file(
 
 file(
     GLOB CUDA_KERNELS
-    "../common/omm_kernels.cu"
+    "../common/micro_map/micro_map_kernels.cu"
+    "../common/micro_map/omm_kernels.cu"
 )
 
 file(
     GLOB OMM_GENERATOR_SOURCES
-    "../common/omm_generator.h"
-    "../common/omm_generator_private.h"
-    "../common/omm_generator.cpp"
-    "../common/omm_generator_misc.cu"
+    "../common/micro_map/micro_map_generator_private.h"
+    "../common/micro_map/micro_map_generator.cpp"
+    "../common/micro_map/micro_map_generator_misc.cu"
+    "../common/micro_map/omm_generator.h"
+    "../common/micro_map/omm_generator_private.h"
+    "../common/micro_map/omm_generator.cpp"
 )
 
 file(
@@ -29,7 +32,9 @@ file(
     "../../optix_util.h"
     "../../optixu_on_cudau.h"
     "../common/common.h"
-    "../common/omm_generator.h"
+    "../common/micro_map/micro_map_generator_private.h"
+    "../common/micro_map/omm_generator.h"
+    "../common/micro_map/omm_generator_private.h"
     "${TARGET_NAME}_shared.h"
 )
 
@@ -76,7 +81,7 @@ source_group(
     "${CMAKE_CURRENT_SOURCE_DIR}/[^/]*\.(h|hpp|c|cpp|cu)$")
 source_group(
     "essentials/omm_generator" REGULAR_EXPRESSION
-    "${CMAKE_SOURCE_DIR}/samples/common/omm_.*\.(h|hpp|c|cpp|cu)$")
+    "${CMAKE_SOURCE_DIR}/samples/common/micro_map/(omm|micro_map)_.*\.(h|hpp|c|cpp|cu)$")
 
 list(APPEND CUDA_NVCC_FLAGS "$<$<CONFIG:Debug>:-G>")
 

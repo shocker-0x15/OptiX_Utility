@@ -1,5 +1,5 @@
 ﻿#include "omm_generator_private.h"
-#include "../../ext/cubd/cubd.h"
+#include "../../../ext/cubd/cubd.h"
 
 extern cudau::Kernel g_extractTexCoords;
 extern cudau::Kernel g_testIfTCTupleIsUnique;

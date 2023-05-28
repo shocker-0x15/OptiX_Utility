@@ -164,5 +164,45 @@
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference_shadow.png"
+    },
+    {
+        "name": "displacement_micro_map final",
+        "sample": "displacement_micro_map",
+        "options": "--screen-shot --visualize final",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_final.png"
+    },
+    {
+        "name": "displacement_micro_map barycentric",
+        "sample": "displacement_micro_map",
+        "options": "--screen-shot --visualize barycentric",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_barycentric.png"
+    },
+    {
+        "name": "displacement_micro_map micro-barycentric",
+        "sample": "displacement_micro_map",
+        "options": "--screen-shot --visualize micro-barycentric",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_micro_barycentric.png"
+    },
+    {
+        "name": "displacement_micro_map pre-computed subdiv-level",
+        "sample": "displacement_micro_map",
+        "options": "--screen-shot --use-pre-computed-mesh --visualize subdiv-level",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_pre_computed_subdiv_level.png"
+    },
+    {
+        "name": "displacement_micro_map pre-computed normal",
+        "sample": "displacement_micro_map",
+        "options": "--screen-shot --use-pre-computed-mesh --visualize normal",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_pre_computed_normal.png"
     }
 ]

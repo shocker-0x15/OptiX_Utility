@@ -161,8 +161,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shared::DMMSubdivLevel maxDmmSubDivLevel = shared::DMMSubdivLevel_5;
     int32_t dmmSubdivLevelBias = 0;
     bool useDmmIndexBuffer = true;
-    float displacementBias = 0.0f;
-    float displacementScale = 1.0f;
+
+    // Hard coded values for runtime DMM generation path in this sample.
+    float displacementBias = /*0.0f*/-5.0f;
+    float displacementScale = /*1.0f*/10.0f;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -715,6 +717,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     if (usePreComputedMesh) {
         //std::filesystem::path filePath = R"(../../data/dmm_test3/xyzrgb_dragon.gltf)";
         //std::filesystem::path filePath = R"(../../data/dmm_test3/exported/xyzrgb_dragon_baked.gltf)";
+
+        // JP: このメッシュは586 trisで構成されているが元のメッシュは144,046 tris持っていた。
+        //     DMMを使うことでオリジナルのディテールを復活させる。
+        // EN: This mesh has 586 triangles while the original mesh had 144,046 tris.
+        //     Use DMMs to bring back the original detail.
         std::filesystem::path filePath = R"(../../data/dmm_sdk_test/bunny_baked.gltf)";
         std::filesystem::path fileDir = filePath.parent_path();
 
@@ -1816,6 +1823,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
 
         outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
+
+        if (takeScreenShot && frameIndex + 1 == lengthof(subPixelOffsets)) {
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
+            auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
+            glGetTextureSubImage(
+                outputTexture.getHandle(), 0,
+                0, 0, 0, renderTargetSizeX, renderTargetSizeY, 1,
+                GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage);
+            saveImage("output.png", renderTargetSizeX, renderTargetSizeY, rawImage, false, true);
+            delete[] rawImage;
+            break;
+        }
 
 
 
