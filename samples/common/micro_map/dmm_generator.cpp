@@ -479,10 +479,10 @@ void countDMMFormats(
 
 void generateDMMArray(
     const DMMGeneratorContext &context,
-    const cudau::Buffer &dmmArray,
-    const cudau::TypedBuffer<OptixDisplacementMicromapDesc> &dmmDescs,
-    const cudau::Buffer &dmmIndexBuffer,
-    const cudau::Buffer &dmmTriangleFlagsBuffer) {
+    const optixu::BufferView &dmmArray,
+    const optixu::BufferView &dmmDescs,
+    const optixu::BufferView &dmmIndexBuffer,
+    const optixu::BufferView &dmmTriangleFlagsBuffer) {
     CUstream stream = 0;
     auto &_context = *reinterpret_cast<const Context*>(context.internalState.data());
 
@@ -496,38 +496,64 @@ void generateDMMArray(
         _context.hasDmmFlags, _context.dmmSizes, numTriangles,
         _context.useIndexBuffer,
         _context.microMapFormats, _context.triNeighborLists,
-        dmmDescs, dmmIndexBuffer, _context.indexSize,
+        shared::StridedBuffer<OptixDisplacementMicromapDesc>(
+            dmmDescs.getCUdeviceptr(),
+            dmmDescs.numElements(),
+            dmmDescs.stride()),
+        dmmIndexBuffer.getCUdeviceptr(), _context.indexSize,
         shared::StridedBuffer<OptixDisplacementMicromapTriangleFlags>(
             dmmTriangleFlagsBuffer.getCUdeviceptr(),
             dmmTriangleFlagsBuffer.numElements(),
             dmmTriangleFlagsBuffer.stride()));
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
-        std::vector<OptixDisplacementMicromapDesc> dmmDescsOnHost = dmmDescs;
-        std::vector<uint8_t> stridedTriFlags(dmmTriangleFlagsBuffer.stride() * numTriangles);
-        CUDADRV_CHECK(cuMemcpyDtoH(
-            stridedTriFlags.data(),
-            dmmTriangleFlagsBuffer.getCUdeviceptr(),
-            stridedTriFlags.size()));
+
+        std::vector<OptixDisplacementMicromapDesc> dmmDescsOnHost(dmmDescs.numElements());
+        {
+            std::vector<uint8_t> stridedDmmDescs(dmmDescs.sizeInBytes());
+            CUDADRV_CHECK(cuMemcpyDtoH(
+                stridedDmmDescs.data(),
+                dmmDescs.getCUdeviceptr(),
+                stridedDmmDescs.size()));
+            for (uint32_t i = 0; i < dmmDescs.numElements(); ++i) {
+                dmmDescsOnHost[i] = reinterpret_cast<OptixDisplacementMicromapDesc &>(
+                    stridedDmmDescs[dmmDescs.stride() * i]);
+            }
+        }
+
         std::vector<OptixDisplacementMicromapTriangleFlags> triFlags(numTriangles);
-        for (uint32_t i = 0; i < numTriangles; ++i)
-            triFlags[i] = reinterpret_cast<OptixDisplacementMicromapTriangleFlags &>(
-                stridedTriFlags[dmmTriangleFlagsBuffer.stride() * i]);
-        if (_context.indexSize == 4) {
-            std::vector<int32_t> dmmIndices(numTriangles);
-            if (_context.useIndexBuffer)
-                CUDADRV_CHECK(cuMemcpyDtoH(
-                    dmmIndices.data(), dmmIndexBuffer.getCUdeviceptr(), dmmIndexBuffer.sizeInBytes()));
+        {
+            std::vector<uint8_t> stridedTriFlags(dmmTriangleFlagsBuffer.sizeInBytes());
+            CUDADRV_CHECK(cuMemcpyDtoH(
+                stridedTriFlags.data(),
+                dmmTriangleFlagsBuffer.getCUdeviceptr(),
+                stridedTriFlags.size()));
+            for (uint32_t i = 0; i < numTriangles; ++i) {
+                triFlags[i] = reinterpret_cast<OptixDisplacementMicromapTriangleFlags &>(
+                    stridedTriFlags[dmmTriangleFlagsBuffer.stride() * i]);
+            }
+        }
+
+        if (_context.useIndexBuffer) {
+            std::vector<uint8_t> stridedDmmIndices(dmmIndexBuffer.sizeInBytes());
+            CUDADRV_CHECK(cuMemcpyDtoH(
+                stridedDmmIndices.data(),
+                dmmIndexBuffer.getCUdeviceptr(),
+                stridedDmmIndices.size()));
+            if (_context.indexSize == 4) {
+                std::vector<int32_t> dmmIndices(numTriangles);
+                for (uint32_t i = 0; i < numTriangles; ++i)
+                    dmmIndices[i] = reinterpret_cast<int32_t &>(stridedDmmIndices[dmmIndexBuffer.stride() * i]);
+                hpprintf("");
+            }
+            else if (_context.indexSize == 2) {
+                std::vector<int16_t> dmmIndices(numTriangles);
+                for (uint32_t i = 0; i < numTriangles; ++i)
+                    dmmIndices[i] = reinterpret_cast<int16_t &>(stridedDmmIndices[dmmIndexBuffer.stride() * i]);
+                hpprintf("");
+            }
             hpprintf("");
         }
-        else if (_context.indexSize == 2) {
-            std::vector<int16_t> dmmIndices(numTriangles);
-            if (_context.useIndexBuffer)
-                CUDADRV_CHECK(cuMemcpyDtoH(
-                    dmmIndices.data(), dmmIndexBuffer.getCUdeviceptr(), dmmIndexBuffer.sizeInBytes()));
-            hpprintf("");
-        }
-        hpprintf("");
     }
 
     // JP: 先頭である三角形においてMicro-Vertex上でハイトマップの評価を行いDMMを計算する。
@@ -540,7 +566,7 @@ void generateDMMArray(
         numTriangles,
         _context.texture, _context.texSize, _context.numChannels, _context.alphaChannelIndex,
         _context.dmmSizes, _context.counter,
-        dmmArray);
+        dmmArray.getCUdeviceptr());
 
     /*
     TODO:
@@ -565,13 +591,25 @@ void generateDMMArray(
             stream, cudau::dim3(1024),
             _context.refKeyIndices, _context.triIndices, _context.dmmSizes,
             numTriangles, _context.counter,
-            dmmArray);
+            dmmArray.getCUdeviceptr());
     }
 
     CUDADRV_CHECK(cuStreamSynchronize(stream));
 
     if (enableDebugPrint) {
-        std::vector<OptixDisplacementMicromapDesc> dmmDescsOnHost = dmmDescs;
+        std::vector<OptixDisplacementMicromapDesc> dmmDescsOnHost(dmmDescs.numElements());
+        {
+            std::vector<uint8_t> stridedDmmDescs(dmmDescs.sizeInBytes());
+            CUDADRV_CHECK(cuMemcpyDtoH(
+                stridedDmmDescs.data(),
+                dmmDescs.getCUdeviceptr(),
+                stridedDmmDescs.size()));
+            for (uint32_t i = 0; i < dmmDescs.numElements(); ++i) {
+                dmmDescsOnHost[i] = reinterpret_cast<OptixDisplacementMicromapDesc &>(
+                    stridedDmmDescs[dmmDescs.stride() * i]);
+            }
+        }
+
         std::vector<uint8_t> dmmArrayOnHost(dmmArray.sizeInBytes());
         CUDADRV_CHECK(cuMemcpyDtoH(
             dmmArrayOnHost.data(), dmmArray.getCUdeviceptr(),

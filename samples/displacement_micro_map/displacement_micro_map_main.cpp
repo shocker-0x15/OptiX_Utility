@@ -715,8 +715,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // Displaced Meshes
     if (usePreComputedMesh) {
-        //std::filesystem::path filePath = R"(../../data/dmm_test3/xyzrgb_dragon.gltf)";
-        //std::filesystem::path filePath = R"(../../data/dmm_test3/exported/xyzrgb_dragon_baked.gltf)";
+        // JP: こちらのコードパスではあらかじめDMM SDKで計算・ベイクしておいたメッシュとDMMを読む。
+        // EN: This code path reads a pre-computed mesh and DMM genenarated by the DMM SDK.
 
         // JP: このメッシュは586 trisで構成されているが元のメッシュは144,046 tris持っていた。
         //     DMMを使うことでオリジナルのディテールを復活させる。
@@ -732,6 +732,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bool ret = loader.LoadASCIIFromFile(&model, &error, &warning, filePath.string());
         Assert(ret, "failed to load the DMM-pre-computed mesh.");
 
+        // JP: DMM SDKの構造体とOptiXの構造体が同一であることの確認。
+        // EN: Ensure the structures from the DMM SDK and OptiX are identical.
         static_assert(
             static_cast<uint32_t>(bary::BlockFormatDispC1::eInvalid) == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_NONE &&
             static_cast<uint32_t>(bary::BlockFormatDispC1::eR11_unorm_lvl3_pack512) == OPTIX_DISPLACEMENT_MICROMAP_FORMAT_64_MICRO_TRIS_64_BYTES &&
@@ -824,6 +826,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 const tinygltf::Primitive &srcPrimGroup = srcMesh.primitives[primGroupIdx];
                 Geometry::MaterialGroup group;
 
+                // JP: 通常の頂点・三角形情報を読み出す。
+                // EN: Read ordinary vertex/triangle information.
                 TypedBufferRef<Shared::Vertex> vertexBuffer;
                 uint32_t numVertices;
                 {
@@ -932,6 +936,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group.optixGeomInst.setMaterial(0, 0, defaultMat);
                 group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
 
+                // JP: DMM関連の頂点・三角形情報を読み出す。
+                // EN: Read DMM-related vertex/triangle information.
                 if (useDMM && srcPrimGroup.extensions.count("NV_displacement_micromap")) {
                     const auto &mmAttrs =
                         srcPrimGroup.extensions.at("NV_displacement_micromap").Get<tinygltf::Value::Object>();
@@ -1072,7 +1078,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             geometries.push_back(geom);
         }
 
-        // Assume 1-level nodes for this sample.
+        // JP: このサンプルでは1レベルのノードを想定している。
+        // EN: Assume 1-level nodes for this sample.
         for (int nodeIdx = 0; nodeIdx < model.nodes.size(); ++nodeIdx) {
             const tinygltf::Node &node = model.nodes[nodeIdx];
 
@@ -1100,6 +1107,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
     }
     else {
+        // JP: こちらのコードパスではDMMの生成もサンプル内で行う。
+        //     * 単なるデモ用途でありDMMの品質は高くないことに注意。メッシュのクラックなどが発生する。
+        // EN: This code path performs DMM generation in the sample.
+        //     * Note that this is just for demonstration and the quality of DMM is not good.
+        //       You'll see cracks in the mesh or something.
+
         std::filesystem::path filePath = R"(../../data/stanford_bunny_309_faces_smooth.obj)";
         std::filesystem::path fileDir = filePath.parent_path();
 
