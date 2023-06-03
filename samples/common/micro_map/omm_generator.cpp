@@ -321,7 +321,7 @@ void generateOMMArray(
         _context.useIndexBuffer,
         shared::StridedBuffer<OptixDisplacementMicromapDesc>(
             ommDescs.getCUdeviceptr(),
-            ommDescs.numElements(),
+            static_cast<uint32_t>(ommDescs.numElements()),
             ommDescs.stride()),
         ommIndexBuffer.getCUdeviceptr(), _context.indexSize);
     if (enableDebugPrint) {

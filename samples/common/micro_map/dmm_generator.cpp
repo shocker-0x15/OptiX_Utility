@@ -498,12 +498,12 @@ void generateDMMArray(
         _context.microMapFormats, _context.triNeighborLists,
         shared::StridedBuffer<OptixDisplacementMicromapDesc>(
             dmmDescs.getCUdeviceptr(),
-            dmmDescs.numElements(),
+            static_cast<uint32_t>(dmmDescs.numElements()),
             dmmDescs.stride()),
         dmmIndexBuffer.getCUdeviceptr(), _context.indexSize,
         shared::StridedBuffer<OptixDisplacementMicromapTriangleFlags>(
             dmmTriangleFlagsBuffer.getCUdeviceptr(),
-            dmmTriangleFlagsBuffer.numElements(),
+            static_cast<uint32_t>(dmmTriangleFlagsBuffer.numElements()),
             dmmTriangleFlagsBuffer.stride()));
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
