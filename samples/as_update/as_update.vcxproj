@@ -24,6 +24,7 @@
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
     <ClCompile Include="..\..\optix_util.cpp" />
     <ClCompile Include="..\common\gl_util.cpp" />
+    <ClCompile Include="..\common\gui_common.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
     <ClCompile Include="as_update_main.cpp" />
   </ItemGroup>
@@ -50,6 +51,7 @@
     <ClInclude Include="..\..\optix_util.h" />
     <ClInclude Include="..\..\optix_util_private.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\gui_common.h" />
     <ClInclude Include="..\common\obj_loader.h" />
     <ClInclude Include="as_update_shared.h" />
   </ItemGroup>

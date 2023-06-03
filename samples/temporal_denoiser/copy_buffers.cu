@@ -30,23 +30,20 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     BufferToDisplay bufferTypeToDisplay,
     float motionVectorOffset, float motionVectorScale,
     optixu::NativeBlockBuffer2D<float4> outputBuffer,
-    int2 imageSize, bool performUpscale, bool useLowResRendering) {
+    int2 outputBufferSize, int2 srcImageSize, bool performUpscale, bool useLowResRendering) {
     int2 launchIndex = make_int2(blockDim.x * blockIdx.x + threadIdx.x,
                                  blockDim.y * blockIdx.y + threadIdx.y);
-    if (launchIndex.x >= imageSize.x ||
-        launchIndex.y >= imageSize.y)
+    if (launchIndex.x >= outputBufferSize.x ||
+        launchIndex.y >= outputBufferSize.y)
         return;
 
-    int32_t srcImageWidth = imageSize.x;
-    int32_t srcImageHeight = imageSize.y;
     int2 pixel = launchIndex;
     if (useLowResRendering && (!performUpscale || bufferTypeToDisplay != BufferToDisplay::DenoisedBeauty)) {
-        srcImageWidth /= 2;
-        srcImageHeight /= 2;
         pixel.x /= 2;
         pixel.y /= 2;
     }
-    uint32_t linearIndex = pixel.y * srcImageWidth + pixel.x;
+
+    uint32_t linearIndex = pixel.y * srcImageSize.x + pixel.x;
     float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     switch (bufferTypeToDisplay) {
     case BufferToDisplay::NoisyBeauty:
@@ -55,15 +52,15 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
         if (bufferTypeToDisplay == BufferToDisplay::DenoisedBeauty && !performUpscale && useLowResRendering) {
             float xInP = (launchIndex.x % 2 + 0.5f) / 2;
             float yInP = (launchIndex.y % 2 + 0.5f) / 2;
-            int32_t npx = shared::clamp(pixel.x + ((xInP - 0.5f) > 0 ? 1 : -1), 0, srcImageWidth - 1);
-            int32_t npy = shared::clamp(pixel.y + ((yInP - 0.5f) > 0 ? 1 : -1), 0, srcImageHeight - 1);
+            int32_t npx = shared::clamp(pixel.x + ((xInP - 0.5f) > 0 ? 1 : -1), 0, srcImageSize.x - 1);
+            int32_t npy = shared::clamp(pixel.y + ((yInP - 0.5f) > 0 ? 1 : -1), 0, srcImageSize.y - 1);
             float s = std::fabs(xInP - 0.5f);
             float t = std::fabs(yInP - 0.5f);
             value =
-                (1.0f - s) * (1.0f - t) * typedLinearBuffer[pixel.y * srcImageWidth + pixel.x] +
-                s * (1.0f - t) * typedLinearBuffer[pixel.y * srcImageWidth + npx] +
-                (1.0f - s) * t * typedLinearBuffer[npy * srcImageWidth + pixel.x] +
-                s * t * typedLinearBuffer[npy * srcImageWidth + npx];
+                (1.0f - s) * (1.0f - t) * typedLinearBuffer[pixel.y * srcImageSize.x + pixel.x] +
+                s * (1.0f - t) * typedLinearBuffer[pixel.y * srcImageSize.x + npx] +
+                (1.0f - s) * t * typedLinearBuffer[npy * srcImageSize.x + pixel.x] +
+                s * t * typedLinearBuffer[npy * srcImageSize.x + npx];
         }
         else {
             value = typedLinearBuffer[linearIndex];

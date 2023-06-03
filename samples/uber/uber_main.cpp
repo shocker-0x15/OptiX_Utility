@@ -1313,6 +1313,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cuContext, outputTexture.getHandle(),
         cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
+    glu::Sampler outputSampler;
+    outputSampler.initialize(
+        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
+        glu::Sampler::WrapMode::ClampToEdge, glu::Sampler::WrapMode::ClampToEdge);
+
 
     
     // JP: Hi-DPIディスプレイで過剰なレンダリング負荷になってしまうため低解像度フレームバッファーを作成する。
@@ -1975,9 +1980,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             {
                 glUseProgram(drawOptiXResultShader.getHandle());
 
-                glUniform1i(0, (int32_t)renderTargetSizeX);
+                glUniform1f(0, 1.0f);
+                glUniform2i(1, renderTargetSizeX, renderTargetSizeY);
 
                 glBindTextureUnit(0, outputTexture.getHandle());
+                glBindSampler(0, outputSampler.getHandle());
 
                 glBindVertexArray(vertexArrayForFullScreen.getHandle());
                 glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -2051,6 +2058,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     frameBuffer.finalize();
 
+    outputSampler.finalize();
     outputArray.finalize();
     outputTexture.finalize();
 

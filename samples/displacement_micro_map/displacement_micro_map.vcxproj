@@ -28,6 +28,7 @@
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\common\gl_util.cpp" />
+    <ClCompile Include="..\common\gui_common.cpp" />
     <ClCompile Include="..\common\micro_map\dmm_generator.cpp" />
     <ClCompile Include="..\common\micro_map\micro_map_generator.cpp" />
     <ClCompile Include="..\common\obj_loader.cpp" />
@@ -58,6 +59,7 @@
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\gui_common.h" />
     <ClInclude Include="..\common\imgui_more.h" />
     <ClInclude Include="..\common\micro_map\dmm_generator.h" />
     <ClInclude Include="..\common\micro_map\dmm_generator_private.h" />

@@ -85,6 +85,7 @@ set_property(
     "c++17" "c++20")
 
 # Assimp
+OPTION( ASSIMP_BUILD_ZLIB "Build your own zlib" ON)
 option(ASSIMP_BUILD_ASSIMP_TOOLS "If the supplementary tools for Assimp are built in addition to the library." OFF)
 option(ASSIMP_BUILD_SAMPLES "If the official samples are built as well (needs Glut)." OFF)
 option(ASSIMP_BUILD_TESTS "If the test suite for Assimp is built in addition to the library." OFF)

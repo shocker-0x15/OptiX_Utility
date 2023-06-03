@@ -12,13 +12,7 @@ EN: This sample demonstrates an example of dynamically add, remove and move obje
 
 #include "scene_edit_shared.h"
 
-// Include glfw3.h after our OpenGL definitions
-#include "../common/gl_util.h"
-#include <GLFW/glfw3.h>
-
-#include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
+#include "../common/gui_common.h"
 #include "../common/imgui_file_dialog.h"
 
 #include <assimp/scene.h>
@@ -27,62 +21,6 @@ EN: This sample demonstrates an example of dynamically add, remove and move obje
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 #include "../common/dds_loader.h"
-
-
-
-struct KeyState {
-    uint64_t timesLastChanged[5];
-    bool statesLastChanged[5];
-    uint32_t lastIndex;
-
-    KeyState() : lastIndex(0) {
-        for (int i = 0; i < 5; ++i) {
-            timesLastChanged[i] = 0;
-            statesLastChanged[i] = false;
-        }
-    }
-
-    void recordStateChange(bool state, uint64_t time) {
-        bool lastState = statesLastChanged[lastIndex];
-        if (state == lastState)
-            return;
-
-        lastIndex = (lastIndex + 1) % 5;
-        statesLastChanged[lastIndex] = !lastState;
-        timesLastChanged[lastIndex] = time;
-    }
-
-    bool getState(int32_t goBack = 0) const {
-        Assert(goBack >= -4 && goBack <= 0, "goBack must be in the range [-4, 0].");
-        return statesLastChanged[(lastIndex + goBack + 5) % 5];
-    }
-
-    uint64_t getTime(int32_t goBack = 0) const {
-        Assert(goBack >= -4 && goBack <= 0, "goBack must be in the range [-4, 0].");
-        return timesLastChanged[(lastIndex + goBack + 5) % 5];
-    }
-};
-
-KeyState g_keyForward;
-KeyState g_keyBackward;
-KeyState g_keyLeftward;
-KeyState g_keyRightward;
-KeyState g_keyUpward;
-KeyState g_keyDownward;
-KeyState g_keyTiltLeft;
-KeyState g_keyTiltRight;
-KeyState g_keyFasterPosMovSpeed;
-KeyState g_keySlowerPosMovSpeed;
-KeyState g_buttonRotate;
-double g_mouseX;
-double g_mouseY;
-
-float g_cameraPositionalMovingSpeed;
-float g_cameraDirectionalMovingSpeed;
-float g_cameraTiltSpeed;
-Quaternion g_cameraOrientation;
-Quaternion g_tempCameraOrientation;
-float3 g_cameraPosition;
 
 
 
@@ -880,240 +818,8 @@ public:
 
 
 
-
-static void glfw_error_callback(int32_t error, const char* description) {
-    hpprintf("Error %d: %s\n", error, description);
-}
-
-
-
-namespace ImGui {
-    void PushDisabledStyle() {
-        PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.2f);
-    }
-    void PopDisabledStyle() {
-        PopStyleVar();
-    }
-
-    bool Button(const char* label, bool active, const ImVec2 &size = ImVec2(0, 0)) {
-        if (!active)
-            PushDisabledStyle();
-        bool ret = Button(label, size) && active;
-        if (!active)
-            PopDisabledStyle();
-        return ret;
-    }
-}
-
 int32_t main(int32_t argc, const char* argv[]) try {
-    const std::filesystem::path exeDir = getExecutableDirectory();
-
-    // ----------------------------------------------------------------
-    // JP: OpenGL, GLFWの初期化。
-    // EN: Initialize OpenGL and GLFW.
-
-    glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit()) {
-        hpprintf("Failed to initialize GLFW.\n");
-        return -1;
-    }
-
-    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-
-    constexpr bool enableGLDebugCallback = DEBUG_SELECT(true, false);
-
-    // JP: OpenGL 4.6 Core Profileのコンテキストを作成する。
-    // EN: Create an OpenGL 4.6 core profile context.
-    const uint32_t OpenGLMajorVersion = 4;
-    const uint32_t OpenGLMinorVersion = 6;
-    const char* glsl_version = "#version 460";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OpenGLMajorVersion);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OpenGLMinorVersion);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    if constexpr (enableGLDebugCallback)
-        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-
-    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
-
-    int32_t renderTargetSizeX = 1280;
-    int32_t renderTargetSizeY = 720;
-
-    // JP: ウインドウの初期化。
-    //     HiDPIディスプレイに対応する。
-    // EN: Initialize a window.
-    //     Support Hi-DPI display.
-    float contentScaleX, contentScaleY;
-    glfwGetMonitorContentScale(monitor, &contentScaleX, &contentScaleY);
-    float UIScaling = contentScaleX;
-    GLFWwindow* window = glfwCreateWindow(
-        static_cast<int32_t>(renderTargetSizeX * UIScaling),
-        static_cast<int32_t>(renderTargetSizeY * UIScaling),
-        "OptiX Utility - Scene Edit", NULL, NULL);
-    glfwSetWindowUserPointer(window, nullptr);
-    if (!window) {
-        hpprintf("Failed to create a GLFW window.\n");
-        glfwTerminate();
-        return -1;
-    }
-
-    int32_t curFBWidth;
-    int32_t curFBHeight;
-    glfwGetFramebufferSize(window, &curFBWidth, &curFBHeight);
-
-    glfwMakeContextCurrent(window);
-
-    glfwSwapInterval(1); // Enable vsync
-
-
-
-    // JP: gl3wInit()は何らかのOpenGLコンテキストが作られた後に呼ぶ必要がある。
-    // EN: gl3wInit() must be called after some OpenGL context has been created.
-    int32_t gl3wRet = gl3wInit();
-    if (!gl3wIsSupported(OpenGLMajorVersion, OpenGLMinorVersion)) {
-        hpprintf("gl3w doesn't support OpenGL %u.%u\n", OpenGLMajorVersion, OpenGLMinorVersion);
-        glfwTerminate();
-        return -1;
-    }
-
-    if constexpr (enableGLDebugCallback) {
-        glu::enableDebugCallback(true);
-        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, false);
-    }
-
-    // END: Initialize OpenGL and GLFW.
-    // ----------------------------------------------------------------
-
-
-
-    // ----------------------------------------------------------------
-    // JP: 入力コールバックの設定。
-    // EN: Set up input callbacks.
-
-    glfwSetMouseButtonCallback(
-        window,
-        [](GLFWwindow* window, int32_t button, int32_t action, int32_t mods) {
-            uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
-
-            switch (button) {
-            case GLFW_MOUSE_BUTTON_MIDDLE: {
-                devPrintf("Mouse Middle\n");
-                g_buttonRotate.recordStateChange(action == GLFW_PRESS, frameIndex);
-                break;
-            }
-            default:
-                break;
-            }
-        });
-    glfwSetCursorPosCallback(
-        window,
-        [](GLFWwindow* window, double x, double y) {
-            g_mouseX = x;
-            g_mouseY = y;
-        });
-    glfwSetKeyCallback(
-        window,
-        [](GLFWwindow* window, int32_t key, int32_t scancode, int32_t action, int32_t mods) {
-            uint64_t &frameIndex = *(uint64_t*)glfwGetWindowUserPointer(window);
-
-            switch (key) {
-            case GLFW_KEY_W: {
-                g_keyForward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_S: {
-                g_keyBackward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_A: {
-                g_keyLeftward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_D: {
-                g_keyRightward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_R: {
-                g_keyUpward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_F: {
-                g_keyDownward.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_Q: {
-                g_keyTiltLeft.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_E: {
-                g_keyTiltRight.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_T: {
-                g_keyFasterPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            case GLFW_KEY_G: {
-                g_keySlowerPosMovSpeed.recordStateChange(action == GLFW_PRESS || action == GLFW_REPEAT, frameIndex);
-                break;
-            }
-            default:
-                break;
-            }
-        });
-
-    g_cameraPositionalMovingSpeed = 0.01f;
-    g_cameraDirectionalMovingSpeed = 0.0015f;
-    g_cameraTiltSpeed = 0.025f;
-    g_cameraPosition = make_float3(0, 0, 3.2f);
-    g_cameraOrientation = qRotateY(pi_v<float>);
-
-    // END: Set up input callbacks.
-    // ----------------------------------------------------------------
-
-
-
-    // ----------------------------------------------------------------
-    // JP: ImGuiの初期化。
-    // EN: Initialize ImGui.
-
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    // Setup style
-    // JP: ガンマ補正が有効なレンダーターゲットで、同じUIの見た目を得るためにデガンマされたスタイルも用意する。
-    // EN: Prepare a degamma-ed style to have the identical UI appearance on gamma-corrected render target.
-    ImGuiStyle guiStyle/*, guiStyleWithGamma*/;
-    ImGui::StyleColorsDark(&guiStyle);
-    //guiStyleWithGamma = guiStyle;
-    //const auto degamma = [](const ImVec4 &color) {
-    //    return ImVec4(sRGB_degamma_s(color.x),
-    //                  sRGB_degamma_s(color.y),
-    //                  sRGB_degamma_s(color.z),
-    //                  color.w);
-    //};
-    //for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-    //    guiStyleWithGamma.Colors[i] = degamma(guiStyleWithGamma.Colors[i]);
-    //}
-    ImGui::GetStyle() = guiStyle;
-
-    io.Fonts->AddFontDefault();
-
-    ImFont* fontForFileDialog = nullptr;
-    std::filesystem::path fontPath = exeDir / "fonts/RictyDiminished-Regular-fixed.ttf";
-    if (std::filesystem::exists(fontPath)) {
-        fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 14.0f, nullptr,
-                                                         io.Fonts->GetGlyphRangesJapanese());
-    }
-    else {
-        hpprintf("Font for Japanese not found: %s\n", fontPath.u8string().c_str());
-    }
-
-    // END: Initialize ImGui.
-    // ----------------------------------------------------------------
+    const std::filesystem::path resourceDir = getExecutableDirectory() / "scene_edit";
 
 
 
@@ -1122,14 +828,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Settings for OptiX context and pipeline.
 
     CUcontext cuContext;
-    int32_t cuDeviceCount;
-    StreamChain<2> streamChain;
+    CUstream stream;
     CUDADRV_CHECK(cuInit(0));
-    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    streamChain.initialize(cuContext);
-    CUstream stream = streamChain.waitAvailableAndGetCurrentStream();
+    CUDADRV_CHECK(cuStreamCreate(&stream, 0));
 
     optixu::Context optixContext = optixu::Context::create(cuContext);
 
@@ -1146,7 +849,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                      OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    const std::vector<char> optixIr = readBinaryFile(exeDir / "scene_edit/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr = readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -1230,43 +933,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: OpenGL用バッファーオブジェクトからCUDAバッファーを生成する。
-    // EN: Create a CUDA buffer from an OpenGL buffer instObject0.
-    glu::Texture2D outputTexture;
-    cudau::Array outputArray;
-    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
-    outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
-    outputArray.initializeFromGLTexture2D(
-        cuContext, outputTexture.getHandle(),
-        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-    outputBufferSurfaceHolder.initialize({ &outputArray });
-
-    glu::Sampler outputSampler;
-    outputSampler.initialize(
-        glu::Sampler::MinFilter::Nearest, glu::Sampler::MagFilter::Nearest,
-        glu::Sampler::WrapMode::Repeat, glu::Sampler::WrapMode::Repeat);
-
-
-
-    // JP: フルスクリーンクアッド(or 三角形)用の空のVAO。
-    // EN: Empty VAO for full screen qud (or triangle).
-    glu::VertexArray vertexArrayForFullScreen;
-    vertexArrayForFullScreen.initialize();
-
-    // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
-    // EN: Shader to copy OptiX result to a frame buffer.
-    glu::GraphicsProgram drawOptiXResultShader;
-    drawOptiXResultShader.initializeVSPS(
-        readTxtFile(exeDir / "scene_edit/shaders/drawOptiXResult.vert"),
-        readTxtFile(exeDir / "scene_edit/shaders/drawOptiXResult.frag"));
-
-
+    constexpr int32_t initWindowContentWidth = 1280;
+    constexpr int32_t initWindowContentHeight = 720;
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = 0;
-    plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
+    plp.imageSize = int2(initWindowContentWidth, initWindowContentHeight);
     plp.camera.fovY = 50 * pi_v<float> / 180;
-    plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
+    plp.camera.aspect = (float)initWindowContentWidth / initWindowContentHeight;
 
     pipeline.setScene(optixEnv.scene);
 
@@ -1274,172 +948,90 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
 
 
-    
+
+    // ----------------------------------------------------------------
+    // JP: ウインドウの表示。
+    // EN: Display the window.
+
+    InitialConfig initConfig = {};
+    initConfig.windowTitle = "OptiX Utility - Scene Edit";
+    initConfig.resourceDir = resourceDir;
+    initConfig.windowContentRenderWidth = initWindowContentWidth;
+    initConfig.windowContentRenderHeight = initWindowContentHeight;
+    initConfig.cameraPosition = make_float3(0, 0, 3.2f);
+    initConfig.cameraOrientation = qRotateY(pi_v<float>);
+    initConfig.cameraMovingSpeed = 0.01f;
+    initConfig.cuContext = cuContext;
+
+    uint32_t sbtIndex = -1;
+    cudau::Buffer* curHitGroupSBT;
+    OptixTraversableHandle curTravHandle = 0;
+
+    GUIFramework framework;
+    framework.initialize(initConfig);
+
+    ImGuiIO &io = ImGui::GetIO();
+    io.Fonts->AddFontDefault();
+
+    ImFont* fontForFileDialog = nullptr;
+    std::filesystem::path fontPath = getExecutableDirectory() / "fonts/RictyDiminished-Regular-fixed.ttf";
+    if (std::filesystem::exists(fontPath)) {
+        fontForFileDialog = io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 14.0f, nullptr,
+                                                         io.Fonts->GetGlyphRangesJapanese());
+    }
+    else {
+        hpprintf("Font for Japanese not found: %s\n", fontPath.u8string().c_str());
+    }
+
     FileDialog fileDialog;
     fileDialog.setFont(fontForFileDialog);
     fileDialog.setFlags(FileDialog::Flag_FileSelection);
     //fileDialog.setFlags(FileDialog::Flag_FileSelection |
     //                    FileDialog::Flag_DirectorySelection |
     //                    FileDialog::Flag_MultipleSelection);
-    
-    uint64_t frameIndex = 0;
-    glfwSetWindowUserPointer(window, &frameIndex);
-    int32_t requestedSize[2];
-    uint32_t sbtIndex = -1;
-    cudau::Buffer* curHitGroupSBT;
-    OptixTraversableHandle curTravHandle = 0;
-    while (true) {
-        uint32_t bufferIndex = frameIndex % 2;
 
-        if (glfwWindowShouldClose(window))
-            break;
-        glfwPollEvents();
+    cudau::Array outputArray;
+    outputArray.initializeFromGLTexture2D(
+        cuContext, framework.getOutputTexture().getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
-        CUstream curStream = streamChain.waitAvailableAndGetCurrentStream();
+    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
+    outputBufferSurfaceHolder.initialize({ &outputArray });
 
-        bool resized = false;
-        int32_t newFBWidth;
-        int32_t newFBHeight;
-        glfwGetFramebufferSize(window, &newFBWidth, &newFBHeight);
-        if (newFBWidth != curFBWidth || newFBHeight != curFBHeight) {
-            curFBWidth = newFBWidth;
-            curFBHeight = newFBHeight;
+    const auto onRenderLoop = [&]
+    (const RunArguments &args) {
+        const uint64_t frameIndex = args.frameIndex;
+        const CUstream curStream = args.curStream;
 
-            renderTargetSizeX = curFBWidth / UIScaling;
-            renderTargetSizeY = curFBHeight / UIScaling;
-            requestedSize[0] = renderTargetSizeX;
-            requestedSize[1] = renderTargetSizeY;
-
-            glFinish();
-            streamChain.waitAllWorkDone();
-
-            outputTexture.finalize();
-            outputTexture.initialize(GL_RGBA32F, renderTargetSizeX, renderTargetSizeY, 1);
-            outputArray.finalize();
-            outputArray.initializeFromGLTexture2D(
-                cuContext, outputTexture.getHandle(),
-                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
-
-            outputArray.resize(renderTargetSizeX, renderTargetSizeY);
-
-            // EN: update the pipeline parameters.
-            plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
-            plp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
-
-            resized = true;
-        }
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-
-
-        bool operatingCamera;
-        bool cameraIsActuallyMoving;
-        static bool operatedCameraOnPrevFrame = false;
-        {
-            const auto decideDirection = [](const KeyState& a, const KeyState& b) {
-                int32_t dir = 0;
-                if (a.getState() == true) {
-                    if (b.getState() == true)
-                        dir = 0;
-                    else
-                        dir = 1;
-                }
-                else {
-                    if (b.getState() == true)
-                        dir = -1;
-                    else
-                        dir = 0;
-                }
-                return dir;
-            };
-
-            int32_t trackZ = decideDirection(g_keyForward, g_keyBackward);
-            int32_t trackX = decideDirection(g_keyLeftward, g_keyRightward);
-            int32_t trackY = decideDirection(g_keyUpward, g_keyDownward);
-            int32_t tiltZ = decideDirection(g_keyTiltRight, g_keyTiltLeft);
-            int32_t adjustPosMoveSpeed = decideDirection(g_keyFasterPosMovSpeed, g_keySlowerPosMovSpeed);
-
-            g_cameraPositionalMovingSpeed *= 1.0f + 0.02f * adjustPosMoveSpeed;
-            g_cameraPositionalMovingSpeed = std::clamp(g_cameraPositionalMovingSpeed, 1e-6f, 1e+6f);
-
-            static double deltaX = 0, deltaY = 0;
-            static double lastX, lastY;
-            static double g_prevMouseX = g_mouseX, g_prevMouseY = g_mouseY;
-            if (g_buttonRotate.getState() == true) {
-                if (g_buttonRotate.getTime() == frameIndex) {
-                    lastX = g_mouseX;
-                    lastY = g_mouseY;
-                }
-                else {
-                    deltaX = g_mouseX - lastX;
-                    deltaY = g_mouseY - lastY;
-                }
-            }
-
-            float deltaAngle = std::sqrt(deltaX * deltaX + deltaY * deltaY);
-            float3 axis = make_float3(deltaY, -deltaX, 0);
-            axis /= deltaAngle;
-            if (deltaAngle == 0.0f)
-                axis = make_float3(1, 0, 0);
-
-            g_cameraOrientation =
-                g_cameraOrientation *
-                qRotateZ(g_cameraTiltSpeed * tiltZ);
-            g_tempCameraOrientation =
-                g_cameraOrientation
-                * qRotate(g_cameraDirectionalMovingSpeed * deltaAngle, axis);
-            g_cameraPosition +=
-                g_tempCameraOrientation.toMatrix3x3()
-                * (g_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
-            if (g_buttonRotate.getState() == false && g_buttonRotate.getTime() == frameIndex) {
-                g_cameraOrientation = g_tempCameraOrientation;
-                deltaX = 0;
-                deltaY = 0;
-            }
-
-            operatingCamera = (g_keyForward.getState() || g_keyBackward.getState() ||
-                               g_keyLeftward.getState() || g_keyRightward.getState() ||
-                               g_keyUpward.getState() || g_keyDownward.getState() ||
-                               g_keyTiltLeft.getState() || g_keyTiltRight.getState() ||
-                               g_buttonRotate.getState());
-            cameraIsActuallyMoving = (trackZ != 0 || trackX != 0 || trackY != 0 ||
-                                      tiltZ != 0 || (g_mouseX != g_prevMouseX) || (g_mouseY != g_prevMouseY))
-                && operatingCamera;
-
-            g_prevMouseX = g_mouseX;
-            g_prevMouseY = g_mouseY;
-
-            plp.camera.position = g_cameraPosition;
-            plp.camera.orientation = g_tempCameraOrientation.toMatrix3x3();
-        }
-
-
-
+        // Camera Window
         {
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
             ImGui::Text("Mouse Middle Drag: Rotate");
 
-            ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
+            ImGui::InputFloat3("Position", reinterpret_cast<float*>(&args.cameraPosition));
             static float rollPitchYaw[3];
-            g_tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
+            args.tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
             rollPitchYaw[0] *= 180 / pi_v<float>;
             rollPitchYaw[1] *= 180 / pi_v<float>;
             rollPitchYaw[2] *= 180 / pi_v<float>;
             if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw))
-                g_cameraOrientation = qFromEulerAngles(
+                args.cameraOrientation = qFromEulerAngles(
                     rollPitchYaw[0] * pi_v<float> / 180,
                     rollPitchYaw[1] * pi_v<float> / 180,
                     rollPitchYaw[2] * pi_v<float> / 180);
-            ImGui::Text("Pos. Speed (T/G): %g", g_cameraPositionalMovingSpeed);
+            ImGui::Text("Pos. Speed (T/G): %g", args.cameraPositionalMovingSpeed);
 
             ImGui::End();
         }
 
+        plp.camera.position = args.cameraPosition;
+        plp.camera.orientation = args.tempCameraOrientation.toMatrix3x3();
+
+
+
+        // Scene Window
         static int32_t travIndex = -1;
         static std::vector<std::string> traversableNames;
         static std::vector<OptixTraversableHandle> traversables;
@@ -2112,56 +1704,55 @@ int32_t main(int32_t argc, const char* argv[]) try {
         plp.resultBuffer = outputBufferSurfaceHolder.getNext();
 
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
-        pipeline.launch(curStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+        pipeline.launch(curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);
 
         outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
 
 
 
-        // ----------------------------------------------------------------
-        // JP: OptiXによる描画結果を表示用レンダーターゲットにコピーする。
-        // EN: Copy the OptiX rendering results to the display render target.
+        ReturnValuesToRenderLoop ret = {};
+        ret.enable_sRGB = false;
+        ret.finish = false;
 
-        glViewport(0, 0, curFBWidth, curFBHeight);
+        return ret;
+    };
 
-        glUseProgram(drawOptiXResultShader.getHandle());
+    const auto onResolutionChange = [&]
+    (CUstream curStream, uint64_t frameIndex,
+     int32_t windowContentWidth, int32_t windowContentHeight) {
+         outputArray.finalize();
+         outputArray.initializeFromGLTexture2D(
+             cuContext, framework.getOutputTexture().getHandle(),
+             cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
-        glUniform2ui(0, curFBWidth, curFBHeight);
+         // EN: update the pipeline parameters.
+         plp.imageSize = int2(windowContentWidth, windowContentHeight);
+         plp.camera.aspect = (float)windowContentWidth / windowContentHeight;
+    };
 
-        glBindTextureUnit(0, outputTexture.getHandle());
-        glBindSampler(0, outputSampler.getHandle());
+    framework.run(onRenderLoop, onResolutionChange);
 
-        glBindVertexArray(vertexArrayForFullScreen.getHandle());
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+    outputBufferSurfaceHolder.finalize();
+    outputArray.finalize();
 
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    framework.finalize();
 
-        // END: Copy the OptiX rendering results to the display render target.
-        // ----------------------------------------------------------------
+    // END: Display the window.
+    // ----------------------------------------------------------------
 
-        glfwSwapBuffers(window);
-        streamChain.swap();
 
-        ++frameIndex;
-    }
-
-    streamChain.waitAllWorkDone();
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
+
+
 
     optixEnv.groups.clear();
     optixEnv.insts.clear();
     optixEnv.geomGroups.clear();
     optixEnv.geomInstFileGroups.clear();
 
-    drawOptiXResultShader.finalize();
-    vertexArrayForFullScreen.finalize();
-
-    outputSampler.finalize();
     outputBufferSurfaceHolder.finalize();
     outputArray.finalize();
-    outputTexture.finalize();
 
     optixEnv.asScratchBuffer.finalize();
     optixEnv.hitGroupSBT[1].finalize();
@@ -2184,18 +1775,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixContext.destroy();
 
-    streamChain.finalize();
+    CUDADRV_CHECK(cuStreamDestroy(stream));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
-
-
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
-    glfwDestroyWindow(window);
-    
-    glfwTerminate();
 
     return 0;
 }

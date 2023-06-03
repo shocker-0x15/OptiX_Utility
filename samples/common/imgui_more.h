@@ -9,7 +9,7 @@ namespace ImGui {
         return RadioButton(label, reinterpret_cast<int*>(v), static_cast<int>(v_button));
     }
 
-    bool InputLog2Int(const char* label, int* v, int max_v, int num_digits = 3) {
+    inline bool InputLog2Int(const char* label, int* v, int max_v, int num_digits = 3) {
         float buttonSize = GetFrameHeight();
         float itemInnerSpacingX = GetStyle().ItemInnerSpacing.x;
 
@@ -35,5 +35,21 @@ namespace ImGui {
         EndGroup();
 
         return changed;
+    }
+
+    inline void PushDisabledStyle() {
+        PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.2f);
+    }
+    inline void PopDisabledStyle() {
+        PopStyleVar();
+    }
+
+    inline bool Button(const char* label, bool active, const ImVec2 &size = ImVec2(0, 0)) {
+        if (!active)
+            PushDisabledStyle();
+        bool ret = Button(label, size) && active;
+        if (!active)
+            PopDisabledStyle();
+        return ret;
     }
 }

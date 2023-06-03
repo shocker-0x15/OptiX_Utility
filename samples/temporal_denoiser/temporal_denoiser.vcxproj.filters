@@ -73,6 +73,9 @@
     <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
       <Filter>non-essentials\ext</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\gui_common.cpp">
+      <Filter>non-essentials</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -149,6 +152,9 @@
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
     <ClInclude Include="..\common\imgui_more.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\gui_common.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
   </ItemGroup>
