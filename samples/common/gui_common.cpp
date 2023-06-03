@@ -258,6 +258,8 @@ void GUIFramework::keyCallback(int32_t key, int32_t scancode, int32_t action, in
 void GUIFramework::run(
     const std::function<ReturnValuesToRenderLoop(const RunArguments &args)> &updateAndRender,
     const std::function<void(CUstream, uint64_t, int32_t, int32_t)> &resizeCallback) {
+    m_frameIndex = 0;
+
     while (true) {
         uint32_t bufferIndex = m_frameIndex % 2;
 
