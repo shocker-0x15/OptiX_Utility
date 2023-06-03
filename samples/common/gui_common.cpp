@@ -261,8 +261,6 @@ void GUIFramework::run(
     m_frameIndex = 0;
 
     while (true) {
-        uint32_t bufferIndex = m_frameIndex % 2;
-
         if (glfwWindowShouldClose(m_window))
             break;
 
@@ -282,8 +280,8 @@ void GUIFramework::run(
             m_windowContentScale = newContentScaleX;
             m_windowContentWidth = newFBWidth;
             m_windowContentHeight = newFBHeight;
-            m_windowContentRenderWidth = newFBWidth / m_windowContentScale;
-            m_windowContentRenderHeight = newFBHeight / m_windowContentScale;
+            m_windowContentRenderWidth = static_cast<int32_t>(newFBWidth / m_windowContentScale);
+            m_windowContentRenderHeight = static_cast<int32_t>(newFBHeight / m_windowContentScale);
 
             glFinish();
             m_streamChain.waitAllWorkDone();
@@ -365,16 +363,17 @@ void GUIFramework::run(
             }
 
             float deltaAngle = static_cast<float>(std::sqrt(deltaX * deltaX + deltaY * deltaY));
-            float3 axis = make_float3(static_cast<float>(deltaY), -static_cast<float>(deltaX), 0);
+            float3 axis(static_cast<float>(deltaY), -static_cast<float>(deltaX), 0.0f);
             axis /= deltaAngle;
             if (deltaAngle == 0.0f)
-                axis = make_float3(1, 0, 0);
+                axis = float3(1, 0, 0);
 
             m_cameraOrientation = m_cameraOrientation * qRotateZ(m_cameraTiltSpeed * tiltZ);
             m_tempCameraOrientation = m_cameraOrientation *
                 qRotate(m_cameraDirectionalMovingSpeed * deltaAngle, axis);
             m_cameraPosition += m_tempCameraOrientation.toMatrix3x3() *
-                (m_cameraPositionalMovingSpeed * make_float3(trackX, trackY, trackZ));
+                (m_cameraPositionalMovingSpeed
+                 * float3(static_cast<float>(trackX), static_cast<float>(trackY), static_cast<float>(trackZ)));
             if (m_buttonRotate.getState() == false && m_buttonRotate.getTime() == m_frameIndex) {
                 m_cameraOrientation = m_tempCameraOrientation;
                 deltaX = 0;
