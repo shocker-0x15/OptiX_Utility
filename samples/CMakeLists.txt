@@ -2,7 +2,7 @@
 # JP: プロジェクト間で共通のソースコードのリスト作成。
 
 file(
-    GLOB_RECURSE COMMON_SOURCES
+    GLOB COMMON_SOURCES
     "common/common.h"
     "common/common.cpp"
 )
@@ -94,6 +94,19 @@ set(
 list(
     FILTER IMGUI_SOURCES INCLUDE REGEX
     ".*\.(h|hpp|c|cc|cpp)$")
+
+file(
+    GLOB COMMON_GUI_SOURCES
+    "common/gui_common.h"
+    "common/gui_common.cpp"
+)
+set(
+    COMMON_GUI_SOURCES
+    ${COMMON_GUI_SOURCES}
+    ${COMMON_SHADERS}
+    ${GL_SOURCES}
+    ${IMGUI_SOURCES}
+)
 
 # END:JP: プロジェクト間で共通のソースコードのリスト作成。
 # ----------------------------------------------------------------

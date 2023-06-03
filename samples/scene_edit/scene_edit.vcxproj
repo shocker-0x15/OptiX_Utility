@@ -22,6 +22,7 @@
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\dds_loader.cpp" />
     <ClCompile Include="..\common\gl_util.cpp" />
+    <ClCompile Include="..\common\gui_common.cpp" />
     <ClCompile Include="..\common\imgui_file_dialog.cpp" />
     <ClCompile Include="..\..\cuda_util.cpp" />
     <ClCompile Include="..\..\ext\gl3w\gl3w.c" />
@@ -44,6 +45,7 @@
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\dds_loader.h" />
     <ClInclude Include="..\common\gl_util.h" />
+    <ClInclude Include="..\common\gui_common.h" />
     <ClInclude Include="..\common\imgui_file_dialog.h" />
     <ClInclude Include="..\..\cuda_util.h" />
     <ClInclude Include="..\..\ext\gl3w\include\GL\gl3w.h" />

@@ -87,11 +87,9 @@ add_executable(
     "${TARGET_NAME}"
     ${UTIL_SOURCES}
     ${COMMON_SOURCES}
-    ${COMMON_SHADERS}
+    ${COMMON_GUI_SOURCES}
     ${TEXTURE_SOURCES}
     ${OBJ_LOADER_SOURCES}
-    ${GL_SOURCES}
-    ${IMGUI_SOURCES}
     ${SOURCES}
     ${CUDA_KERNELS}
     ${OPTIX_KERNELS}
