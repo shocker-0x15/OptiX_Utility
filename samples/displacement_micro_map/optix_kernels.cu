@@ -1,7 +1,9 @@
 ﻿#pragma once
 
 #include "displacement_micro_map_shared.h"
+#if !defined(OPTIXU_Platform_CodeCompletion)
 #include <optix_micromap.h>
+#endif
 
 using namespace Shared;
 
@@ -76,6 +78,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     auto hp = HitPointParameter::get();
     float3 p;
     float3 sn;
+    float3 tc0Dir;
     float2 texCoord;
     {
         const Triangle &tri = geomInst.triangleBuffer[hp.primIndex];
@@ -102,6 +105,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         if (optixIsTriangleHit()) { // Vanilla Triangle
             p = b0 * v0.position + b1 * v1.position + b2 * v2.position;
             sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+            tc0Dir = b0 * v0.tc0Direction + b1 * v1.tc0Direction + b2 * v2.tc0Direction;
 
             if (plp.visualizationMode == VisualizationMode_MicroBarycentric) {
                 float3 result = make_float3(b0, b1, b2);
@@ -127,12 +131,42 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
             }
 
             p = mb0 * microTriPositions[0] + mb1 * microTriPositions[1] + mb2 * microTriPositions[2];
-            sn = cross(microTriPositions[1] - microTriPositions[0],
-                       microTriPositions[2] - microTriPositions[0]);
+            if (geomInst.normalTexture && plp.enableNormalMap) {
+                sn = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+                tc0Dir = b0 * v0.tc0Direction + b1 * v1.tc0Direction + b2 * v2.tc0Direction;
+            }
+            else {
+                sn = cross(microTriPositions[1] - microTriPositions[0],
+                           microTriPositions[2] - microTriPositions[0]);
+                tc0Dir = make_float3(0.0f, 0.0f, 0.0f);
+            }
         }
 
         p = optixTransformPointFromObjectToWorldSpace(p);
         sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
+
+        /*
+        JP: 法線マップを適用する。
+            DMMを使う場合、マイクロ頂点の位置は取得できるが、マイクロ頂点法線を併せて持つ方法は用意されていない。
+            マイクロ頂点間の補間法線を法線マップによって表現する。
+        EN: Apply a normal map.
+            When using DMM, micro vertex positions can be obtained, but no way is provided to
+            have micro vertex normals together.
+            Represent interpolated normals between micro vertices by a normal map.
+        */
+        if (geomInst.normalTexture && plp.enableNormalMap) {
+            tc0Dir = optixTransformVectorFromObjectToWorldSpace(tc0Dir);
+            tc0Dir = normalize(tc0Dir - dot(tc0Dir, sn) * sn);
+            float3 tc1Dir = cross(sn, tc0Dir);
+
+            // read a modified normal vector
+            float4 texValue = tex2DLod<float4>(geomInst.normalTexture, texCoord.x, texCoord.y, 0.0f);
+            float3 modLocalNormal = getXYZ(texValue);
+            modLocalNormal = 2.0f * modLocalNormal - make_float3(1.0f);
+            modLocalNormal.y *= -1; // DirectX convention
+
+            sn = Matrix3x3(tc0Dir, tc1Dir, sn) * modLocalNormal;
+        }
 
         if (plp.visualizationMode == VisualizationMode_Normal) {
             float3 result = 0.5f * sn + make_float3(0.5f);
@@ -164,8 +198,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     p = p + sn * 0.001f;
 
     float3 albedo;
-    if (geomInst.texture)
-        albedo = getXYZ(tex2DLod<float4>(geomInst.texture, texCoord.x, texCoord.y, 0.0f));
+    if (geomInst.albedoTexture)
+        albedo = getXYZ(tex2DLod<float4>(geomInst.albedoTexture, texCoord.x, texCoord.y, 0.0f));
     else
         albedo = geomInst.albedo;
 

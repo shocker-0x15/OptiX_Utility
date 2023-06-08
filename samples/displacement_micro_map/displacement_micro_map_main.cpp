@@ -70,7 +70,6 @@ EN: This sample shows how to use Displacement Micro-Map (DMM) with which high-de
 #include "displacement_micro_map_shared.h"
 
 #include "../common/obj_loader.h"
-#include "../common/dds_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
@@ -293,8 +292,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             TypedBufferRef<Shared::Vertex> vertexBuffer;
             TypedBufferRef<Shared::Triangle> triangleBuffer;
             optixu::GeometryInstance optixGeomInst;
-            ArrayRef texArray;
-            CUtexObject texObj;
+            ArrayRef albedoTexArray;
+            CUtexObject albedoTexObj;
+            ArrayRef normalTexArray;
+            CUtexObject normalTexObj;
             ArrayRef heightTexArray;
             CUtexObject heightTexObj;
 
@@ -323,9 +324,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     CUDADRV_CHECK(cuTexObjectDestroy(it->heightTexObj));
                     it->heightTexArray = nullptr;
                 }
-                if (it->texObj) {
-                    CUDADRV_CHECK(cuTexObjectDestroy(it->texObj));
-                    it->texArray = nullptr;
+                if (it->normalTexObj) {
+                    CUDADRV_CHECK(cuTexObjectDestroy(it->normalTexObj));
+                    it->normalTexArray = nullptr;
+                }
+                if (it->albedoTexObj) {
+                    CUDADRV_CHECK(cuTexObjectDestroy(it->albedoTexObj));
+                    it->albedoTexArray = nullptr;
                 }
                 it->triangleBuffer = nullptr;
                 it->vertexBuffer = nullptr;
@@ -386,10 +391,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         Shared::Vertex vertices[] = {
             // floor
-            { make_float3(-100.0f, 0.0f, -100.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-100.0f, 0.0f, 100.0f), make_float3(0, 1, 0), make_float2(0, 1) },
-            { make_float3(100.0f, 0.0f, 100.0f), make_float3(0, 1, 0), make_float2(1, 1) },
-            { make_float3(100.0f, 0.0f, -100.0f), make_float3(0, 1, 0), make_float2(1, 0) },
+            { float3(-100.0f, 0.0f, -100.0f), float3(0, 1, 0), float3(1, 0, 0), float2(0, 0) },
+            { float3(-100.0f, 0.0f, 100.0f), float3(0, 1, 0), float3(1, 0, 0), float2(0, 1) },
+            { float3(100.0f, 0.0f, 100.0f), float3(0, 1, 0), float3(1, 0, 0), float2(1, 1) },
+            { float3(100.0f, 0.0f, -100.0f), float3(0, 1, 0), float3(1, 0, 0), float2(1, 0) },
         };
 
         Shared::Triangle triangles[] = {
@@ -417,7 +422,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             Shared::GeometryInstanceData geomData = {};
             geomData.vertexBuffer = group.vertexBuffer->getDevicePointer();
             geomData.triangleBuffer = group.triangleBuffer->getDevicePointer();
-            geomData.texture = 0;
+            geomData.albedoTexture = 0;
             geomData.albedo = float3(0.8f, 0.8f, 0.8f);
 
             group.optixGeomInst = scene.createGeometryInstance();
@@ -463,6 +468,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
         tinygltf::TinyGLTF loader;
         std::string error;
         std::string warning;
+        loader.SetImageLoader(
+            [](tinygltf::Image* image, const int image_idx, std::string* err,
+               std::string* warn, int /*req_width*/, int /*req_height*/,
+               const unsigned char* bytes, int size, void* /*user_data*/) {
+                   int32_t width, height;
+                   int32_t comp;
+                   uint8_t* data = stbi_load_from_memory(bytes, size, &width, &height, &comp, 4);
+
+                   image->width = width;
+                   image->height = height;
+                   image->component = comp;
+                   image->bits = 8;
+                   image->pixel_type = TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE;
+                   image->image.resize(width * height * comp);
+                   std::copy(data, data + width * height * comp, image->image.begin());
+
+                   stbi_image_free(data);
+
+                   return true;
+            }, nullptr);
         bool ret = loader.LoadASCIIFromFile(&model, &error, &warning, filePath.string());
         Assert(ret, "failed to load the DMM-pre-computed mesh.");
 
@@ -568,11 +593,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     const uint8_t* posBuffer = nullptr;
                     const uint8_t* normBuffer = nullptr;
                     const uint8_t* tcBuffer = nullptr;
-                    //const uint8_t* tangBuffer = nullptr;
+                    const uint8_t* tangBuffer = nullptr;
                     uint32_t posStride = 0;
                     uint32_t normStride = 0;
                     uint32_t tcStride = 0;
-                    //uint32_t tangStride = 0;
+                    uint32_t tangStride = 0;
                     bool hasTexCoords = false;
                     {
                         const tinygltf::Accessor &posAccessor =
@@ -589,12 +614,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             + normView.byteOffset + normAccessor.byteOffset;
                         normStride = normAccessor.ByteStride(normView);
 
-                        //const tinygltf::Accessor &tangAccessor =
-                        //    model.accessors[srcPrimGroup.attributes.at("TANGENT")];
-                        //const tinygltf::BufferView &tangView = model.bufferViews[tangAccessor.bufferView];
-                        //tangBuffer = model.buffers[tangView.buffer].data.data()
-                        //    + tangView.byteOffset + tangAccessor.byteOffset;
-                        //tangStride = tangAccessor.ByteStride(tangView);
+                        const tinygltf::Accessor &tangAccessor =
+                            model.accessors[srcPrimGroup.attributes.at("TANGENT")];
+                        const tinygltf::BufferView &tangView = model.bufferViews[tangAccessor.bufferView];
+                        tangBuffer = model.buffers[tangView.buffer].data.data()
+                            + tangView.byteOffset + tangAccessor.byteOffset;
+                        tangStride = tangAccessor.ByteStride(tangView);
 
                         if (srcPrimGroup.attributes.count("TEXCOORD_0")) {
                             hasTexCoords = true;
@@ -616,6 +641,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             *reinterpret_cast<const float3*>(&posBuffer[posStride * vIdx]);
                         vertex.normal =
                             *reinterpret_cast<const float3*>(&normBuffer[normStride * vIdx]);
+                        vertex.tc0Direction =
+                            *reinterpret_cast<const float3*>(&tangBuffer[tangStride * vIdx]);
                         if (hasTexCoords) {
                             vertex.texCoord =
                                 *reinterpret_cast<const float2*>(&tcBuffer[tcStride * vIdx]);
@@ -655,7 +682,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                 group.vertexBuffer = vertexBuffer;
                 group.triangleBuffer = triangleBuffer;
-                group.texObj = 0;
+                group.albedoTexObj = 0;
+                group.normalTexObj = 0;
                 group.heightTexObj = 0;
 
                 Shared::GeometryInstanceData geomData = {};
@@ -799,6 +827,27 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         OPTIX_DISPLACEMENT_MICROMAP_BIAS_AND_SCALE_FORMAT_FLOAT2);
                 }
 
+                const tinygltf::Material &srcMat = model.materials[srcPrimGroup.material];
+                {
+                    const tinygltf::Image &srcNormalMap = model.images[srcMat.normalTexture.index];
+                    group.normalTexArray = createArrayRef();
+                    group.normalTexArray->initialize2D(
+                        cuContext, cudau::ArrayElementType::UInt8, 4,
+                        cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                        srcNormalMap.width, srcNormalMap.height, 1);
+                    group.normalTexArray->write<uint8_t>(
+                        srcNormalMap.image.data(), srcNormalMap.width * srcNormalMap.height * 4);
+
+                    cudau::TextureSampler texSampler;
+                    texSampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
+                    texSampler.setMipMapFilterMode(cudau::TextureFilterMode::Point);
+                    texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat);
+                    texSampler.setWrapMode(0, cudau::TextureWrapMode::Repeat);
+                    texSampler.setWrapMode(1, cudau::TextureWrapMode::Repeat);
+                    group.normalTexObj = texSampler.createTextureObject(*group.normalTexArray.get());
+                    geomData.normalTexture = group.normalTexObj;
+                }
+
                 group.optixGeomInst.setUserData(geomData);
 
                 geom->optixGas.addChild(group.optixGeomInst);
@@ -850,14 +899,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::filesystem::path filePath = R"(../../data/stanford_bunny_309_faces_smooth.obj)";
         std::filesystem::path fileDir = filePath.parent_path();
 
-        std::vector<obj::Vertex> vertices;
+        std::vector<obj::Vertex> srcVertices;
         std::vector<obj::MaterialGroup> matGroups;
         std::vector<obj::Material> materials;
-        obj::load(filePath, &vertices, &matGroups, &materials);
+        obj::load(filePath, &srcVertices, &matGroups, &materials);
 
+        std::vector<Shared::Vertex> vertices(srcVertices.size());
+        for (int i = 0; i < vertices.size(); ++i) {
+            const obj::Vertex &srcVertex = srcVertices[i];
+            Shared::Vertex v = {};
+            v.position = srcVertex.position;
+            v.normal = srcVertex.normal;
+            v.tc0Direction = float3(0, 0, 0);
+            v.texCoord = srcVertex.texCoord;
+            vertices[i] = v;
+        }
         TypedBufferRef<Shared::Vertex> vertexBuffer = createTypedBufferRef<Shared::Vertex>(
             cuContext, cudau::BufferType::Device,
-            reinterpret_cast<Shared::Vertex*>(vertices.data()), vertices.size());
+            vertices.data(), vertices.size());
 
         auto geom = std::make_shared<Geometry>();
 
@@ -904,12 +963,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 uint8_t* linearImageData = stbi_load(
                     srcMat.diffuseTexPath.string().c_str(),
                     &width, &height, &n, 4);
-                group.texArray = createArrayRef();
-                group.texArray->initialize2D(
+                group.albedoTexArray = createArrayRef();
+                group.albedoTexArray->initialize2D(
                     cuContext, cudau::ArrayElementType::UInt8, 4,
                     cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
                     width, height, 1);
-                group.texArray->write<uint8_t>(linearImageData, width * height * 4);
+                group.albedoTexArray->write<uint8_t>(linearImageData, width * height * 4);
                 stbi_image_free(linearImageData);
 
                 cudau::TextureSampler texSampler;
@@ -918,8 +977,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
                 texSampler.setWrapMode(0, cudau::TextureWrapMode::Repeat);
                 texSampler.setWrapMode(1, cudau::TextureWrapMode::Repeat);
-                group.texObj = texSampler.createTextureObject(*group.texArray.get());
-                geomData.texture = group.texObj;
+                group.albedoTexObj = texSampler.createTextureObject(*group.albedoTexArray.get());
+                geomData.albedoTexture = group.albedoTexObj;
             }
             if (!srcMat.bumpTexPath.empty()) {
                 int32_t width, height, n;
@@ -1369,6 +1428,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Debug Window
         static bool drawBaseEdges = false;
+        static bool enableNormalMap = true;
         bool visModeChanged = false;
         bool lightParamChanged = false;
         {
@@ -1399,6 +1459,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 "Normal", &visualizationMode, Shared::VisualizationMode_Normal);
 
             visModeChanged |= ImGui::Checkbox("Draw Base Edges", &drawBaseEdges);
+            visModeChanged |= ImGui::Checkbox("Enable Normal Map", &enableNormalMap);
 
             ImGui::End();
         }
@@ -1443,6 +1504,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
             plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
             plp.drawBaseEdges = drawBaseEdges;
+            plp.enableNormalMap = enableNormalMap;
             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
             pipeline.launch(
                 curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);

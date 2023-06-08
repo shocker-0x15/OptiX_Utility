@@ -46,7 +46,7 @@ Currently based on OptiX 7.7.0
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX-IR support for better debugging\
-  \* but fow now (7.7.0 and the 531.79 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
+  \* but fow now (7.7.0 and the 535.98 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser
   - LDR (Not Tested)
   - HDR
@@ -274,7 +274,7 @@ I've confirmed that the program runs correctly in the following environment.
 
 * Windows 11 (22H2) & Visual Studio Community 2022 (17.6.2)
 * Core i9-9900K, 32GB, RTX 4080 16GB
-* NVIDIA Driver 531.79
+* NVIDIA Driver 535.98
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
