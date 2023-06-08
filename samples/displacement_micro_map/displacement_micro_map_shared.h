@@ -19,6 +19,7 @@ namespace Shared {
     struct Vertex {
         float3 position;
         float3 normal;
+        float3 tc0Direction;
         float2 texCoord;
     };
 
@@ -45,8 +46,11 @@ namespace Shared {
         const OptixDisplacementMicromapDesc* dmmDescBuffer;
         CUdeviceptr dmmIndexBuffer;
 
-        CUtexObject texture;
+        CUtexObject albedoTexture;
         float3 albedo;
+
+        CUtexObject normalTexture;
+
         uint32_t dmmIndexSize : 3;
     };
 
@@ -74,6 +78,7 @@ namespace Shared {
         unsigned int visualizationMode : 3;
         unsigned int sampleIndex : 8;
         unsigned int drawBaseEdges : 1;
+        unsigned int enableNormalMap : 1;
     };
 
 
