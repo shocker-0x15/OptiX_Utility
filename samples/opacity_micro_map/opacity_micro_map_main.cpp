@@ -35,8 +35,6 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
     *: This sample itself is for demonstrating how to use OMM, therefore the scene is probably too simple
        to see the speedup.
 
-    [1] Opacity Micro-Map SDK: https://github.com/NVIDIAGameWorks/Opacity-MicroMap-SDK
-
     --no-omm: Disable OMM.
     --visualize ***: You can change visualizing mode
       - final: Final rendering.
@@ -46,6 +44,9 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
     --max-subdiv-level *: The maximum OMM subdivision level.
     --subdiv-level-bias *: The bias to OMM subdivision level.
     --no-index-buffer: Specify not to use index buffers for OMM.
+
+    [1] Opacity Micro-Map SDK: https://github.com/NVIDIAGameWorks/Opacity-MicroMap-SDK
+        Opacity Micor-Map Samples: https://github.com/NVIDIAGameWorks/Opacity-MicroMap-Samples
 
 */
 
