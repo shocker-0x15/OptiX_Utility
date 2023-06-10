@@ -188,6 +188,8 @@ static void glfw_error_callback(int32_t error, const char* description) {
 
 
 int32_t main(int32_t argc, const char* argv[]) try {
+    const std::filesystem::path resourceDir = getExecutableDirectory() / "uber";
+
     bool takeScreenShot = false;
 
     uint32_t argIdx = 1;
@@ -468,13 +470,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     ongoing question:
     // https://forums.developer.nvidia.com/t/optix-7-5-payload-type-mismatch-errors-when-using-optix-ir/218138
 #if 1
-    const std::string optixPtx = readTxtFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.ptx");
+    const std::string optixPtx = readTxtFile(resourceDir / "ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
         optixPtx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 #else
-    const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "uber/ptxes/optix_kernels.optixir");
+    const std::vector<char> optixIr = readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -583,12 +585,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     CUmodule modulePostProcess;
     CUDADRV_CHECK(cuModuleLoad(
-        &modulePostProcess, (getExecutableDirectory() / "uber/ptxes/post_process.ptx").string().c_str()));
+        &modulePostProcess, (resourceDir / "ptxes/post_process.ptx").string().c_str()));
     cudau::Kernel kernelPostProcess(modulePostProcess, "postProcess", cudau::dim3(8, 8), 0);
 
     CUmodule moduleDeform;
     CUDADRV_CHECK(cuModuleLoad(
-        &moduleDeform, (getExecutableDirectory() / "uber/ptxes/deform.ptx").string().c_str()));
+        &moduleDeform, (resourceDir / "ptxes/deform.ptx").string().c_str()));
     cudau::Kernel kernelDeform(moduleDeform, "deform", cudau::dim3(32), 0);
     cudau::Kernel kernelAccumulateVertexNormals(moduleDeform, "accumulateVertexNormals", cudau::dim3(32), 0);
     cudau::Kernel kernelNormalizeVertexNormals(moduleDeform, "normalizeVertexNormals", cudau::dim3(32), 0);
@@ -596,7 +598,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUmodule moduleBoundingBoxProgram;
     CUDADRV_CHECK(cuModuleLoad(
         &moduleBoundingBoxProgram,
-        (getExecutableDirectory() / "uber/ptxes/sphere_bounding_box.ptx").string().c_str()));
+        (resourceDir / "ptxes/sphere_bounding_box.ptx").string().c_str()));
     cudau::Kernel kernelCalculateBoundingBoxesForSpheres(
         moduleBoundingBoxProgram, "calculateBoundingBoxesForSpheres", cudau::dim3(32), 0);
 
