@@ -39,7 +39,7 @@ nvcuda_compile_optix_ir(
     "-I${OPTIX_INCLUDE_DIR}"
 )
 
-set_common_sources(FALSE)
+set_common_sources(TRUE)
 
 # essentials
 source_group(
@@ -50,6 +50,7 @@ add_executable(
     "${TARGET_NAME}"
     ${UTIL_SOURCES}
     ${COMMON_SOURCES}
+    ${COMMON_GUI_SOURCES}
     ${OBJ_LOADER_SOURCES}
     ${SOURCES}
     ${OPTIX_KERNELS}
@@ -59,16 +60,21 @@ set_target_properties(
     CXX_EXTENSIONS OFF
     PROJECT_LABEL "09.${TARGET_NAME}"
     FOLDER "samples")
-target_compile_definitions(
-    "${TARGET_NAME}" PRIVATE
-    "CUDA_UTIL_DONT_USE_GL_INTEROP"
-)
 target_include_directories(
     "${TARGET_NAME}" PRIVATE
     "${OPTIX_INCLUDE_DIR}"
+    "../../ext/gl3w/include"
+    "../../ext/glfw/include"
+    "../../ext/imgui"
+)
+target_link_directories(
+    "${TARGET_NAME}" PRIVATE
+    "../../ext/glfw/lib"
 )
 target_link_libraries(
     "${TARGET_NAME}"
     fakelib
     CUDA::cuda_driver
+    opengl32
+    glfw3
 )

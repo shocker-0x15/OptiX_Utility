@@ -12,16 +12,34 @@ EN: This sample shows how to build a GAS to handle deformation blur.
 
 #include "../common/obj_loader.h"
 
+#include "../common/gui_common.h"
+
+
+
 int32_t main(int32_t argc, const char* argv[]) try {
+    const std::filesystem::path resourceDir = getExecutableDirectory() / "deformation_blur";
+
+    bool takeScreenShot = false;
+
+    uint32_t argIdx = 1;
+    while (argIdx < argc) {
+        std::string_view arg = argv[argIdx];
+        if (arg == "--screen-shot")
+            takeScreenShot = true;
+        else
+            throw std::runtime_error("Unknown command line argument.");
+        ++argIdx;
+    }
+
+
+
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
 
     CUcontext cuContext;
-    int32_t cuDeviceCount;
     CUstream cuStream;
     CUDADRV_CHECK(cuInit(0));
-    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
@@ -57,7 +75,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::UseMotionBlur::Yes);
 
     const std::vector<char> optixIr =
-        readBinaryFile(getExecutableDirectory() / "deformation_blur/ptxes/optix_kernels.optixir");
+        readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -694,40 +712,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    constexpr uint32_t renderTargetSizeX = 1024;
-    constexpr uint32_t renderTargetSizeY = 1024;
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 4> rngBuffer;
-    rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
-    {
-        std::mt19937 rng(50932423);
-
-        rngBuffer.map();
-        for (int y = 0; y < renderTargetSizeY; ++y) {
-            for (int x = 0; x < renderTargetSizeX; ++x) {
-                rngBuffer(x, y).setState(rng());
-            }
-        }
-        rngBuffer.unmap();
-    }
-
-    optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
-    accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
 
 
+
+    constexpr int32_t initWindowContentWidth = 1024;
+    constexpr int32_t initWindowContentHeight = 1024;
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.imageSize.x = renderTargetSizeX;
-    plp.imageSize.y = renderTargetSizeY;
-    plp.rngBuffer = rngBuffer.getBlockBuffer2D();
-    plp.accumBuffer = accumBuffer.getBlockBuffer2D();
-    plp.timeBegin = 0.0f;
-    plp.timeEnd = 1.0f;
-    plp.numAccumFrames = 0;
+    plp.imageSize.x = initWindowContentWidth;
+    plp.imageSize.y = initWindowContentHeight;
     plp.camera.fovY = 50 * pi_v<float> / 180;
-    plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 0, 3.8f);
-    plp.camera.orientation = rotateY3x3(pi_v<float>);
+    plp.camera.aspect = static_cast<float>(initWindowContentWidth) / initWindowContentHeight;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -735,23 +732,219 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUdeviceptr plpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice, sizeof(plp)));
 
-    for (int frameIndex = 0; frameIndex < 1024; ++frameIndex) {
-        plp.numAccumFrames = frameIndex;
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-    }
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
-    saveImage("output.png", accumBuffer, false, false);
+
+    // ----------------------------------------------------------------
+    // JP: ウインドウの表示。
+    // EN: Display the window.
+
+    InitialConfig initConfig = {};
+    initConfig.windowTitle = "OptiX Utility - Deformation Blur";
+    initConfig.resourceDir = resourceDir;
+    initConfig.windowContentRenderWidth = initWindowContentWidth;
+    initConfig.windowContentRenderHeight = initWindowContentHeight;
+    initConfig.cameraPosition = make_float3(0, 0, 3.8f);
+    initConfig.cameraOrientation = qRotateY(pi_v<float>);
+    initConfig.cameraMovingSpeed = 0.01f;
+    initConfig.cuContext = cuContext;
+
+    GUIFramework framework;
+    framework.initialize(initConfig);
+
+    cudau::Array outputArray;
+    outputArray.initializeFromGLTexture2D(
+        cuContext, framework.getOutputTexture().getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+
+    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
+    outputBufferSurfaceHolder.initialize({ &outputArray });
+
+    const auto initializeResDependentResources = [&]
+    (int32_t width, int32_t height) {
+        rngBuffer.initialize(cuContext, cudau::BufferType::Device, width, height);
+        {
+            std::mt19937 rng(50932423);
+
+            rngBuffer.map();
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    rngBuffer(x, y).setState(rng());
+                }
+            }
+            rngBuffer.unmap();
+        }
+
+        plp.rngBuffer = rngBuffer.getBlockBuffer2D();
+    };
+
+    const auto resizeResDependentResources = [&]
+    (int32_t width, int32_t height) {
+        rngBuffer.resize(width, height);
+        {
+            std::mt19937 rng(50932423);
+
+            rngBuffer.map();
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    rngBuffer(x, y).setState(rng());
+                }
+            }
+            rngBuffer.unmap();
+        }
+
+        plp.rngBuffer = rngBuffer.getBlockBuffer2D();
+    };
+
+    const auto finalizeResDependentResources = [&]
+    () {
+        rngBuffer.finalize();
+    };
+
+    initializeResDependentResources(initWindowContentWidth, initWindowContentHeight);
+
+    const auto onRenderLoop = [&]
+    (const RunArguments &args) {
+        const uint64_t frameIndex = args.frameIndex;
+        const CUstream curStream = args.curStream;
+
+        // Camera Window
+        bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
+        {
+            ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
+            ImGui::Text("Mouse Middle Drag: Rotate");
+
+            if (ImGui::InputFloat3("Position", reinterpret_cast<float*>(&args.cameraPosition)))
+                cameraIsActuallyMoving = true;
+            static float rollPitchYaw[3];
+            args.tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw)) {
+                args.cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
+                cameraIsActuallyMoving = true;
+            }
+            ImGui::Text("Pos. Speed (T/G): %g", args.cameraPositionalMovingSpeed);
+
+            ImGui::End();
+        }
+
+        plp.camera.position = args.cameraPosition;
+        plp.camera.orientation = args.tempCameraOrientation.toMatrix3x3();
+
+
+
+        // Debug Window
+        static float centerTime = 0.5f;
+        static float exposureTime = 1.0f;
+        static bool usePerPixelRNGs = true;
+        bool resetAccum = false;
+        {
+            ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            resetAccum |= ImGui::SliderFloat("Center Time", &centerTime, 0.0f, 1.0f);
+            resetAccum |= ImGui::SliderFloat("Exposure Time", &exposureTime, 0.0f, 1.0f);
+            ImGui::Text(
+                "Time: %.3f - %.3f",
+                centerTime - 0.5f * exposureTime,
+                centerTime + 0.5f * exposureTime);
+
+            resetAccum |= ImGui::Checkbox("Per-pixel RNGs", &usePerPixelRNGs);
+
+            ImGui::End();
+        }
+
+
+
+        bool firstAccumFrame =
+            cameraIsActuallyMoving ||
+            args.resized ||
+            frameIndex == 0 ||
+            resetAccum;
+        static uint32_t numAccumFrames = 0;
+        if (firstAccumFrame)
+            numAccumFrames = 0;
+
+        // Render
+        outputBufferSurfaceHolder.beginCUDAAccess(curStream);
+
+        static Shared::PCG32RNG globalRNG;
+        if (numAccumFrames == 0)
+            globalRNG.setState(419511321);
+
+        plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
+        plp.timeBegin = centerTime - 0.5f * exposureTime;
+        plp.timeEnd = centerTime + 0.5f * exposureTime;
+        plp.numAccumFrames = numAccumFrames;
+        plp.globalRNG = globalRNG;
+        plp.usePerPixelRNGs = usePerPixelRNGs;
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
+        pipeline.launch(
+            curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);
+        ++numAccumFrames;
+        globalRNG();
+
+        outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
+
+
+
+        ReturnValuesToRenderLoop ret = {};
+        ret.enable_sRGB = false;
+        ret.finish = false;
+
+        if (takeScreenShot && frameIndex + 1 == 1024) {
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
+            const uint32_t numPixels = args.windowContentRenderWidth * args.windowContentRenderHeight;
+            auto rawImage = new float4[numPixels];
+            glGetTextureSubImage(
+                args.outputTexture->getHandle(), 0,
+                0, 0, 0, args.windowContentRenderWidth, args.windowContentRenderHeight, 1,
+                GL_RGBA, GL_FLOAT,
+                sizeof(float4) * numPixels, rawImage);
+            saveImage("output.png", args.windowContentRenderWidth, args.windowContentRenderHeight, rawImage,
+                      false, false);
+            delete[] rawImage;
+            ret.finish = true;
+        }
+
+        return ret;
+    };
+
+    const auto onResolutionChange = [&]
+    (CUstream curStream, uint64_t frameIndex,
+     int32_t windowContentWidth, int32_t windowContentHeight) {
+         outputArray.finalize();
+         outputArray.initializeFromGLTexture2D(
+             cuContext, framework.getOutputTexture().getHandle(),
+             cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+
+         resizeResDependentResources(windowContentWidth, windowContentHeight);
+
+         // EN: update the pipeline parameters.
+         plp.imageSize = int2(windowContentWidth, windowContentHeight);
+         plp.camera.aspect = (float)windowContentWidth / windowContentHeight;
+    };
+
+    framework.run(onRenderLoop, onResolutionChange);
+
+    finalizeResDependentResources();
+
+    outputBufferSurfaceHolder.finalize();
+    outputArray.finalize();
+
+    framework.finalize();
+
+    // END: Display the window.
+    // ----------------------------------------------------------------
 
 
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
-
-
-
-    rngBuffer.finalize();
-    accumBuffer.finalize();
 
 
 

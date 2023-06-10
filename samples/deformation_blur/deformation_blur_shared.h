@@ -109,11 +109,13 @@ namespace Shared {
         OptixTraversableHandle travHandle;
         int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
         optixu::BlockBuffer2D<PCG32RNG, 4> rngBuffer;
-        optixu::BlockBuffer2D<float4, 1> accumBuffer;
+        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         float timeBegin;
         float timeEnd;
         uint32_t numAccumFrames;
         PerspectiveCamera camera;
+        PCG32RNG globalRNG;
+        uint32_t usePerPixelRNGs : 1;
     };
 
     using PartialSphereAttributeSignature = optixu::AttributeSignature<float, float>;

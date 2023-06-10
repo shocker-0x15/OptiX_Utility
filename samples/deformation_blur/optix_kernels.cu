@@ -86,7 +86,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
 
         uint32_t baseIndex = geom.segmentIndexBuffer[hpParam.primIndex];
         float stepF = (geom.numMotionSteps - 1) * normTime;
-        uint32_t step = static_cast<uint32_t>(stepF);
+        uint32_t step = min(static_cast<uint32_t>(stepF), geom.numMotionSteps - 2);
         float p = stepF - step;
 #pragma unroll
         for (int i = 0; i < numControlPoints; ++i) {
@@ -119,7 +119,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcSphereSurfaceNormal(
         float normTime = std::fmin(std::fmax((optixGetRayTime() - timeBegin) / (timeEnd - timeBegin), 0.0f), 1.0f);
 
         float stepF = (geom.numMotionSteps - 1) * normTime;
-        uint32_t step = static_cast<uint32_t>(stepF);
+        uint32_t step = min(static_cast<uint32_t>(stepF), geom.numMotionSteps - 2);
         float p = stepF - step;
         const Sphere &sphA = geom.sphereBuffers[step][primIndex];
         const Sphere &sphB = geom.sphereBuffers[step + 1][primIndex];
@@ -205,7 +205,11 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(partialSphere)() {
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
-    PCG32RNG rng = plp.rngBuffer[launchIndex];
+    PCG32RNG rng;
+    if (plp.usePerPixelRNGs)
+        rng = plp.rngBuffer[launchIndex];
+    else
+        rng = plp.globalRNG;
 
     float x = static_cast<float>(launchIndex.x + rng.getFloat0cTo1o()) / plp.imageSize.x;
     float y = static_cast<float>(launchIndex.y + rng.getFloat0cTo1o()) / plp.imageSize.y;
@@ -224,13 +228,14 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         RayType_Primary, NumRayTypes, RayType_Primary,
         color);
 
-    plp.rngBuffer[launchIndex] = rng;
+    if (plp.usePerPixelRNGs)
+        plp.rngBuffer[launchIndex] = rng;
 
     float3 curResult = color;
     float curWeight = 1.0f / (1 + plp.numAccumFrames);
-    float3 prevResult = getXYZ(plp.accumBuffer[launchIndex]);
+    float3 prevResult = getXYZ(plp.colorAccumBuffer.read(launchIndex));
     curResult = (1 - curWeight) * prevResult + curWeight * curResult;
-    plp.accumBuffer[launchIndex] = make_float4(curResult, 1.0f);
+    plp.colorAccumBuffer.write(launchIndex, make_float4(curResult, 1.0f));
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
@@ -251,6 +256,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     OptixPrimitiveType primType = optixGetPrimitiveType();
     if (primType == OPTIX_PRIMITIVE_TYPE_TRIANGLE) {
         const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
+        // JP: ここでは単純に1つ目のバッファーの法線から色を決める。
+        // EN: Determine a color simply based on the first buffer here.
         const Vertex &v0 = geom.vertexBuffers[0][triangle.index0];
         const Vertex &v1 = geom.vertexBuffers[0][triangle.index1];
         const Vertex &v2 = geom.vertexBuffers[0][triangle.index2];
