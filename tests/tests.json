@@ -66,6 +66,7 @@
     {
         "name": "deformation_blur",
         "sample": "deformation_blur",
+        "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference.png"
