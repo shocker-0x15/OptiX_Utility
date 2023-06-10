@@ -1338,21 +1338,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     glu::VertexArray vertexArrayForFullScreen;
     vertexArrayForFullScreen.initialize();
 
-    const std::filesystem::path exeDir = getExecutableDirectory();
-
     // JP: OptiXの結果をフレームバッファーにコピーするシェーダー。
     // EN: Shader to copy OptiX result to a frame buffer.
     glu::GraphicsProgram drawOptiXResultShader;
     drawOptiXResultShader.initializeVSPS(
-        readTxtFile(exeDir / "uber/shaders/drawOptiXResult.vert"),
-        readTxtFile(exeDir / "uber/shaders/drawOptiXResult.frag"));
+        readTxtFile(resourceDir / "shaders/drawOptiXResult.vert"),
+        readTxtFile(resourceDir / "shaders/drawOptiXResult.frag"));
 
     // JP: アップスケール用のシェーダー。
     // EN: Shader for upscale.
     glu::GraphicsProgram scaleShader;
     scaleShader.initializeVSPS(
-        readTxtFile(exeDir / "uber/shaders/scale.vert"),
-        readTxtFile(exeDir / "uber/shaders/scale.frag"));
+        readTxtFile(resourceDir / "shaders/scale.vert"),
+        readTxtFile(resourceDir / "shaders/scale.frag"));
 
     // JP: アップスケール用のサンプラー。
     //     texelFetch()を使う場合には設定値は無関係。だがバインドは必要な様子。
