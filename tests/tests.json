@@ -145,7 +145,7 @@
     {
         "name": "opacity_micro_map final",
         "sample": "opacity_micro_map",
-        "options": "--visualize final",
+        "options": "--screen-shot --visualize final",
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference_final.png"
@@ -153,7 +153,7 @@
     {
         "name": "opacity_micro_map primary",
         "sample": "opacity_micro_map",
-        "options": "--visualize primary-any-hits",
+        "options": "--screen-shot --visualize primary-any-hits",
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference_primary.png"
@@ -161,7 +161,7 @@
     {
         "name": "opacity_micro_map shadow",
         "sample": "opacity_micro_map",
-        "options": "--visualize shadow-any-hits --max-subdiv-level 5 --subdiv-level-bias 1",
+        "options": "--screen-shot --visualize shadow-any-hits --max-subdiv-level 5 --subdiv-level-bias 1",
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference_shadow.png"
