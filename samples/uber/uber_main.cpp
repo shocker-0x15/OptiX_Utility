@@ -433,11 +433,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
 
     CUcontext cuContext;
-    int32_t cuDeviceCount;
     StreamChain<2> streamChain;
     GPUTimer gpuTimer[2];
     CUDADRV_CHECK(cuInit(0));
-    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     streamChain.initialize(cuContext);
