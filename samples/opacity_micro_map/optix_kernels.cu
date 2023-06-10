@@ -74,11 +74,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float isTransparent(float alpha) {
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
-    uint32_t superSampleSize = plp.superSampleSizeMinus1 + 1;
-    float dx = (static_cast<float>(plp.sampleIndex % superSampleSize) + 0.5f) / superSampleSize;
-    float dy = (static_cast<float>(plp.sampleIndex / superSampleSize) + 0.5f) / superSampleSize;
-    float x = static_cast<float>(launchIndex.x + dx) / plp.imageSize.x;
-    float y = static_cast<float>(launchIndex.y + dy) / plp.imageSize.y;
+    float x = static_cast<float>(launchIndex.x + plp.subPixelOffset.x) / plp.imageSize.x;
+    float y = static_cast<float>(launchIndex.y + plp.subPixelOffset.y) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
@@ -91,11 +88,14 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         OPTIX_RAY_FLAG_NONE : OPTIX_RAY_FLAG_DISABLE_ANYHIT;
     float3 color;
     uint32_t numAnyHitCalls = 0;
+    HitPointFlags hpFlags = {};
     PrimaryRayPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, rayFlags,
         RayType_Primary, NumRayTypes, RayType_Primary,
-        color, numAnyHitCalls);
+        color, numAnyHitCalls, hpFlags);
+    if (hpFlags.nearBaseTriEdge && plp.drawBaseEdges)
+        color *= 0.01f;
 
     if (plp.visualizationMode == VisualizationMode_NumPrimaryAnyHits ||
         plp.visualizationMode == VisualizationMode_NumShadowAnyHits) {
@@ -117,9 +117,9 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(primary)() {
     const GeometryInstanceData &geomInst = sbtr.geomInstData;
 
     uint32_t numAnyHitCalls;
-    PrimaryRayPayloadSignature::get(nullptr, &numAnyHitCalls);
+    PrimaryRayPayloadSignature::get(nullptr, &numAnyHitCalls, nullptr);
     ++numAnyHitCalls;
-    PrimaryRayPayloadSignature::set(nullptr, &numAnyHitCalls);
+    PrimaryRayPayloadSignature::set(nullptr, &numAnyHitCalls, nullptr);
 
     float alpha = fetchAlpha(geomInst, HitPointParameter::get());
     if (isTransparent(alpha))
@@ -131,12 +131,14 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     uint32_t numAnyHitCalls = 0;
     PrimaryRayPayloadSignature::set(
         &contribution,
-        plp.visualizationMode == VisualizationMode_NumShadowAnyHits ? &numAnyHitCalls : nullptr);
+        plp.visualizationMode == VisualizationMode_NumShadowAnyHits ? &numAnyHitCalls : nullptr, nullptr);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
     auto sbtr = HitGroupSBTRecordData::get();
     const GeometryInstanceData &geomInst = sbtr.geomInstData;
+
+    HitPointFlags hpFlags = {};
 
     auto hp = HitPointParameter::get();
     float3 p;
@@ -150,9 +152,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
         float b1 = hp.b1;
         float b2 = hp.b2;
         float b0 = 1 - (b1 + b2);
+        if (b0 < 0.01f || b1 < 0.01f || b2 < 0.01f) {
+            hpFlags.nearBaseTriEdge = true;
+            PrimaryRayPayloadSignature::set(nullptr, nullptr, &hpFlags);
+        }
+
         if (plp.visualizationMode == VisualizationMode_Barycentric) {
             float3 result = make_float3(b0, b1, b2);
-            PrimaryRayPayloadSignature::set(&result, nullptr);
+            PrimaryRayPayloadSignature::set(&result, nullptr, nullptr);
             return;
         }
 
@@ -195,7 +202,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading)() {
 
     PrimaryRayPayloadSignature::set(
         &result,
-        plp.visualizationMode == VisualizationMode_NumShadowAnyHits ? &numAnyHitCalls : nullptr);
+        plp.visualizationMode == VisualizationMode_NumShadowAnyHits ? &numAnyHitCalls : nullptr, nullptr);
 }
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {

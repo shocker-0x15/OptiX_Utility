@@ -1380,8 +1380,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
     };
 
-    std::mt19937 perFrameRng(72139121);
-
     GPUTimer gpuTimers[2];
     gpuTimers[0].initialize(cuContext);
     gpuTimers[1].initialize(cuContext);
@@ -1528,7 +1526,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 0, 0, 0, args.windowContentRenderWidth, args.windowContentRenderHeight, 1,
                 GL_RGBA, GL_FLOAT, sizeof(float4) * numPixels, rawImage);
             saveImage("output.png", args.windowContentRenderWidth, args.windowContentRenderHeight, rawImage,
-                      false, true);
+                      false, ret.enable_sRGB);
             delete[] rawImage;
             ret.finish = true;
         }
