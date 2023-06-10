@@ -57,7 +57,12 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
+#include "../common/gui_common.h"
+
 int32_t main(int32_t argc, const char* argv[]) try {
+    const std::filesystem::path resourceDir = getExecutableDirectory() / "opacity_micro_map";
+
+    bool takeScreenShot = false;
     bool useOMM = true;
     auto visualizationMode = Shared::VisualizationMode_Final;
     shared::OMMFormat maxOmmSubDivLevel = shared::OMMFormat_Level4;
@@ -67,7 +72,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t argIdx = 1;
     while (argIdx < argc) {
         std::string_view arg = argv[argIdx];
-        if (arg == "--no-omm") {
+        if (arg == "--screen-shot") {
+            takeScreenShot = true;
+        }
+        else if (arg == "--no-omm") {
             useOMM = false;
         }
         else if (arg == "--visualize") {
@@ -114,10 +122,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Settings for OptiX context and pipeline.
 
     CUcontext cuContext;
-    int32_t cuDeviceCount;
     CUstream cuStream;
     CUDADRV_CHECK(cuInit(0));
-    CUDADRV_CHECK(cuDeviceGetCount(&cuDeviceCount));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
@@ -140,7 +146,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::UseMotionBlur::No, optixu::UseOpacityMicroMaps(useOMM));
 
     const std::vector<char> optixIr =
-        readBinaryFile(getExecutableDirectory() / "opacity_micro_map/ptxes/optix_kernels.optixir");
+        readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -406,7 +412,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             uint64_t rawOmmArraySize = 0;
             if (useOMM) {
                 initializeOMMGeneratorContext(
-                    getExecutableDirectory() / "opacity_micro_map/ptxes",
+                    resourceDir / "ptxes",
                     alphaTestGeom.vertexBuffer.getCUdeviceptr() + offsetof(Shared::Vertex, texCoord),
                     sizeof(Shared::Vertex), vertices.size(),
                     group.triangleBuffer.getCUdeviceptr(), sizeof(Shared::Triangle), numTriangles,
@@ -624,28 +630,35 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    constexpr uint32_t renderTargetSizeX = 1280;
-    constexpr uint32_t renderTargetSizeY = 720;
-    cudau::Array colorAccumBuffer;
-    colorAccumBuffer.initialize2D(
-        cuContext, cudau::ArrayElementType::Float32, 4,
-        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-        renderTargetSizeX, renderTargetSizeY, 1);
+    constexpr int32_t initWindowContentWidth = 1280;
+    constexpr int32_t initWindowContentHeight = 720;
 
-
+    const auto computeHaltonSequence = []
+    (uint32_t base, uint32_t idx) {
+        const float recBase = 1.0f / base;
+        float ret = 0.0f;
+        float scale = 1.0f;
+        while (idx) {
+            scale *= recBase;
+            ret += (idx % base) * scale;
+            idx /= base;
+        }
+        return ret;
+    };
+    float2 subPixelOffsets[64];
+    for (int i = 0; i < lengthof(subPixelOffsets); ++i)
+        subPixelOffsets[i] = float2(computeHaltonSequence(2, i), computeHaltonSequence(3, i));
     
+    float lightDirPhi = -16;
+    float lightDirTheta = 60;
+    float lightStrengthInLog10 = 0.8f;
+
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.imageSize = int2(renderTargetSizeX, renderTargetSizeY);
-    plp.colorAccumBuffer = colorAccumBuffer.getSurfaceObject(0);
+    plp.imageSize = int2(initWindowContentWidth, initWindowContentHeight);
     plp.camera.fovY = 50 * pi_v<float> / 180;
-    plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 6.0f, 6.0f);
-    plp.camera.orientation = rotateY3x3(pi_v<float>) * rotateX3x3(pi_v<float> / 4.0f);
-    plp.lightDirection = normalize(float3(1, 5, 2));
-    plp.lightRadiance = float3(7.5f, 7.5f, 7.5f);
+    plp.camera.aspect = static_cast<float>(initWindowContentWidth) / initWindowContentHeight;
     plp.envRadiance = float3(0.10f, 0.13f, 0.9f);
-    plp.visualizationMode = visualizationMode;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -655,39 +668,220 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    cudau::Timer timerRender;
-    timerRender.initialize(cuContext);
-    
-    // JP: レンダリング
-    // EN: Render
-    timerRender.start(cuStream);
-    const uint32_t superSampleSize = 8;
-    plp.superSampleSizeMinus1 = superSampleSize - 1;
-    for (int frameIndex = 0; frameIndex < superSampleSize * superSampleSize; ++frameIndex) {
-        plp.sampleIndex = frameIndex;
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-        pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-    }
-    timerRender.stop(cuStream);
+    // ----------------------------------------------------------------
+    // JP: ウインドウの表示。
+    // EN: Display the window.
 
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    InitialConfig initConfig = {};
+    initConfig.windowTitle = "OptiX Utility - Opacity Micro Map";
+    initConfig.resourceDir = resourceDir;
+    initConfig.windowContentRenderWidth = initWindowContentWidth;
+    initConfig.windowContentRenderHeight = initWindowContentHeight;
+    initConfig.cameraPosition = make_float3(0, 6.0f, 6.0f);
+    initConfig.cameraOrientation = qRotateY(pi_v<float>) * qRotateX(pi_v<float> / 4.0f);
+    initConfig.cameraMovingSpeed = 0.1f;
+    initConfig.cuContext = cuContext;
 
-    float renderTime = timerRender.report();
-    hpprintf("Render: %.3f[ms]\n", renderTime);
+    GUIFramework framework;
+    framework.initialize(initConfig);
 
-    timerRender.finalize();
+    cudau::Array outputArray;
+    outputArray.initializeFromGLTexture2D(
+        cuContext, framework.getOutputTexture().getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
 
-    // JP: 結果の画像出力。
-    // EN: Output the result as an image.
-    saveImage("output.png", colorAccumBuffer, true, true);
+    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
+    outputBufferSurfaceHolder.initialize({ &outputArray });
+
+    struct GPUTimer {
+        cudau::Timer render;
+
+        void initialize(CUcontext context) {
+            render.initialize(context);
+        }
+        void finalize() {
+            render.finalize();
+        }
+    };
+
+    GPUTimer gpuTimers[2];
+    gpuTimers[0].initialize(cuContext);
+    gpuTimers[1].initialize(cuContext);
+
+    const auto onRenderLoop = [&]
+    (const RunArguments &args) {
+        const uint64_t frameIndex = args.frameIndex;
+        const CUstream curStream = args.curStream;
+        GPUTimer &curGPUTimer = gpuTimers[frameIndex % 2];
+
+        // Camera Window
+        bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
+        {
+            ImGui::Begin("Camera & Rendering", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
+            ImGui::Text("Mouse Middle Drag: Rotate");
+
+            if (ImGui::InputFloat3("Position", reinterpret_cast<float*>(&args.cameraPosition)))
+                cameraIsActuallyMoving = true;
+            static float rollPitchYaw[3];
+            args.tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw)) {
+                args.cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
+                cameraIsActuallyMoving = true;
+            }
+            ImGui::Text("Pos. Speed (T/G): %g", args.cameraPositionalMovingSpeed);
+
+            ImGui::End();
+        }
+
+        plp.camera.position = args.cameraPosition;
+        plp.camera.orientation = args.tempCameraOrientation.toMatrix3x3();
+
+
+
+        // Debug Window
+        static bool drawBaseEdges = false;
+        bool visModeChanged = false;
+        bool lightParamChanged = false;
+        {
+            ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            const float oldStrength = lightStrengthInLog10;
+            const float oldPhi = lightDirPhi;
+            const float oldTheta = lightDirTheta;
+            ImGui::SliderFloat("Light Strength", &lightStrengthInLog10, -2, 2);
+            ImGui::SliderFloat("Light Phi", &lightDirPhi, -180, 180);
+            ImGui::SliderFloat("Light Theta", &lightDirTheta, 0, 90);
+            lightParamChanged =
+                lightStrengthInLog10 != oldStrength
+                || lightDirPhi != oldPhi || lightDirTheta != oldTheta;
+
+            ImGui::Separator();
+
+            ImGui::Text("Buffer to Display");
+            visModeChanged |= ImGui::RadioButtonE(
+                "Final", &visualizationMode, Shared::VisualizationMode_Final);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Barycentric", &visualizationMode, Shared::VisualizationMode_Barycentric);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Primary Any Hits", &visualizationMode, Shared::VisualizationMode_NumPrimaryAnyHits);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Shadow Any Hits", &visualizationMode, Shared::VisualizationMode_NumShadowAnyHits);
+
+            visModeChanged |= ImGui::Checkbox("Draw Base Edges", &drawBaseEdges);
+
+            ImGui::End();
+        }
+
+        // Stats Window
+        {
+            ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            static MovingAverageTime renderTime;
+
+            renderTime.append(curGPUTimer.render.report());
+
+            //ImGui::SetNextItemWidth(100.0f);
+            ImGui::Text("render: %.3f [ms]", renderTime.getAverage());
+
+            ImGui::End();
+        }
+
+
+
+        bool firstAccumFrame =
+            cameraIsActuallyMoving ||
+            args.resized ||
+            frameIndex == 0 ||
+            lightParamChanged ||
+            visModeChanged;
+        bool isNewSequence = args.resized || frameIndex == 0;
+        static uint32_t numAccumFrames = 0;
+        if (firstAccumFrame)
+            numAccumFrames = 0;
+
+        outputBufferSurfaceHolder.beginCUDAAccess(curStream);
+
+        // Render
+        {
+            curGPUTimer.render.start(curStream);
+
+            plp.lightDirection = fromPolarYUp(lightDirPhi * pi_v<float> / 180, lightDirTheta * pi_v<float> / 180);
+            plp.lightRadiance = float3(std::pow(10.0f, lightStrengthInLog10));
+            plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
+            plp.visualizationMode = visualizationMode;
+            plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
+            plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
+            plp.drawBaseEdges = drawBaseEdges;
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
+            pipeline.launch(
+                curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);
+            ++numAccumFrames;
+
+            curGPUTimer.render.stop(curStream);
+        }
+
+        outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
+
+
+
+        ReturnValuesToRenderLoop ret = {};
+        ret.enable_sRGB = visualizationMode != Shared::VisualizationMode_Barycentric;
+        ret.finish = false;
+
+        if (takeScreenShot && frameIndex + 1 == lengthof(subPixelOffsets)) {
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
+            const uint32_t numPixels = args.windowContentRenderWidth * args.windowContentRenderHeight;
+            auto rawImage = new float4[numPixels];
+            glGetTextureSubImage(
+                args.outputTexture->getHandle(), 0,
+                0, 0, 0, args.windowContentRenderWidth, args.windowContentRenderHeight, 1,
+                GL_RGBA, GL_FLOAT, sizeof(float4) * numPixels, rawImage);
+            saveImage("output.png", args.windowContentRenderWidth, args.windowContentRenderHeight, rawImage,
+                      false, ret.enable_sRGB);
+            delete[] rawImage;
+            ret.finish = true;
+        }
+
+        return ret;
+    };
+
+    const auto onResolutionChange = [&]
+    (CUstream curStream, uint64_t frameIndex,
+     int32_t windowContentWidth, int32_t windowContentHeight) {
+         outputArray.finalize();
+         outputArray.initializeFromGLTexture2D(
+             cuContext, framework.getOutputTexture().getHandle(),
+             cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+
+         // EN: update the pipeline parameters.
+         plp.imageSize = int2(windowContentWidth, windowContentHeight);
+         plp.camera.aspect = static_cast<float>(windowContentWidth) / windowContentHeight;
+    };
+
+    framework.run(onRenderLoop, onResolutionChange);
+
+    gpuTimers[1].finalize();
+    gpuTimers[0].finalize();
+
+    outputBufferSurfaceHolder.finalize();
+    outputArray.finalize();
+
+    framework.finalize();
+
+    // END: Display the window.
+    // ----------------------------------------------------------------
 
 
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
-
-
-    
-    colorAccumBuffer.finalize();
 
 
 
