@@ -1621,6 +1621,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         sw.start(); // ImGui
         {
+            ImGui::SetNextWindowPos(ImVec2(912, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             float cudaFrameTime = curGPUTimer.frame.report();
@@ -1711,6 +1712,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static bool enablePeriodicIASRebuild = true;
         static int32_t iasRebuildInterval = 30;
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 312), ImGuiCond_FirstUseEver);
             ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::Checkbox("Enable GAS Rebuild", &enablePeriodicGASRebuild);
@@ -1724,6 +1726,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::InputFloat3("Position", reinterpret_cast<float*>(&plp.camera.position));
@@ -1751,6 +1754,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: マテリアルの編集。
         // EN; Edit materials.
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 112), ImGuiCond_FirstUseEver);
             ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             if (ImGui::Button(play ? "Stop" : "Play"))

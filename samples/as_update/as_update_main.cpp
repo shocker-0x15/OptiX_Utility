@@ -545,6 +545,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Camera Window
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");

@@ -810,6 +810,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // Camera Window
         bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
@@ -845,6 +846,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static bool usePerPixelRNGs = true;
         bool resetAccum = false;
         {
+            ImGui::SetNextWindowPos(ImVec2(690, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             resetAccum |= ImGui::SliderFloat("Center Time", &centerTime, 0.0f, 1.0f);

@@ -1058,6 +1058,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // Camera Window
         bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
@@ -1097,6 +1098,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bool oldUseLowResRendering = useLowResRendering;
         bool denoiserModelChanged = false;
         {
+            ImGui::SetNextWindowPos(ImVec2(712, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             if (ImGui::Button(animate ? "Stop" : "Play")) {
@@ -1185,6 +1187,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Stats Window
         {
+            ImGui::SetNextWindowPos(ImVec2(8, 144), ImGuiCond_FirstUseEver);
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             float cudaFrameTime = curGPUTimer.frame.report();
