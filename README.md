@@ -11,10 +11,14 @@ It provides fine-level controllability but requires the user to write troublesom
 The purpose of this OptiX Utility is to provide classes and functions which encapsulate parts that tend to be boilerplate code while keeping fine controllability.
 
 ## 組込方法 / Integration
-OptiX Utilityを使うプログラムにoptix_util.h, optix_util_private.h, optix_util.cppを追加します。
-オプションとして、プログラムがCUDAのメモリ確保などを実装していない場合はcuda_util.h, cuda_util.cppとoptixu_on_cudau.hも追加します。CUDA UtilityにOpenGL連携機能が必要ない場合はコンパイルオプションとして`CUDA_UTIL_DONT_USE_GL_INTEROP`を定義してください。
+OptiX Utilityを使うプログラムに以下を追加します。\
+Add the followings to your program which uses OptiX Utility:
 
-Add optix_util.h, optix_util_private.h and optix_util.cpp to your program which uses OptiX Utility.
+- optix_util.h
+- optix_util_private.h
+- optix_util.cpp
+
+オプションとして、プログラムがCUDAのメモリ確保などを実装していない場合は cuda_util.h, cuda_util.cpp と optixu_on_cudau.h も追加します。CUDA UtilityにOpenGL連携機能が必要ない場合はコンパイルオプションとして`CUDA_UTIL_DONT_USE_GL_INTEROP`を定義してください。\
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
