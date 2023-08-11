@@ -243,12 +243,12 @@ TEST(ContextTest, ContextBasic) {
                 optixu::Denoiser denoiser;
 
                 denoiser = context.createDenoiser(
-                    OPTIX_DENOISER_MODEL_KIND_LDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes);
+                    OPTIX_DENOISER_MODEL_KIND_LDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
                 denoiser = context.createDenoiser(
-                    OPTIX_DENOISER_MODEL_KIND_HDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes);
+                    OPTIX_DENOISER_MODEL_KIND_HDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
@@ -257,7 +257,7 @@ TEST(ContextTest, ContextBasic) {
                     denoiser,
                     context.createDenoiser(
                         static_cast<OptixDenoiserModelKind>(~0),
-                        optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes));
+                        optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY));
             }
         }
         context.destroy();
@@ -281,7 +281,7 @@ TEST(ContextTest, ContextBasic) {
 
 TEST(MaterialTest, MaterialBasic) {
     try {
-        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Context context = optixu::Context::create(cuContext, 4, optixu::EnableValidation::Yes);
 
         optixu::Pipeline pipeline0 = context.createPipeline();
         pipeline0.setPipelineOptions(
@@ -289,7 +289,7 @@ TEST(MaterialTest, MaterialBasic) {
             optixu::calcSumDwords<float2>(),
             "plp", sizeof(shared::PipelineLaunchParameters0),
             OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-            OPTIX_EXCEPTION_FLAG_DEBUG,
+            OPTIX_EXCEPTION_FLAG_NONE,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
         const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");

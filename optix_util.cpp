@@ -96,8 +96,9 @@ namespace optixu {
     Denoiser Context::createDenoiser(
         OptixDenoiserModelKind modelKind,
         GuideAlbedo guideAlbedo,
-        GuideNormal guideNormal) const {
-        return (new _Denoiser(m, modelKind, guideAlbedo, guideNormal))->getPublicType();
+        GuideNormal guideNormal,
+        OptixDenoiserAlphaMode alphaMode) const {
+        return (new _Denoiser(m, modelKind, guideAlbedo, guideNormal, alphaMode))->getPublicType();
     }
 
     CUcontext Context::getCUcontext() const {
@@ -4210,7 +4211,7 @@ namespace optixu {
     void Denoiser::invoke(
         CUstream stream, const DenoisingTask &task,
         const DenoiserInputBuffers &inputBuffers, IsFirstFrame isFirstFrame,
-        OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
+        CUdeviceptr normalizer, float blendFactor,
         const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
         const BufferView &internalGuideLayerForNextFrame) const {
         bool isTemporal =
@@ -4269,7 +4270,6 @@ namespace optixu {
             "Denoiser requires the previous denoised beauty buffer.");
 
         OptixDenoiserParams params = {};
-        params.denoiseAlpha = alphaMode;
         if (m->modelKind == OPTIX_DENOISER_MODEL_KIND_HDR ||
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL)
             params.hdrIntensity = normalizer;

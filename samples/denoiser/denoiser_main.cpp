@@ -74,7 +74,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
 
-    optixu::Context optixContext = optixu::Context::create(cuContext);
+    optixu::Context optixContext = optixu::Context::create(
+        cuContext, 4,
+        optixu::EnableValidation::DEBUG_SELECT(Yes, No));
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
@@ -86,8 +88,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     const std::vector<char> optixIr =
@@ -687,7 +688,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_AOV;
 
     optixu::Denoiser denoiser = optixContext.createDenoiser(
-        denoiserModel, useAlbedo, useNormal);
+        denoiserModel, useAlbedo, useNormal, OPTIX_DENOISER_ALPHA_MODE_COPY);
     optixu::DenoiserSizes denoiserSizes;
     uint32_t numTasks;
     denoiser.prepare(
@@ -798,7 +799,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         denoiser.invoke(
             cuStream, denoisingTasks[i],
             inputBuffers, optixu::IsFirstFrame::Yes,
-            OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer, 0.0f,
+            hdrNormalizer, 0.0f,
             linearOutputBuffer,
             nullptr, optixu::BufferView()); // no AOV outputs, no internal guide layer for the next frame
     timerDenoise.stop(cuStream);

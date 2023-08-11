@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 project(
     OptiX_Utility_cmake
     VERSION 1.0
-    DESCRIPTION "OptiX 7 Lightweight Wrapper Library"
+    DESCRIPTION "OptiX Lightweight Wrapper Library"
     LANGUAGES C CXX CUDA)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -15,14 +15,14 @@ set(
     "${CMAKE_SOURCE_DIR}/cmake"
     ${CMAKE_MODULE_PATH})
 find_package(CUDAToolkit 12.0 REQUIRED)
-find_package(OptiX77)
+find_package(OptiX80)
 include("copy_files")
 include("nvcuda_compile_ptx")
 
-if (OptiX77_FOUND)
-    set(OPTIX_INCLUDE_DIR "${OPTIX77_INCLUDE_DIR}")
+if (OptiX80_FOUND)
+    set(OPTIX_INCLUDE_DIR "${OPTIX80_INCLUDE_DIR}")
 else()
-    message(FATAL_ERROR "OptiX SDK 7.7 not found.")
+    message(FATAL_ERROR "OptiX SDK 8.0.0 not found.")
 endif()
 
 

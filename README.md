@@ -22,7 +22,7 @@ Add the followings to your program which uses OptiX Utility:
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
-Currently based on OptiX 7.7.0
+Currently based on OptiX 8.0.0
 - Traversable types
   - Single GAS
   - Single-level instancing
@@ -50,7 +50,7 @@ Currently based on OptiX 7.7.0
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX-IR support for better debugging\
-  \* but fow now (7.7.0 and the 535.98 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
+  \* but fow now (8.0.0 and the 535.98 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser
   - LDR (Not Tested)
   - HDR
@@ -107,7 +107,7 @@ pipeline.setPipelineOptions(
     "plp", sizeof(PipelineLaunchParameters),
     OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-    OPTIX_EXCEPTION_FLAG_DEBUG,
+    OPTIX_EXCEPTION_FLAG_NONE,
     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 optixu::Module mainModule =
     pipeline.createModuleFromPTXString(
@@ -276,15 +276,15 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the program runs correctly in the following environment.
 
-* Windows 11 (22H2) & Visual Studio Community 2022 (17.6.5)
-* Core i9-9900K, 32GB, RTX 4080 16GB
-* NVIDIA Driver 536.40
+* Windows 11 (22H2) & Visual Studio Community 2022 (17.7.0)
+* Ryzen 9 7950X, 64GB, RTX 4080 16GB
+* NVIDIA Driver 536.67
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
 * CUDA 12.2 (probably works with lower CUDA versions)
-* OptiX 7.7.0 (requires Maxwell or later generation NVIDIA GPU)
+* OptiX 8.0.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))

@@ -445,7 +445,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gpuTimer[0].initialize(cuContext);
     gpuTimer[1].initialize(cuContext);
 
-    optixu::Context optixContext = optixu::Context::create(cuContext);
+    optixu::Context optixContext = optixu::Context::create(
+        cuContext, 4,
+        optixu::EnableValidation::DEBUG_SELECT(Yes, No));
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
@@ -457,8 +459,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         "plp", sizeof(Shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
         DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
-                      OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-                      OPTIX_EXCEPTION_FLAG_DEBUG),
+                      OPTIX_EXCEPTION_FLAG_TRACE_DEPTH),
                      OPTIX_EXCEPTION_FLAG_NONE),
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
