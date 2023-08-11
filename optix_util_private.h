@@ -1505,7 +1505,8 @@ namespace optixu {
             _Context* ctxt,
             OptixDenoiserModelKind _modelKind,
             bool _guideAlbedo,
-            bool _guideNormal) :
+            bool _guideNormal,
+            OptixDenoiserAlphaMode alphaMode) :
             context(ctxt),
             imageWidth(0), imageHeight(0), tileWidth(0), tileHeight(0),
             overlapWidth(0), inputWidth(0), inputHeight(0),
@@ -1515,6 +1516,7 @@ namespace optixu {
             OptixDenoiserOptions options = {};
             options.guideAlbedo = _guideAlbedo;
             options.guideNormal = _guideNormal;
+            options.denoiseAlpha = alphaMode;
             OPTIX_CHECK(optixDenoiserCreate(context->getRawContext(), modelKind, &options, &rawDenoiser));
         }
         ~Priv() {

@@ -79,11 +79,11 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.7.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\prebuilt\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 8.0.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\prebuilt\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.7.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\prebuilt\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\ProgramData\NVIDIA Corporation\OptiX SDK 8.0.0\include;$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\prebuilt\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

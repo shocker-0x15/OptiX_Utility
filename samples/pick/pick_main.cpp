@@ -46,7 +46,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&stream, 0));
 
-    optixu::Context optixContext = optixu::Context::create(cuContext);
+    optixu::Context optixContext = optixu::Context::create(
+        cuContext, 4,
+        optixu::EnableValidation::DEBUG_SELECT(Yes, No));
 
     struct Pipeline {
         optixu::Pipeline pipeline;
@@ -83,7 +85,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             "plp", sizeof(Shared::PickPipelineLaunchParameters),
             OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-            DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+            OPTIX_EXCEPTION_FLAG_NONE,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
         const std::vector<char> optixIr =
@@ -128,7 +130,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             "plp", sizeof(Shared::RenderPipelineLaunchParameters),
             OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-            DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+            OPTIX_EXCEPTION_FLAG_NONE,
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
         const std::vector<char> optixIr =

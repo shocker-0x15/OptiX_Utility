@@ -68,7 +68,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&stream, 0));
 
-    optixu::Context optixContext = optixu::Context::create(cuContext);
+    optixu::Context optixContext = optixu::Context::create(
+        cuContext, 4,
+        optixu::EnableValidation::DEBUG_SELECT(Yes, No));
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
@@ -80,8 +82,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::calcSumDwords<float2>(),
         "plp", sizeof(Shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-        DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     /*
@@ -876,7 +877,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixu::DenoiserSizes denoiserSizes;
         uint32_t numTasks;
-        denoiser = optixContext.createDenoiser(denoiserModel, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes);
+        denoiser = optixContext.createDenoiser(
+            denoiserModel,
+            optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
         denoiser.prepare(
             width, height, tileWidth, tileHeight,
             &denoiserSizes, &numTasks);
@@ -1304,7 +1307,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             denoiser.invoke(
                 curStream, denoisingTasks[i],
                 inputBuffers, optixu::IsFirstFrame(isNewSequence),
-                OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer.getCUdeviceptr(), 0.0f,
+                hdrNormalizer.getCUdeviceptr(), 0.0f,
                 linearDenoisedBeautyBuffer,
                 nullptr, // no AOV outputs
                 internalGuideLayerForNextFrame);

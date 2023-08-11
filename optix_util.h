@@ -31,6 +31,12 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- !!BREAKING
+  JP: - OptiX 8.0.0をサポート。
+        Context::createDenoiser(), Denoiser::invoke()のパラメターを変更。
+  EN: - Supported OptiX 8.0.0.
+        Changed the parameters of Context::createDenoiser(), Denoiser::invoke().
+
 - JP: - Displacement Micro-Mapをサポート。
   EN: - Supported displacement micro-map.
 
@@ -41,6 +47,7 @@ EN:
   EN: - Supported OptiX 7.7.0.
       - Changed the parameters of Pipeline::link().
       - Does not support displaced micro-mesh yet.
+
 - !!BREAKING
   JP: - ProgramGroupをProgram, HitProgramGroup, CallableProgramGroupに分割した。
   EN: - Separated ProgramGroup into Program, HitProgramGroup, CallableProgramGroup.
@@ -91,6 +98,7 @@ EN:
         __CUDACC__と__CUDA_ARCH__の使い分けを明確に。
   EN: - Removed inline qualifier from RT_DEVICE_FUNCTION and added RT_INLINE.
         Disambiguate usage of __CUDACC__ and __CUDA_ARCH__.
+
 - !!BREAKING
   JP: - getPayloads()/setPayloads(), getAttributes(), getExceptionDetails()を削除。
         ペイロードなどの値はシグネチャー型経由で取得・設定を行う。
@@ -1182,7 +1190,8 @@ namespace optixu {
         Denoiser createDenoiser(
             OptixDenoiserModelKind modelKind,
             GuideAlbedo guideAlbedo,
-            GuideNormal guideNormal) const;
+            GuideNormal guideNormal,
+            OptixDenoiserAlphaMode alphaMode) const;
 
         operator bool() const { return m; }
         bool operator==(const Context &r) const { return m == r.m; }
@@ -1934,7 +1943,7 @@ namespace optixu {
         void invoke(
             CUstream stream, const DenoisingTask &task,
             const DenoiserInputBuffers &inputBuffers, IsFirstFrame isFirstFrame,
-            OptixDenoiserAlphaMode alphaMode, CUdeviceptr normalizer, float blendFactor,
+            CUdeviceptr normalizer, float blendFactor,
             const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
             const BufferView &internalGuideLayerForNextFrame) const;
     };
@@ -1973,11 +1982,7 @@ void optixGetCubicBezierVertexData(OptixTraversableHandle gas, unsigned int prim
 void optixGetCubicBSplineVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
 float optixGetCurveParameter();
 int optixGetExceptionCode();
-OptixInvalidRayExceptionDetails optixGetExceptionInvalidRay();
-int optixGetExceptionInvalidSbtOffset();
-OptixTraversableHandle optixGetExceptionInvalidTraversable();
 char* optixGetExceptionLineInfo();
-OptixParameterMismatchExceptionDetails optixGetExceptionParameterMismatch();
 unsigned int optixGetGASMotionStepCount(OptixTraversableHandle gas);
 float optixGetGASMotionTimeBegin(OptixTraversableHandle gas);
 float optixGetGASMotionTimeEnd(OptixTraversableHandle gas);
