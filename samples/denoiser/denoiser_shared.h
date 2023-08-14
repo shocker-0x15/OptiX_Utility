@@ -89,6 +89,7 @@ namespace Shared {
         optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         PerspectiveCamera camera;
+        uint32_t useCameraSpaceNormal : 1;
     };
 
 

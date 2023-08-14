@@ -1249,6 +1249,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             numAccumFrames = 0;
         plp.enableJittering = enableJittering;
         plp.resetFlowBuffer = isNewSequence;
+        // Only old models require camera-space normal and
+        // world-space normal is recommended for newer models.
+        plp.useCameraSpaceNormal = denoiserModel == OPTIX_DENOISER_MODEL_KIND_HDR;
 
         // Render
         curGPUTimer.render.start(curStream);

@@ -735,6 +735,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.16f);
     plp.camera.orientation = rotateY3x3(pi_v<float>);
+    // Only old models require camera-space normal and
+    // world-space normal is recommended for newer models.
+    plp.useCameraSpaceNormal = denoiserModel == OPTIX_DENOISER_MODEL_KIND_HDR;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
