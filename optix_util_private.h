@@ -218,6 +218,8 @@ namespace optixu {
     class Context::Priv {
         CUcontext cuContext;
         OptixDeviceContext rawContext;
+        uint32_t rtCoreVersion;
+        uint32_t shaderExecutionReorderingFlags;
         uint32_t maxInstanceID;
         uint32_t numVisibilityMaskBits;
         std::unordered_map<const void*, std::string> registeredNames;
@@ -244,6 +246,12 @@ namespace optixu {
             OPTIX_CHECK(optixDeviceContextGetProperty(
                 rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK,
                 &numVisibilityMaskBits, sizeof(numVisibilityMaskBits)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_RTCORE_VERSION,
+                &rtCoreVersion, sizeof(rtCoreVersion)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING,
+                &shaderExecutionReorderingFlags, sizeof(shaderExecutionReorderingFlags)));
         }
         ~Priv() {
             optixDeviceContextDestroy(rawContext);

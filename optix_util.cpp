@@ -101,6 +101,14 @@ namespace optixu {
         return (new _Denoiser(m, modelKind, guideAlbedo, guideNormal, alphaMode))->getPublicType();
     }
 
+    uint32_t Context::getRTCoreVersion() const {
+        return m->rtCoreVersion;
+    }
+
+    uint32_t Context::getShaderExecutionReorderingFlags() const {
+        return m->shaderExecutionReorderingFlags;
+    }
+
     CUcontext Context::getCUcontext() const {
         return m->cuContext;
     }
