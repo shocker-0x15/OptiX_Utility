@@ -35,8 +35,8 @@ Currently based on OptiX 8.0.0
     - 3rd order: Round cubic B-splines, Round Catmull-Rom splines, Round cubic B&#233;zier curves
   - Spheres
   - User-defined custom primitives
-- Opacity micro-map
-- Displacement micro-map
+- Opacity micro-map (OMM)
+- Displacement micro-map (DMM)
 - Motion blur types
   - Instance motion blur
   - Deformation blur
@@ -59,7 +59,8 @@ Currently based on OptiX 8.0.0
   - HDR Temporal
   - HDR Temporal with Kernel Prediction Model (AOV Output Not Tested)
   - HDR Temporal + Upscaling 2x (AOV Output Not Tested)
-- Automatic payload/attribute value packing in kernel code
+- Automatic payload/attribute packing/unpacking in kernel code
+  - supports hit objects as well for shader execution reordering (SER)
 - Payload usage annotation to reduce register consumption in complex pipelines
 
 ### TODO
@@ -278,7 +279,7 @@ I've confirmed that the program runs correctly in the following environment.
 
 * Windows 11 (22H2) & Visual Studio Community 2022 (17.7.0)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 536.67
+* NVIDIA Driver 536.99
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
