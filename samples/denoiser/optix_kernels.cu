@@ -72,9 +72,11 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 
     plp.rngBuffer[launchIndex] = rng;
 
-    // Normal input to the denoiser should be in camera space (right handed, looking down the negative Z-axis).
-    firstHitNormal = transpose(plp.camera.orientation) * firstHitNormal;
-    firstHitNormal.x *= -1;
+    if (plp.useCameraSpaceNormal) {
+        // Convert the normal into the camera space (right handed, looking down the negative Z-axis).
+        firstHitNormal = transpose(plp.camera.orientation) * firstHitNormal;
+        firstHitNormal.x *= -1;
+    }
 
     float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
     float3 prevAlbedoResult = make_float3(0.0f, 0.0f, 0.0f);

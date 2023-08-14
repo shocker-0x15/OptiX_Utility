@@ -120,6 +120,7 @@ namespace Shared {
         const InstanceData* instances;
         unsigned int enableJittering : 1;
         unsigned int resetFlowBuffer : 1;
+        unsigned int useCameraSpaceNormal : 1;
     };
 
 
