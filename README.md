@@ -50,7 +50,7 @@ Currently based on OptiX 8.0.0
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX-IR support for better debugging\
-  \* but fow now (8.0.0 and the 535.98 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
+  \* but fow now (7.7.0 and the 535.98 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser
   - LDR (Not Tested)
   - HDR
