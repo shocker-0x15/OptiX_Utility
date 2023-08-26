@@ -935,7 +935,7 @@ struct AABBAsOrderedInt {
         minP(v.minP), maxP(v.maxP) {
     }
 
-    CUDA_COMMON_FUNCTION AABBAsOrderedInt& operator=(const AABBAsOrderedInt &v) {
+    CUDA_COMMON_FUNCTION AABBAsOrderedInt &operator=(const AABBAsOrderedInt &v) {
         minP = v.minP;
         maxP = v.maxP;
         return *this;

@@ -360,7 +360,7 @@ namespace optixu {
             struct Hash {
                 typedef std::size_t result_type;
 
-                std::size_t operator()(const Key& key) const {
+                std::size_t operator()(const Key &key) const {
                     size_t seed = 0;
                     auto hash0 = std::hash<const _Pipeline*>()(key.pipeline);
                     auto hash1 = std::hash<uint32_t>()(key.rayType);
@@ -424,7 +424,7 @@ namespace optixu {
             struct Hash {
                 typedef std::size_t result_type;
 
-                std::size_t operator()(const SBTOffsetKey& key) const {
+                std::size_t operator()(const SBTOffsetKey &key) const {
                     size_t seed = 0;
                     auto hash0 = std::hash<uint32_t>()(key.gasSerialID);
                     auto hash1 = std::hash<uint32_t>()(key.matSetIndex);
@@ -1186,7 +1186,7 @@ namespace optixu {
             struct Hash {
                 typedef std::size_t result_type;
 
-                std::size_t operator()(const KeyForBuiltinISModule& key) const {
+                std::size_t operator()(const KeyForBuiltinISModule &key) const {
                     size_t seed = 0;
                     auto hash0 = std::hash<OptixPrimitiveType>()(key.curveType);
                     auto hash1 = std::hash<OptixCurveEndcapFlags>()(key.endcapFlags);
