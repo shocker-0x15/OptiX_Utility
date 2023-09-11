@@ -179,8 +179,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Matrix3x3 matSR = Matrix3x3();
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = roomTriangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.matSR_N = transpose(inverse(matSR));
 
         /*
@@ -246,9 +246,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Matrix3x3 matSR = Matrix3x3();
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getROBuffer<enableBufferOobCheck>();
 #if !defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
-        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 #endif
         geomData.matSR_N = transpose(inverse(matSR));
 
@@ -297,8 +297,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Matrix3x3 matSR = rotateY3x3(pi_v<float> / 4) * scale3x3(0.012f);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = bunnyVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = bunnyTriangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.matSR_N = transpose(inverse(matSR));
 
         bunnyGeomInst.setVertexBuffer(bunnyVertexBuffer);

@@ -364,8 +364,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.matIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = room.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = room.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = room.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = room.triangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         room.optixGeomInst = scene.createGeometryInstance();
         room.optixGeomInst.setVertexBuffer(room.vertexBuffer);
@@ -413,8 +413,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = areaLight.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = areaLight.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = areaLight.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = areaLight.triangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         areaLight.optixGeomInst = scene.createGeometryInstance();
         areaLight.optixGeomInst.setVertexBuffer(areaLight.vertexBuffer);
@@ -462,8 +462,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = bunny.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = bunny.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = bunny.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = bunny.triangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         bunny.optixGeomInst = scene.createGeometryInstance();
         bunny.optixGeomInst.setVertexBuffer(bunny.vertexBuffer);

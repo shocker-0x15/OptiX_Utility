@@ -419,8 +419,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
             Shared::GeometryInstanceData geomData = {};
-            geomData.vertexBuffer = group.vertexBuffer->getDevicePointer();
-            geomData.triangleBuffer = group.triangleBuffer->getDevicePointer();
+            geomData.vertexBuffer = group.vertexBuffer->getROBuffer<enableBufferOobCheck>();
+            geomData.triangleBuffer = group.triangleBuffer->getROBuffer<enableBufferOobCheck>();
             geomData.albedoTexture = 0;
             geomData.albedo = float3(0.8f, 0.8f, 0.8f);
 
@@ -686,8 +686,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 group.heightTexObj = 0;
 
                 Shared::GeometryInstanceData geomData = {};
-                geomData.vertexBuffer = group.vertexBuffer->getDevicePointer();
-                geomData.triangleBuffer = group.triangleBuffer->getDevicePointer();
+                geomData.vertexBuffer = group.vertexBuffer->getROBuffer<enableBufferOobCheck>();
+                geomData.triangleBuffer = group.triangleBuffer->getROBuffer<enableBufferOobCheck>();
                 geomData.albedo = float3(0.9f, 0.2f, 0.01f);
 
                 group.optixGeomInst = scene.createGeometryInstance();
@@ -709,7 +709,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         microMapGroupIdx = mmAttrs.at("groupIndex").GetNumberAsInt();
 
                     const DMMArray &dmmArray = dmmGroups[microMapIdx]->arrays[microMapGroupIdx];
-                    geomData.dmmDescBuffer = dmmArray.descs->getDevicePointer();
+                    geomData.dmmDescBuffer = dmmArray.descs->getROBuffer<enableBufferOobCheck>();
                     //geomData.dmmIndexBuffer = ;
                     //geomData.dmmIndexSize = ;
 
@@ -954,8 +954,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 numTriangles);
 
             Shared::GeometryInstanceData geomData = {};
-            geomData.vertexBuffer = group.vertexBuffer->getDevicePointer();
-            geomData.triangleBuffer = group.triangleBuffer->getDevicePointer();
+            geomData.vertexBuffer = group.vertexBuffer->getROBuffer<enableBufferOobCheck>();
+            geomData.triangleBuffer = group.triangleBuffer->getROBuffer<enableBufferOobCheck>();
             geomData.albedo = float3(srcMat.diffuse[0], srcMat.diffuse[1], srcMat.diffuse[2]);
             if (!srcMat.diffuseTexPath.empty()) {
                 int32_t width, height, n;
@@ -1085,7 +1085,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 dmmGroup->rawDmmArray = createBufferRef(cuContext, cudau::BufferType::Device, rawDmmArraySize, 1);
                 dmmArray.descs = createTypedBufferRef<OptixDisplacementMicromapDesc>(
                     cuContext, cudau::BufferType::Device, numDmms);
-                geomData.dmmDescBuffer = dmmArray.descs->getDevicePointer();
+                geomData.dmmDescBuffer = dmmArray.descs->getROBuffer<enableBufferOobCheck>();
                 if (useDmmIndexBuffer) {
                     group.dmmIndexBuffer = createBufferRef(
                         cuContext, cudau::BufferType::Device,

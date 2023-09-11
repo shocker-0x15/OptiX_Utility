@@ -159,8 +159,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = roomTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
@@ -189,8 +189,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
         areaLightGeomInst.setTriangleBuffer(areaLightTriangleBuffer);
@@ -250,8 +250,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         customPrimsAabbBuffer.unmap();
 
         Shared::GeometryData geomData = {};
-        geomData.aabbBuffer = customPrimsAabbBuffer.getDevicePointer();
-        geomData.paramBuffer = spheresParamBuffer.getDevicePointer();
+        geomData.aabbBuffer = customPrimsAabbBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.paramBuffer = spheresParamBuffer.getROBuffer<enableBufferOobCheck>();
 
         customPrimsGeomInst.setCustomPrimitiveAABBBuffer(customPrimsAabbBuffer);
         customPrimsGeomInst.setNumMaterials(1, optixu::BufferView());

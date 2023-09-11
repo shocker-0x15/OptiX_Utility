@@ -178,21 +178,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
     struct Geometry {
         struct TriangleMesh {
             std::vector<cudau::TypedBuffer<Shared::Vertex>> vertexBuffers;
-            cudau::TypedBuffer<const Shared::Vertex*> vertexBufferPointerBuffer;
+            cudau::TypedBuffer<ROBuffer<Shared::Vertex>> vertexBufferPointerBuffer;
             cudau::TypedBuffer<Shared::Triangle> triangleBuffer;
         };
         struct Curves {
             std::vector<cudau::TypedBuffer<Shared::CurveVertex>> vertexBuffers;
-            cudau::TypedBuffer<const Shared::CurveVertex*> vertexBufferPointerBuffer;
+            cudau::TypedBuffer<ROBuffer<Shared::CurveVertex>> vertexBufferPointerBuffer;
             cudau::TypedBuffer<uint32_t> segmentIndexBuffer;
         };
         struct Spheres {
             std::vector<cudau::TypedBuffer<Shared::Sphere>> sphereBuffers;
-            cudau::TypedBuffer<const Shared::Sphere*> sphereBufferPointerBuffer;
+            cudau::TypedBuffer<ROBuffer<Shared::Sphere>> sphereBufferPointerBuffer;
         };
         struct CustomPrimitives {
             std::vector<cudau::TypedBuffer<Shared::PartialSphereParameter>> partialSphereParamBuffers;
-            cudau::TypedBuffer<const Shared::PartialSphereParameter*> partialSphereParamBufferPointerBuffer;
+            cudau::TypedBuffer<ROBuffer<Shared::PartialSphereParameter>> partialSphereParamBufferPointerBuffer;
         };
         std::variant<TriangleMesh, Curves, Spheres, CustomPrimitives> shape;
         optixu::GeometryInstance optixGeomInst;
@@ -275,10 +275,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::GeometryData geomData = {};
         auto vertexBufferPointers = shape.vertexBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            vertexBufferPointers[i] = shape.vertexBuffers[i].getDevicePointer();
+            vertexBufferPointers[i] = shape.vertexBuffers[i].getROBuffer<enableBufferOobCheck>();
         shape.vertexBufferPointerBuffer.unmap();
-        geomData.vertexBuffers = shape.vertexBufferPointerBuffer.getDevicePointer();
-        geomData.triangleBuffer = shape.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffers = shape.vertexBufferPointerBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = shape.triangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.numMotionSteps = numMotionSteps;
 
         bunny.optixGeomInst = scene.createGeometryInstance();
@@ -363,10 +363,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::GeometryData geomData = {};
         auto vertexBufferPointers = shape.vertexBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            vertexBufferPointers[i] = shape.vertexBuffers[i].getDevicePointer();
+            vertexBufferPointers[i] = shape.vertexBuffers[i].getROBuffer<enableBufferOobCheck>();
         shape.vertexBufferPointerBuffer.unmap();
-        geomData.curveVertexBuffers = shape.vertexBufferPointerBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = shape.segmentIndexBuffer.getDevicePointer();
+        geomData.curveVertexBuffers = shape.vertexBufferPointerBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = shape.segmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.numMotionSteps = numMotionSteps;
 
         curves.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
@@ -441,9 +441,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::GeometryData geomData = {};
         auto paramBufferPointers = shape.sphereBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            paramBufferPointers[i] = shape.sphereBuffers[i].getDevicePointer();
+            paramBufferPointers[i] = shape.sphereBuffers[i].getROBuffer<enableBufferOobCheck>();
         shape.sphereBufferPointerBuffer.unmap();
-        geomData.sphereBuffers = shape.sphereBufferPointerBuffer.getDevicePointer();
+        geomData.sphereBuffers = shape.sphereBufferPointerBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.numMotionSteps = numMotionSteps;
 
         spheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::Spheres);
@@ -531,9 +531,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Shared::GeometryData geomData = {};
         auto paramBufferPointers = shape.partialSphereParamBufferPointerBuffer.map();
         for (int i = 0; i < numMotionSteps; ++i)
-            paramBufferPointers[i] = shape.partialSphereParamBuffers[i].getDevicePointer();
+            paramBufferPointers[i] = shape.partialSphereParamBuffers[i].getROBuffer<enableBufferOobCheck>();
         shape.partialSphereParamBufferPointerBuffer.unmap();
-        geomData.partialSphereParamBuffers = shape.partialSphereParamBufferPointerBuffer.getDevicePointer();
+        geomData.partialSphereParamBuffers =
+            shape.partialSphereParamBufferPointerBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.numMotionSteps = numMotionSteps;
 
         partialSpheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);

@@ -225,8 +225,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         floorTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = floorVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = floorTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = floorVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = floorTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         floorGeomInst.setVertexBuffer(floorVertexBuffer);
         floorGeomInst.setTriangleBuffer(floorTriangleBuffer);
@@ -261,8 +261,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         linearCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
-        geomData.curveVertexBuffer = linearCurveVertexBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = linearCurveSegmentIndexBuffer.getDevicePointer();
+        geomData.curveVertexBuffer = linearCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = linearCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
 
         linearCurveGeomInst.setVertexBuffer(optixu::BufferView(
             linearCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
@@ -294,8 +294,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         quadraticCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
-        geomData.curveVertexBuffer = quadraticCurveVertexBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = quadraticCurveSegmentIndexBuffer.getDevicePointer();
+        geomData.curveVertexBuffer = quadraticCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = quadraticCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
 
         quadraticCurveGeomInst.setVertexBuffer(optixu::BufferView(
             quadraticCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
@@ -328,8 +328,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cubicCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
-        geomData.curveVertexBuffer = cubicCurveVertexBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = cubicCurveSegmentIndexBuffer.getDevicePointer();
+        geomData.curveVertexBuffer = cubicCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = cubicCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
 
         cubicCurveGeomInst.setVertexBuffer(optixu::BufferView(
             cubicCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
@@ -362,8 +362,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         catmullRomCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
-        geomData.curveVertexBuffer = catmullRomCurveVertexBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = catmullRomCurveSegmentIndexBuffer.getDevicePointer();
+        geomData.curveVertexBuffer = catmullRomCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = catmullRomCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
 
         catmullRomCurveGeomInst.setVertexBuffer(optixu::BufferView(
             catmullRomCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
@@ -396,8 +396,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cubicBezierCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
-        geomData.curveVertexBuffer = cubicBezierCurveVertexBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = cubicBezierCurveSegmentIndexBuffer.getDevicePointer();
+        geomData.curveVertexBuffer = cubicBezierCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = cubicBezierCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
 
         cubicBezierCurveGeomInst.setVertexBuffer(optixu::BufferView(
             cubicBezierCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
@@ -430,8 +430,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         quadraticRibbonSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
 
         Shared::GeometryData geomData = {};
-        geomData.ribbonVertexBuffer = quadraticRibbonVertexBuffer.getDevicePointer();
-        geomData.segmentIndexBuffer = quadraticRibbonSegmentIndexBuffer.getDevicePointer();
+        geomData.ribbonVertexBuffer = quadraticRibbonVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = quadraticRibbonSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
 
         quadraticRibbonGeomInst.setVertexBuffer(optixu::BufferView(
             quadraticRibbonVertexBuffer.getCUdeviceptr() + offsetof(Shared::RibbonVertex, position),

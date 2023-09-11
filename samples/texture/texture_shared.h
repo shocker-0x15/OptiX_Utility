@@ -22,8 +22,6 @@ namespace Shared {
 
 
 
-
-
     struct PerspectiveCamera {
         float aspect;
         float fovY;
@@ -34,8 +32,8 @@ namespace Shared {
 
     
     struct GeometryData {
-        const Vertex* vertexBuffer;
-        const Triangle* triangleBuffer;
+        ROBuffer<Vertex> vertexBuffer;
+        ROBuffer<Triangle> triangleBuffer;
     };
 
     struct MaterialData {

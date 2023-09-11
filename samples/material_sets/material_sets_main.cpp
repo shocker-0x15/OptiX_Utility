@@ -206,8 +206,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomMatIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = roomTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
@@ -250,8 +250,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         multiMatPolygonMaterialIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = multiMatPolygonVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = multiMatPolygonTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = multiMatPolygonVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = multiMatPolygonTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         multiMatPolygonGeomInst.setVertexBuffer(multiMatPolygonVertexBuffer);
         multiMatPolygonGeomInst.setTriangleBuffer(multiMatPolygonTriangleBuffer);

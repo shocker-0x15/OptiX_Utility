@@ -145,8 +145,8 @@ public:
 
         Shared::GeometryData* geomDataPtr = m_sceneContext->geometryDataBuffer.map();
         Shared::GeometryData &recordData = geomDataPtr[m_sceneContext->geometryID];
-        recordData.vertexBuffer = m_vertexBuffer.getDevicePointer();
-        recordData.triangleBuffer = triangleBuffer->getDevicePointer();
+        recordData.vertexBuffer = m_vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        recordData.triangleBuffer = triangleBuffer->getROBuffer<enableBufferOobCheck>();
         recordData.decodeHitPointFunc = m_sceneContext->decodeHitPointTriangle;
         m_sceneContext->geometryDataBuffer.unmap();
 
@@ -1010,8 +1010,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         Shared::GeometryData* geomDataPtr = sceneContext.geometryDataBuffer.map();
         Shared::GeometryData &recordData = geomDataPtr[sceneContext.geometryID];
-        recordData.curveVertexBuffer = floorFiberVertexBuffer.getDevicePointer();
-        recordData.segmentIndexBuffer = floorFiberSegmentIndexBuffer.getDevicePointer();
+        recordData.curveVertexBuffer = floorFiberVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        recordData.segmentIndexBuffer = floorFiberSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
         recordData.decodeHitPointFunc = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointCurveIndex);
         sceneContext.geometryDataBuffer.unmap();
 
@@ -1081,8 +1081,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         Shared::GeometryData* geomDataPtr = sceneContext.geometryDataBuffer.map();
         Shared::GeometryData &recordData = geomDataPtr[sceneContext.geometryID];
-        recordData.aabbBuffer = customPrimAABBs.getDevicePointer();
-        recordData.paramBuffer = customPrimParameters.getDevicePointer();
+        recordData.aabbBuffer = customPrimAABBs.getROBuffer<enableBufferOobCheck>();
+        recordData.paramBuffer = customPrimParameters.getROBuffer<enableBufferOobCheck>();
         recordData.decodeHitPointFunc = static_cast<Shared::ProgDecodeHitPoint>(callableProgramDecodeHitPointSphereIndex);
         sceneContext.geometryDataBuffer.unmap();
 
@@ -1394,8 +1394,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandles = travHandleBuffer.getDevicePointer();
-    plp.materialData = materialDataBuffer.getDevicePointer();
-    plp.geomInstData = sceneContext.geometryDataBuffer.getDevicePointer();
+    plp.materialData = materialDataBuffer.getROBuffer<enableBufferOobCheck>();
+    plp.geomInstData = sceneContext.geometryDataBuffer.getROBuffer<enableBufferOobCheck>();
     plp.travIndex = iasSceneIndex;
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;

@@ -363,8 +363,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         geomInfos.push_back("Room");
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = room.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = room.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = group.triangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.geomID = geomID++;
 
         group.optixGeomInst = scene.createGeometryInstance();
@@ -406,8 +406,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         geomInfos.push_back("Area Light");
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = areaLight.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = areaLight.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = group.triangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.geomID = geomID++;
 
         group.optixGeomInst = scene.createGeometryInstance();
@@ -449,8 +449,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         geomInfos.push_back("Bunny");
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = bunny.vertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = bunny.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = group.triangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomData.geomID = geomID++;
 
         group.optixGeomInst = scene.createGeometryInstance();

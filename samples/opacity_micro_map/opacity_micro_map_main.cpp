@@ -307,8 +307,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.triangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
             Shared::GeometryInstanceData geomData = {};
-            geomData.vertexBuffer = floor.vertexBuffer.getDevicePointer();
-            geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
+            geomData.vertexBuffer = floor.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+            geomData.triangleBuffer = group.triangleBuffer.getROBuffer<enableBufferOobCheck>();
             geomData.texture = 0;
             geomData.albedo = float3(0.8f, 0.8f, 0.8f);
 
@@ -380,8 +380,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 numTriangles);
 
             Shared::GeometryInstanceData geomData = {};
-            geomData.vertexBuffer = alphaTestGeom.vertexBuffer.getDevicePointer();
-            geomData.triangleBuffer = group.triangleBuffer.getDevicePointer();
+            geomData.vertexBuffer = alphaTestGeom.vertexBuffer.getROBuffer<enableBufferOobCheck>();
+            geomData.triangleBuffer = group.triangleBuffer.getROBuffer<enableBufferOobCheck>();
             geomData.albedo = float3(srcMat.diffuse[0], srcMat.diffuse[1], srcMat.diffuse[2]);
             if (!srcMat.diffuseTexPath.empty()) {
                 int32_t width, height, n;

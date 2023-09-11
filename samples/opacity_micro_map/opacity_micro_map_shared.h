@@ -38,8 +38,8 @@ namespace Shared {
 
     
     struct GeometryInstanceData {
-        const Vertex* vertexBuffer;
-        const Triangle* triangleBuffer;
+        ROBuffer<Vertex> vertexBuffer;
+        ROBuffer<Triangle> triangleBuffer;
         CUtexObject texture;
         float3 albedo;
     };

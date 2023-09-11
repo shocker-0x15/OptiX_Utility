@@ -32,8 +32,8 @@ namespace Shared {
 
     
     struct GeometryData {
-        const Vertex* vertexBuffer;
-        const Triangle* triangleBuffer;
+        ROBuffer<Vertex> vertexBuffer;
+        ROBuffer<Triangle> triangleBuffer;
         Matrix3x3 matSR_N; // pre-transform normal matrix
 
         CUDA_COMMON_FUNCTION float3 transformNormal(const float3 &n) const {

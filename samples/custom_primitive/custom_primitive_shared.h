@@ -47,12 +47,12 @@ namespace Shared {
     struct GeometryData {
         union {
             struct {
-                const Vertex* vertexBuffer;
-                const Triangle* triangleBuffer;
+                ROBuffer<Vertex> vertexBuffer;
+                ROBuffer<Triangle> triangleBuffer;
             };
             struct {
-                const AABB* aabbBuffer;
-                const PartialSphereParameter* paramBuffer;
+                ROBuffer<AABB> aabbBuffer;
+                ROBuffer<PartialSphereParameter> paramBuffer;
             };
         };
     };
@@ -61,7 +61,6 @@ namespace Shared {
 
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
-        const GeometryData* geomInstData;
         int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
         optixu::BlockBuffer2D<float4, 1> resultBuffer;
         PerspectiveCamera camera;
