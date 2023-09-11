@@ -325,7 +325,8 @@ namespace cudau {
     // WriteOnlyDiscard: Do not issue a device-to-host transfer when mapping and
     //                   the previous contents will be undefined.
     enum class BufferMapFlag {
-        ReadWrite = 0,
+        Unmapped = 0,
+        ReadWrite,
         ReadOnly,
         WriteOnlyDiscard
     };
@@ -347,7 +348,6 @@ namespace cudau {
 
         struct {
             unsigned int m_persistentMappedMemory : 1;
-            unsigned int m_mapped : 1;
             unsigned int m_initialized : 1;
         };
 
@@ -708,9 +708,9 @@ namespace cudau {
             CUmipmappedArray m_mipmappedArray;
         };
         void** m_mappedPointers;
-        CUarray* m_mappedArrays;
+        CUarray* m_mipmapArrays;
+        BufferMapFlag* m_mapFlags;
         CUsurfObject* m_surfObjs;
-        BufferMapFlag m_mapFlag;
 
         uint32_t m_GLTexID;
         CUgraphicsResource m_cudaGfxResource;
@@ -825,19 +825,15 @@ namespace cudau {
 
         CUarray getCUarray(uint32_t mipmapLevel) const {
             if (m_GLTexID) {
-                if (m_mappedArrays[mipmapLevel] == nullptr)
+                if (m_mipmapArrays[mipmapLevel] == nullptr)
                     throw std::runtime_error("This mip level of this interop array is not mapped.");
-                return m_mappedArrays[mipmapLevel];
+                return m_mipmapArrays[mipmapLevel];
             }
             else {
-                if (m_numMipmapLevels > 1) {
-                    CUarray ret;
-                    CUDADRV_CHECK(cuMipmappedArrayGetLevel(&ret, m_mipmappedArray, mipmapLevel));
-                    return ret;
-                }
-                else {
+                if (m_numMipmapLevels > 1)
+                    return m_mipmapArrays[mipmapLevel];
+                else
                     return m_array;
-                }
             }
         }
         CUmipmappedArray getCUmipmappedArray() const {
@@ -879,50 +875,107 @@ namespace cudau {
         }
         void unmap(uint32_t mipmapLevel = 0, CUstream stream = 0);
         template <typename T>
-        void write(const T* srcValues, uint32_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) {
-            uint32_t width;
-            uint32_t height;
-            computeDimensionsOfLevel<!CUDA_UTIL_TEX_DIM_WORKAROUND>(mipmapLevel, &width, &height);
+        void write(
+            const T* srcValues, uint32_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) const {
             uint32_t depth = std::max<uint32_t>(1, m_depth);
-            size_t size = static_cast<size_t>(m_stride) * depth * height * width;
-            if (sizeof(T) * numValues > size)
+
+            uint32_t hostBw;
+            uint32_t hostBh;
+            computeDimensionsOfLevel<false>(mipmapLevel, &hostBw, &hostBh);
+            size_t hostSizePerRow = hostBw * m_stride;
+            size_t hostSize = depth * hostBh * hostSizePerRow;
+            if (sizeof(T) * numValues > hostSize)
                 throw std::runtime_error("Too large transfer.");
-            auto dstValues = map<T>(mipmapLevel, stream);
-            std::copy_n(srcValues, numValues, dstValues);
-            unmap(mipmapLevel, stream);
+            uint32_t writeHeight = (sizeof(T) * numValues) / hostSizePerRow;
+
+            uint32_t deviceBw;
+            uint32_t deviceBh;
+            computeDimensionsOfLevel<CUDA_UTIL_TEX_DIM_WORKAROUND>(mipmapLevel, &deviceBw, &deviceBh);
+            size_t deviceSizePerRow = deviceBw * static_cast<size_t>(m_stride);
+
+            CUDA_MEMCPY3D params = {};
+            params.WidthInBytes = deviceSizePerRow;
+            params.Height = deviceBh;
+            params.Depth = depth;
+
+            params.srcMemoryType = CU_MEMORYTYPE_HOST;
+            params.srcHost = srcValues;
+            params.srcPitch = hostSizePerRow;
+            params.srcHeight = writeHeight;
+            params.srcXInBytes = 0;
+            params.srcY = 0;
+            params.srcZ = 0;
+            // srcArray, srcDevice, srcLOD are not used in this case.
+
+            params.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+            params.dstArray = (m_numMipmapLevels > 1 || m_GLTexID != 0) ? m_mipmapArrays[mipmapLevel] : m_array;
+            params.dstXInBytes = 0;
+            params.dstY = 0;
+            params.dstZ = 0;
+            // dstDevice, dstHeight, dstHost, dstLOD, dstPitch are not used in this case.
+
+            CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
         }
         template <typename T>
-        void write(const std::vector<T> &values, uint32_t mipmapLevel = 0, CUstream stream = 0) {
+        void write(const std::vector<T> &values, uint32_t mipmapLevel = 0, CUstream stream = 0) const {
             write(values.data(), static_cast<uint32_t>(values.size()), mipmapLevel, stream);
         }
         template <typename T>
-        void read(T* dstValues, uint32_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) {
-            uint32_t width;
-            uint32_t height;
-            computeDimensionsOfLevel<!CUDA_UTIL_TEX_DIM_WORKAROUND>(mipmapLevel, &width, &height);
+        void read(T* dstValues, uint32_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) const {
             uint32_t depth = std::max<uint32_t>(1, m_depth);
-            size_t size = static_cast<size_t>(m_stride) * depth * height * width;
-            if (sizeof(T) * numValues > size)
+
+            uint32_t hostBw;
+            uint32_t hostBh;
+            computeDimensionsOfLevel<false>(mipmapLevel, &hostBw, &hostBh);
+            size_t hostSizePerRow = hostBw * m_stride;
+            size_t hostSize = depth * hostBh * hostSizePerRow;
+            if (sizeof(T) * numValues > hostSize)
                 throw std::runtime_error("Too large transfer.");
-            auto srcValues = map<T>(mipmapLevel, stream);
-            std::copy_n(srcValues, numValues, dstValues);
-            unmap(mipmapLevel, stream);
+            uint32_t readHeight = (sizeof(T) * numValues) / hostSizePerRow;
+
+            uint32_t deviceBw;
+            uint32_t deviceBh;
+            computeDimensionsOfLevel<CUDA_UTIL_TEX_DIM_WORKAROUND>(mipmapLevel, &deviceBw, &deviceBh);
+            size_t deviceSizePerRow = deviceBw * static_cast<size_t>(m_stride);
+
+            CUDA_MEMCPY3D params = {};
+            params.WidthInBytes = deviceSizePerRow;
+            params.Height = deviceBh;
+            params.Depth = depth;
+
+            params.srcMemoryType = CU_MEMORYTYPE_ARRAY;
+            params.srcArray = (m_numMipmapLevels > 1 || m_GLTexID != 0) ? m_mipmapArrays[mipmapLevel] : m_array;
+            params.srcXInBytes = 0;
+            params.srcY = 0;
+            params.srcZ = 0;
+            // srcDevice, srcHeight, srcHost, srcLOD, srcPitch are not used in this case.
+
+            params.dstMemoryType = CU_MEMORYTYPE_HOST;
+            params.dstHost = dstValues;
+            params.dstPitch = hostSizePerRow;
+            params.dstHeight = readHeight;
+            params.dstXInBytes = 0;
+            params.dstY = 0;
+            params.dstZ = 0;
+            // dstArray, dstDevice, dstLOD are not used in this case.
+
+            CUDADRV_CHECK(cuMemcpy3DAsync(&params, stream));
         }
         template <typename T>
-        void read(std::vector<T> &values, uint32_t mipmapLevel = 0, CUstream stream = 0) {
+        void read(std::vector<T> &values, uint32_t mipmapLevel = 0, CUstream stream = 0) const {
             read(values.data(), static_cast<uint32_t>(values.size()), mipmapLevel, stream);
         }
         template <typename T>
-        void fill(const T &value, uint32_t mipmapLevel = 0, CUstream stream = 0) {
-            uint32_t width;
-            uint32_t height;
-            computeDimensionsOfLevel<!CUDA_UTIL_TEX_DIM_WORKAROUND>(mipmapLevel, &width, &height);
+        void fill(const T &value, uint32_t mipmapLevel = 0, CUstream stream = 0) const {
+            uint32_t hostBw;
+            uint32_t hostBh;
+            computeDimensionsOfLevel<false>(mipmapLevel, &hostBw, &hostBh);
             uint32_t depth = std::max<uint32_t>(1, m_depth);
-            size_t size = static_cast<size_t>(m_stride) * depth * height * width;
-            size_t numValues = size / sizeof(T);
-            auto dstValues = map<T>(mipmapLevel, stream, BufferMapFlag::WriteOnlyDiscard);
-            std::fill_n(dstValues, numValues, value);
-            unmap(mipmapLevel, stream);
+            size_t hostSizePerRow = hostBw * m_stride;
+            size_t hostSize = depth * hostBh * hostSizePerRow;
+            size_t numValues = hostSize / sizeof(T);
+            std::vector<T> values(value, numValues);
+            write(values, mipmapLevel, stream);
         }
 
         CUDA_RESOURCE_VIEW_DESC getResourceViewDesc() const;
@@ -935,13 +988,13 @@ namespace cudau {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             if (m_GLTexID == 0)
                 throw std::runtime_error("This is not an array created from OpenGL object.");
-            if (m_mappedArrays[mipmapLevel] == nullptr)
+            if (m_mipmapArrays[mipmapLevel] == nullptr)
                 throw std::runtime_error("Use beginCUDAAccess()/endCUDAAccess().");
 
             CUsurfObject ret;
             CUDA_RESOURCE_DESC resDesc = {};
             resDesc.resType = CU_RESOURCE_TYPE_ARRAY;
-            resDesc.res.array.hArray = m_mappedArrays[mipmapLevel];
+            resDesc.res.array.hArray = m_mipmapArrays[mipmapLevel];
             CUDADRV_CHECK(cuSurfObjectCreate(&ret, &resDesc));
             return ret;
 #else
