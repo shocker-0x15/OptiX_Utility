@@ -1217,6 +1217,14 @@ CUDA_COMMON_FUNCTION CUDA_INLINE Quaternion qFromEulerAngles(float roll, float p
 
 
 
+static constexpr bool enableBufferOobCheck = true;
+template <typename T>
+using ROBuffer = cudau::ROBufferTemplate<T, enableBufferOobCheck>;
+template <typename T>
+using RWBuffer = cudau::RWBufferTemplate<T, enableBufferOobCheck>;
+
+
+
 // Reference:
 // Long-Period Hash Functions for Procedural Texturing
 // combined permutation table of the hash function of period 739,024 = lcm(11, 13, 16, 17, 19)
@@ -1708,4 +1716,4 @@ ArrayRef createArrayRef(ArgTypes&&... args) {
         new cudau::Array(std::forward<ArgTypes>(args)...));
 }
 
-#endif
+#endif // #if !defined(__CUDACC__) || defined(OPTIXU_Platform_CodeCompletion)

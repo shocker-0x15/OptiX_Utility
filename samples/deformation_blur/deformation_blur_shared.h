@@ -86,18 +86,18 @@ namespace Shared {
     struct GeometryData {
         union {
             struct {
-                const Vertex** vertexBuffers;
-                const Triangle* triangleBuffer;
+                ROBuffer<ROBuffer<Vertex>> vertexBuffers;
+                ROBuffer<Triangle> triangleBuffer;
             };
             struct {
-                const CurveVertex** curveVertexBuffers;
-                const uint32_t* segmentIndexBuffer;
+                ROBuffer<ROBuffer<CurveVertex>> curveVertexBuffers;
+                ROBuffer<uint32_t> segmentIndexBuffer;
             };
             struct {
-                const Sphere** sphereBuffers;
+                ROBuffer<ROBuffer<Sphere>> sphereBuffers;
             };
             struct {
-                const PartialSphereParameter** partialSphereParamBuffers;
+                ROBuffer<ROBuffer<PartialSphereParameter>> partialSphereParamBuffers;
             };
         };
         uint32_t numMotionSteps;

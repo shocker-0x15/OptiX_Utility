@@ -261,8 +261,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomMatIndexBuffer.initialize(cuContext, cudau::BufferType::Device, matIndices, lengthof(matIndices));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = roomTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
@@ -303,8 +303,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLightTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = areaLightVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = areaLightTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = areaLightVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = areaLightTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
         areaLightGeomInst.setTriangleBuffer(areaLightTriangleBuffer);
@@ -341,8 +341,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles);
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = bunnyVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = bunnyTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = bunnyVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = bunnyTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         bunnyGeomInst.setVertexBuffer(bunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(bunnyTriangleBuffer);

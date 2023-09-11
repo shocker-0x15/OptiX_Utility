@@ -245,8 +245,8 @@ void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* 
         geomInst->optixGeomInst.setNumMaterials(1, optixu::BufferView());
         geomInst->optixGeomInst.setMaterial(0, 0, optixEnv->material);
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = vertexBuffer->getDevicePointer();
-        geomData.triangleBuffer = geomInst->triangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = vertexBuffer->getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = geomInst->triangleBuffer.getROBuffer<enableBufferOobCheck>();
         geomInst->optixGeomInst.setUserData(geomData);
 
         fileGroup.geomInsts.push_back(geomInst);

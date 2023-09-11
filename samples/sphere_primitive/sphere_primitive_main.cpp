@@ -171,8 +171,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::GeometryData geomData = {};
-        geomData.vertexBuffer = roomVertexBuffer.getDevicePointer();
-        geomData.triangleBuffer = roomTriangleBuffer.getDevicePointer();
+        geomData.vertexBuffer = roomVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.triangleBuffer = roomTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
@@ -215,7 +215,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         sphereParamBuffer.initialize(cuContext, cudau::BufferType::Device, params);
 
         Shared::GeometryData geomData = {};
-        geomData.sphereParamBuffer = sphereParamBuffer.getDevicePointer();
+        geomData.sphereParamBuffer = sphereParamBuffer.getROBuffer<enableBufferOobCheck>();
 
         sphereGeomInst.setVertexBuffer(optixu::BufferView(
             sphereParamBuffer.getCUdeviceptr() + offsetof(Shared::SphereParameter, center),

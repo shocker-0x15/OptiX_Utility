@@ -96,16 +96,16 @@ namespace Shared {
     struct GeometryData {
         union {
             struct {
-                const Vertex* vertexBuffer;
-                const Triangle* triangleBuffer;
+                ROBuffer<Vertex> vertexBuffer;
+                ROBuffer<Triangle> triangleBuffer;
             };
             struct {
-                const CurveVertex* curveVertexBuffer;
-                const uint32_t* segmentIndexBuffer;
+                ROBuffer<CurveVertex> curveVertexBuffer;
+                ROBuffer<uint32_t> segmentIndexBuffer;
             };
             struct {
-                const AABB* aabbBuffer;
-                const SphereParameter* paramBuffer;
+                ROBuffer<AABB> aabbBuffer;
+                ROBuffer<SphereParameter> paramBuffer;
             };
         };
         ProgDecodeHitPoint decodeHitPointFunc;
@@ -143,8 +143,8 @@ namespace Shared {
 
     struct PipelineLaunchParameters {
         const OptixTraversableHandle* travHandles;
-        const MaterialData* materialData;
-        const GeometryData* geomInstData;
+        ROBuffer<MaterialData> materialData;
+        ROBuffer<GeometryData> geomInstData;
         uint32_t travIndex;
         int2 imageSize;
         uint32_t numAccumFrames;

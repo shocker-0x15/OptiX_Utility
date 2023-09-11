@@ -39,6 +39,16 @@
 
 
 
+#if __cplusplus <= 199711L
+#   if defined(CUDAUPlatform_Windows_MSVC)
+#       pragma message("\"/Zc:__cplusplus\" compiler option to enable the updated __cplusplus definition is recommended.")
+#   else
+#       pragma message("Enabling the updated __cplusplus definition is recommended.")
+#   endif
+#endif
+
+
+
 #if defined(__CUDACC_RTC__)
 // Defining things corresponding to cstdint and cfloat is left to the user.
 typedef unsigned long long CUtexObject;
@@ -87,6 +97,10 @@ typedef unsigned long long CUsurfObject;
 #   undef RGB
 #endif
 
+#if __cplusplus >= 202002L
+#   include <concepts>
+#endif
+
 
 
 #if defined(__CUDACC__)
@@ -113,13 +127,27 @@ typedef unsigned long long CUsurfObject;
 #   define CUDAU_ENABLE_ASSERT
 #endif
 
-#ifdef CUDAU_ENABLE_ASSERT
-#   define CUDAUAssert(expr, fmt, ...) \
+#if defined(CUDAU_ENABLE_ASSERT)
+#   if defined(__CUDA_ARCH__)
+#       define CUDAUAssert(expr, fmt, ...) \
+do { \
+    if (!(expr)) { \
+        printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
+        printf(fmt"\n", ##__VA_ARGS__); \
+    } \
+} \
+while (0)
+#   else
+#       define CUDAUAssert(expr, fmt, ...) \
+do { \
     if (!(expr)) { \
         cudau::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
         cudau::devPrintf(fmt"\n", ##__VA_ARGS__); \
         abort(); \
-    } 0
+    } \
+} \
+while (0)
+#   endif
 #else
 #   define CUDAUAssert(expr, fmt, ...)
 #endif
@@ -158,8 +186,135 @@ typedef unsigned long long CUsurfObject;
 namespace cudau {
 #if !defined(__CUDA_ARCH__)
     void devPrintf(const char* fmt, ...);
+#endif
 
 
+
+#if __cplusplus >= 202002L
+#   define CUDAU_INTEGRAL_CONCEPT std::integral
+#else
+#   define CUDAU_INTEGRAL_CONCEPT typename
+#endif
+
+    template <typename T, bool oobCheck>
+    class RWBufferTemplate;
+
+    template <typename T, bool oobCheck>
+    class ROBufferTemplate {
+        friend class RWBufferTemplate<T, oobCheck>;
+        const T* m_data;
+
+    public:
+        CUDA_COMMON_FUNCTION ROBufferTemplate() : m_data(nullptr) {}
+        CUDA_COMMON_FUNCTION ROBufferTemplate(const T* data, uint32_t) :
+            m_data(data) {}
+
+        template <CUDAU_INTEGRAL_CONCEPT I>
+        CUDA_COMMON_FUNCTION const T &operator[](I idx) const {
+            return m_data[idx];
+        }
+
+        CUDA_COMMON_FUNCTION operator bool() const {
+            return m_data;
+        }
+    };
+
+    template <typename T>
+    class ROBufferTemplate<T, true> {
+        friend class RWBufferTemplate<T, true>;
+        const T* m_data;
+        uint32_t m_numElements;
+
+    public:
+        CUDA_COMMON_FUNCTION ROBufferTemplate() : m_data(nullptr), m_numElements(0) {}
+        CUDA_COMMON_FUNCTION ROBufferTemplate(const T* data, uint32_t numElements) :
+            m_data(data), m_numElements(numElements) {}
+
+        CUDA_COMMON_FUNCTION uint32_t getNumElements() const {
+            return m_numElements;
+        }
+
+        template <CUDAU_INTEGRAL_CONCEPT I>
+        CUDA_COMMON_FUNCTION const T &operator[](I idx) const {
+            CUDAUAssert(
+                idx < m_numElements, "Buffer 0x%p OOB Access: %u >= %u\n",
+                m_data, static_cast<uint32_t>(idx), m_numElements);
+            return m_data[idx];
+        }
+
+        CUDA_COMMON_FUNCTION operator bool() const {
+            return m_data;
+        }
+    };
+
+
+
+    template <typename T, bool oobCheck>
+    class RWBufferTemplate {
+        T* m_data;
+
+    public:
+        CUDA_COMMON_FUNCTION RWBufferTemplate() : m_data(nullptr) {}
+        CUDA_COMMON_FUNCTION RWBufferTemplate(T* data, uint32_t) :
+            m_data(data) {}
+        CUDA_COMMON_FUNCTION RWBufferTemplate(const ROBufferTemplate<T, oobCheck> &buf) :
+            m_data(const_cast<T*>(buf.m_data)) {}
+
+        template <CUDAU_INTEGRAL_CONCEPT I>
+        CUDA_COMMON_FUNCTION T &operator[](I idx) {
+            return m_data[idx];
+        }
+        template <CUDAU_INTEGRAL_CONCEPT I>
+        CUDA_COMMON_FUNCTION const T &operator[](I idx) const {
+            return m_data[idx];
+        }
+
+        CUDA_COMMON_FUNCTION operator bool() const {
+            return m_data;
+        }
+    };
+
+    template <typename T>
+    class RWBufferTemplate<T, true> {
+        T* m_data;
+        uint32_t m_numElements;
+
+    public:
+        CUDA_COMMON_FUNCTION RWBufferTemplate() : m_data(nullptr), m_numElements(0) {}
+        CUDA_COMMON_FUNCTION RWBufferTemplate(T* data, uint32_t numElements) :
+            m_data(data), m_numElements(numElements) {}
+        CUDA_COMMON_FUNCTION RWBufferTemplate(const ROBufferTemplate<T, true> &buf) :
+            m_data(const_cast<T*>(buf.m_data)), m_numElements(buf.m_numElements) {}
+
+        CUDA_COMMON_FUNCTION uint32_t getNumElements() const {
+            return m_numElements;
+        }
+
+        template <CUDAU_INTEGRAL_CONCEPT I>
+        CUDA_COMMON_FUNCTION T &operator[](I idx) {
+            CUDAUAssert(
+                idx < m_numElements, "Buffer 0x%p OOB Access: %u >= %u\n",
+                m_data, static_cast<uint32_t>(idx), m_numElements);
+            return m_data[idx];
+        }
+        template <CUDAU_INTEGRAL_CONCEPT I>
+        CUDA_COMMON_FUNCTION const T &operator[](I idx) const {
+            CUDAUAssert(
+                idx < m_numElements, "Buffer 0x%p OOB Access: %u >= %u\n",
+                m_data, static_cast<uint32_t>(idx), m_numElements);
+            return m_data[idx];
+        }
+
+        CUDA_COMMON_FUNCTION operator bool() const {
+            return m_data;
+        }
+    };
+
+#undef CUDAU_INTEGRAL_CONCEPT
+
+
+
+#if !defined(__CUDA_ARCH__)
 
     struct dim3 {
         uint32_t x, y, z;
@@ -575,6 +730,14 @@ namespace cudau {
         }
         T* getDevicePointerAt(uint32_t idx) const {
             return reinterpret_cast<T*>(getCUdeviceptrAt(idx));
+        }
+        template <bool oobCheck>
+        ROBufferTemplate<T, oobCheck> getROBuffer() const {
+            return ROBufferTemplate<T, oobCheck>(getDevicePointer(), numElements());
+        }
+        template <bool oobCheck>
+        RWBufferTemplate<T, oobCheck> getRWBuffer() const {
+            return RWBufferTemplate<T, oobCheck>(getDevicePointer(), numElements());
         }
 
         T* map(CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite) {
@@ -1227,5 +1390,6 @@ namespace cudau {
             return curTexObj;
         }
     };
+
 #endif // #if !defined(__CUDA_ARCH__)
 } // namespace cudau

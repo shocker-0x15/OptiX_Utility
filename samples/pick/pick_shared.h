@@ -49,8 +49,8 @@ namespace Shared {
     };
     
     struct GeometryData {
-        const Vertex* vertexBuffer;
-        const Triangle* triangleBuffer;
+        ROBuffer<Vertex> vertexBuffer;
+        ROBuffer<Triangle> triangleBuffer;
         uint32_t geomID;
     };
 

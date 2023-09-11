@@ -39,11 +39,11 @@ namespace Shared {
 
     
     struct GeometryInstanceData {
-        const Vertex* vertexBuffer;
-        const Triangle* triangleBuffer;
+        ROBuffer<Vertex> vertexBuffer;
+        ROBuffer<Triangle> triangleBuffer;
 
         // Just for debug visualization
-        const OptixDisplacementMicromapDesc* dmmDescBuffer;
+        ROBuffer<OptixDisplacementMicromapDesc> dmmDescBuffer;
         CUdeviceptr dmmIndexBuffer;
 
         CUtexObject albedoTexture;
