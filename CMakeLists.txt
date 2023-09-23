@@ -112,6 +112,15 @@ set_project_group("External" "ext/googletest")
 option(OPTIXU_BUILD_SAMPLES "Build sample projects for OptiX Utility." ON)
 option(OPTIXU_BUILD_TESTS "Build test projects for OptiX Utility." ON)
 
+file(
+    GLOB META_FILES
+    "cuda_util.natvis"
+    "README.md"
+    "LICENSE.md"
+)
+
+add_custom_target(__support_files SOURCES ${META_FILES})
+
 if(OPTIXU_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
