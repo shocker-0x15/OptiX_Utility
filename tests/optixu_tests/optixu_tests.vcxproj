@@ -131,7 +131,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <NvccCompilation>optix-ir</NvccCompilation>
-      <AdditionalOptions>-std=c++17 --use_fast_math -Xcompiler "/wd 4819" -D_DEBUG %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++17 --use_fast_math -Xcompiler "/wd 4819 /Zc:__cplusplus" -D_DEBUG %(AdditionalOptions)</AdditionalOptions>
       <CudaRuntime>Shared</CudaRuntime>
       <FastMath>true</FastMath>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
@@ -162,7 +162,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <NvccCompilation>optix-ir</NvccCompilation>
-      <AdditionalOptions>-std=c++17 --use_fast_math -Xcompiler "/wd 4819" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++17 --use_fast_math -Xcompiler "/wd 4819 /Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
       <CudaRuntime>Shared</CudaRuntime>
       <FastMath>true</FastMath>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
