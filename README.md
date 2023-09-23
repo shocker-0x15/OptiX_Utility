@@ -1,5 +1,9 @@
 # OptiX Utility
 
+**!!! CUDA 12.2 Update 2, NVIDIA Driver 537.13の環境の下、デバッグビルドにおいていくつかのサンプルで実行時にCUDAのエラーが出ることを確認しています。リリースビルドは正常に動作します。 !!!**
+
+**!!! I'm observing that some samples with debug build report runtime CUDA errors in the environment, CUDA 12.2 Update 2, NVIDIA Driver 537.13. The release build runs correctly. !!!**
+
 ![example](example.png)
 
 [OptiX](https://developer.nvidia.com/optix)はOptiX 7以降[Direct X Raytracing (DXR)](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html)にそっくりなローレベル指向なAPIになりました。<!--
@@ -275,17 +279,17 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 
 ## 動作環境 / Confirmed Environment
 現状以下の環境で動作を確認しています。\
-I've confirmed that the program runs correctly in the following environment.
+I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (22H2) & Visual Studio Community 2022 (17.7.0)
+* Windows 11 (22H2) & Visual Studio Community 2022 (17.7.2)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 536.99
+* NVIDIA Driver 537.13
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* CUDA 12.2 (probably works with lower CUDA versions)
-* OptiX 8.0.0 (requires Maxwell or later generation NVIDIA GPU)
+* [CUDA 12.2 Update2](https://developer.nvidia.com/cuda-downloads) (probably works with lower CUDA versions)
+* [OptiX 8.0.0](https://developer.nvidia.com/designworks/optix/download) (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
