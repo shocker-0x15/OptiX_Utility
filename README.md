@@ -1,8 +1,8 @@
 # OptiX Utility
 
-**!!! CUDA 12.2 Update 2, NVIDIA Driver 537.13の環境の下、デバッグビルドにおいていくつかのサンプルで実行時にCUDAのエラーが出ることを確認しています。リリースビルドは正常に動作します。[不具合は報告済み](https://forums.developer.nvidia.com/t/debug-enabled-very-simple-kernel-weirdly-crashes/266320/1)でおそらく将来のCUDAまたはドライバーのアップデートによって解消されることを期待しています。 !!!**
+**!!! CUDA 12.2 Update 2, NVIDIA Driver 537.13の環境の下、デバッグビルドにおいていくつかのサンプルで実行時にCUDAのエラーが出ることを確認しています。リリースビルドは正常に動作します。[不具合は報告済み](https://forums.developer.nvidia.com/t/debug-enabled-very-simple-kernel-weirdly-crashes/266320/1)で将来のCUDAまたはドライバーのアップデートによって解消されます。 !!!**
 
-**!!! I'm observing that some samples with debug build report runtime CUDA errors in the environment, CUDA 12.2 Update 2, NVIDIA Driver 537.13. The release build runs correctly. I have already reported [the issue](https://forums.developer.nvidia.com/t/debug-enabled-very-simple-kernel-weirdly-crashes/266320/1). I guess that the issue will probably resolved in the future update in CUDA or driver. !!!**
+**!!! I'm observing that some samples with debug build report runtime CUDA errors in the environment, CUDA 12.2 Update 2, NVIDIA Driver 537.13. The release build runs correctly. I have already reported [the issue](https://forums.developer.nvidia.com/t/debug-enabled-very-simple-kernel-weirdly-crashes/266320/1). The issue will be resolved in the future update in CUDA or driver. !!!**
 
 ![example](example.png)
 
@@ -281,9 +281,9 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (22H2) & Visual Studio Community 2022 (17.7.2)
+* Windows 11 (23H2) & Visual Studio Community 2022 (17.7.4)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 537.13
+* NVIDIA Driver 537.42
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
