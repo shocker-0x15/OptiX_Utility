@@ -468,7 +468,7 @@ void saveImage(const std::filesystem::path &filepath,
                uint32_t width, cudau::TypedBuffer<float4> &buffer,
                bool applyToneMap, bool apply_sRGB_gammaCorrection) {
     Assert(buffer.numElements() % width == 0, "Buffer's length is not divisible by the width.");
-    uint32_t height = buffer.numElements() / width;
+    uint32_t height = static_cast<uint32_t>(buffer.numElements()) / width;
     auto data = buffer.map();
     saveImage(filepath, width, height, data, applyToneMap, apply_sRGB_gammaCorrection);
     buffer.unmap();
@@ -478,6 +478,9 @@ void saveImage(const std::filesystem::path &filepath,
                cudau::Array &array,
                bool applyToneMap, bool apply_sRGB_gammaCorrection) {
     auto data = array.map<float4>();
-    saveImage(filepath, array.getWidth(), array.getHeight(), data, applyToneMap, apply_sRGB_gammaCorrection);
+    saveImage(
+        filepath,
+        static_cast<uint32_t>(array.getWidth()), static_cast<uint32_t>(array.getHeight()),
+        data, applyToneMap, apply_sRGB_gammaCorrection);
     array.unmap();
 }
