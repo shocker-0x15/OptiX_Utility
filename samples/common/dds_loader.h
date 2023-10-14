@@ -41,5 +41,5 @@ namespace dds {
 
     [[nodiscard]]
     uint8_t** load(const char* filepath, int32_t* width, int32_t* height, int32_t* mipCount, size_t** sizes, Format* format);
-    void free(uint8_t** data, int32_t mipCount, size_t* sizes);
+    void free(uint8_t** data, size_t* sizes);
 }
