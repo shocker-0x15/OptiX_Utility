@@ -176,7 +176,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             for (int i = 0; i < farSideWallArray.getNumMipmapLevels(); ++i)
                 farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
-            dds::free(ddsData, mipCount, sizes);
+            dds::free(ddsData, sizes);
         }
         else {
             int32_t width, height, n;
@@ -235,7 +235,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
                 floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
 
-            dds::free(ddsData, mipCount, sizes);
+            dds::free(ddsData, sizes);
         }
         else {
             int32_t width, height, n;

@@ -111,8 +111,7 @@ pipeline.setPipelineOptions(
     optixu::calcSumDwords<AttributeSignature>(),
     "plp", sizeof(PipelineLaunchParameters),
     OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-    OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-    OPTIX_EXCEPTION_FLAG_NONE,
+    OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 optixu::Module mainModule =
     pipeline.createModuleFromPTXString(
@@ -281,7 +280,7 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (23H2) & Visual Studio Community 2022 (17.7.4)
+* Windows 11 (23H2) & Visual Studio Community 2022 (17.7.5)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
 * NVIDIA Driver 537.42
 

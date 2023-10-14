@@ -107,7 +107,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             for (int i = 0; i < array.getNumMipmapLevels(); ++i)
                 array.write<uint8_t>(ddsData[i], sizes[i], i);
 
-            dds::free(ddsData, mipCount, sizes);
+            dds::free(ddsData, sizes);
         }
         else {
             int32_t width, height, n;
