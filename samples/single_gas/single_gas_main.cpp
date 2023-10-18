@@ -317,11 +317,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    size_t maxSizeOfScratchBuffer = 0;
-    OptixAccelBufferSizes asMemReqs;
-
-    cudau::Buffer asBuildScratchMem;
-
     // JP: Geometry Acceleration Structureを生成する。
     // EN: Create an geometry acceleration structure.
     optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
@@ -342,15 +337,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Acceleration structure is built using the specified transform.
         Note that geometry that given by the user in a kernel is not transformed.
     */
+    OptixAccelBufferSizes asMemReqs;
     gas.addChild(areaLightGeomInst, preTransformBuffer.getCUdeviceptrAt(1));
     gas.addChild(bunnyGeomInst, preTransformBuffer.getCUdeviceptrAt(2));
     gas.prepareForBuild(&asMemReqs);
     gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     // JP: Geometry Acceleration Structureをビルドする。
     // EN: Build geometry acceleration structures.
-    asBuildScratchMem.initialize(cuContext, cudau::BufferType::Device, maxSizeOfScratchBuffer, 1);
+    cudau::Buffer asBuildScratchMem(cuContext, cudau::BufferType::Device, asMemReqs.tempSizeInBytes, 1);
     OptixTraversableHandle travHandle = gas.rebuild(cuStream, gasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
@@ -424,6 +419,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     gasCompactedMem.finalize();
     asBuildScratchMem.finalize();
+    gasMem.finalize();
     gas.destroy();
 
     bunnyTriangleBuffer.finalize();

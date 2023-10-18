@@ -570,8 +570,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     areaLightInst.destroy();
     roomInst.destroy();
 
+    bunnyGasMem.finalize();
     bunnyGas.destroy();
+    areaLightGasMem.finalize();
     areaLightGas.destroy();
+    roomGasMem.finalize();
     roomGas.destroy();
 
     bunnyTriangleBuffer.finalize();

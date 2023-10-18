@@ -443,6 +443,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     compactedASMem.finalize();
 
+    asBuildScratchMem.finalize();
+
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
@@ -450,8 +452,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     customPrimitivesInst.destroy();
     roomInst.destroy();
 
-    asBuildScratchMem.finalize();
+    customPrimitivesGasMem.finalize();
     customPrimitivesGas.destroy();
+    roomGasMem.finalize();
     roomGas.destroy();
 
     spheresParamBuffer.finalize();

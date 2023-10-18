@@ -409,6 +409,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     compactedASMem.finalize();
 
+    asBuildScratchMem.finalize();
+
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
@@ -416,8 +418,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     spheresInst.destroy();
     roomInst.destroy();
 
-    asBuildScratchMem.finalize();
+    spheresGasMem.finalize();
     spheresGas.destroy();
+    roomGasMem.finalize();
     roomGas.destroy();
 
     sphereParamBuffer.finalize();
