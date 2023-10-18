@@ -767,6 +767,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     compactedASMem.finalize();
 
+    asBuildScratchMem.finalize();
+
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
@@ -779,13 +781,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     linearCurvesInst.destroy();
     floorInst.destroy();
 
-    asBuildScratchMem.finalize();
+    quadraticRibbonsGasMem.finalize();
     quadraticRibbonsGas.destroy();
+    cubicBezierCurvesGasMem.finalize();
     cubicBezierCurvesGas.destroy();
+    catmullRomCurvesGasMem.finalize();
     catmullRomCurvesGas.destroy();
+    cubicCurvesGasMem.finalize();
     cubicCurvesGas.destroy();
+    quadraticCurvesGasMem.finalize();
     quadraticCurvesGas.destroy();
+    linearCurvesGasMem.finalize();
     linearCurvesGas.destroy();
+    floorGasMem.finalize();
     floorGas.destroy();
 
     quadraticRibbonSegmentIndexBuffer.finalize();

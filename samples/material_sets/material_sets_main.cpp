@@ -506,7 +506,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         polygonInsts[i].destroy();
     roomInst.destroy();
 
+    polygonGasMem.finalize();
     polygonGas.destroy();
+    roomGasMem.finalize();
     roomGas.destroy();
 
     multiMatPolygonMaterialIndexBuffer.finalize();
