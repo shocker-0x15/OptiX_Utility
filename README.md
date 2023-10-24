@@ -1,8 +1,8 @@
 # OptiX Utility
 
-**!!! CUDA 12.2 Update 2, NVIDIA Driver 537.13の環境の下、デバッグビルドにおいていくつかのサンプルで実行時にCUDAのエラーが出ることを確認しています。リリースビルドは正常に動作します。[不具合は報告済み](https://forums.developer.nvidia.com/t/debug-enabled-very-simple-kernel-weirdly-crashes/266320/1)で将来のCUDAまたはドライバーのアップデートによって解消されます。 !!!**
+**!!! CUDA 12.2 Update 2, NVIDIA Driver 545.84の環境の下、いくつかのサンプルでプログラム終了時にエラーが出ることを確認しています。[不具合は報告済み](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1)で将来のCUDAまたはドライバーのアップデートによって解消されることを期待しています。 !!!**
 
-**!!! I'm observing that some samples with debug build report runtime CUDA errors in the environment, CUDA 12.2 Update 2, NVIDIA Driver 537.13. The release build runs correctly. I have already reported [the issue](https://forums.developer.nvidia.com/t/debug-enabled-very-simple-kernel-weirdly-crashes/266320/1). The issue will be resolved in the future update in CUDA or driver. !!!**
+**!!! I'm observing that some samples report runtime errors at the termination of the programs in the environment, CUDA 12.2 Update 2, NVIDIA Driver 545.84. I have already reported [the issue](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1). I hope that the issue will be resolved in a future update in CUDA or driver. !!!**
 
 ![example](example.png)
 
@@ -282,7 +282,7 @@ I've confirmed that the programs run correctly in the following environment.
 
 * Windows 11 (23H2) & Visual Studio Community 2022 (17.7.5)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 537.42
+* NVIDIA Driver 545.84
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
