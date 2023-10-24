@@ -491,7 +491,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixContext.destroy();
 
     CUDADRV_CHECK(cuStreamDestroy(cuStream));
-    CUDADRV_CHECK(cuCtxDestroy(cuContext));
+    //CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     return 0;
 }
