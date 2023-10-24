@@ -1,8 +1,8 @@
 # OptiX Utility
 
-**!!! CUDA 12.2 Update 2, NVIDIA Driver 545.84の環境の下、いくつかのサンプルでプログラム終了時にエラーが出ることを確認しています。[不具合は報告済み](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1)で将来のCUDAまたはドライバーのアップデートによって解消されることを期待しています。 !!!**
+**!!! CUDA 12.2 Update 2, NVIDIA Driver 545.84の環境の下、いくつかのサンプルでプログラム終了時にエラーが出ることを確認しています。ワークアラウンドとしてCUDAコンテキストの破棄をコメントアウトしています。[不具合は報告済み](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1)で将来のCUDAまたはドライバーのアップデートによって解消されることを期待しています。 !!!**
 
-**!!! I'm observing that some samples report runtime errors at the termination of the programs in the environment, CUDA 12.2 Update 2, NVIDIA Driver 545.84. I have already reported [the issue](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1). I hope that the issue will be resolved in a future update in CUDA or driver. !!!**
+**!!! I'm observing that some samples report runtime errors when the programs terminate in the environment, CUDA 12.2 Update 2, NVIDIA Driver 545.84. I've commented out CUDA context destruction as a workaround. I have already reported [the issue](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1) and hope that the issue will be resolved in a future update in CUDA or driver. !!!**
 
 ![example](example.png)
 

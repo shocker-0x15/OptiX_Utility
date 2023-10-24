@@ -2170,7 +2170,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gpuTimer[1].finalize();
     gpuTimer[0].finalize();
     streamChain.finalize();
-    CUDADRV_CHECK(cuCtxDestroy(cuContext));
+    //CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
