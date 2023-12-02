@@ -469,7 +469,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     質問中:
     // EN: OptiX-IR doesn't work with Debug configuration for some reason.
     //     ongoing question:
-    // https://forums.developer.nvidia.com/t/optix-7-5-payload-type-mismatch-errors-when-using-optix-ir/218138
+    // https://forums.developer.nvidia.com/t/debuggable-optix-ir-makes-launching-a-pipeline-failed/274765
 #if 1
     const std::string optixPtx = readTxtFile(resourceDir / "ptxes/optix_kernels.ptx");
     optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
@@ -614,6 +614,77 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     hpprintf("Setup materials.\n");
 
+    const auto createTexture = [&cuContext](const std::filesystem::path &filepath) {
+        cudau::Array array;
+
+        if (filepath.extension() == ".DDS") {
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load(
+                filepath.string().c_str(),
+                &width, &height, &mipCount, &sizes, &format);
+
+            const auto translate = [](dds::Format srcFormat) {
+                cudau::ArrayElementType dstFormat;
+                switch (srcFormat) {
+                case dds::Format::BC1_UNorm:
+                    return cudau::ArrayElementType::BC1_UNorm;
+                case dds::Format::BC1_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC1_UNorm_sRGB;
+                case dds::Format::BC2_UNorm:
+                    return cudau::ArrayElementType::BC2_UNorm;
+                case dds::Format::BC2_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC2_UNorm_sRGB;
+                case dds::Format::BC3_UNorm:
+                    return cudau::ArrayElementType::BC3_UNorm;
+                case dds::Format::BC3_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC3_UNorm_sRGB;
+                case dds::Format::BC4_UNorm:
+                    return cudau::ArrayElementType::BC4_UNorm;
+                case dds::Format::BC4_SNorm:
+                    return cudau::ArrayElementType::BC4_SNorm;
+                case dds::Format::BC5_UNorm:
+                    return cudau::ArrayElementType::BC5_UNorm;
+                case dds::Format::BC5_SNorm:
+                    return cudau::ArrayElementType::BC5_SNorm;
+                case dds::Format::BC6H_UF16:
+                    return cudau::ArrayElementType::BC6H_UF16;
+                case dds::Format::BC6H_SF16:
+                    return cudau::ArrayElementType::BC6H_SF16;
+                case dds::Format::BC7_UNorm:
+                    return cudau::ArrayElementType::BC7_UNorm;
+                case dds::Format::BC7_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC7_UNorm_sRGB;
+                default:
+                    Assert_ShouldNotBeCalled();
+                    break;
+                }
+            };
+
+            array.initialize2D(
+                cuContext, translate(format), 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, mipCount);
+            for (int i = 0; i < mipCount; ++i)
+                array.write<uint8_t>(ddsData[i], sizes[i], i);
+
+            dds::free(ddsData, sizes);
+        }
+        else {
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load(filepath.string().c_str(), &width, &height, &n, 4);
+            array.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
+            array.write<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+        }
+
+        return array;
+    };
+
     cudau::TypedBuffer<CUtexObject> textureObjectBuffer;
     textureObjectBuffer.initialize(cuContext, g_bufferType, 128);
     uint32_t textureID = 0;
@@ -628,65 +699,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
     texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-    cudau::Array arrayCheckerBoard;
-    if constexpr (useBlockCompressedTexture) {
-        int32_t width, height, mipCount;
-        size_t* sizes;
-        dds::Format format;
-        uint8_t** ddsData = dds::load(
-            "../../data/checkerboard_line.DDS", &width, &height, &mipCount, &sizes, &format);
-
-        arrayCheckerBoard.initialize2D(
-            cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-            width, height, 1/*mipCount*/);
-        for (int i = 0; i < arrayCheckerBoard.getNumMipmapLevels(); ++i)
-            arrayCheckerBoard.write<uint8_t>(ddsData[i], sizes[i], i);
-
-        dds::free(ddsData, sizes);
-    }
-    else {
-        int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load(
-            "../../data/checkerboard_line.png", &width, &height, &n, 4);
-        arrayCheckerBoard.initialize2D(
-            cuContext, cudau::ArrayElementType::UInt8, 4,
-            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-            width, height, 1);
-        arrayCheckerBoard.write<uint8_t>(linearImageData, width * height * 4);
-        stbi_image_free(linearImageData);
-    }
+    cudau::Array arrayCheckerBoard = createTexture(
+        useBlockCompressedTexture ?
+        "../../data/checkerboard_line.DDS" :
+        "../../data/checkerboard_line.png");
     uint32_t texCheckerBoardIndex = textureID++;
     textureObjects[texCheckerBoardIndex] = texSampler.createTextureObject(arrayCheckerBoard);
 
-    cudau::Array arrayGrid;
-    if constexpr (useBlockCompressedTexture) {
-        int32_t width, height, mipCount;
-        size_t* sizes;
-        dds::Format format;
-        uint8_t** ddsData = dds::load(
-            "../../data/grid.DDS", &width, &height, &mipCount, &sizes, &format);
-
-        arrayGrid.initialize2D(
-            cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-            width, height, 1/*mipCount*/);
-        for (int i = 0; i < arrayGrid.getNumMipmapLevels(); ++i)
-            arrayGrid.write<uint8_t>(ddsData[i], sizes[i], i);
-
-        dds::free(ddsData, sizes);
-    }
-    else {
-        int32_t width, height, n;
-        uint8_t* linearImageData = stbi_load(
-            "../../data/grid.png", &width, &height, &n, 4);
-        arrayGrid.initialize2D(
-            cuContext, cudau::ArrayElementType::UInt8, 4,
-            cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-            width, height, 1);
-        arrayGrid.write<uint8_t>(linearImageData, width * height * 4);
-        stbi_image_free(linearImageData);
-    }
+    cudau::Array arrayGrid = createTexture(
+        useBlockCompressedTexture ?
+        "../../data/grid.DDS" :
+        "../../data/grid.png");
     uint32_t texGridIndex = textureID++;
     textureObjects[texGridIndex] = texSampler.createTextureObject(arrayGrid);
 

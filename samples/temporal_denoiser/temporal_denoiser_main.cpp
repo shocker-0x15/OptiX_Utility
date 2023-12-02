@@ -133,6 +133,77 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: マテリアルのセットアップ。
     // EN: Setup materials.
 
+    const auto createTexture = [&cuContext](const std::filesystem::path &filepath) {
+        cudau::Array array;
+
+        if (filepath.extension() == ".DDS") {
+            int32_t width, height, mipCount;
+            size_t* sizes;
+            dds::Format format;
+            uint8_t** ddsData = dds::load(
+                filepath.string().c_str(),
+                &width, &height, &mipCount, &sizes, &format);
+
+            const auto translate = [](dds::Format srcFormat) {
+                cudau::ArrayElementType dstFormat;
+                switch (srcFormat) {
+                case dds::Format::BC1_UNorm:
+                    return cudau::ArrayElementType::BC1_UNorm;
+                case dds::Format::BC1_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC1_UNorm_sRGB;
+                case dds::Format::BC2_UNorm:
+                    return cudau::ArrayElementType::BC2_UNorm;
+                case dds::Format::BC2_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC2_UNorm_sRGB;
+                case dds::Format::BC3_UNorm:
+                    return cudau::ArrayElementType::BC3_UNorm;
+                case dds::Format::BC3_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC3_UNorm_sRGB;
+                case dds::Format::BC4_UNorm:
+                    return cudau::ArrayElementType::BC4_UNorm;
+                case dds::Format::BC4_SNorm:
+                    return cudau::ArrayElementType::BC4_SNorm;
+                case dds::Format::BC5_UNorm:
+                    return cudau::ArrayElementType::BC5_UNorm;
+                case dds::Format::BC5_SNorm:
+                    return cudau::ArrayElementType::BC5_SNorm;
+                case dds::Format::BC6H_UF16:
+                    return cudau::ArrayElementType::BC6H_UF16;
+                case dds::Format::BC6H_SF16:
+                    return cudau::ArrayElementType::BC6H_SF16;
+                case dds::Format::BC7_UNorm:
+                    return cudau::ArrayElementType::BC7_UNorm;
+                case dds::Format::BC7_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC7_UNorm_sRGB;
+                default:
+                    Assert_ShouldNotBeCalled();
+                    break;
+                }
+            };
+
+            array.initialize2D(
+                cuContext, translate(format), 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, mipCount);
+            for (int i = 0; i < mipCount; ++i)
+                array.write<uint8_t>(ddsData[i], sizes[i], i);
+
+            dds::free(ddsData, sizes);
+        }
+        else {
+            int32_t width, height, n;
+            uint8_t* linearImageData = stbi_load(filepath.string().c_str(), &width, &height, &n, 4);
+            array.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
+            array.write<uint8_t>(linearImageData, width * height * 4);
+            stbi_image_free(linearImageData);
+        }
+
+        return array;
+    };
+
     constexpr bool useBlockCompressedTexture = true;
 
     optixu::Material ceilingMat = optixContext.createMaterial();
@@ -155,35 +226,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        if constexpr (useBlockCompressedTexture) {
-            int32_t width, height, mipCount;
-            size_t* sizes;
-            dds::Format format;
-            uint8_t** ddsData = dds::load(
-                "../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS",
-                &width, &height, &mipCount, &sizes, &format);
-
-            farSideWallArray.initialize2D(
-                cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                width, height, 1/*mipCount*/);
-            for (int i = 0; i < farSideWallArray.getNumMipmapLevels(); ++i)
-                farSideWallArray.write<uint8_t>(ddsData[i], sizes[i], i);
-
-            dds::free(ddsData, sizes);
-        }
-        else {
-            int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load(
-                "../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg",
-                &width, &height, &n, 4);
-            farSideWallArray.initialize2D(
-                cuContext, cudau::ArrayElementType::UInt8, 4,
-                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                width, height, 1);
-            farSideWallArray.write<uint8_t>(linearImageData, width * height * 4);
-            stbi_image_free(linearImageData);
-        }
+        farSideWallArray = createTexture(
+            useBlockCompressedTexture ?
+            "../../data/TexturesCom_FabricPlain0077_1_seamless_S.DDS" :
+            "../../data/TexturesCom_FabricPlain0077_1_seamless_S.jpg");
         farSideWallMatData.texture = texSampler.createTextureObject(farSideWallArray);
     }
     farSideWallMat.setUserData(farSideWallMatData);
@@ -214,35 +260,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         texSampler.setIndexingMode(cudau::TextureIndexingMode::NormalizedCoordinates);
         texSampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
 
-        if constexpr (useBlockCompressedTexture) {
-            int32_t width, height, mipCount;
-            size_t* sizes;
-            dds::Format format;
-            uint8_t** ddsData = dds::load(
-                "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS",
-                &width, &height, &mipCount, &sizes, &format);
-
-            floorArray.initialize2D(
-                cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                width, height, 1/*mipCount*/);
-            for (int i = 0; i < floorArray.getNumMipmapLevels(); ++i)
-                floorArray.write<uint8_t>(ddsData[i], sizes[i], i);
-
-            dds::free(ddsData, sizes);
-        }
-        else {
-            int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load(
-                "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg",
-                &width, &height, &n, 4);
-            floorArray.initialize2D(
-                cuContext, cudau::ArrayElementType::UInt8, 4,
-                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                width, height, 1);
-            floorArray.write<uint8_t>(linearImageData, width * height * 4);
-            stbi_image_free(linearImageData);
-        }
+        floorArray = createTexture(
+            useBlockCompressedTexture ?
+            "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.DDS" :
+            "../../data/TexturesCom_FloorsCheckerboard0017_1_seamless_S.jpg");
         floorMatData.texture = texSampler.createTextureObject(floorArray);
     }
     floorMat.setUserData(floorMatData);

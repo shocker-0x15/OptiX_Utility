@@ -53,7 +53,6 @@ EN: This sample shows how to use Opacity Micro-Map (OMM) which accelerates alpha
 #include "opacity_micro_map_shared.h"
 
 #include "../common/obj_loader.h"
-#include "../common/dds_loader.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../ext/stb_image.h"
 
