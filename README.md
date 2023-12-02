@@ -54,7 +54,7 @@ Currently based on OptiX 8.0.0
 - Geometry instancing with different material sets
 - Callable programs
 - OptiX-IR support for better debugging\
-  \* but fow now (7.7.0 and the 535.98 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
+  \* but fow now (8.0.0 and the 546.17 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser
   - LDR (Not Tested)
   - HDR
@@ -280,14 +280,14 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (23H2) & Visual Studio Community 2022 (17.7.5)
+* Windows 11 (23H2) & Visual Studio Community 2022 (17.8.2)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 545.84
+* NVIDIA Driver 546.17
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* [CUDA 12.2 Update2](https://developer.nvidia.com/cuda-downloads) (probably works with lower CUDA versions)
+* [CUDA 12.2 Update 2](https://developer.nvidia.com/cuda-downloads) (probably works with lower CUDA versions)
 * [OptiX 8.0.0](https://developer.nvidia.com/designworks/optix/download) (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
