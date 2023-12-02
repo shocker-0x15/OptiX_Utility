@@ -41,25 +41,7 @@ nvcuda_compile_ptx(
     "-I${OPTIX_INCLUDE_DIR}"
 )
 
-# nvcuda_compile_optix_ir(
-#     SOURCES ${OPTIX_KERNELS}
-#     DEPENDENCIES ${GPU_KERNEL_DEPENDENCIES}
-#     TARGET_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_CFG_INTDIR}/${TARGET_NAME}/ptxes"
-#     GENERATED_FILES OPTIX_PTXES
-#     NVCC_OPTIONS
-#     "-Xcompiler" "\"/wd 4819 /Zc:__cplusplus\""
-#     "$<$<CONFIG:Debug>:-D_DEBUG=1>"
-#     "$<$<CONFIG:Debug>:-G>"
-#     "$<$<CONFIG:Debug>:-O0>"
-#     "--gpu-architecture=compute_52"
-#     "-std=${CPP_VER_CUDA}"
-#     "-cudart" "shared"
-#     "--use_fast_math"
-#     "--relocatable-device-code=true"
-#     "-I${OPTIX_INCLUDE_DIR}"
-# )
-
-nvcuda_compile_ptx(
+nvcuda_compile_optix_ir(
     SOURCES ${OPTIX_KERNELS}
     DEPENDENCIES ${GPU_KERNEL_DEPENDENCIES}
     TARGET_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_CFG_INTDIR}/${TARGET_NAME}/ptxes"
@@ -67,7 +49,8 @@ nvcuda_compile_ptx(
     NVCC_OPTIONS
     "-Xcompiler" "\"/wd 4819 /Zc:__cplusplus\""
     "$<$<CONFIG:Debug>:-D_DEBUG=1>"
-    "$<$<CONFIG:Debug>:-lineinfo>"
+    "$<$<CONFIG:Debug>:-G>"
+    "$<$<CONFIG:Debug>:-O0>"
     "--gpu-architecture=compute_52"
     "-std=${CPP_VER_CUDA}"
     "-cudart" "shared"

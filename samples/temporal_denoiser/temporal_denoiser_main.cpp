@@ -85,28 +85,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    /*
-    JP: Debug構成だとOptiX-IRを使うとカーネル中のisnan()の動作がおかしい。
-        質問中:
-    EN: isnan() in the kernel doesn't work properly with OptiX-IR/Debug configuration for some reason.
-        ongoing question:
-    https://forums.developer.nvidia.com/t/optix-7-5-debuggable-optix-ir-makes-isnan-not-working/228251
-    */
-#if 1
-    const std::string optixPtx =
-        readTxtFile(resourceDir / "ptxes/optix_kernels.ptx");
-    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
-        optixPtx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-#else
     const std::vector<char> optixIr =
         readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-#endif
 
     optixu::Module emptyModule;
 
