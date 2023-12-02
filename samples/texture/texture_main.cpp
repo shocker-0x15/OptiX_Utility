@@ -98,24 +98,63 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t width, height, mipCount;
             size_t* sizes;
             dds::Format format;
-            uint8_t** ddsData = dds::load(filepath.string().c_str(),
-                                          &width, &height, &mipCount, &sizes, &format);
+            uint8_t** ddsData = dds::load(
+                filepath.string().c_str(),
+                &width, &height, &mipCount, &sizes, &format);
 
-            array.initialize2D(cuContext, cudau::ArrayElementType::BC1_UNorm, 1,
-                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                               width, height, /*mipCount*/1); // CUDA's bug?
-            for (int i = 0; i < array.getNumMipmapLevels(); ++i)
+            const auto translate = [](dds::Format srcFormat) {
+                cudau::ArrayElementType dstFormat;
+                switch (srcFormat) {
+                case dds::Format::BC1_UNorm:
+                    return cudau::ArrayElementType::BC1_UNorm;
+                case dds::Format::BC1_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC1_UNorm_sRGB;
+                case dds::Format::BC2_UNorm:
+                    return cudau::ArrayElementType::BC2_UNorm;
+                case dds::Format::BC2_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC2_UNorm_sRGB;
+                case dds::Format::BC3_UNorm:
+                    return cudau::ArrayElementType::BC3_UNorm;
+                case dds::Format::BC3_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC3_UNorm_sRGB;
+                case dds::Format::BC4_UNorm:
+                    return cudau::ArrayElementType::BC4_UNorm;
+                case dds::Format::BC4_SNorm:
+                    return cudau::ArrayElementType::BC4_SNorm;
+                case dds::Format::BC5_UNorm:
+                    return cudau::ArrayElementType::BC5_UNorm;
+                case dds::Format::BC5_SNorm:
+                    return cudau::ArrayElementType::BC5_SNorm;
+                case dds::Format::BC6H_UF16:
+                    return cudau::ArrayElementType::BC6H_UF16;
+                case dds::Format::BC6H_SF16:
+                    return cudau::ArrayElementType::BC6H_SF16;
+                case dds::Format::BC7_UNorm:
+                    return cudau::ArrayElementType::BC7_UNorm;
+                case dds::Format::BC7_UNorm_sRGB:
+                    return cudau::ArrayElementType::BC7_UNorm_sRGB;
+                default:
+                    Assert_ShouldNotBeCalled();
+                    break;
+                }
+            };
+
+            array.initialize2D(
+                cuContext, translate(format), 1,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, mipCount);
+            for (int i = 0; i < mipCount; ++i)
                 array.write<uint8_t>(ddsData[i], sizes[i], i);
 
             dds::free(ddsData, sizes);
         }
         else {
             int32_t width, height, n;
-            uint8_t* linearImageData = stbi_load(filepath.string().c_str(),
-                                                 &width, &height, &n, 4);
-            array.initialize2D(cuContext, cudau::ArrayElementType::UInt8, 4,
-                               cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
-                               width, height, 1);
+            uint8_t* linearImageData = stbi_load(filepath.string().c_str(), &width, &height, &n, 4);
+            array.initialize2D(
+                cuContext, cudau::ArrayElementType::UInt8, 4,
+                cudau::ArraySurface::Disable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
             array.write<uint8_t>(linearImageData, width * height * 4);
             stbi_image_free(linearImageData);
         }
