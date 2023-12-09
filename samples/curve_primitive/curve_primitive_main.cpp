@@ -1036,7 +1036,7 @@ void generateRibbons(
             uint32_t numSegments = uSeg(rng);
             uint32_t indexStart = vertices->size();
 
-            float curNormalAngle = 2 * M_PI * u01(rng);
+            float curNormalAngle = 2 * pi_v<float> * u01(rng);
 
             // Beginning phantom points
             {
@@ -1058,7 +1058,7 @@ void generateRibbons(
                 float3 pos = float3(x + 0.6f * deltaX * (u01(rng) - 0.5f),
                                     0.1f * (s + 1),
                                     z + 0.6f * deltaZ * (u01(rng) - 0.5f));
-                curNormalAngle += M_PI / 3 * (u01(rng) - 0.5f);
+                curNormalAngle += pi_v<float> / 3 * (u01(rng) - 0.5f);
                 float3 normal = float3(
                     std::cos(curNormalAngle), 0.0f, std::sin(curNormalAngle));
                 vertices->push_back(Shared::RibbonVertex{ pos, normal, width });

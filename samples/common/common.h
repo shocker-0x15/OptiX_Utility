@@ -39,9 +39,6 @@
 #   include <cstdint>
 #   include <cmath>
 
-#   if __cplusplus >= 202002L
-#       include <numbers>
-#   endif
 #   include <fstream>
 #   include <sstream>
 #   include <array>
@@ -60,6 +57,10 @@
 #   include <immintrin.h>
 
 #   include "stopwatch.h"
+#endif
+
+#if __cplusplus >= 202002L
+#   include <numbers>
 #endif
 
 #include "../../optixu_on_cudau.h"
@@ -95,6 +96,14 @@ template <typename T, size_t size>
 CUDA_COMMON_FUNCTION CUDA_INLINE constexpr size_t lengthof(const T (&array)[size]) {
     return size;
 }
+
+#if __cplusplus >= 202002L
+template <std::floating_point T>
+static constexpr T pi_v = std::numbers::pi_v<T>;
+#else
+template <typename T>
+static constexpr T pi_v = static_cast<T>(3.141592653589793);
+#endif
 
 namespace shared {
     template <typename T>
@@ -1010,7 +1019,7 @@ struct Matrix3x3 {
                            dot(r[2], v));
     }
 
-    CUDA_COMMON_FUNCTION float3 row(unsigned int r) const {
+    CUDA_COMMON_FUNCTION float3 row(uint32_t r) const {
         //Assert(r < 3, "\"r\" is out of range [0, 2].");
         switch (r) {
         case 0:
@@ -1447,14 +1456,6 @@ public:
 #   define hpprintf(fmt, ...) do { devPrintf(fmt, ##__VA_ARGS__); printf(fmt, ##__VA_ARGS__); } while (0)
 #else
 #   define hpprintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#endif
-
-#if __cplusplus >= 202002L
-template <std::floating_point T>
-static constexpr T pi_v = std::numbers::pi_v<T>;
-#else
-template <typename T>
-static constexpr T pi_v = static_cast<T>(M_PI);
 #endif
 
 

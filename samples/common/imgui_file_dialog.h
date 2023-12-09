@@ -23,9 +23,7 @@ private:
         std::filesystem::directory_entry entry;
         union {
             uint32_t flags;
-            struct {
-                unsigned int selected : 1;
-            };
+            uint32_t selected : 1;
         };
         EntryInfo() : flags(0) {}
 

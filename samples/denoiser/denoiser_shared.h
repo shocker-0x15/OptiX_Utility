@@ -99,10 +99,8 @@ namespace Shared {
         float3 contribution;
         float3 origin;
         float3 direction;
-        struct {
-            unsigned int pathLength : 30;
-            unsigned int terminate : 1;
-        };
+        uint32_t pathLength : 30;
+        uint32_t terminate : 1;
     };
 
     using SearchRayPayloadSignature = optixu::PayloadSignature<PCG32RNG, SearchRayPayload*, float3*, float3*>;

@@ -111,8 +111,9 @@ namespace Shared {
         ProgDecodeHitPoint decodeHitPointFunc;
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION void decodeHitPoint(const HitPointParameter &hitPointParam,
-                                                 float3* p, float3* sn, float2* texCoord) const {
+        CUDA_DEVICE_FUNCTION CUDA_INLINE void decodeHitPoint(
+            const HitPointParameter &hitPointParam,
+            float3* p, float3* sn, float2* texCoord) const {
             if (isnan(hitPointParam.b1)) { // curves
                 *p = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
                 *p = optixTransformPointFromWorldToObjectSpace(*p);
@@ -128,8 +129,8 @@ namespace Shared {
         float3 albedo;
         union {
             struct {
-                unsigned int program : 16;
-                unsigned int texID : 16;
+                uint32_t program : 16;
+                uint32_t texID : 16;
             };
             uint32_t misc;
         };
@@ -166,11 +167,9 @@ namespace Shared {
         float3 contribution;
         float3 origin;
         float3 direction;
-        struct {
-            unsigned int pathLength : 30;
-            unsigned int specularBounce : 1;
-            unsigned int terminate : 1;
-        };
+        uint32_t pathLength : 30;
+        uint32_t specularBounce : 1;
+        uint32_t terminate : 1;
     };
 
     using SphereAttributeSignature = optixu::AttributeSignature<float, float>;

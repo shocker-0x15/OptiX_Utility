@@ -118,9 +118,9 @@ namespace Shared {
         PerspectiveCamera camera;
         PerspectiveCamera prevCamera;
         const InstanceData* instances;
-        unsigned int enableJittering : 1;
-        unsigned int resetFlowBuffer : 1;
-        unsigned int useCameraSpaceNormal : 1;
+        uint32_t enableJittering : 1;
+        uint32_t resetFlowBuffer : 1;
+        uint32_t useCameraSpaceNormal : 1;
     };
 
 
@@ -130,10 +130,8 @@ namespace Shared {
         float3 contribution;
         float3 origin;
         float3 direction;
-        struct {
-            unsigned int pathLength : 30;
-            unsigned int terminate : 1;
-        };
+        uint32_t pathLength : 30;
+        uint32_t terminate : 1;
     };
 
     struct DenoiserData {

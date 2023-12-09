@@ -94,8 +94,8 @@ namespace Shared {
 
 
     struct PathFlags {
-        unsigned int pathLength : 31;
-        unsigned int terminate : 1;
+        uint32_t pathLength : 31;
+        uint32_t terminate : 1;
     };
 
     // JP: 通常のPayloadSignature型の代わりにアクセス情報を記述したAnnotatedPayloadSignature型を使用する。
