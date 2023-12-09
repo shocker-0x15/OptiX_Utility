@@ -75,10 +75,10 @@ namespace Shared {
         float3 lightRadiance;
         float3 envRadiance;
         float2 subPixelOffset;
-        unsigned int visualizationMode : 3;
-        unsigned int sampleIndex : 8;
-        unsigned int drawBaseEdges : 1;
-        unsigned int enableNormalMap : 1;
+        uint32_t visualizationMode : 3;
+        uint32_t sampleIndex : 8;
+        uint32_t drawBaseEdges : 1;
+        uint32_t enableNormalMap : 1;
     };
 
 

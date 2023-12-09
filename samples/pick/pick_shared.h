@@ -69,11 +69,11 @@ namespace Shared {
         uint32_t matIndex;
         uint32_t primIndex;
         uint32_t instanceID;
-        unsigned int gasID : 16;
-        unsigned int gasChildID : 16;
-        unsigned int geomID : 16;
-        unsigned int matID : 16;
-        unsigned int hit : 1;
+        uint32_t gasID : 16;
+        uint32_t gasChildID : 16;
+        uint32_t geomID : 16;
+        uint32_t matID : 16;
+        uint32_t hit : 1;
     };
 
 

@@ -3,8 +3,6 @@
 #include "uber_shared.h"
 #include "../common/curve_evaluator.h"
 
-#define M_PI 3.14159265
-
 using namespace Shared;
 
 RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
@@ -174,8 +172,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void calcCurveAttribute(
     *sn = ce.calcNormal(curveParam, hp);
 }
 
-RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParameter &hitPointParam, const GeometryData &geom,
-                                                            float3* p, float3* sn, float2* texCoord) {
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(
+    const HitPointParameter &hitPointParam, const GeometryData &geom,
+    float3* p, float3* sn, float2* texCoord) {
     const Triangle &tri = geom.triangleBuffer[hitPointParam.primIndex];
     const Vertex &v0 = geom.vertexBuffer[tri.index0];
     const Vertex &v1 = geom.vertexBuffer[tri.index1];
@@ -188,29 +187,31 @@ RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointTriangle)(const HitPointParame
     *texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
 }
 
-RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointCurve)(const HitPointParameter &hitPointParam, const GeometryData &geom,
-                                                         float3* p, float3* sn, float2* texCoord) {
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointCurve)(
+    const HitPointParameter &hitPointParam, const GeometryData &geom,
+    float3* p, float3* sn, float2* texCoord) {
     uint32_t primIndex = hitPointParam.primIndex;
     float curveParam = hitPointParam.b0;
     float3 hp = *p;
 
     OptixPrimitiveType primType = static_cast<OptixPrimitiveType>(~0x7F800000 & __float_as_uint(hitPointParam.b1));
     if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(geom, primIndex, curveParam, hp,
-                                                              sn, texCoord);
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(
+            geom, primIndex, curveParam, hp, sn, texCoord);
     else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(geom, primIndex, curveParam, hp,
-                                                                         sn, texCoord);
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(
+            geom, primIndex, curveParam, hp, sn, texCoord);
     else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp,
-                                                                     sn, texCoord);
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(
+            geom, primIndex, curveParam, hp, sn, texCoord);
     else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
-        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(geom, primIndex, curveParam, hp,
-                                                                  sn, texCoord);
+        calcCurveAttribute<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(
+            geom, primIndex, curveParam, hp, sn, texCoord);
 }
 
-RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(const HitPointParameter &hitPointParam, const GeometryData &geom,
-                                                          float3* p, float3* sn, float2* texCoord) {
+RT_CALLABLE_PROGRAM void RT_DC_NAME(decodeHitPointSphere)(
+    const HitPointParameter &hitPointParam, const GeometryData &geom,
+    float3* p, float3* sn, float2* texCoord) {
     const SphereParameter &param = geom.paramBuffer[hitPointParam.primIndex];
     float theta = hitPointParam.b0;
     float phi = hitPointParam.b1;
@@ -290,7 +291,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
 
         float cosSP = dot(sn, shadowRayDir);
         float G = visibility * std::fabs(cosSP) * std::fabs(cosLight) / dist2;
-        float3 fs = cosSP > 0 ? albedo / M_PI : make_float3(0, 0, 0);
+        float3 fs = cosSP > 0 ? albedo / pi_v<float> : make_float3(0, 0, 0);
         float3 contribution = payload->alpha * fs * G * Le / areaPDF;
         payload->contribution = payload->contribution + contribution;
     }
@@ -308,13 +309,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(shading_diffuse)() {
     makeCoordinateSystem(sn, &s, &t);
 
     // Sampling incoming direction.
-    float phi = 2 * M_PI * rng.getFloat0cTo1o();
+    float phi = 2 * pi_v<float> * rng.getFloat0cTo1o();
     float theta = std::asin(std::sqrt(rng.getFloat0cTo1o()));
     float sinTheta = std::sin(theta);
     float3 vIn = make_float3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, std::cos(theta));
-    vIn = make_float3(dot(make_float3(s.x, t.x, sn.x), vIn),
-                      dot(make_float3(s.y, t.y, sn.y), vIn),
-                      dot(make_float3(s.z, t.z, sn.z), vIn));
+    vIn = make_float3(
+        dot(make_float3(s.x, t.x, sn.x), vIn),
+        dot(make_float3(s.y, t.y, sn.y), vIn),
+        dot(make_float3(s.z, t.z, sn.z), vIn));
     payload->alpha = payload->alpha * albedo;
     payload->origin = p;
     payload->direction = vIn;

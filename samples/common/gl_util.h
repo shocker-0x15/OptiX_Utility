@@ -194,10 +194,8 @@ namespace glu {
 
         void* m_mappedPointer;
 
-        struct {
-            unsigned int m_initialized : 1;
-            unsigned int m_mapped : 1;
-        };
+        uint32_t m_initialized : 1;
+        uint32_t m_mapped : 1;
 
         Buffer(const Buffer &) = delete;
         Buffer &operator=(const Buffer &) = delete;
@@ -279,9 +277,7 @@ namespace glu {
         GLsizei m_height;
         uint32_t m_numMipLevels;
 
-        struct {
-            unsigned int m_initialized : 1;
-        };
+        uint32_t m_initialized : 1;
 
         Texture2D(const Texture2D &) = delete;
         Texture2D &operator=(const Texture2D &) = delete;
@@ -365,9 +361,7 @@ namespace glu {
     private:
         GLuint m_handle;
 
-        struct {
-            unsigned int m_initialized : 1;
-        };
+        uint32_t m_initialized : 1;
 
         Sampler(const Sampler &) = delete;
         Sampler &operator=(const Sampler &) = delete;
@@ -444,9 +438,7 @@ namespace glu {
         uint32_t m_colorIsMultiBuffered;
         bool m_depthIsMultiBuffered;
 
-        struct {
-            unsigned int m_initialized : 1;
-        };
+        uint32_t m_initialized : 1;
 
         FrameBuffer(const FrameBuffer &) = delete;
         FrameBuffer &operator=(const FrameBuffer &) = delete;
@@ -556,9 +548,7 @@ namespace glu {
     private:
         GLuint m_handle;
 
-        struct {
-            unsigned int m_initialized : 1;
-        };
+        uint32_t m_initialized : 1;
 
         Shader(const Shader &) = delete;
         Shader &operator=(const Shader &) = delete;
@@ -586,9 +576,7 @@ namespace glu {
         Shader m_vertex;
         Shader m_fragment;
 
-        struct {
-            unsigned int m_initialized;
-        };
+        uint32_t m_initialized : 1;
 
         GraphicsProgram(const GraphicsProgram &) = delete;
         GraphicsProgram &operator=(const GraphicsProgram &) = delete;
@@ -617,9 +605,7 @@ namespace glu {
         GLuint m_handle;
         Shader m_compute;
 
-        struct {
-            unsigned int m_initialized;
-        };
+        uint32_t m_initialized : 1;
 
         ComputeProgram(const ComputeProgram &) = delete;
         ComputeProgram &operator=(const ComputeProgram &) = delete;
