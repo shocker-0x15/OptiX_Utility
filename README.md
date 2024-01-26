@@ -1,9 +1,5 @@
 # OptiX Utility
 
-**!!! CUDA 12.2 Update 2, NVIDIA Driver 545.84の環境の下、いくつかのサンプルでプログラム終了時にエラーが出ることを確認しています。ワークアラウンドとしてCUDAコンテキストの破棄をコメントアウトしています。[不具合は報告済み](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1)で将来のCUDAまたはドライバーのアップデートによって解消されることを期待しています。 !!!**
-
-**!!! I'm observing that some samples report runtime errors when the programs terminate in the environment, CUDA 12.2 Update 2, NVIDIA Driver 545.84. I've commented out CUDA context destruction as a workaround. I have already reported [the issue](https://forums.developer.nvidia.com/t/crash-at-app-termination-nvcuda64-dll/269877/1) and hope that the issue will be resolved in a future update in CUDA or driver. !!!**
-
 ![example](example.png)
 
 [OptiX](https://developer.nvidia.com/optix)はOptiX 7以降[Direct X Raytracing (DXR)](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html)にそっくりなローレベル指向なAPIになりました。<!--
@@ -282,7 +278,7 @@ I've confirmed that the programs run correctly in the following environment.
 
 * Windows 11 (23H2) & Visual Studio Community 2022 (17.8.5)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 546.65
+* NVIDIA Driver 551.23
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.

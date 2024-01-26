@@ -658,7 +658,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     return cudau::ArrayElementType::BC7_UNorm_sRGB;
                 default:
                     Assert_ShouldNotBeCalled();
-                    break;
+                    return static_cast<cudau::ArrayElementType>(-1);
                 }
             };
 
@@ -2193,7 +2193,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gpuTimer[1].finalize();
     gpuTimer[0].finalize();
     streamChain.finalize();
-    //CUDADRV_CHECK(cuCtxDestroy(cuContext));
+    CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
