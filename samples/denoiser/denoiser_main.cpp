@@ -183,7 +183,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     return cudau::ArrayElementType::BC7_UNorm_sRGB;
                 default:
                     Assert_ShouldNotBeCalled();
-                    break;
+                    return static_cast<cudau::ArrayElementType>(-1);
                 }
             };
 
@@ -943,7 +943,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixContext.destroy();
 
     CUDADRV_CHECK(cuStreamDestroy(cuStream));
-    //CUDADRV_CHECK(cuCtxDestroy(cuContext));
+    CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     return 0;
 }
