@@ -621,24 +621,27 @@ namespace optixu {
             const AttributeTypes &... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void get(AttributeTypes*... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void getFromHitObject(AttributeTypes*... attributes);
+        template <Has3D PosType, Has3D DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void makeHitObject(
             OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
+            const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
             const OptixTraversableHandle* transforms, uint32_t numTransforms,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes);
+        template <Has3D PosType, Has3D DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void makeHitObject(
             OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
+            const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes);
+        template <Has3D PosType, Has3D DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void makeHitObjectWithRecord(
             OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
+            const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t sbtRecordIndex, uint32_t instIdx,
             const OptixTraversableHandle* transforms, uint32_t numTransforms,
@@ -1115,10 +1118,11 @@ namespace optixu {
     }
 
     template <typename... AttributeTypes>
+    template <Has3D PosType, Has3D DirType>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         makeHitObject(
             OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
+            const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
             const OptixTraversableHandle* transforms, uint32_t numTransforms,
@@ -1138,10 +1142,11 @@ namespace optixu {
     }
 
     template <typename... AttributeTypes>
+    template <Has3D PosType, Has3D DirType>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         makeHitObject(
             OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
+            const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
@@ -1159,10 +1164,11 @@ namespace optixu {
     }
 
     template <typename... AttributeTypes>
+    template <Has3D PosType, Has3D DirType>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         makeHitObjectWithRecord(
             OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
+            const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t sbtRecordIndex, uint32_t instIdx,
             const OptixTraversableHandle* transforms, uint32_t numTransforms,
