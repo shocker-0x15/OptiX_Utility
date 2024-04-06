@@ -65,6 +65,7 @@ Currently based on OptiX 8.0.0
 
 ### TODO
 - Support SBT offset summation accross all instances in the traversal graph
+- Test NVRTC compilation.
 - Test flow vector trustworthiness guiding
 - Test AOV denoisers
 - Test Linux environment
