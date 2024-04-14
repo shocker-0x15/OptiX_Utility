@@ -510,11 +510,12 @@ namespace optixu {
         { v.y } -> convertible_to<float>;
         { v.z } -> convertible_to<float>;
     };
+#       define OPTIXU_HAS3D_CONCEPT Has3D
 #   else
-#       define Has3D typename
+#       define OPTIXU_HAS3D_CONCEPT typename
 #   endif
 
-    template <Has3D T>
+    template <OPTIXU_HAS3D_CONCEPT T>
     RT_DEVICE_FUNCTION RT_INLINE float3 toNative(const T &v) {
         return make_float3(
             static_cast<float>(v.x),
@@ -542,7 +543,9 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        template <OptixPayloadTypeID payloadTypeID = OPTIX_PAYLOAD_TYPE_DEFAULT, Has3D PosType, Has3D DirType>
+        template <
+            OptixPayloadTypeID payloadTypeID = OPTIX_PAYLOAD_TYPE_DEFAULT,
+            OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void trace(
             OptixTraversableHandle handle,
             const PosType &origin, const DirType &direction,
@@ -550,7 +553,9 @@ namespace optixu {
             OptixVisibilityMask visibilityMask, OptixRayFlags rayFlags,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t missSBTIndex,
             PayloadTypes &... payloads);
-        template <OptixPayloadTypeID payloadTypeID = OPTIX_PAYLOAD_TYPE_DEFAULT, Has3D PosType, Has3D DirType>
+        template <
+            OptixPayloadTypeID payloadTypeID = OPTIX_PAYLOAD_TYPE_DEFAULT,
+            OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void traverse(
             OptixTraversableHandle handle,
             const PosType &origin, const DirType &direction,
@@ -621,7 +626,7 @@ namespace optixu {
             const AttributeTypes &... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void get(AttributeTypes*... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void getFromHitObject(AttributeTypes*... attributes);
-        template <Has3D PosType, Has3D DirType>
+        template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void makeHitObject(
             OptixTraversableHandle handle,
             const PosType &origin, const DirType &direction,
@@ -630,7 +635,7 @@ namespace optixu {
             const OptixTraversableHandle* transforms, uint32_t numTransforms,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes);
-        template <Has3D PosType, Has3D DirType>
+        template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void makeHitObject(
             OptixTraversableHandle handle,
             const PosType &origin, const DirType &direction,
@@ -638,7 +643,7 @@ namespace optixu {
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes);
-        template <Has3D PosType, Has3D DirType>
+        template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
         RT_DEVICE_FUNCTION RT_INLINE static void makeHitObjectWithRecord(
             OptixTraversableHandle handle,
             const PosType &origin, const DirType &direction,
@@ -1003,7 +1008,7 @@ namespace optixu {
     }
 
     template <typename... PayloadTypes>
-    template <OptixPayloadTypeID payloadTypeID, Has3D PosType, Has3D DirType>
+    template <OptixPayloadTypeID payloadTypeID, OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
     RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
         trace(
             OptixTraversableHandle handle,
@@ -1025,7 +1030,7 @@ namespace optixu {
     }
 
     template <typename... PayloadTypes>
-    template <OptixPayloadTypeID payloadTypeID, Has3D PosType, Has3D DirType>
+    template <OptixPayloadTypeID payloadTypeID, OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
     RT_DEVICE_FUNCTION RT_INLINE void PayloadSignature<PayloadTypes...>::
         traverse(
             OptixTraversableHandle handle,
@@ -1118,7 +1123,7 @@ namespace optixu {
     }
 
     template <typename... AttributeTypes>
-    template <Has3D PosType, Has3D DirType>
+    template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         makeHitObject(
             OptixTraversableHandle handle,
@@ -1142,7 +1147,7 @@ namespace optixu {
     }
 
     template <typename... AttributeTypes>
-    template <Has3D PosType, Has3D DirType>
+    template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         makeHitObject(
             OptixTraversableHandle handle,
@@ -1164,7 +1169,7 @@ namespace optixu {
     }
 
     template <typename... AttributeTypes>
-    template <Has3D PosType, Has3D DirType>
+    template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
     RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
         makeHitObjectWithRecord(
             OptixTraversableHandle handle,
@@ -1207,6 +1212,8 @@ namespace optixu {
         if constexpr (numDwords > 0)
             detail::getValues<detail::ExceptionDetailFunc, 0>(exDetails...);
     }
+
+#undef OPTIXU_HAS3D_CONCEPT
 
 #endif // #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
     // END: Device-side function wrappers
