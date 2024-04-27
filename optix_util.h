@@ -235,6 +235,9 @@ TODO:
 
 */
 
+#define OPTIXU_STRINGIFY(x) #x
+#define OPTIXU_TO_STRING(x) OPTIXU_STRINGIFY(x)
+
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
 #   define OPTIXU_Platform_Windows
@@ -420,9 +423,6 @@ namespace optixu {
 #endif
 
     namespace detail {
-        static constexpr uint32_t maxNumPayloadsInDwords = 32;
-#define OPTIXU_STR_MAX_NUM_PAYLOADS "32"
-
         template <typename T>
         RT_DEVICE_FUNCTION constexpr size_t getNumDwords() {
             return (sizeof(T) + 3) / 4;
@@ -438,11 +438,11 @@ namespace optixu {
 
 #if !defined(__CUDA_ARCH__)
     struct PayloadType {
-        OptixPayloadSemantics semantics[detail::maxNumPayloadsInDwords];
+        OptixPayloadSemantics semantics[OPTIX_COMPILE_DEFAULT_MAX_PAYLOAD_VALUE_COUNT];
         uint32_t numDwords;
 
         PayloadType() : numDwords(0) {
-            for (uint32_t i = 0; i < detail::maxNumPayloadsInDwords; ++i)
+            for (uint32_t i = 0; i < OPTIX_COMPILE_DEFAULT_MAX_PAYLOAD_VALUE_COUNT; ++i)
                 semantics[i] = static_cast<OptixPayloadSemantics>(0);
         }
 
@@ -535,8 +535,10 @@ namespace optixu {
         static constexpr uint32_t numDwords =
             static_cast<uint32_t>(detail::calcSumDwords<PayloadTypes...>());
         static_assert(
-            numDwords <= detail::maxNumPayloadsInDwords,
-            "Maximum number of payloads is " OPTIXU_STR_MAX_NUM_PAYLOADS " in dwords.");
+            numDwords <= OPTIX_COMPILE_DEFAULT_MAX_PAYLOAD_VALUE_COUNT,
+            "Maximum number of payloads is "
+            OPTIXU_TO_STRING(OPTIX_COMPILE_DEFAULT_MAX_PAYLOAD_VALUE_COUNT)
+            " in dwords.");
         static constexpr uint32_t _arraySize = numParameters > 0 ? numParameters : 1u;
         static constexpr uint32_t sizesInDwords[_arraySize] = {
             static_cast<uint32_t>(detail::getNumDwords<PayloadTypes>())...
@@ -2386,3 +2388,6 @@ unsigned int optixUndefinedValue();
 
 // END: Declarations for code completion
 // ----------------------------------------------------------------
+
+#undef OPTIXU_TO_STRING
+#undef OPTIXU_STRINGIFY
