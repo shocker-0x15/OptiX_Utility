@@ -31,6 +31,9 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- JP: - optixReportIntersection()に返り値があることを忘れていたのを修正。
+  EN: - fixed forgetting that optixReportIntersection has a return value.
+
 - JP: - 各プログラム(グループ)にsetActive()を追加。
   EN: - Added setActive() to programs (groups).
 
@@ -623,7 +626,7 @@ namespace optixu {
         };
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION RT_INLINE static void reportIntersection(
+        RT_DEVICE_FUNCTION RT_INLINE static bool reportIntersection(
             float hitT, uint32_t hitKind,
             const AttributeTypes &... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void get(AttributeTypes*... attributes);
@@ -802,10 +805,10 @@ namespace optixu {
         }
 
         template <size_t... I>
-        RT_DEVICE_FUNCTION RT_INLINE void reportIntersection(
+        RT_DEVICE_FUNCTION RT_INLINE bool reportIntersection(
             float hitT, uint32_t hitKind, const uint32_t* attributes,
             index_sequence<I...>) {
-            optixReportIntersection(hitT, hitKind, attributes[I]...);
+            return optixReportIntersection(hitT, hitKind, attributes[I]...);
         }
 
         template <size_t... I>
@@ -1098,14 +1101,14 @@ namespace optixu {
 
 
     template <typename... AttributeTypes>
-    RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
+    RT_DEVICE_FUNCTION RT_INLINE bool AttributeSignature<AttributeTypes...>::
         reportIntersection(
             float hitT, uint32_t hitKind,
             const AttributeTypes &... attributes) {
         uint32_t a[numDwords > 0 ? numDwords : 1];
         if constexpr (numDwords > 0)
             detail::packToUInts<0>(a, attributes...);
-        detail::reportIntersection(hitT, hitKind, a, make_index_sequence<numDwords>{});
+        return detail::reportIntersection(hitT, hitKind, a, make_index_sequence<numDwords>{});
     }
 
     template <typename... AttributeTypes>

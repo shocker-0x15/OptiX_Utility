@@ -97,8 +97,21 @@ CUDA_DEVICE_KERNEL void RT_IS_NAME(partialSphere)() {
     if (t < 0)
         return;
 
-    // JP: アトリビュートシグネチャー型を通じて、アトリビュートとともに交叉が有効であることを報告する。
-    // EN: report that the intersection is valid with attributes via the attribute signature type.
+    /*
+    JP: アトリビュートシグネチャー型を通じて、アトリビュートとともに交叉が有効であることを報告する。
+        [注意!] reportIntersectionはboolの返り値を持っている。
+        Any-Hit Programが関連付けられている場合に該当のヒットが採択・棄却されたかを表す。
+        同じプリミティブ内で複数の交叉の可能性がある場合は処理を続行することができる。
+        またレイフラグにOPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HITを指定した場合や、Any-Hit Program内で
+        optixTerminateRay()が呼ばれた場合はIntersection Programに処理が返ってこない。
+    EN: report that the intersection is valid with attributes via the attribute signature type.
+        [Note!] reportIntersection returns a bool value.
+        That indicates the corresponding hit was accepted or not when an any-hit program is associated.
+        Proceed the process if there are potentially multiple intersections in the same primitive.
+        Also, the control does not return to the intersection program when
+        OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT was specified as ray flag or optixTerminateRay() was
+        called in the any-hit program.
+    */
     PartialSphereAttributeSignature::reportIntersection(t, isFront ? 0 : 1, theta, phi);
 }
 
