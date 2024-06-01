@@ -292,4 +292,4 @@ It requires the following libraries.
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
 
 ----
-2023 [@Shocker_0x15](https://twitter.com/Shocker_0x15)
+2024 [@Shocker_0x15](https://twitter.com/Shocker_0x15)
