@@ -26,6 +26,7 @@ def run():
     parser.add_argument('--build-dir', default=str(root_dir / 'build'))
     parser.add_argument('--cppstd', default='c++20')
     parser.add_argument('--cppstd-cuda', default='c++20')
+    parser.add_argument('--cuda')
     args = parser.parse_args()
 
     cmake_path = Path(args.cmake_path)
@@ -45,7 +46,8 @@ def run():
         '-B', str(build_dir),
         '-G','Visual Studio 17 2022', '-A', 'x64',
         '-D', 'CPP_VER=' + args.cppstd,
-        '-D', 'CPP_VER_CUDA=' + args.cppstd_cuda]
+        '-D', 'CPP_VER_CUDA=' + args.cppstd_cuda,
+        '-T', 'cuda=' + args.cuda]
     run_command(cmd)
 
     # END: CMake meta build

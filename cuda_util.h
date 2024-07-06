@@ -27,25 +27,25 @@
 #       define CUDAUPlatform_Windows_MSVC
 #       if defined(__INTELLISENSE__)
 #           define CUDAU_CODE_COMPLETION
-#       endif
-#   endif
+#       endif // if defined(__INTELLISENSE__)
+#   endif // if defined(__MINGW32__)
 #elif defined(__linux__)
 #   define CUDAUPlatform_Linux
 #elif defined(__APPLE__)
 #   define CUDAUPlatform_macOS
 #elif defined(__OpenBSD__)
 #   define CUDAUPlatform_OpenBSD
-#endif
+#endif // if defined(_WIN32) || defined(_WIN64)
 
 
 
 #if __cplusplus <= 199711L
 #   if defined(CUDAUPlatform_Windows_MSVC)
 #       pragma message("\"/Zc:__cplusplus\" compiler option to enable the updated __cplusplus definition is recommended.")
-#   else
+#   else // if defined(CUDAUPlatform_Windows_MSVC)
 #       pragma message("Enabling the updated __cplusplus definition is recommended.")
-#   endif
-#endif
+#   endif // if defined(CUDAUPlatform_Windows_MSVC)
+#endif // if __cplusplus <= 199711L
 
 
 
@@ -53,26 +53,26 @@
 // Defining things corresponding to cstdint and cfloat is left to the user.
 typedef unsigned long long CUtexObject;
 typedef unsigned long long CUsurfObject;
-#else
+#else // if defined(__CUDACC_RTC__)
 #include <cstdint>
 #include <cfloat>
 #if defined(CUDAUPlatform_Windows)
 #   pragma warning(push)
 #   pragma warning(disable:4819)
-#endif
+#endif // if defined(CUDAUPlatform_Windows)
 #include <cuda.h>
 #if defined(CUDAUPlatform_Windows)
 #   pragma warning(pop)
-#endif
-#endif
+#endif // if defined(CUDAUPlatform_Windows)
+#endif // if defined(__CUDACC_RTC__)
 
 #if !defined(__CUDA_ARCH__)
 #   include <cstdio>
 #   include <cstdlib>
+#   include <stdexcept>
 
 #   include <algorithm>
 #   include <vector>
-#   include <sstream>
 
 // JP: CUDA/OpenGL連携機能が不要な場合はコンパイルオプションとして
 //     CUDA_UTIL_DONT_USE_GL_INTEROPの定義を行う。
@@ -82,22 +82,22 @@ typedef unsigned long long CUsurfObject;
 //     Modify GL/gl3w.h as needed.
 #   if !defined(CUDA_UTIL_DONT_USE_GL_INTEROP)
 #       define CUDA_UTIL_USE_GL_INTEROP
-#   endif
+#   endif // !defined(CUDA_UTIL_DONT_USE_GL_INTEROP)
 #   if defined(CUDA_UTIL_USE_GL_INTEROP)
 #       include <GL/gl3w.h>
 #       include <cudaGL.h>
-#   endif
+#   endif // if defined(CUDA_UTIL_USE_GL_INTEROP)
 
 #   undef min
 #   undef max
 #   undef near
 #   undef far
 #   undef RGB
-#endif
+#endif // if !defined(__CUDA_ARCH__)
 
 #if __cplusplus >= 202002L
 #   include <concepts>
-#endif
+#endif // if __cplusplus >= 202002L
 
 
 
@@ -109,7 +109,7 @@ typedef unsigned long long CUsurfObject;
 #   define CUDA_INLINE __forceinline__
 #   define CUDA_DEVICE_FUNCTION __device__
 #   define CUDA_COMMON_FUNCTION __host__ __device__
-#else
+#else // if defined(__CUDACC__)
 #   define CUDA_SHARED_MEM
 #   define CUDA_CONSTANT_MEM
 #   define CUDA_DEVICE_MEM
@@ -117,15 +117,19 @@ typedef unsigned long long CUsurfObject;
 #   define CUDA_INLINE inline
 #   define CUDA_DEVICE_FUNCTION
 #   define CUDA_COMMON_FUNCTION
-#endif
+#endif // if defined(__CUDACC__)
 
 
 
-#ifdef _DEBUG
-#   define CUDAU_ENABLE_ASSERT
-#endif
+#if !defined(CUDAU_ENABLE_ASSERT)
+#   if defined(_DEBUG)
+#       define CUDAU_ENABLE_ASSERT 1
+#   else // if defined(_DEBUG)
+#       define CUDAU_ENABLE_ASSERT 0
+#   endif // if defined(_DEBUG)
+#endif // if !defined(CUDAU_ENABLE_ASSERT)
 
-#if defined(CUDAU_ENABLE_ASSERT)
+#if CUDAU_ENABLE_ASSERT
 #   if defined(__CUDA_ARCH__)
 #       define CUDAUAssert(expr, fmt, ...) \
 do { \
@@ -135,7 +139,7 @@ do { \
     } \
 } \
 while (0)
-#   else
+#   else // if defined(__CUDA_ARCH__)
 #       define CUDAUAssert(expr, fmt, ...) \
 do { \
     if (!(expr)) { \
@@ -145,29 +149,21 @@ do { \
     } \
 } \
 while (0)
-#   endif
-#else
+#   endif // if defined(__CUDA_ARCH__)
+#else // if CUDAU_ENABLE_ASSERT
 #   define CUDAUAssert(expr, fmt, ...)
-#endif
+#endif // if CUDAU_ENABLE_ASSERT
 
 #define CUDAUAssert_ShouldNotBeCalled() CUDAUAssert(false, "Should not be called!")
 #define CUDAUAssert_NotImplemented() CUDAUAssert(false, "Not implemented yet!")
 
-#define CUDADRV_CHECK(call) \
-    do { \
-        CUresult error = call; \
-        if (error != CUDA_SUCCESS) { \
-            std::stringstream ss; \
-            const char* errMsg = "failed to get an error message."; \
-            cuGetErrorString(error, &errMsg); \
-            ss << "CUDA call (" << #call << " ) failed with error: '" \
-               << errMsg \
-               << "' (" __FILE__ << ":" << __LINE__ << ")\n"; \
-            throw std::runtime_error(ss.str().c_str()); \
-        } \
-    } while (0)
+#if !defined(CUDAU_ENABLE_CHECK)
+#   define CUDAU_ENABLE_CHECK 1
+#endif // if !defined(CUDAU_ENABLE_CHECK)
 
-#define CUDA_CHECK(call) \
+#if CUDAU_ENABLE_CHECK
+#   define CUDADRV_CHECK(call) cudau::check(call, #call)
+#   define CUDA_CHECK(call) \
     do { \
         cudaError_t error = call; \
         if (error != cudaSuccess) { \
@@ -178,6 +174,11 @@ while (0)
             throw std::runtime_error(ss.str().c_str()); \
         } \
     } while (0)
+#else // if CUDAU_ENABLE_CHECK
+#   define CUDADRV_CHECK(call) call
+#   define CUDA_CHECK(call) call
+#endif // if CUDAU_ENABLE_CHECK
+
 
 
 
@@ -185,15 +186,17 @@ namespace cudau {
 
 #if __cplusplus >= 202002L
 #   define CUDAU_INTEGRAL_CONCEPT std::integral
-#else
+#else // if __cplusplus >= 202002L
 #   define CUDAU_INTEGRAL_CONCEPT typename
-#endif
+#endif // if __cplusplus >= 202002L
 
 
 
 #if !defined(__CUDA_ARCH__)
     void devPrintf(const char* fmt, ...);
-#endif
+
+    void check(CUresult status, const char* callStr);
+#endif // if !defined(__CUDA_ARCH__)
 
 
 
@@ -858,7 +861,7 @@ namespace cudau {
 
 #   if defined(CUDA_UTIL_USE_GL_INTEROP)
     void getArrayElementFormat(GLenum internalFormat, ArrayElementType* elemType, uint32_t* numChannels);
-#   endif
+#   endif // if defined(CUDA_UTIL_USE_GL_INTEROP)
 
     inline bool isBCFormat(ArrayElementType elemType) {
         return (elemType == cudau::ArrayElementType::BC1_UNorm ||
@@ -1387,7 +1390,7 @@ namespace cudau {
         }
     };
 
-#endif // #if !defined(__CUDA_ARCH__)
+#endif // if !defined(__CUDA_ARCH__)
 
 #undef CUDAU_INTEGRAL_CONCEPT
 

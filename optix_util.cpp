@@ -20,16 +20,39 @@
 
 namespace optixu {
     void devPrintf(const char* fmt, ...) {
+#if defined(OPTIXU_Platform_Windows_MSVC)
         va_list args;
         va_start(args, fmt);
-#if defined(OPTIXU_Platform_Windows_MSVC)
-        char str[4096];
-        vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
-        OutputDebugString(str);
-#else
-        vprintf_s(fmt, args);
-#endif
+        const int32_t reqStrSize = _vscprintf(fmt, args) + 1;
         va_end(args);
+
+        static std::vector<char> str;
+        if (reqStrSize > str.size())
+            str.resize(reqStrSize);
+
+        va_start(args, fmt);
+        vsnprintf_s(str.data(), str.size(), _TRUNCATE, fmt, args);
+        va_end(args);
+
+#   if defined(UNICODE)
+        const int32_t reqWstrSize = MultiByteToWideChar(CP_ACP, 0, str.data(), -1, nullptr, 0);
+        static std::vector<wchar_t> wstr;
+        if (reqWstrSize > wstr.size())
+            wstr.resize(reqWstrSize);
+
+        MultiByteToWideChar(
+            CP_ACP, 0, str.data(), static_cast<int32_t>(str.size()),
+            wstr.data(), static_cast<int32_t>(wstr.size()));
+        OutputDebugString(wstr.data());
+#   else // if defined(UNICODE)
+        OutputDebugString(str.data());
+#   endif // if defined(UNICODE)
+#else // if defined(OPTIXU_Platform_Windows_MSVC)
+        va_list args;
+        va_start(args, fmt);
+        vprintf_s(fmt, args);
+        va_end(args);
+#endif // if defined(OPTIXU_Platform_Windows_MSVC)
     }
 
 

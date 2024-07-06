@@ -27,15 +27,15 @@
 #       define GLUPlatform_Windows_MSVC
 #       if defined(__INTELLISENSE__)
 #           define GLU_CODE_COMPLETION
-#       endif
-#   endif
+#       endif // if defined(__INTELLISENSE__)
+#   endif // if defined(__MINGW32__)
 #elif defined(__linux__)
 #   define GLUPlatform_Linux
 #elif defined(__APPLE__)
 #   define GLUPlatform_macOS
 #elif defined(__OpenBSD__)
 #   define GLUPlatform_OpenBSD
-#endif
+#endif // if defined(_WIN32) || defined(_WIN64)
 
 
 
@@ -43,50 +43,52 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include <sstream>
 #include <stdexcept>
 #include <filesystem>
 #include "GL/gl3w.h"
 
 
 
-#ifdef _DEBUG
-#   define GLU_ENABLE_ASSERT
-#endif
+#if !defined(GLU_ENABLE_ASSERT)
+#   if defined(_DEBUG)
+#       define GLU_ENABLE_ASSERT 1
+#   else // if defined(_DEBUG)
+#       define GLU_ENABLE_ASSERT 0
+#   endif // if defined(_DEBUG)
+#endif // if !defined(GLU_ENABLE_ASSERT)
 
-#ifdef GLU_ENABLE_ASSERT
+#if GLU_ENABLE_ASSERT
 #   define GLUAssert(expr, fmt, ...) \
     if (!(expr)) { \
         cudau::devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
         cudau::devPrintf(fmt"\n", ##__VA_ARGS__); \
         abort(); \
     } 0
-#else
+#else // if GLU_ENABLE_ASSERT
 #   define GLUAssert(expr, fmt, ...)
-#endif
+#endif // if GLU_ENABLE_ASSERT
 
 #define GLUAssert_ShouldNotBeCalled() GLUAssert(false, "Should not be called!")
 #define GLUAssert_NotImplemented() GLUAssert(false, "Not implemented yet!")
 
-#define GL_CHECK(call) \
-    do { \
-        call; \
-        auto error = static_cast<::glu::Error>(glGetError()); \
-        if (error != ::glu::Error::NoError) { \
-            std::stringstream ss; \
-            const char* errMsg = nullptr; \
-            ::glu::getErrorString(error, &errMsg); \
-            ss << "GL call (" << #call << " ) failed with error: '" \
-               << errMsg \
-               << "' (" __FILE__ << ":" << __LINE__ << ")\n"; \
-            throw std::runtime_error(ss.str().c_str()); \
-        } \
-    } while (0)
+#if !defined(GLU_ENABLE_CHECK)
+#   define GLU_ENABLE_CHECK 1
+#endif // if !defined(GLU_ENABLE_CHECK)
+
+#if GLU_ENABLE_CHECK
+#   define GL_CHECK(call) do { call; glu::check(#call); } while (0)
+#else // if GLU_ENABLE_CHECK
+#   define GL_CHECK(call) call
+#endif // if GLU_ENABLE_CHECK
 
 
 
 namespace glu {
     void devPrintf(const char* fmt, ...);
+
+    void check(const char* callStr);
+
+
 
     enum class Error {
         NoError = GL_NO_ERROR,

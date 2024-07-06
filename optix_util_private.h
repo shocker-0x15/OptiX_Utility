@@ -28,17 +28,17 @@
 #   undef near
 #   undef far
 #   undef RGB
-#endif
+#endif // if defined(OPTIXU_Platform_Windows_MSVC)
 
 #if defined(OPTIXU_Platform_Windows_MSVC)
 #   pragma warning(push)
 #   pragma warning(disable:4819)
-#endif
+#endif // if defined(OPTIXU_Platform_Windows_MSVC)
 #include <optix_function_table_definition.h>
 #include <cuda.h>
 #if defined(OPTIXU_Platform_Windows_MSVC)
 #   pragma warning(pop)
-#endif
+#endif // if defined(OPTIXU_Platform_Windows_MSVC)
 
 #include <sstream>
 #include <vector>
@@ -53,13 +53,13 @@
 #   else
 #       pragma message("Enabling the updated __cplusplus definition is recommended.")
 #   endif
-#endif
+#endif // if __cplusplus <= 199711L
 
 #if __cplusplus >= 202002L
 #include <bit>
-#else
+#else // if __cplusplus >= 202002L
 #include <intrin.h>
-#endif
+#endif // if __cplusplus >= 202002L
 
 #include <stdexcept>
 
@@ -126,9 +126,9 @@ namespace optixu {
     inline uint32_t countr_zero(uint32_t x) {
         return _tzcnt_u32(x);
     }
-#else
+#else // if __cplusplus < 202002L
     using std::countr_zero;
-#endif
+#endif // if __cplusplus < 202002L
 
 
 
@@ -158,7 +158,7 @@ namespace optixu {
         return PublicType::Priv::extract(obj);
     }
 
-#if defined(OPTIXU_ENABLE_RUNTIME_ERROR)
+#if OPTIXU_ENABLE_RUNTIME_ERROR
 #   define OPTIXU_DEFINE_THROW_RUNTIME_ERROR(TypeName) \
         template <typename... Types> \
         void throwRuntimeError(bool expr, const char* fmt, const Types &... args) const { \
@@ -169,11 +169,11 @@ namespace optixu {
             ss << TypeName ## " " << getName() << ": " << fmt; \
             optixu::_throwRuntimeError(ss.str().c_str(), args...); \
         }
-#else
+#else // if OPTIXU_ENABLE_RUNTIME_ERROR
 #   define OPTIXU_DEFINE_THROW_RUNTIME_ERROR(TypeName) \
         template <typename... Types> \
         void throwRuntimeError(bool, const char*, const Types &...) const {}
-#endif
+#endif // if OPTIXU_ENABLE_RUNTIME_ERROR
 
 
 
