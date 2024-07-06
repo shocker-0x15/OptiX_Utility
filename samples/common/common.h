@@ -10,10 +10,11 @@
 #    define HP_Platform_macOS
 #endif
 
-#ifdef _DEBUG
-#   define ENABLE_ASSERT
+#if defined(_DEBUG)
+#   define ENABLE_ASSERT 1
 #   define DEBUG_SELECT(A, B) A
 #else
+#   define ENABLE_ASSERT 0
 #   define DEBUG_SELECT(A, B) B
 #endif
 
@@ -67,7 +68,7 @@
 
 
 
-#ifdef HP_Platform_Windows_MSVC
+#if defined(HP_Platform_Windows_MSVC)
 #   if defined(__CUDA_ARCH__)
 #   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #else
@@ -77,7 +78,7 @@ void devPrintf(const char* fmt, ...);
 #   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #endif
 
-#ifdef ENABLE_ASSERT
+#if ENABLE_ASSERT
 #   if defined(__CUDA_ARCH__)
 #       define Assert(expr, fmt, ...) do { if (!(expr)) { devPrintf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); devPrintf(fmt"\n", ##__VA_ARGS__); assert(false); } } while (0)
 #   else

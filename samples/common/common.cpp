@@ -4,12 +4,39 @@
 #include "../../ext/stb_image_write.h"
 
 void devPrintf(const char* fmt, ...) {
+#ifdef HP_Platform_Windows_MSVC
     va_list args;
     va_start(args, fmt);
-    char str[4096];
-    vsnprintf_s(str, sizeof(str), _TRUNCATE, fmt, args);
+    const int32_t reqStrSize = _vscprintf(fmt, args) + 1;
     va_end(args);
-    OutputDebugString(str);
+
+    static std::vector<char> str;
+    if (reqStrSize > str.size())
+        str.resize(reqStrSize);
+
+    va_start(args, fmt);
+    vsnprintf_s(str.data(), str.size(), _TRUNCATE, fmt, args);
+    va_end(args);
+
+#   if defined(UNICODE)
+    const int32_t reqWstrSize = MultiByteToWideChar(CP_ACP, 0, str.data(), -1, nullptr, 0);
+    static std::vector<wchar_t> wstr;
+    if (reqWstrSize > wstr.size())
+        wstr.resize(reqWstrSize);
+
+    MultiByteToWideChar(
+        CP_ACP, 0, str.data(), static_cast<int32_t>(str.size()),
+        wstr.data(), static_cast<int32_t>(wstr.size()));
+    OutputDebugString(wstr.data());
+#   else
+    OutputDebugString(str.data());
+#   endif
+#else
+    va_list args;
+    va_start(args, fmt);
+    vprintf_s(fmt, args);
+    va_end(args);
+#endif
 }
 
 

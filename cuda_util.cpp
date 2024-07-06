@@ -18,34 +18,67 @@
 
 #include "cuda_util.h"
 
-#ifdef CUDAUPlatform_Windows_MSVC
+#include <sstream>
+
+#if defined(CUDAUPlatform_Windows_MSVC)
 #   include <Windows.h>
 #   undef near
 #   undef far
 #   undef min
 #   undef max
-#endif
+#endif // if defined(CUDAUPlatform_Windows_MSVC)
 
 
 
 namespace cudau {
-#ifdef CUDAUPlatform_Windows_MSVC
     void devPrintf(const char* fmt, ...) {
+#if defined(CUDAUPlatform_Windows_MSVC)
         va_list args;
         va_start(args, fmt);
-        char str[1024];
-        vsprintf_s(str, fmt, args);
+        const int32_t reqStrSize = _vscprintf(fmt, args) + 1;
         va_end(args);
-        OutputDebugString(str);
-    }
-#else
-    void devPrintf(const char* fmt, ...) {
+
+        static std::vector<char> str;
+        if (reqStrSize > str.size())
+            str.resize(reqStrSize);
+
+        va_start(args, fmt);
+        vsnprintf_s(str.data(), str.size(), _TRUNCATE, fmt, args);
+        va_end(args);
+
+#   if defined(UNICODE)
+        const int32_t reqWstrSize = MultiByteToWideChar(CP_ACP, 0, str.data(), -1, nullptr, 0);
+        static std::vector<wchar_t> wstr;
+        if (reqWstrSize > wstr.size())
+            wstr.resize(reqWstrSize);
+
+        MultiByteToWideChar(
+            CP_ACP, 0, str.data(), static_cast<int32_t>(str.size()),
+            wstr.data(), static_cast<int32_t>(wstr.size()));
+        OutputDebugString(wstr.data());
+#   else // if defined(UNICODE)
+        OutputDebugString(str.data());
+#   endif // if defined(UNICODE)
+#else // if defined(CUDAUPlatform_Windows_MSVC)
         va_list args;
         va_start(args, fmt);
         vprintf_s(fmt, args);
         va_end(args);
+#endif // if defined(CUDAUPlatform_Windows_MSVC)
     }
-#endif
+
+    void check(CUresult status, const char* callStr) {
+        if (status == CUDA_SUCCESS)
+            return;
+
+        std::stringstream ss;
+        const char* errMsg = "failed to get an error message.";
+        cuGetErrorString(status, &errMsg);
+        ss << "CUDA call (" << callStr << " ) failed with error: '"
+            << errMsg
+            << "' (" __FILE__ << ":" << __LINE__ << ")\n";
+        throw std::runtime_error(ss.str().c_str());
+    }
 
 
 //#define USE_PINNED_MAPPED_MEMORY
@@ -55,17 +88,17 @@ namespace cudau {
         void* ret;
         CUDADRV_CHECK(cuMemAllocHost(&ret, size));
         return ret;
-#else
+#else // if defined(USE_PINNED_MAPPED_MEMORY)
         return new uint8_t[size];
-#endif
+#endif // if defined(USE_PINNED_MAPPED_MEMORY)
     }
 
     static void releaseHostMem(void* ptr) {
 #if defined(USE_PINNED_MAPPED_MEMORY)
         CUDADRV_CHECK(cuMemFreeHost(ptr));
-#else
+#else // if defined(USE_PINNED_MAPPED_MEMORY)
         delete[] ptr;
-#endif
+#endif // if defined(USE_PINNED_MAPPED_MEMORY)
     }
 
 
@@ -162,10 +195,10 @@ namespace cudau {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             CUDADRV_CHECK(cuGraphicsGLRegisterBuffer(
                 &m_cudaGfxResource, m_GLBufferID, CU_GRAPHICS_REGISTER_FLAGS_NONE));
-#else
+#else // if defined(CUDA_UTIL_USE_GL_INTEROP)
             throw std::runtime_error(
                 "Disable \"CUDA_UTIL_DONT_USE_GL_INTEROP\" if you use CUDA/OpenGL interoperability.");
-#endif
+#endif // if defined(CUDA_UTIL_USE_GL_INTEROP)
         }
         else if (m_type == BufferType::ZeroCopy) {
             CUDADRV_CHECK(cuMemHostAlloc(
@@ -317,7 +350,7 @@ namespace cudau {
                 CUDADRV_CHECK(cuMemcpyDtoHAsync(m_mappedPointer, m_devicePointer, size, stream));
 #if defined(USE_PINNED_MAPPED_MEMORY)
                 CUDADRV_CHECK(cuStreamSynchronize(stream));
-#endif
+#endif // if defined(USE_PINNED_MAPPED_MEMORY)
             }
 
             return m_mappedPointer;
@@ -480,7 +513,7 @@ namespace cudau {
 #undef CUDA_UTIL_EXPR1
 #undef CUDA_UTIL_EXPR0
     }
-#endif
+#endif // if defined(CUDA_UTIL_USE_GL_INTEROP)
 
     Array::Array() :
         m_cuContext(nullptr),
@@ -717,10 +750,10 @@ namespace cudau {
                 (useTextureGather ?
                  CU_GRAPHICS_REGISTER_FLAGS_TEXTURE_GATHER : 0));
             CUDADRV_CHECK(cuGraphicsGLRegisterImage(&m_cudaGfxResource, glTexID, GL_TEXTURE_2D, flags));
-#else
+#else // if defined(CUDA_UTIL_USE_GL_INTEROP)
             throw std::runtime_error(
                 "Disable \"CUDA_UTIL_DONT_USE_GL_INTEROP\" if you use CUDA/OpenGL interoperability.");
-#endif
+#endif // if defined(CUDA_UTIL_USE_GL_INTEROP)
         }
         else {
             if (m_numMipmapLevels > 1)
@@ -899,7 +932,7 @@ namespace cudau {
             read(reinterpret_cast<uint8_t*>(m_mappedPointers[mipmapLevel]), size, mipmapLevel, stream);
 #if defined(USE_PINNED_MAPPED_MEMORY)
             CUDADRV_CHECK(cuStreamSynchronize(stream));
-#endif
+#endif // if defined(USE_PINNED_MAPPED_MEMORY)
         }
 
         return m_mappedPointers[mipmapLevel];

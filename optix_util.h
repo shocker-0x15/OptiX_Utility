@@ -238,8 +238,12 @@ TODO:
 
 */
 
+
+
 #define OPTIXU_STRINGIFY(x) #x
 #define OPTIXU_TO_STRING(x) OPTIXU_STRINGIFY(x)
+
+
 
 // Platform defines
 #if defined(_WIN32) || defined(_WIN64)
@@ -248,16 +252,18 @@ TODO:
 #       define OPTIXU_Platform_Windows_MSVC
 #       if defined(__INTELLISENSE__)
 #           define OPTIXU_Platform_CodeCompletion
-#       endif
-#   endif
+#       endif // if defined(__INTELLISENSE__)
+#   endif // if defined(_MSC_VER)
 #elif defined(__APPLE__)
 #   define OPTIXU_Platform_macOS
-#endif
+#endif // if defined(_WIN32) || defined(_WIN64)
+
+
 
 #if defined(__CUDACC_RTC__)
 // JP: cstdintやcfloatに対応する定義はユーザーに任せられている。
 // EN: Defining things corresponding to cstdint and cfloat is left to the user.
-#else
+#else // if defined(__CUDACC_RTC__)
 #include <cstdint>
 #include <cfloat>
 #include <string>
@@ -265,29 +271,36 @@ TODO:
 #include <initializer_list>
 #   if __cplusplus >= 202002L
 #       include <concepts>
-#   endif
-#endif
+#   endif // if __cplusplus >= 202002L
+#endif // if defined(__CUDACC_RTC__)
 
 #if defined(OPTIXU_Platform_Windows_MSVC)
 #   pragma warning(push)
 #   pragma warning(disable:4819)
-#endif
+#endif // if defined(OPTIXU_Platform_Windows_MSVC)
 // JP: NVRTCを使う場合でも「アプリケーション」ユーザーはOptiX SDKのインストールを必要とする。
 // EN: Even NVRTC requires the "application" user to install OptiX SDK.
 #include <optix.h>
 #if !defined(__CUDA_ARCH__)
 #   include <optix_stubs.h>
-#endif
+#endif // if !defined(__CUDA_ARCH__)
 #if defined(OPTIXU_Platform_Windows_MSVC)
 #   pragma warning(pop)
-#endif
+#endif // if defined(OPTIXU_Platform_Windows_MSVC)
 
-#ifdef _DEBUG
-#   define OPTIXU_ENABLE_ASSERT
-#endif
+
+
+#if !defined(OPTIXU_ENABLE_ASSERT)
+#   if defined(_DEBUG)
+#       define OPTIXU_ENABLE_ASSERT 1
+#   else
+#       define OPTIXU_ENABLE_ASSERT 0
+#   endif // if defined(_DEBUG)
+#endif // if !defined(OPTIXU_ENABLE_ASSERT)
+
 #if !defined(OPTIXU_DISABLE_RUNTIME_ERROR)
-#   define OPTIXU_ENABLE_RUNTIME_ERROR
-#endif
+#   define OPTIXU_ENABLE_RUNTIME_ERROR 1
+#endif // if !defined(OPTIXU_DISABLE_RUNTIME_ERROR)
 
 #if defined(__CUDACC__)
 #   define RT_CALLABLE_PROGRAM extern "C" __device__
@@ -297,13 +310,13 @@ TODO:
 #   if !defined(RT_PIPELINE_LAUNCH_PARAMETERS)
 #       define RT_PIPELINE_LAUNCH_PARAMETERS extern "C" __constant__
 #   endif
-#else
+#else // if defined(__CUDACC__)
 #   define RT_CALLABLE_PROGRAM
 #   define RT_INLINE inline
 #   define RT_DEVICE_FUNCTION
 #   define RT_COMMON_FUNCTION
 #   define RT_PIPELINE_LAUNCH_PARAMETERS
-#endif
+#endif // if defined(__CUDACC__)
 
 #define RT_RG_NAME(name) __raygen__ ## name
 #define RT_MS_NAME(name) __miss__ ## name
@@ -358,7 +371,7 @@ OPTIXU_DEFINE_OPERATORS_FOR_FLAGS(OptixPayloadTypeID);
 
 #if defined(OPTIXU_Platform_CodeCompletion)
 struct float3;
-#endif
+#endif // if defined(OPTIXU_Platform_CodeCompletion)
 
 
 
@@ -375,7 +388,7 @@ namespace optixu {
 #   define optixuPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #endif
 
-#if defined(OPTIXU_ENABLE_ASSERT)
+#if OPTIXU_ENABLE_ASSERT
 #   if defined(__CUDA_ARCH__)
 #       define optixuAssert(expr, fmt, ...) \
             do { \
@@ -395,9 +408,9 @@ namespace optixu {
                 } \
             } while (0)
 #   endif
-#else
+#else // if OPTIXU_ENABLE_ASSERT
 #   define optixuAssert(expr, fmt, ...)
-#endif
+#endif // if OPTIXU_ENABLE_ASSERT
 
 #define optixuAssert_ShouldNotBeCalled() optixuAssert(false, "Should not be called!")
 #define optixuAssert_NotImplemented() optixuAssert(false, "Not implemented yet!")
@@ -406,7 +419,7 @@ namespace optixu {
     // EN: Definitions to abstract std meta functions.
 #if defined(__CUDACC_RTC__)
     // TODO
-#else
+#else // if defined(__CUDACC_RTC__)
 #   if __cplusplus >= 202002L
     template <class _From, class _To>
     concept convertible_to = std::convertible_to<_From, _To>;
@@ -423,7 +436,7 @@ namespace optixu {
 
     template <size_t _Size>
     using make_index_sequence = std::make_index_sequence<_Size>;
-#endif
+#endif // if defined(__CUDACC_RTC__)
 
     namespace detail {
         template <typename T>
@@ -456,7 +469,7 @@ namespace optixu {
             return ret;
         }
     };
-#endif
+#endif // if !defined(__CUDA_ARCH__)
 
 
 
@@ -514,9 +527,9 @@ namespace optixu {
         { v.z } -> convertible_to<float>;
     };
 #       define OPTIXU_HAS3D_CONCEPT Has3D
-#   else
+#   else // if __cplusplus >= 202002L
 #       define OPTIXU_HAS3D_CONCEPT typename
-#   endif
+#   endif // if __cplusplus >= 202002L
 
     template <OPTIXU_HAS3D_CONCEPT T>
     RT_DEVICE_FUNCTION RT_INLINE float3 toNative(const T &v) {
@@ -525,7 +538,7 @@ namespace optixu {
             static_cast<float>(v.y),
             static_cast<float>(v.z));
     }
-#endif
+#endif // if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
 
 
@@ -2387,7 +2400,7 @@ float3 optixTransformVectorFromObjectToWorldSpace(float3 vec);
 float3 optixTransformVectorFromWorldToObjectSpace(float3 vec);
 unsigned int optixUndefinedValue();
 
-#endif
+#endif // if defined(OPTIXU_Platform_CodeCompletion)
 
 // END: Declarations for code completion
 // ----------------------------------------------------------------
