@@ -186,9 +186,25 @@ else()
     message(FATAL_ERROR "Invalid C++ standard.")
 endif()
 
-# Windowsはsymlink作成に追加の権限が必要。
-# file(CREATE_LINK "${CMAKE_SOURCE_DIR}/data" "${CMAKE_BINARY_DIR}/data" SYMBOLIC)
-file(COPY "${CMAKE_SOURCE_DIR}/data" DESTINATION "${CMAKE_BINARY_DIR}")
+
+
+# データディレクトリのコピーを行うカスタムターゲットの定義。
+set(SRC_DATA_DIR "${CMAKE_SOURCE_DIR}/data")
+set(DST_DATA_DIR "${CMAKE_BINARY_DIR}/data")
+file(GLOB_RECURSE SRC_DATA_FILES "${SRC_DATA_DIR}/*")
+set(DATA_FILE_LIST "${CMAKE_BINARY_DIR}/data_file_list.txt")
+add_custom_command(
+    OUTPUT ${DATA_FILE_LIST}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${DST_DATA_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${SRC_DATA_DIR} ${DST_DATA_DIR}
+    COMMAND ${CMAKE_COMMAND} -E echo "${SRC_DATA_FILES}" > ${DATA_FILE_LIST}
+    DEPENDS ${SRC_DATA_FILES}
+    COMMENT "Copying directory and updating file list"
+)
+add_custom_target(__copy_data ALL DEPENDS ${DATA_FILE_LIST})
+add_dependencies(fakelib __copy_data)
+
+
 
 add_subdirectory(single_gas)
 add_subdirectory(single_level_instancing)
