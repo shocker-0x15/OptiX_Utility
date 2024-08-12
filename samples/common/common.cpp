@@ -18,19 +18,7 @@ void devPrintf(const char* fmt, ...) {
     vsnprintf_s(str.data(), str.size(), _TRUNCATE, fmt, args);
     va_end(args);
 
-#   if defined(UNICODE)
-    const int32_t reqWstrSize = MultiByteToWideChar(CP_ACP, 0, str.data(), -1, nullptr, 0);
-    static std::vector<wchar_t> wstr;
-    if (reqWstrSize > wstr.size())
-        wstr.resize(reqWstrSize);
-
-    MultiByteToWideChar(
-        CP_ACP, 0, str.data(), static_cast<int32_t>(str.size()),
-        wstr.data(), static_cast<int32_t>(wstr.size()));
-    OutputDebugString(wstr.data());
-#   else
-    OutputDebugString(str.data());
-#   endif
+    OutputDebugStringA(str.data());
 #else
     va_list args;
     va_start(args, fmt);
