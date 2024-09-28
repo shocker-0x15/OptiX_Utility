@@ -393,8 +393,8 @@ namespace optixu {
 #       define optixuAssert(expr, fmt, ...) \
             do { \
                 if (!(expr)) { \
-                    printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
-                    printf(fmt"\n", ##__VA_ARGS__); \
+                    ::printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
+                    ::printf(fmt"\n", ##__VA_ARGS__); \
                     assert(0); \
                 } \
             } while (0)

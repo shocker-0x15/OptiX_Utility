@@ -134,8 +134,8 @@ typedef unsigned long long CUsurfObject;
 #       define CUDAUAssert(expr, fmt, ...) \
 do { \
     if (!(expr)) { \
-        printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
-        printf(fmt"\n", ##__VA_ARGS__); \
+        ::printf("%s @%s: %u:\n", #expr, __FILE__, __LINE__); \
+        ::printf(fmt"\n", ##__VA_ARGS__); \
     } \
 } \
 while (0)
