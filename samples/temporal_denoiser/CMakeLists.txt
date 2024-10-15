@@ -80,7 +80,7 @@ add_executable(
 set_target_properties(
     "${TARGET_NAME}" PROPERTIES
     CXX_EXTENSIONS OFF
-    PROJECT_LABEL "11.${TARGET_NAME}"
+    PROJECT_LABEL "${BASIC_SAMPLE_INDEX_STR}.${TARGET_NAME}"
     FOLDER "samples")
 target_include_directories(
     "${TARGET_NAME}" PRIVATE

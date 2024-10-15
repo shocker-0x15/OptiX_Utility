@@ -54,7 +54,7 @@ add_executable(
 set_target_properties(
     "${TARGET_NAME}" PROPERTIES
     CXX_EXTENSIONS OFF
-    PROJECT_LABEL "00.${TARGET_NAME}"
+    PROJECT_LABEL "${BASIC_SAMPLE_INDEX_STR}.${TARGET_NAME}"
     FOLDER "samples")
 target_compile_definitions(
     "${TARGET_NAME}" PRIVATE
