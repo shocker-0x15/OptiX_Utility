@@ -238,10 +238,10 @@ namespace optixu {
         CUDADRV_CHECK(cuMemcpyHtoDAsync(sbt.getCUdeviceptr(), hostMem, sbt.sizeInBytes(), stream));
     }
 
-    bool Scene::Priv::isReady(bool* hasMotionAS) {
-        *hasMotionAS = false;
+    bool Scene::Priv::isReady(bool* hasMotionGAS, bool* hasMotionIAS) {
+        *hasMotionGAS = false;
         for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : geomASs) {
-            *hasMotionAS |= gas.second->hasMotion();
+            *hasMotionGAS |= gas.second->hasMotion();
             if (!gas.second->isReady())
                 return false;
         }
@@ -251,8 +251,9 @@ namespace optixu {
                 return false;
         }
 
+        *hasMotionIAS = false;
         for (_InstanceAccelerationStructure* ias : instASs) {
-            *hasMotionAS |= ias->hasMotion();
+            *hasMotionIAS |= ias->hasMotion();
             if (!ias->isReady())
                 return false;
         }
@@ -4029,12 +4030,13 @@ namespace optixu {
         m->throwRuntimeError(
             m->scene,
             "Scene is not set.");
-        bool hasMotionAS;
+        bool hasMotionGAS;
+        bool hasMotionIAS;
         m->throwRuntimeError(
-            m->scene->isReady(&hasMotionAS),
+            m->scene->isReady(&hasMotionGAS, &hasMotionIAS),
             "Scene is not ready.");
         m->throwRuntimeError(
-            m->pipelineCompileOptions.usesMotionBlur || !hasMotionAS,
+            m->pipelineCompileOptions.usesMotionBlur || !(hasMotionGAS || hasMotionIAS),
             "Scene has a motion AS but the pipeline has not been configured for motion.");
         m->throwRuntimeError(
             m->hitGroupSbt.isValid(),
@@ -4045,9 +4047,10 @@ namespace optixu {
 
         m->setupShaderBindingTable(stream);
 
-        if (m->hasActiveDirectCallable && !m->stackSizeHasBeenSet) {
+        if ((m->hasActiveDirectCallable || hasMotionIAS) &&
+            !m->stackSizeHasBeenSet) {
             optixuPrintf(
-                "[WARNING] There are active direct callable programs, "
+                "[WARNING] There are active direct callable programs and/or motion transforms are used, "
                 "but the pipeline stack sizes have not been set.\n");
         }
 
