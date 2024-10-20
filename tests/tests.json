@@ -72,6 +72,14 @@
         "reference": "reference.png"
     },
     {
+        "name": "callable_program",
+        "sample": "callable_program",
+        "options": "--screen-shot",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference.png"
+    },
+    {
         "name": "denoiser",
         "sample": "denoiser",
         "image": "color_denoised.png",

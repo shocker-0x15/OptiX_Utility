@@ -105,7 +105,7 @@
     <ProjectGuid>{A6882C6F-6687-4A3A-9703-6832C32D7C3B}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>13.opacity_micro_map</ProjectName>
+    <ProjectName>14.opacity_micro_map</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

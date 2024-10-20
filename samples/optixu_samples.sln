@@ -15,7 +15,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "08.multi_level_instancing",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "05.custom_primitive", "custom_primitive\custom_primitive.vcxproj", "{69A22E89-BFE0-40C4-A225-02D33982BEAD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.denoiser", "denoiser\denoiser.vcxproj", "{2D96E67E-8C6A-4B87-8B88-93E3921D874A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "11.denoiser", "denoiser\denoiser.vcxproj", "{2D96E67E-8C6A-4B87-8B88-93E3921D874A}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "03.material_sets", "material_sets\material_sets.vcxproj", "{147ED7B4-6B60-4AED-87D9-5FB62C14AAEF}"
 EndProject
@@ -31,19 +31,21 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "application", "application"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "06.curve_primitive", "curve_primitive\curve_primitive.vcxproj", "{EFADEE83-B8BD-4B30-9869-5117F623D6F6}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "11.temporal_denoiser", "temporal_denoiser\temporal_denoiser.vcxproj", "{461A4AC3-0084-4A9B-8A92-BF421C0EFA29}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "12.temporal_denoiser", "temporal_denoiser\temporal_denoiser.vcxproj", "{461A4AC3-0084-4A9B-8A92-BF421C0EFA29}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "12.payload_annotation", "payload_annotation\payload_annotation.vcxproj", "{1F481DF3-CA02-431E-8C86-2785366F3487}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "13.payload_annotation", "payload_annotation\payload_annotation.vcxproj", "{1F481DF3-CA02-431E-8C86-2785366F3487}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "07.sphere_primitive", "sphere_primitive\sphere_primitive.vcxproj", "{92CD031A-E0E6-4364-B0CE-F22CC05B6E60}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "13.opacity_micro_map", "opacity_micro_map\opacity_micro_map.vcxproj", "{A6882C6F-6687-4A3A-9703-6832C32D7C3B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "14.opacity_micro_map", "opacity_micro_map\opacity_micro_map.vcxproj", "{A6882C6F-6687-4A3A-9703-6832C32D7C3B}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "14.displacement_micro_map", "displacement_micro_map\displacement_micro_map.vcxproj", "{FCEEB252-A098-407C-9CB2-5A37A51AD415}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "15.displacement_micro_map", "displacement_micro_map\displacement_micro_map.vcxproj", "{FCEEB252-A098-407C-9CB2-5A37A51AD415}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "basic", "basic", "{CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "__support_files", "__support_files\__support_files.vcxproj", "{1A6CB9A7-BB5B-47AD-AB41-965B0E8E1777}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.callable_program", "callable_program\callable_program.vcxproj", "{457B5783-F24A-4B0E-B07F-B4B03B89781B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -127,6 +129,10 @@ Global
 		{1A6CB9A7-BB5B-47AD-AB41-965B0E8E1777}.Debug|x64.Build.0 = Debug|x64
 		{1A6CB9A7-BB5B-47AD-AB41-965B0E8E1777}.Release|x64.ActiveCfg = Release|x64
 		{1A6CB9A7-BB5B-47AD-AB41-965B0E8E1777}.Release|x64.Build.0 = Release|x64
+		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Debug|x64.ActiveCfg = Debug|x64
+		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Debug|x64.Build.0 = Debug|x64
+		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Release|x64.ActiveCfg = Release|x64
+		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -150,6 +156,7 @@ Global
 		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
 		{A6882C6F-6687-4A3A-9703-6832C32D7C3B} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
 		{FCEEB252-A098-407C-9CB2-5A37A51AD415} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
+		{457B5783-F24A-4B0E-B07F-B4B03B89781B} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A089BF53-6CD1-4F82-BFB8-00CE152F27F8}
