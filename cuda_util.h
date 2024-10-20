@@ -350,7 +350,8 @@ namespace cudau {
     void callKernel(
         CUstream stream, CUfunction kernel,
         const dim3 &gridDim, const dim3 &blockDim, uint32_t sharedMemSize,
-        ArgTypes&&... args) {
+        ArgTypes&&... args)
+    {
         if constexpr (sizeof...(args) > 0) {
             ConstVoidPtr argPointers[sizeof...(args)];
             CUdeviceptr pointers[sizeof...(args)] = {};
@@ -383,7 +384,8 @@ namespace cudau {
     public:
         Kernel() : m_kernel(nullptr), m_blockDim(1), m_sharedMemSize(0) {}
         Kernel(CUmodule module, const char* name, const dim3 blockDim, uint32_t sharedMemSize) :
-            m_blockDim(blockDim), m_sharedMemSize(sharedMemSize) {
+            m_blockDim(blockDim), m_sharedMemSize(sharedMemSize)
+        {
             CUDADRV_CHECK(cuModuleGetFunction(&m_kernel, module, name));
         }
 
@@ -531,12 +533,16 @@ namespace cudau {
         Buffer();
         ~Buffer();
 
-        Buffer(CUcontext context, BufferType type,
-               size_t numElements, size_t stride) : Buffer() {
+        Buffer(
+            CUcontext context, BufferType type,
+            size_t numElements, size_t stride) : Buffer()
+        {
             initialize(context, type, numElements, stride);
         }
-        Buffer(CUcontext context, BufferType type,
-               const void* data, size_t numElements, size_t stride) : Buffer() {
+        Buffer(
+            CUcontext context, BufferType type,
+            const void* data, size_t numElements, size_t stride) : Buffer()
+        {
             initialize(context, type, data, numElements, stride);
         }
 
@@ -548,12 +554,14 @@ namespace cudau {
 
         void initialize(
             CUcontext context, BufferType type,
-            size_t numElements, size_t stride) {
+            size_t numElements, size_t stride)
+        {
             initialize(context, type, numElements, stride, 0);
         }
         void initialize(
             CUcontext context, BufferType type,
-            const void* data, size_t numElements, size_t stride, CUstream stream = 0) {
+            const void* data, size_t numElements, size_t stride, CUstream stream = 0)
+        {
             initialize(context, type, numElements, stride, 0);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(getCUdeviceptr(), data, numElements * stride, stream));
         }
@@ -706,7 +714,8 @@ namespace cudau {
         void initialize(
             CUcontext context, BufferType type,
             size_t numElements, const T &value,
-            CUstream stream = 0) {
+            CUstream stream = 0)
+        {
             std::vector<T> values(numElements, value);
             initialize(context, type, values.size());
             CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), values.data(), values.size() * sizeof(T), stream));
@@ -714,14 +723,16 @@ namespace cudau {
         void initialize(
             CUcontext context, BufferType type,
             const T* v, size_t numElements,
-            CUstream stream = 0) {
+            CUstream stream = 0)
+        {
             initialize(context, type, numElements);
             CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), v, numElements * sizeof(T), stream));
         }
         void initialize(
             CUcontext context, BufferType type,
             const std::vector<T> &v,
-            CUstream stream = 0) {
+            CUstream stream = 0)
+        {
             initialize(context, type, v.size());
             CUDADRV_CHECK(cuMemcpyHtoDAsync(Buffer::getCUdeviceptr(), v.data(), v.size() * sizeof(T), stream));
         }
@@ -936,7 +947,8 @@ namespace cudau {
         void initialize1D(
             CUcontext context, ArrayElementType elemType, uint32_t numChannels,
             ArraySurface surfaceLoadStore,
-            size_t length, uint32_t numMipmapLevels) {
+            size_t length, uint32_t numMipmapLevels)
+        {
             initialize(
                 context, elemType, numChannels, length, 0, 0, numMipmapLevels,
                 surfaceLoadStore == ArraySurface::Enable, false, false, false, 0);
@@ -944,7 +956,8 @@ namespace cudau {
         void initialize2D(
             CUcontext context, ArrayElementType elemType, uint32_t numChannels,
             ArraySurface surfaceLoadStore, ArrayTextureGather useTextureGather,
-            size_t width, size_t height, uint32_t numMipmapLevels) {
+            size_t width, size_t height, uint32_t numMipmapLevels)
+        {
             initialize(
                 context, elemType, numChannels, width, height, 0, numMipmapLevels,
                 surfaceLoadStore == ArraySurface::Enable,
@@ -954,14 +967,16 @@ namespace cudau {
         void initialize3D(
             CUcontext context, ArrayElementType elemType, uint32_t numChannels,
             ArraySurface surfaceLoadStore,
-            size_t width, size_t height, size_t depth, uint32_t numMipmapLevels) {
+            size_t width, size_t height, size_t depth, uint32_t numMipmapLevels)
+        {
             initialize(
                 context, elemType, numChannels, width, height, 0, numMipmapLevels,
                 surfaceLoadStore == ArraySurface::Enable, false, false, false, 0);
         }
         void initializeFromGLTexture2D(
             CUcontext context, uint32_t glTexID,
-            ArraySurface surfaceLoadStore, ArrayTextureGather useTextureGather) {
+            ArraySurface surfaceLoadStore, ArrayTextureGather useTextureGather)
+        {
 #if defined(CUDA_UTIL_USE_GL_INTEROP)
             GLint width, height;
             GLint numMipmapLevels;
@@ -1040,13 +1055,15 @@ namespace cudau {
         T* map(
             uint32_t mipmapLevel = 0,
             CUstream stream = 0,
-            BufferMapFlag flag = BufferMapFlag::ReadWrite) {
+            BufferMapFlag flag = BufferMapFlag::ReadWrite)
+        {
             return reinterpret_cast<T*>(map(mipmapLevel, stream, flag));
         }
         void unmap(uint32_t mipmapLevel = 0, CUstream stream = 0);
         template <typename T>
         void write(
-            const T* srcValues, size_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) const {
+            const T* srcValues, size_t numValues, uint32_t mipmapLevel = 0, CUstream stream = 0) const
+        {
             size_t depth = std::max<size_t>(1, m_depth);
 
             size_t bw;

@@ -143,7 +143,8 @@ namespace cudau {
 
     void Buffer::initialize(
         CUcontext context, BufferType type,
-        size_t numElements, size_t stride, uint32_t glBufferID) {
+        size_t numElements, size_t stride, uint32_t glBufferID)
+    {
         if (m_initialized)
             throw std::runtime_error("Buffer is already initialized.");
 
@@ -582,7 +583,8 @@ namespace cudau {
     void Array::initialize(
         CUcontext context, ArrayElementType elemType, uint32_t numChannels,
         size_t width, size_t height, size_t depth, uint32_t numMipmapLevels,
-        bool surfaceLoadStore, bool useTextureGather, bool cubemap, bool layered, uint32_t glTexID) {
+        bool surfaceLoadStore, bool useTextureGather, bool cubemap, bool layered, uint32_t glTexID)
+    {
         if (m_initialized)
             throw std::runtime_error("Array is already initialized.");
         if (numChannels != 1 && numChannels != 2 && numChannels != 4)
