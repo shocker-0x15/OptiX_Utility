@@ -4042,6 +4042,34 @@ namespace optixu {
             &m->sbtParams, dimX, dimY, dimZ));
     }
 
+    Program Pipeline::getRayGenerationProgram() const {
+        if (m->currentRayGenProgram)
+            return m->currentRayGenProgram->getPublicType();
+        else
+            return Program();
+    }
+
+    Program Pipeline::getExceptionProgram() const {
+        if (m->currentExceptionProgram)
+            return m->currentExceptionProgram->getPublicType();
+        else
+            return Program();
+    }
+
+    Program Pipeline::getMissProgram(uint32_t rayType) const {
+        if (m->currentMissPrograms[rayType])
+            return m->currentMissPrograms[rayType]->getPublicType();
+        else
+            return Program();
+    }
+
+    CallableProgramGroup Pipeline::getCallableProgram(uint32_t index) const {
+        if (m->currentCallablePrograms[index])
+            return m->currentCallablePrograms[index]->getPublicType();
+        else
+            return CallableProgramGroup();
+    }
+
     Scene Pipeline::getScene() const {
         if (m->scene)
             return m->scene->getPublicType();
