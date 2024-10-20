@@ -1218,10 +1218,13 @@ namespace optixu {
         void* hitGroupSbtHostMem;
         OptixShaderBindingTable sbtParams;
 
-        uint32_t pipelineLinked : 1;
+        uint32_t pipelineIsLinked : 1;
         uint32_t sbtLayoutIsUpToDate : 1;
         uint32_t sbtIsUpToDate : 1;
         uint32_t hitGroupSbtIsUpToDate : 1;
+        uint32_t hasActiveDirectCallable : 1;
+        uint32_t hasActiveContinuationCallable : 1;
+        uint32_t stackSizeHasBeenSet : 1;
 
         Module createModule(
             const char* data, size_t size,
@@ -1247,8 +1250,10 @@ namespace optixu {
             sizeOfPipelineLaunchParams(0),
             scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
             currentRayGenProgram(nullptr), currentExceptionProgram(nullptr),
-            pipelineLinked(false), sbtLayoutIsUpToDate(false),
-            sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false) {
+            pipelineIsLinked(false), sbtLayoutIsUpToDate(false),
+            sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false),
+            hasActiveDirectCallable(false), hasActiveContinuationCallable(false),
+            stackSizeHasBeenSet(false) {
             sbtParams = {};
         }
         ~Priv();
@@ -1264,7 +1269,7 @@ namespace optixu {
 
 
 
-        bool isLinked() const { return pipelineLinked; }
+        bool isLinked() const { return pipelineIsLinked; }
         void markDirty();
 
         void destroyProgram(_Program* program);
@@ -1439,6 +1444,11 @@ namespace optixu {
             OPTIX_CHECK(optixProgramGroupGetStackSize(rawGroup, &stackSizes, pipeline->getRawPipeline()));
             stackSizeDC = stackSizes.dssDC;
             stackSizeCC = stackSizes.cssCC;
+        }
+
+        void getStackSizes(uint32_t* _stackSizeDC, uint32_t* _stackSizeCC) const {
+            *_stackSizeDC = stackSizeDC;
+            *_stackSizeCC = stackSizeCC;
         }
 
         void packHeader(uint8_t* record) const {
