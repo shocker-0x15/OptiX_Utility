@@ -2162,6 +2162,10 @@ namespace optixu {
             CUstream stream, CUdeviceptr plpOnDevice,
             uint32_t dimX, uint32_t dimY, uint32_t dimZ) const;
 
+        Program getRayGenerationProgram() const;
+        Program getExceptionProgram() const;
+        Program getMissProgram(uint32_t rayType) const;
+        CallableProgramGroup getCallableProgram(uint32_t index) const;
         Scene getScene() const;
     };
 
