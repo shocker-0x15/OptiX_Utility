@@ -3181,7 +3181,7 @@ namespace optixu {
 
 
     Pipeline::Priv::~Priv() {
-        if (pipelineLinked)
+        if (pipelineIsLinked)
             optixPipelineDestroy(rawPipeline);
         for (auto it = modulesForBuiltinIS.begin(); it != modulesForBuiltinIS.end(); ++it)
             it->second->getPublicType().destroy();
@@ -3190,9 +3190,9 @@ namespace optixu {
     }
 
     void Pipeline::Priv::markDirty() {
-        if (pipelineLinked)
+        if (pipelineIsLinked)
             OPTIX_CHECK(optixPipelineDestroy(rawPipeline));
-        pipelineLinked = false;
+        pipelineIsLinked = false;
     }
 
     Module Pipeline::Priv::createModule(
@@ -3341,9 +3341,16 @@ namespace optixu {
                 offset += OPTIX_SBT_RECORD_HEADER_SIZE;
             }
 
+            hasActiveDirectCallable = false;
+            hasActiveContinuationCallable = false;
             CUdeviceptr callableRecordOffset = offset;
             for (uint32_t i = 0; i < numCallablePrograms; ++i) {
-                currentCallablePrograms[i]->packHeader(records + offset);
+                _CallableProgramGroup* callable = currentCallablePrograms[i];
+                callable->packHeader(records + offset);
+                uint32_t stackSizeDC, stackSizeCC;
+                callable->getStackSizes(&stackSizeDC, &stackSizeCC);
+                hasActiveDirectCallable |= stackSizeDC > 0;
+                hasActiveContinuationCallable |= stackSizeCC > 0;
                 offset += OPTIX_SBT_RECORD_HEADER_SIZE;
             }
 
@@ -3388,7 +3395,7 @@ namespace optixu {
         OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
         UseMotionBlur useMotionBlur, UseOpacityMicroMaps useOpacityMicroMaps) const {
         m->throwRuntimeError(
-            !m->pipelineLinked,
+            !m->pipelineIsLinked,
             "Changing pipeline options after linking is not supported yet.");
 
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
@@ -3819,7 +3826,7 @@ namespace optixu {
     }
 
     void Pipeline::link(uint32_t maxTraceDepth) const {
-        m->throwRuntimeError(!m->pipelineLinked, "This pipeline has been already linked.");
+        m->throwRuntimeError(!m->pipelineIsLinked, "This pipeline has been already linked.");
 
         OptixPipelineLinkOptions pipelineLinkOptions = {};
         pipelineLinkOptions.maxTraceDepth = maxTraceDepth;
@@ -3861,7 +3868,7 @@ namespace optixu {
                 it->setStackSizes();
         }
 
-        m->pipelineLinked = true;
+        m->pipelineIsLinked = true;
     }
 
     void Pipeline::setNumMissRayTypes(uint32_t numMissRayTypes) const {
@@ -4004,6 +4011,7 @@ namespace optixu {
             directCallableStackSizeFromState,
             continuationStackSize,
             maxTraversableGraphDepth));
+        m->stackSizeHasBeenSet = true;
     }
 
     void Pipeline::launch(
@@ -4032,10 +4040,16 @@ namespace optixu {
             m->hitGroupSbt.isValid(),
             "Hitgroup shader binding table is not set.");
         m->throwRuntimeError(
-            m->pipelineLinked,
+            m->pipelineIsLinked,
             "Pipeline has not been linked yet.");
 
         m->setupShaderBindingTable(stream);
+
+        if (m->hasActiveDirectCallable && !m->stackSizeHasBeenSet) {
+            optixuPrintf(
+                "[WARNING] There are active direct callable programs, "
+                "but the pipeline stack sizes have not been set.\n");
+        }
 
         OPTIX_CHECK(optixLaunch(
             m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
