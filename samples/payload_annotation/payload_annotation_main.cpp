@@ -60,7 +60,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         payloadTypes[1] = Shared::VisibilityRayPayloadSignature::getPayloadType();
     }
     const std::vector<char> optixIr =
-        readBinaryFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_kernels.optixir");
+        readBinaryFile(getExecutableDirectory() / "payload_annotation/ptxes/optix_path_tracing.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),

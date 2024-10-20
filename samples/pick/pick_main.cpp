@@ -89,7 +89,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
         const std::vector<char> optixIr =
-            readBinaryFile(resourceDir / "ptxes/pick_kernels.optixir");
+            readBinaryFile(resourceDir / "ptxes/optix_pick_kernels.optixir");
         p.module = optixPipeline.createModuleFromOptixIR(
             optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -134,7 +134,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
         const std::vector<char> optixIr =
-            readBinaryFile(resourceDir / "ptxes/render_kernels.optixir");
+            readBinaryFile(resourceDir / "ptxes/optix_render_kernels.optixir");
         p.module = optixPipeline.createModuleFromOptixIR(
             optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),

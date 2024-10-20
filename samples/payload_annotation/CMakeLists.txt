@@ -7,7 +7,7 @@ file(
 
 file(
     GLOB OPTIX_KERNELS
-    "optix_kernels.cu"
+    "optix_path_tracing.cu"
 )
 
 file(

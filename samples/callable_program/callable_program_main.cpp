@@ -54,7 +54,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     const std::vector<char> pathTracingOptixIr =
-        readBinaryFile(getExecutableDirectory() / "callable_program/ptxes/path_tracing.optixir");
+        readBinaryFile(getExecutableDirectory() / "callable_program/ptxes/optix_path_tracing.optixir");
     optixu::Module pathTracingModule = pipeline.createModuleFromOptixIR(
         pathTracingOptixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
@@ -102,7 +102,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #undef PROCESS_CALLABLE_PROGRAMS
 
     const std::vector<char> bsdfsOptixIr =
-        readBinaryFile(getExecutableDirectory() / "callable_program/ptxes/bsdfs.optixir");
+        readBinaryFile(getExecutableDirectory() / "callable_program/ptxes/optix_bsdfs.optixir");
     optixu::Module bsdfsModule = pipeline.createModuleFromOptixIR(
         bsdfsOptixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),

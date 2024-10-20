@@ -86,7 +86,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     const std::vector<char> optixIr =
-        readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");
+        readBinaryFile(resourceDir / "ptxes/optix_path_tracing.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),

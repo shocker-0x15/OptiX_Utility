@@ -6,8 +6,8 @@ file(
 
 file(
     GLOB OPTIX_KERNELS
-    "pick_kernels.cu"
-    "render_kernels.cu"
+    "optix_pick_kernels.cu"
+    "optix_render_kernels.cu"
 )
 
 file(

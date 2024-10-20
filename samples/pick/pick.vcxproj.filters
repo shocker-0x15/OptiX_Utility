@@ -153,8 +153,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="pick_kernels.cu" />
-    <CudaCompile Include="render_kernels.cu" />
+    <CudaCompile Include="optix_pick_kernels.cu" />
+    <CudaCompile Include="optix_render_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
