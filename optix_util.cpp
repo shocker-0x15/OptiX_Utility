@@ -437,7 +437,8 @@ namespace optixu {
     }
 
     void OpacityMicroMapArray::rebuild(
-        CUstream stream, const BufferView &scratchBuffer) const {
+        CUstream stream, const BufferView &scratchBuffer) const
+    {
         m->throwRuntimeError(
             m->memoryUsageComputed, "You need to call computeMemoryUsage() before rebuild.");
         m->throwRuntimeError(
