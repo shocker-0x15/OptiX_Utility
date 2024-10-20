@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "temporal_denoiser_shared.h"
+﻿#include "temporal_denoiser_shared.h"
 
 using namespace Shared;
 

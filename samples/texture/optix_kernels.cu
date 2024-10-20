@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "texture_shared.h"
+﻿#include "texture_shared.h"
 
 using namespace Shared;
 

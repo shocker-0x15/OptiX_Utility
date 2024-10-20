@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "single_gas_shared.h"
+﻿#include "single_gas_shared.h"
 
 using namespace Shared;
 

@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "pick_shared.h"
+﻿#include "pick_shared.h"
 
 using namespace Shared;
 

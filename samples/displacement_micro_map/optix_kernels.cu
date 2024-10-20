@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "displacement_micro_map_shared.h"
+﻿#include "displacement_micro_map_shared.h"
 #if !defined(OPTIXU_Platform_CodeCompletion)
 #include <optix_micromap.h>
 #endif

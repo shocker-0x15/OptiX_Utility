@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "uber_shared.h"
+﻿#include "uber_shared.h"
 
 using namespace Shared;
 

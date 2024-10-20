@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "curve_primitive_shared.h"
+﻿#include "curve_primitive_shared.h"
 #include "../common/curve_evaluator.h"
 
 using namespace Shared;

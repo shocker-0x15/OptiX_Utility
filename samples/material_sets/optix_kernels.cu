@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "material_sets_shared.h"
+﻿#include "material_sets_shared.h"
 
 using namespace Shared;
 

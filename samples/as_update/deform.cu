@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "as_update_shared.h"
+﻿#include "as_update_shared.h"
 
 using namespace Shared;
 

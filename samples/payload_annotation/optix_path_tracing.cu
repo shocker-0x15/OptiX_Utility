@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "payload_annotation_shared.h"
+﻿#include "payload_annotation_shared.h"
 
 using namespace Shared;
 
