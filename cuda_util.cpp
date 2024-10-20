@@ -505,6 +505,8 @@ namespace cudau {
 
     Array::Array() :
         m_cuContext(nullptr),
+        m_width(0), m_height(0), m_depth(0), m_numMipmapLevels(0),
+        m_stride(0), m_elemType(ArrayElementType(0xFFFFFFFF)), m_numChannels(0),
         m_array(0), m_mappedPointers(nullptr), m_mipmapArrays(nullptr), m_mapFlags(nullptr),
         m_surfObjs(nullptr),
         m_GLTexID(0), m_cudaGfxResource(nullptr),
