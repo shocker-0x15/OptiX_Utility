@@ -254,7 +254,17 @@ CUDA_COMMON_FUNCTION CUDA_INLINE T pow2(const T &x) {
 
 template <typename T>
 CUDA_COMMON_FUNCTION CUDA_INLINE T pow3(const T &x) {
-    return x * x * x;
+    return pow2(x) * x;
+}
+
+template <typename T>
+CUDA_COMMON_FUNCTION CUDA_INLINE T pow4(const T &x) {
+    return pow2(pow2(x));
+}
+
+template <typename T>
+CUDA_COMMON_FUNCTION CUDA_INLINE T pow5(const T &x) {
+    return pow4(x) * x;
 }
 
 
@@ -799,6 +809,47 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 fromPolarYUp(float phi, float theta) {
     cosTheta = std::cos(theta);
 #endif
     return make_float3(-sinPhi * sinTheta, cosTheta, cosPhi * sinTheta);
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE void concentricSampleDisk(float u0, float u1, float* dx, float* dy) {
+    float r, theta;
+    float sx = 2 * u0 - 1;
+    float sy = 2 * u1 - 1;
+
+    if (sx == 0 && sy == 0) {
+        *dx = 0;
+        *dy = 0;
+        return;
+    }
+    if (sx >= -sy) { // region 1 or 2
+        if (sx > sy) { // region 1
+            r = sx;
+            theta = sy / sx;
+        }
+        else { // region 2
+            r = sy;
+            theta = 2 - sx / sy;
+        }
+    }
+    else { // region 3 or 4
+        if (sx > sy) {/// region 4
+            r = -sy;
+            theta = 6 + sx / sy;
+        }
+        else {// region 3
+            r = -sx;
+            theta = 4 + sy / sx;
+        }
+    }
+    theta *= pi_v<float> / 4;
+    *dx = r * std::cos(theta);
+    *dy = r * std::sin(theta);
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 cosineSampleHemisphere(float u0, float u1) {
+    float x, y;
+    concentricSampleDisk(u0, u1, &x, &y);
+    return make_float3(x, y, std::sqrt(std::fmax(0.0f, 1.0f - x * x - y * y)));
 }
 
 CUDA_DEVICE_FUNCTION CUDA_INLINE float3 HSVtoRGB(float h, float s, float v) {

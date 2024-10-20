@@ -111,7 +111,7 @@
     <ProjectGuid>{FCEEB252-A098-407C-9CB2-5A37A51AD415}</ProjectGuid>
     <RootNamespace>OptiX7GLFWImGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>14.displacement_micro_map</ProjectName>
+    <ProjectName>15.displacement_micro_map</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
