@@ -32,7 +32,7 @@
     <ClInclude Include="payload_annotation_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="optix_path_tracing.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

@@ -32,14 +32,14 @@
     <ClInclude Include="callable_program_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="bsdfs.cu" />
     <CudaCompile Include="copy_buffers.cu">
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
       <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
       <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
     </CudaCompile>
-    <CudaCompile Include="path_tracing.cu" />
+    <CudaCompile Include="optix_bsdfs.cu" />
+    <CudaCompile Include="optix_path_tracing.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

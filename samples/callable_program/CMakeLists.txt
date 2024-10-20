@@ -12,8 +12,8 @@ file(
 
 file(
     GLOB OPTIX_KERNELS
-    "path_tracing.cu"
-    "bsdfs.cu"
+    "optix_path_tracing.cu"
+    "optix_bsdfs.cu"
 )
 
 file(

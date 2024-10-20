@@ -63,7 +63,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="optix_path_tracing.cu" />
     <CudaCompile Include="copy_buffers.cu" />
   </ItemGroup>
 </Project>
