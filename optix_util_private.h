@@ -492,7 +492,7 @@ namespace optixu {
         }
         void setupHitGroupSBT(CUstream stream, const _Pipeline* pipeline, const BufferView &sbt, void* hostMem);
 
-        bool isReady(bool* hasMotionAS);
+        bool isReady(bool* hasMotionGAS, bool* hasMotionIAS);
     };
 
 
