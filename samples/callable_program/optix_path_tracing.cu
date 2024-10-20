@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "callable_program_shared.h"
+﻿#include "callable_program_shared.h"
 
 using namespace Shared;
 

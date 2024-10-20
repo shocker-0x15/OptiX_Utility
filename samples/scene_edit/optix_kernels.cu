@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "scene_edit_shared.h"
+﻿#include "scene_edit_shared.h"
 
 using namespace Shared;
 

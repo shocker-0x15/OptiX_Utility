@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "uber_shared.h"
+﻿#include "uber_shared.h"
 
 CUDA_DEVICE_KERNEL void postProcess(
 #if defined(USE_NATIVE_BLOCK_BUFFER2D)

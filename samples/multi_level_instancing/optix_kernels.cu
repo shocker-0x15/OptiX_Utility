@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "multi_level_instancing_shared.h"
+﻿#include "multi_level_instancing_shared.h"
 
 using namespace Shared;
 

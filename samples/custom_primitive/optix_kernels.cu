@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "custom_primitive_shared.h"
+﻿#include "custom_primitive_shared.h"
 
 using namespace Shared;
 

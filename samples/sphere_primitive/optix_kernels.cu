@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "sphere_primitive_shared.h"
+﻿#include "sphere_primitive_shared.h"
 
 using namespace Shared;
 

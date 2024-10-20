@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "deformation_blur_shared.h"
+﻿#include "deformation_blur_shared.h"
 #include "../common/curve_evaluator.h"
 
 using namespace Shared;
