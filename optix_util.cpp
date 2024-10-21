@@ -131,12 +131,12 @@ namespace optixu {
     void Material::Priv::setRecordHeader(
         const _Pipeline* pipeline, uint32_t rayType, uint8_t* record, SizeAlign* curSizeAlign) const
     {
-        Key key{ pipeline, rayType };
+        const Key key{ pipeline, rayType };
         throwRuntimeError(
             programs.count(key),
             "No hit group is set to the pipeline %s, ray type %u",
             pipeline->getName().c_str(), rayType);
-        const _HitProgramGroup* hitGroup = programs.at(key);
+        const _HitProgramGroup* const hitGroup = programs.at(key);
         *curSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
         hitGroup->packHeader(record);
     }
@@ -157,7 +157,7 @@ namespace optixu {
         const _Pipeline* _pipeline = extract(hitGroup)->getPipeline();
         m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
 
-        _Material::Key key{ _pipeline, rayType };
+        const _Material::Key key{ _pipeline, rayType };
         m->programs[key] = extract(hitGroup);
     }
 
@@ -176,10 +176,10 @@ namespace optixu {
     }
 
     HitProgramGroup Material::getHitGroup(Pipeline pipeline, uint32_t rayType) const {
-        auto _pipeline = extract(pipeline);
+        _Pipeline* const _pipeline = extract(pipeline);
         m->throwRuntimeError(_pipeline, "Invalid pipeline %p.", _pipeline);
 
-        _Material::Key key{ _pipeline, rayType };
+        const _Material::Key key{ _pipeline, rayType };
         m->throwRuntimeError(
             m->programs.count(key),
             "Hit group is not set for the pipeline %s, rayType %u.",
@@ -232,9 +232,9 @@ namespace optixu {
         auto records = reinterpret_cast<uint8_t*>(hostMem);
 
         for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : geomASs) {
-            uint32_t numMatSets = gas.second->getNumMaterialSets();
+            const uint32_t numMatSets = gas.second->getNumMaterialSets();
             for (uint32_t matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
-                uint32_t numRecords = gas.second->fillSBTRecords(pipeline, matSetIdx, records);
+                const uint32_t numRecords = gas.second->fillSBTRecords(pipeline, matSetIdx, records);
                 records += numRecords * singleRecordSize;
             }
         }
@@ -250,13 +250,13 @@ namespace optixu {
                 return false;
         }
 
-        for (_Transform* tr : transforms) {
+        for (_Transform* const tr : transforms) {
             if (!tr->isReady())
                 return false;
         }
 
         *hasMotionIAS = false;
-        for (_InstanceAccelerationStructure* ias : instASs) {
+        for (_InstanceAccelerationStructure* const ias : instASs) {
             *hasMotionIAS |= ias->hasMotion();
             if (!ias->isReady())
                 return false;
@@ -349,13 +349,13 @@ namespace optixu {
         // EN: A GAS is associated to its serial ID instead of its address to make SBT layout fixed
         //     in an environment where GAS's virtual address changes run to run.
         for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : m->geomASs) {
-            uint32_t numMatSets = gas.second->getNumMaterialSets();
+            const uint32_t numMatSets = gas.second->getNumMaterialSets();
             for (uint32_t matSetIdx = 0; matSetIdx < numMatSets; ++matSetIdx) {
                 SizeAlign gasRecordSizeAlign;
                 uint32_t gasNumSBTRecords;
                 gas.second->calcSBTRequirements(matSetIdx, &gasRecordSizeAlign, &gasNumSBTRecords);
                 maxRecordSizeAlign = max(maxRecordSizeAlign, gasRecordSizeAlign);
-                _Scene::SBTOffsetKey key = { gas.first, matSetIdx };
+                const _Scene::SBTOffsetKey key = { gas.first, matSetIdx };
                 m->sbtOffsets[key] = sbtOffset;
                 sbtOffset += gasNumSBTRecords;
             }
@@ -579,8 +579,8 @@ namespace optixu {
                 "Triangle buffer must be provided if using a index format other than None, "
                 "otherwise must not be provided.");
 
-            uint32_t vertexStride = geom.vertexBuffers[0].stride();
-            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            const uint32_t vertexStride = geom.vertexBuffers[0].stride();
+            const uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -699,16 +699,16 @@ namespace optixu {
             auto &geom = std::get<CurveGeometry>(geometry);
             throwRuntimeError(geom.segmentIndexBuffer.isValid(), "Segment index buffer must be provided.");
 
-            uint32_t vertexStride = geom.vertexBuffers[0].stride();
-            uint32_t widthStride = geom.widthBuffers[0].stride();
-            bool normalBufferAvailable = geomType == GeometryType::FlatQuadraticBSplines;
+            const uint32_t vertexStride = geom.vertexBuffers[0].stride();
+            const uint32_t widthStride = geom.widthBuffers[0].stride();
+            const bool normalBufferAvailable = geomType == GeometryType::FlatQuadraticBSplines;
             bool normalBufferSet = false;
             uint32_t normalStride = 0;
             if (normalBufferAvailable) {
                 normalBufferSet = geom.normalBuffers[0].isValid();
                 normalStride = geom.normalBuffers[0].stride();
             }
-            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            const uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 geom.widthBufferArray[i] = geom.widthBuffers[i].getCUdeviceptr();
@@ -794,9 +794,9 @@ namespace optixu {
         else if (std::holds_alternative<SphereGeometry>(geometry)) {
             auto &geom = std::get<SphereGeometry>(geometry);
 
-            uint32_t centerStride = geom.centerBuffers[0].stride();
-            uint32_t radiusStride = geom.radiusBuffers[0].stride();
-            uint32_t numSpheres = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
+            const uint32_t centerStride = geom.centerBuffers[0].stride();
+            const uint32_t radiusStride = geom.radiusBuffers[0].stride();
+            const uint32_t numSpheres = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.centerBufferArray[i] = geom.centerBuffers[i].getCUdeviceptr();
                 geom.radiusBufferArray[i] = geom.radiusBuffers[i].getCUdeviceptr();
@@ -855,8 +855,8 @@ namespace optixu {
         else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
             auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
 
-            uint32_t stride = geom.primitiveAabbBuffers[0].stride();
-            uint32_t numPrimitives = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
+            const uint32_t stride = geom.primitiveAabbBuffers[0].stride();
+            const uint32_t numPrimitives = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.primitiveAabbBufferArray[i] = geom.primitiveAabbBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -904,8 +904,8 @@ namespace optixu {
         if (std::holds_alternative<TriangleGeometry>(geometry)) {
             auto &geom = std::get<TriangleGeometry>(geometry);
 
-            uint32_t vertexStride = geom.vertexBuffers[0].stride();
-            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            const uint32_t vertexStride = geom.vertexBuffers[0].stride();
+            const uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -1005,16 +1005,16 @@ namespace optixu {
         else if (std::holds_alternative<CurveGeometry>(geometry)) {
             auto &geom = std::get<CurveGeometry>(geometry);
 
-            uint32_t vertexStride = geom.vertexBuffers[0].stride();
-            uint32_t widthStride = geom.widthBuffers[0].stride();
-            bool normalBufferAvailable = geomType == GeometryType::FlatQuadraticBSplines;
+            const uint32_t vertexStride = geom.vertexBuffers[0].stride();
+            const uint32_t widthStride = geom.widthBuffers[0].stride();
+            const bool normalBufferAvailable = geomType == GeometryType::FlatQuadraticBSplines;
             bool normalBufferSet = false;
             uint32_t normalStride = 0;
             if (normalBufferAvailable) {
                 normalBufferSet = geom.normalBuffers[0].isValid();
                 normalStride = geom.normalBuffers[0].stride();
             }
-            uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
+            const uint32_t numVertices = static_cast<uint32_t>(geom.vertexBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.vertexBufferArray[i] = geom.vertexBuffers[i].getCUdeviceptr();
                 geom.widthBufferArray[i] = geom.widthBuffers[i].getCUdeviceptr();
@@ -1075,9 +1075,9 @@ namespace optixu {
         else if (std::holds_alternative<SphereGeometry>(geometry)) {
             auto &geom = std::get<SphereGeometry>(geometry);
 
-            uint32_t centerStride = geom.centerBuffers[0].stride();
-            uint32_t radiusStride = geom.radiusBuffers[0].stride();
-            uint32_t numSpheres = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
+            const uint32_t centerStride = geom.centerBuffers[0].stride();
+            const uint32_t radiusStride = geom.radiusBuffers[0].stride();
+            const uint32_t numSpheres = static_cast<uint32_t>(geom.centerBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.centerBufferArray[i] = geom.centerBuffers[i].getCUdeviceptr();
                 geom.radiusBufferArray[i] = geom.radiusBuffers[i].getCUdeviceptr();
@@ -1115,8 +1115,8 @@ namespace optixu {
         else if (std::holds_alternative<CustomPrimitiveGeometry>(geometry)) {
             auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
 
-            uint32_t stride = geom.primitiveAabbBuffers[0].stride();
-            uint32_t numPrimitives = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
+            const uint32_t stride = geom.primitiveAabbBuffers[0].stride();
+            const uint32_t numPrimitives = static_cast<uint32_t>(geom.primitiveAabbBuffers[0].numElements());
             for (uint32_t i = 0; i < numMotionSteps; ++i) {
                 geom.primitiveAabbBufferArray[i] = geom.primitiveAabbBuffers[i].getCUdeviceptr();
                 throwRuntimeError(
@@ -1157,7 +1157,7 @@ namespace optixu {
                 materials[matIdx][0],
                 "Default material (== material set 0) is not set for the slot %u.",
                 matIdx);
-            uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
+            const uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
             const _Material* mat = materials[matIdx][matSetIdx];
             if (!mat)
                 mat = materials[matIdx][0];
@@ -1177,13 +1177,13 @@ namespace optixu {
         const void* gasChildUserData, const SizeAlign &gasChildUserDataSizeAlign,
         uint32_t numRayTypes, uint8_t* records) const
     {
-        uint32_t numMaterials = static_cast<uint32_t>(materials.size());
+        const uint32_t numMaterials = static_cast<uint32_t>(materials.size());
         for (uint32_t matIdx = 0; matIdx < numMaterials; ++matIdx) {
             throwRuntimeError(
                 materials[matIdx][0],
                 "Default material (== material set 0) is not set for material %u.",
                 matIdx);
-            uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
+            const uint32_t matSetIdx = gasMatSetIdx < materials[matIdx].size() ? gasMatSetIdx : 0;
             const _Material* mat = materials[matIdx][matSetIdx];
             if (!mat)
                 mat = materials[matIdx][0];
@@ -1342,7 +1342,7 @@ namespace optixu {
         const BufferView &ommIndexBuffer,
         IndexSize indexSize, uint32_t indexOffset) const
     {
-        uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
+        const uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
         m->throwRuntimeError(
             std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
             "This geometry instance was created not for triangles.");
@@ -1383,7 +1383,7 @@ namespace optixu {
         OptixDisplacementMicromapDirectionFormat vertexDirectionFormat,
         OptixDisplacementMicromapBiasAndScaleFormat vertexBiasAndScaleFormat) const
     {
-        uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
+        const uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
         m->throwRuntimeError(
             std::holds_alternative<Priv::TriangleGeometry>(m->geometry),
             "This geometry instance was created not for triangles.");
@@ -1463,7 +1463,7 @@ namespace optixu {
     void GeometryInstance::setNumMaterials(
         uint32_t numMaterials, const BufferView &matIndexBuffer, IndexSize indexSize) const
     {
-        uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
+        const uint32_t indexSizeInBytes = 1 << static_cast<uint32_t>(indexSize);
         m->throwRuntimeError(
             !std::holds_alternative<Priv::CurveGeometry>(m->geometry),
             "Geometry instance for curves is not allowed to have multiple materials.");
@@ -1497,14 +1497,14 @@ namespace optixu {
         else {
             optixuAssert_ShouldNotBeCalled();
         }
-        uint32_t prevNumMaterials = static_cast<uint32_t>(m->materials.size());
+        const uint32_t prevNumMaterials = static_cast<uint32_t>(m->materials.size());
         m->materials.resize(numMaterials);
         for (int matIdx = prevNumMaterials; matIdx < m->materials.size(); ++matIdx)
             m->materials[matIdx].resize(1, nullptr);
     }
 
     void GeometryInstance::setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const {
-        size_t numMaterials = m->materials.size();
+        const size_t numMaterials = m->materials.size();
         m->throwRuntimeError(
             matIdx < numMaterials, "Out of material bounds [0, %u).",
             static_cast<uint32_t>(numMaterials));
@@ -1513,12 +1513,12 @@ namespace optixu {
     }
 
     void GeometryInstance::setMaterial(uint32_t matSetIdx, uint32_t matIdx, Material mat) const {
-        size_t numMaterials = m->materials.size();
+        const size_t numMaterials = m->materials.size();
         m->throwRuntimeError(
             matIdx < numMaterials, "Out of material bounds [0, %u).",
             static_cast<uint32_t>(numMaterials));
 
-        uint32_t prevNumMatSets = static_cast<uint32_t>(m->materials[matIdx].size());
+        const uint32_t prevNumMatSets = static_cast<uint32_t>(m->materials[matIdx].size());
         if (matSetIdx >= prevNumMatSets)
             m->materials[matIdx].resize(matSetIdx + 1, nullptr);
         m->materials[matIdx][matSetIdx] = extract(mat);
@@ -1730,7 +1730,7 @@ namespace optixu {
     }
 
     OptixGeometryFlags GeometryInstance::getGeometryFlags(uint32_t matIdx) const {
-        size_t numMaterials = m->materials.size();
+        const size_t numMaterials = m->materials.size();
         m->throwRuntimeError(
             matIdx < numMaterials, "Out of material bounds [0, %u).",
             static_cast<uint32_t>(numMaterials));
@@ -1738,11 +1738,11 @@ namespace optixu {
     }
 
     Material GeometryInstance::getMaterial(uint32_t matSetIdx, uint32_t matIdx) const {
-        size_t numMaterials = m->materials.size();
+        const size_t numMaterials = m->materials.size();
         m->throwRuntimeError(
             matIdx < numMaterials, "Out of material bounds [0, %u).",
             static_cast<uint32_t>(numMaterials));
-        size_t numMatSets = m->materials[matIdx].size();
+        const size_t numMatSets = m->materials[matIdx].size();
         m->throwRuntimeError(
             matSetIdx < numMatSets, "Out of material set bounds [0, %u).",
             static_cast<uint32_t>(numMatSets));
@@ -1790,11 +1790,11 @@ namespace optixu {
             "Material set index %u is out of bounds [0, %u).",
             matSetIdx, static_cast<uint32_t>(numRayTypesPerMaterialSet.size()));
 
-        uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
+        const uint32_t numRayTypes = numRayTypesPerMaterialSet[matSetIdx];
         uint32_t sumRecords = 0;
         for (uint32_t sbtGasIdx = 0; sbtGasIdx < children.size(); ++sbtGasIdx) {
             const Child &child = children[sbtGasIdx];
-            uint32_t numRecords = child.geomInst->fillSBTRecords(
+            const uint32_t numRecords = child.geomInst->fillSBTRecords(
                 pipeline, matSetIdx,
                 userData.data(), userDataSizeAlign,
                 child.userData.data(), child.userDataSizeAlign,
@@ -1865,7 +1865,7 @@ namespace optixu {
         GeometryInstance geomInst, CUdeviceptr preTransform,
         const void* data, uint32_t size, uint32_t alignment) const
     {
-        auto _geomInst = extract(geomInst);
+        _GeometryInstance* const _geomInst = extract(geomInst);
         m->throwRuntimeError(
             _geomInst,
             "Invalid geometry instance %p.",
@@ -1893,7 +1893,7 @@ namespace optixu {
         Priv::Child child;
         child.geomInst = _geomInst;
         child.preTransform = preTransform;
-        auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
+        const auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
         m->throwRuntimeError(
             idx == m->children.cend(),
             "Geometry instance %s with transform %p has been already added.",
@@ -1909,7 +1909,7 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::removeChildAt(uint32_t index) const {
-        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
         m->throwRuntimeError(
             index < numChildren,
             "Index is out of bounds [0, %u).]",
@@ -1940,7 +1940,7 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const {
-        uint32_t numMatSets = static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
+        const uint32_t numMatSets = static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
         m->throwRuntimeError(
             matSetIdx < numMatSets,
             "Material set index %u is out of bounds [0, %u).",
@@ -1953,10 +1953,10 @@ namespace optixu {
     void GeometryAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
         m->buildInputs.resize(m->children.size(), OptixBuildInput{});
         uint32_t childIdx = 0;
-        uint32_t numMotionSteps = std::max<uint32_t>(m->buildOptions.motionOptions.numKeys, 1u);
+        const uint32_t numMotionSteps = std::max<uint32_t>(m->buildOptions.motionOptions.numKeys, 1u);
         for (const Priv::Child &child : m->children) {
             child.geomInst->fillBuildInput(&m->buildInputs[childIdx++], child.preTransform);
-            uint32_t childNumMotionSteps = child.geomInst->getNumMotionSteps();
+            const uint32_t childNumMotionSteps = child.geomInst->getNumMotionSteps();
             m->throwRuntimeError(
                 childNumMotionSteps == numMotionSteps,
                 "This GAS has %u motion steps but the GeometryInstance %s has the number %u.",
@@ -1976,7 +1976,7 @@ namespace optixu {
             | (m->allowOpacityMicroMapUpdate ? OPTIX_BUILD_FLAG_ALLOW_OPACITY_MICROMAP_UPDATE : 0)
             | (m->allowDisableOpacityMicroMaps ? OPTIX_BUILD_FLAG_ALLOW_DISABLE_OPACITY_MICROMAPS : 0);
 
-        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        const uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0)
             OPTIX_CHECK(optixAccelComputeMemoryUsage(
                 m->getRawContext(), &m->buildOptions,
@@ -2002,7 +2002,7 @@ namespace optixu {
             scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
             "Size of the given scratch buffer is not enough.");
 
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         // JP: アップデートの意味でリビルドするときはprepareForBuild()を呼ばないため
         //     ビルド入力を更新する処理をここにも書いておく必要がある。
@@ -2013,7 +2013,7 @@ namespace optixu {
             child.geomInst->updateBuildInput(&m->buildInputs[childIdx++], child.preTransform);
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
-        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        const uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0) {
             OPTIX_CHECK(optixAccelBuild(
                 m->getRawContext(), stream,
@@ -2039,7 +2039,7 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::prepareForCompact(size_t* compactedAccelBufferSize) const {
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
         m->throwRuntimeError(
             compactionEnabled,
             "This AS does not allow compaction.");
@@ -2053,7 +2053,7 @@ namespace optixu {
         // JP: リビルド・アップデートの完了を待ってコンパクション後のサイズ情報を取得。
         // EN: Wait the completion of rebuild/update then obtain the size after coompaction.
         // TODO: ? stream
-        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        const uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0) {
             CUDADRV_CHECK(cuEventSynchronize(m->finishEvent));
             CUDADRV_CHECK(cuMemcpyDtoH(
@@ -2071,7 +2071,7 @@ namespace optixu {
     OptixTraversableHandle GeometryAccelerationStructure::compact(
         CUstream stream, const BufferView &compactedAccelBuffer) const
     {
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
         m->throwRuntimeError(
             compactionEnabled,
             "This AS does not allow compaction.");
@@ -2085,7 +2085,7 @@ namespace optixu {
             compactedAccelBuffer.sizeInBytes() >= m->compactedSize,
             "Size of the given buffer is not enough.");
 
-        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        const uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0) {
             OPTIX_CHECK(optixAccelCompact(
                 m->getRawContext(), stream,
@@ -2104,7 +2104,7 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::removeUncompacted() const {
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         if (!m->compactedAvailable || !compactionEnabled)
             return;
@@ -2118,7 +2118,7 @@ namespace optixu {
     }
 
     void GeometryAccelerationStructure::update(CUstream stream, const BufferView &scratchBuffer) const {
-        bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+        const bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
         m->throwRuntimeError(
             updateEnabled,
             "This AS does not allow update.");
@@ -2134,11 +2134,11 @@ namespace optixu {
             child.geomInst->updateBuildInput(&m->buildInputs[childIdx++], child.preTransform);
 
         const BufferView &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
-        OptixTraversableHandle handle = m->compactedAvailable ? m->compactedHandle : m->handle;
+        const OptixTraversableHandle handle = m->compactedAvailable ? m->compactedHandle : m->handle;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OptixTraversableHandle tempHandle = handle;
-        uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
+        const uint32_t numBuildInputs = static_cast<uint32_t>(m->buildInputs.size());
         if (numBuildInputs > 0)
             OPTIX_CHECK(optixAccelBuild(
                 m->getRawContext(), stream,
@@ -2158,7 +2158,7 @@ namespace optixu {
     void GeometryAccelerationStructure::setChildUserData(
         uint32_t index, const void* data, uint32_t size, uint32_t alignment) const
     {
-        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
         m->throwRuntimeError(
             index < numChildren,
             "Index is out of bounds [0, %u).]",
@@ -2253,7 +2253,7 @@ namespace optixu {
     uint32_t GeometryAccelerationStructure::findChildIndex(
         GeometryInstance geomInst, CUdeviceptr preTransform) const
     {
-        auto _geomInst = extract(geomInst);
+        _GeometryInstance* const _geomInst = extract(geomInst);
         m->throwRuntimeError(
             _geomInst,
             "Invalid geometry instance %p.",
@@ -2265,7 +2265,7 @@ namespace optixu {
         Priv::Child child;
         child.geomInst = _geomInst;
         child.preTransform = preTransform;
-        auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
+        const auto idx = std::find(m->children.cbegin(), m->children.cend(), child);
         if (idx == m->children.cend())
             return 0xFFFFFFFF;
 
@@ -2275,7 +2275,7 @@ namespace optixu {
     GeometryInstance GeometryAccelerationStructure::getChild(
         uint32_t index, CUdeviceptr* preTransform) const
     {
-        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
         m->throwRuntimeError(
             index < numChildren,
             "Index is out of bounds [0, %u).]",
@@ -2290,7 +2290,7 @@ namespace optixu {
     }
 
     uint32_t GeometryAccelerationStructure::getNumRayTypes(uint32_t matSetIdx) const {
-        uint32_t numMatSets = static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
+        const uint32_t numMatSets = static_cast<uint32_t>(m->numRayTypesPerMaterialSet.size());
         m->throwRuntimeError(
             matSetIdx < numMatSets,
             "Material set index %u is out of bounds [0, %u).",
@@ -2301,7 +2301,7 @@ namespace optixu {
     void GeometryAccelerationStructure::getChildUserData(
         uint32_t index, void* data, uint32_t* size, uint32_t* alignment) const
     {
-        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
         m->throwRuntimeError(
             index < numChildren,
             "Index is out of bounds [0, %u).]",
@@ -2361,9 +2361,10 @@ namespace optixu {
             m->options.numKeys = numKeys;
             m->data = new uint8_t[m->dataSize];
             std::memset(m->data, 0, m->dataSize);
-            auto motionData = reinterpret_cast<float*>(m->data + offsetof(OptixMatrixMotionTransform, transform));
+            const auto motionData = reinterpret_cast<float*>(
+                m->data + offsetof(OptixMatrixMotionTransform, transform));
             for (uint32_t i = 0; i < numKeys; ++i) {
-                float* dataPerKey = motionData + 12 * i;
+                float* const dataPerKey = motionData + 12 * i;
                 dataPerKey[0] = 1.0f; dataPerKey[1] = 0.0f; dataPerKey[2] = 0.0f; dataPerKey[3] = 0.0f;
                 dataPerKey[4] = 1.0f; dataPerKey[5] = 0.0f; dataPerKey[6] = 0.0f; dataPerKey[7] = 0.0f;
                 dataPerKey[8] = 1.0f; dataPerKey[9] = 0.0f; dataPerKey[10] = 0.0f; dataPerKey[11] = 0.0f;
@@ -2375,10 +2376,10 @@ namespace optixu {
             m->options.numKeys = numKeys;
             m->data = new uint8_t[m->dataSize];
             std::memset(m->data, 0, m->dataSize);
-            auto motionData = reinterpret_cast<OptixSRTData*>(
+            const auto motionData = reinterpret_cast<OptixSRTData*>(
                 m->data + offsetof(OptixSRTMotionTransform, srtData));
             for (uint32_t i = 0; i < numKeys; ++i) {
-                OptixSRTData* dataPerKey = motionData + i;
+                OptixSRTData* const dataPerKey = motionData + i;
                 dataPerKey->sx = dataPerKey->sy = dataPerKey->sz = 1.0f;
                 dataPerKey->a = dataPerKey->b = dataPerKey->c = 0.0f;
                 dataPerKey->pvx = dataPerKey->pvy = dataPerKey->pvz = 0.0f;
@@ -2391,7 +2392,7 @@ namespace optixu {
             m->dataSize = sizeof(OptixStaticTransform);
             m->data = new uint8_t[m->dataSize];
             std::memset(m->data, 0, m->dataSize);
-            auto xfm = reinterpret_cast<OptixStaticTransform*>(m->data);
+            const auto xfm = reinterpret_cast<OptixStaticTransform*>(m->data);
             xfm->transform[0] = 1.0f; xfm->transform[1] = 0.0f; xfm->transform[2] = 0.0f; xfm->transform[3] = 0.0f;
             xfm->transform[4] = 1.0f; xfm->transform[5] = 0.0f; xfm->transform[6] = 0.0f; xfm->transform[7] = 0.0f;
             xfm->transform[8] = 1.0f; xfm->transform[9] = 0.0f; xfm->transform[10] = 0.0f; xfm->transform[11] = 0.0f;
@@ -2423,9 +2424,9 @@ namespace optixu {
         m->throwRuntimeError(
             keyIdx <= m->options.numKeys,
             "Number of motion keys was set to %u", m->options.numKeys);
-        auto motionData = reinterpret_cast<float*>(
+        const auto motionData = reinterpret_cast<float*>(
             m->data + offsetof(OptixMatrixMotionTransform, transform));
-        float* dataPerKey = motionData + 12 * keyIdx;
+        float* const dataPerKey = motionData + 12 * keyIdx;
 
         std::copy_n(matrix, 12, dataPerKey);
 
@@ -2442,9 +2443,9 @@ namespace optixu {
         m->throwRuntimeError(
             keyIdx <= m->options.numKeys,
             "Number of motion keys was set to %u", m->options.numKeys);
-        auto motionData = reinterpret_cast<OptixSRTData*>(
+        const auto motionData = reinterpret_cast<OptixSRTData*>(
             m->data + offsetof(OptixSRTMotionTransform, srtData));
-        OptixSRTData* dataPerKey = motionData + keyIdx;
+        OptixSRTData* const dataPerKey = motionData + keyIdx;
 
         dataPerKey->sx = scale[0];
         dataPerKey->sy = scale[1];
@@ -2469,7 +2470,7 @@ namespace optixu {
                                matrix[ 0] * matrix[ 6] * matrix[ 9]);
         m->throwRuntimeError(invDet != 0.0f, "Given matrix is not invertible.");
 
-        auto xfm = reinterpret_cast<OptixStaticTransform*>(m->data);
+        const auto xfm = reinterpret_cast<OptixStaticTransform*>(m->data);
 
         std::copy_n(matrix, 12, xfm->transform);
 
@@ -2492,7 +2493,7 @@ namespace optixu {
     }
 
     void Transform::setChild(GeometryAccelerationStructure child) const {
-        auto _child = extract(child);
+        _GeometryAccelerationStructure* const _child = extract(child);
         m->throwRuntimeError(
             _child,
             "Invalid GAS %p.",
@@ -2507,7 +2508,7 @@ namespace optixu {
     }
 
     void Transform::setChild(InstanceAccelerationStructure child) const {
-        auto _child = extract(child);
+        _InstanceAccelerationStructure* const _child = extract(child);
         m->throwRuntimeError(
             _child,
             "Invalid IAS %p.",
@@ -2522,7 +2523,7 @@ namespace optixu {
     }
 
     void Transform::setChild(Transform child) const {
-        auto _child = extract(child);
+        _Transform* const _child = extract(child);
         m->throwRuntimeError(
             _child,
             "Invalid transform %p.",
@@ -2563,19 +2564,19 @@ namespace optixu {
 
         OptixTraversableType travType;
         if (m->type == TransformType::MatrixMotion) {
-            auto tr = reinterpret_cast<OptixMatrixMotionTransform*>(m->data);
+            const auto tr = reinterpret_cast<OptixMatrixMotionTransform*>(m->data);
             tr->child = childHandle;
             tr->motionOptions = m->options;
             travType = OPTIX_TRAVERSABLE_TYPE_MATRIX_MOTION_TRANSFORM;
         }
         else if (m->type == TransformType::SRTMotion) {
-            auto tr = reinterpret_cast<OptixSRTMotionTransform*>(m->data);
+            const auto tr = reinterpret_cast<OptixSRTMotionTransform*>(m->data);
             tr->child = childHandle;
             tr->motionOptions = m->options;
             travType = OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM;
         }
         else if (m->type == TransformType::Static) {
-            auto tr = reinterpret_cast<OptixStaticTransform*>(m->data);
+            const auto tr = reinterpret_cast<OptixStaticTransform*>(m->data);
             tr->child = childHandle;
             travType = OPTIX_TRAVERSABLE_TYPE_STATIC_TRANSFORM;
         }
@@ -2625,9 +2626,9 @@ namespace optixu {
             keyIdx <= m->options.numKeys,
             "Number of motion keys was set to %u",
             m->options.numKeys);
-        auto motionData = reinterpret_cast<const float*>(
+        const auto motionData = reinterpret_cast<const float*>(
             m->data + offsetof(OptixMatrixMotionTransform, transform));
-        const float* dataPerKey = motionData + 12 * keyIdx;
+        const float* const dataPerKey = motionData + 12 * keyIdx;
 
         std::copy_n(dataPerKey, 12, matrix);
     }
@@ -2642,9 +2643,9 @@ namespace optixu {
             keyIdx <= m->options.numKeys,
             "Number of motion keys was set to %u",
             m->options.numKeys);
-        auto motionData = reinterpret_cast<const OptixSRTData*>(
+        const auto motionData = reinterpret_cast<const OptixSRTData*>(
             m->data + offsetof(OptixSRTMotionTransform, srtData));
-        const OptixSRTData* dataPerKey = motionData + keyIdx;
+        const OptixSRTData* const dataPerKey = motionData + keyIdx;
 
         scale[0] = dataPerKey->sx;
         scale[1] = dataPerKey->sy;
@@ -2658,7 +2659,7 @@ namespace optixu {
             m->type == TransformType::Static,
             "This transform has been configured as static transform.");
 
-        auto xfm = reinterpret_cast<const OptixStaticTransform*>(m->data);
+        const auto xfm = reinterpret_cast<const OptixStaticTransform*>(m->data);
 
         std::copy_n(xfm->transform, 12, matrix);
     }
@@ -2694,22 +2695,22 @@ namespace optixu {
         instance->instanceId = id;
 
         if (std::holds_alternative<_GeometryAccelerationStructure*>(child)) {
-            auto gas = std::get<_GeometryAccelerationStructure*>(child);
+            const auto gas = std::get<_GeometryAccelerationStructure*>(child);
             throwRuntimeError(gas->isReady(), "GAS %s is not ready.", gas->getName().c_str());
             instance->traversableHandle = gas->getHandle();
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
-            auto ias = std::get<_InstanceAccelerationStructure*>(child);
+            const auto ias = std::get<_InstanceAccelerationStructure*>(child);
             throwRuntimeError(ias->isReady(), "IAS %s is not ready.", ias->getName().c_str());
             instance->traversableHandle = ias->getHandle();
             instance->sbtOffset = 0;
         }
         else if (std::holds_alternative<_Transform*>(child)) {
-            auto xfm = std::get<_Transform*>(child);
+            const auto xfm = std::get<_Transform*>(child);
             throwRuntimeError(xfm->isReady(), "Transform %s is not ready.", xfm->getName().c_str());
             instance->traversableHandle = xfm->getHandle();
-            _GeometryAccelerationStructure* desGas = xfm->getDescendantGAS();
+            _GeometryAccelerationStructure* const desGas = xfm->getDescendantGAS();
             if (desGas)
                 instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
             else
@@ -2728,19 +2729,19 @@ namespace optixu {
         instance->instanceId = id;
 
         if (std::holds_alternative<_GeometryAccelerationStructure*>(child)) {
-            auto gas = std::get<_GeometryAccelerationStructure*>(child);
+            const auto gas = std::get<_GeometryAccelerationStructure*>(child);
             throwRuntimeError(gas->isReady(), "GAS %s is not ready.", gas->getName().c_str());
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
-            auto ias = std::get<_InstanceAccelerationStructure*>(child);
+            const auto ias = std::get<_InstanceAccelerationStructure*>(child);
             throwRuntimeError(ias->isReady(), "IAS %s is not ready.", ias->getName().c_str());
             instance->sbtOffset = 0;
         }
         else if (std::holds_alternative<_Transform*>(child)) {
-            auto xfm = std::get<_Transform*>(child);
+            const auto xfm = std::get<_Transform*>(child);
             throwRuntimeError(xfm->isReady(), "Transform %s is not ready.", xfm->getName().c_str());
-            _GeometryAccelerationStructure* desGas = xfm->getDescendantGAS();
+            _GeometryAccelerationStructure* const desGas = xfm->getDescendantGAS();
             if (desGas)
                 instance->sbtOffset = scene->getSBTOffset(desGas, matSetIndex);
             else
@@ -2773,7 +2774,7 @@ namespace optixu {
     }
 
     void Instance::setChild(GeometryAccelerationStructure child, uint32_t matSetIdx) const {
-        auto _child = extract(child);
+        _GeometryAccelerationStructure* const _child = extract(child);
         m->throwRuntimeError(
             _child,
             "Invalid GAS %p.",
@@ -2787,7 +2788,7 @@ namespace optixu {
     }
 
     void Instance::setChild(InstanceAccelerationStructure child) const {
-        auto _child = extract(child);
+        _InstanceAccelerationStructure* const _child = extract(child);
         m->throwRuntimeError(
             _child,
             "Invalid IAS %p.",
@@ -2801,7 +2802,7 @@ namespace optixu {
     }
 
     void Instance::setChild(Transform child, uint32_t matSetIdx) const {
-        auto _child = extract(child);
+        _Transform* const _child = extract(child);
         m->throwRuntimeError(
             _child,
             "Invalid transform %p.",
@@ -2819,7 +2820,7 @@ namespace optixu {
     }
 
     void Instance::setID(uint32_t value) const {
-        uint32_t maxInstanceID = m->scene->getContext()->getMaxInstanceID();
+        const uint32_t maxInstanceID = m->scene->getContext()->getMaxInstanceID();
         m->throwRuntimeError(
             value <= maxInstanceID,
             "Max instance ID value is 0x%08x.",
@@ -2828,7 +2829,7 @@ namespace optixu {
     }
 
     void Instance::setVisibilityMask(uint32_t mask) const {
-        uint32_t numVisibilityMaskBits = m->scene->getContext()->getNumVisibilityMaskBits();
+        const uint32_t numVisibilityMaskBits = m->scene->getContext()->getNumVisibilityMaskBits();
         m->throwRuntimeError(
             (mask >> numVisibilityMaskBits) == 0,
             "Number of visibility mask bits is %u.",
@@ -2932,7 +2933,7 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::addChild(Instance instance) const {
-        _Instance* _inst = extract(instance);
+        _Instance* const _inst = extract(instance);
         m->throwRuntimeError(
             _inst,
             "Invalid instance %p.");
@@ -2940,7 +2941,7 @@ namespace optixu {
             _inst->getScene() == m->scene,
             "Scene mismatch for the given instance %s.",
             _inst->getName().c_str());
-        auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
+        const auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
         m->throwRuntimeError(
             idx == m->children.cend(),
             "Instance %s has been already added.",
@@ -2952,7 +2953,7 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::removeChildAt(uint32_t index) const {
-        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
         m->throwRuntimeError(
             index < numChildren,
             "Index is out of bounds [0, %u).]",
@@ -3034,7 +3035,7 @@ namespace optixu {
             stream));
         m->buildInput.instanceArray.instances = m->children.size() > 0 ? instanceBuffer.getCUdeviceptr() : 0;
 
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
         OPTIX_CHECK(optixAccelBuild(
@@ -3057,7 +3058,7 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::prepareForCompact(size_t* compactedAccelBufferSize) const {
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
         m->throwRuntimeError(compactionEnabled, "This AS does not allow compaction.");
         m->throwRuntimeError(m->available, "Uncompacted AS has not been built yet.");
 
@@ -3079,7 +3080,7 @@ namespace optixu {
     OptixTraversableHandle InstanceAccelerationStructure::compact(
         CUstream stream, const BufferView &compactedAccelBuffer) const
     {
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
         m->throwRuntimeError(
             compactionEnabled,
             "This AS does not allow compaction.");
@@ -3106,7 +3107,7 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::removeUncompacted() const {
-        bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
+        const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
 
         if (!m->compactedAvailable || !compactionEnabled)
             return;
@@ -3118,7 +3119,7 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::update(CUstream stream, const BufferView &scratchBuffer) const {
-        bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
+        const bool updateEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_UPDATE) != 0;
         m->throwRuntimeError(
             updateEnabled,
             "This AS does not allow update.");
@@ -3138,7 +3139,7 @@ namespace optixu {
             stream));
 
         const BufferView &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
-        OptixTraversableHandle handle = m->compactedAvailable ? m->compactedHandle : m->handle;
+        const OptixTraversableHandle handle = m->compactedAvailable ? m->compactedHandle : m->handle;
 
         m->buildOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
         OptixTraversableHandle tempHandle = handle;
@@ -3206,7 +3207,7 @@ namespace optixu {
             _inst->getScene() == m->scene,
             "Scene mismatch for the given instance %s.",
             _inst->getName().c_str());
-        auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
+        const auto idx = std::find(m->children.cbegin(), m->children.cend(), _inst);
         if (idx == m->children.cend())
             return 0xFFFFFFFF;
 
@@ -3214,7 +3215,7 @@ namespace optixu {
     }
 
     Instance InstanceAccelerationStructure::getChild(uint32_t index) const {
-        uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+        const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
         m->throwRuntimeError(
             index < numChildren,
             "Index is out of bounds [0, %u).]",
@@ -3287,7 +3288,7 @@ namespace optixu {
             primType != OPTIX_PRIMITIVE_TYPE_SPHERE)
             return nullptr;
 
-        KeyForBuiltinISModule key{ primType, endcapFlags, OPTIX_BUILD_FLAG_NONE };
+        const KeyForBuiltinISModule key{ primType, endcapFlags, OPTIX_BUILD_FLAG_NONE };
         if (modulesForBuiltinIS.count(key) == 0) {
             OptixModuleCompileOptions moduleCompileOptions = {};
             moduleCompileOptions.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
@@ -3370,19 +3371,19 @@ namespace optixu {
             for (uint32_t i = 0; i < numCallablePrograms; ++i)
                 throwRuntimeError(currentCallablePrograms[i], "Callable program is not set for index %d.", i);
 
-            auto records = reinterpret_cast<uint8_t*>(sbtHostMem);
+            const auto records = reinterpret_cast<uint8_t*>(sbtHostMem);
             size_t offset = 0;
 
-            size_t rayGenRecordOffset = offset;
+            const size_t rayGenRecordOffset = offset;
             currentRayGenProgram->packHeader(records + offset);
             offset += OPTIX_SBT_RECORD_HEADER_SIZE;
 
-            size_t exceptionRecordOffset = offset;
+            const size_t exceptionRecordOffset = offset;
             if (currentExceptionProgram)
                 currentExceptionProgram->packHeader(records + offset);
             offset += OPTIX_SBT_RECORD_HEADER_SIZE;
 
-            CUdeviceptr missRecordOffset = offset;
+            const CUdeviceptr missRecordOffset = offset;
             for (uint32_t i = 0; i < numMissRayTypes; ++i) {
                 currentMissPrograms[i]->packHeader(records + offset);
                 offset += OPTIX_SBT_RECORD_HEADER_SIZE;
@@ -3390,9 +3391,9 @@ namespace optixu {
 
             hasActiveDirectCallable = false;
             hasActiveContinuationCallable = false;
-            CUdeviceptr callableRecordOffset = offset;
+            const CUdeviceptr callableRecordOffset = offset;
             for (uint32_t i = 0; i < numCallablePrograms; ++i) {
-                _CallableProgramGroup* callable = currentCallablePrograms[i];
+                _CallableProgramGroup* const callable = currentCallablePrograms[i];
                 callable->packHeader(records + offset);
                 uint32_t stackSizeDC, stackSizeCC;
                 callable->getStackSizes(&stackSizeDC, &stackSizeCC);
@@ -3403,7 +3404,7 @@ namespace optixu {
 
             CUDADRV_CHECK(cuMemcpyHtoDAsync(sbt.getCUdeviceptr(), sbtHostMem, sbt.sizeInBytes(), stream));
 
-            CUdeviceptr baseAddress = sbt.getCUdeviceptr();
+            const CUdeviceptr baseAddress = sbt.getCUdeviceptr();
             sbtParams.raygenRecord = baseAddress + rayGenRecordOffset;
             sbtParams.exceptionRecord = currentExceptionProgram ? baseAddress + exceptionRecordOffset : 0;
             sbtParams.missRecordBase = baseAddress + missRecordOffset;
@@ -3490,7 +3491,7 @@ namespace optixu {
     }
 
     Program Pipeline::createRayGenProgram(Module module, const char* entryFunctionName) const {
-        _Module* _module = extract(module);
+        _Module* const _module = extract(module);
         m->throwRuntimeError(
             _module && entryFunctionName,
             "Either of RayGen module or entry function name is not provided.");
@@ -3509,14 +3510,14 @@ namespace optixu {
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto program = new _Program(m, group, desc.kind);
+        const auto program = new _Program(m, group, desc.kind);
         m->programs.insert(program);
 
         return program->getPublicType();
     }
 
     Program Pipeline::createExceptionProgram(Module module, const char* entryFunctionName) const {
-        _Module* _module = extract(module);
+        _Module* const _module = extract(module);
         m->throwRuntimeError(
             _module && entryFunctionName,
             "Either of Exception module or entry function name is not provided.");
@@ -3535,7 +3536,7 @@ namespace optixu {
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto program = new _Program(m, group, desc.kind);
+        const auto program = new _Program(m, group, desc.kind);
         m->programs.insert(program);
 
         return program->getPublicType();
@@ -3545,7 +3546,7 @@ namespace optixu {
         Module module, const char* entryFunctionName,
         const PayloadType &payloadType) const
     {
-        _Module* _module = extract(module);
+        _Module* const _module = extract(module);
         m->throwRuntimeError(
             (_module != nullptr) == (entryFunctionName != nullptr),
             "Either of Miss module or entry function name is not provided.");
@@ -3562,14 +3563,14 @@ namespace optixu {
         desc.miss.entryFunctionName = entryFunctionName;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        const OptixPayloadType optixPayloadType = payloadType.getRawType();
         if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
 
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto program = new _Program(m, group, desc.kind);
+        const auto program = new _Program(m, group, desc.kind);
         m->programs.insert(program);
 
         return program->getPublicType();
@@ -3580,8 +3581,8 @@ namespace optixu {
         Module module_AH, const char* entryFunctionNameAH,
         const PayloadType &payloadType) const
     {
-        _Module* _module_CH = extract(module_CH);
-        _Module* _module_AH = extract(module_AH);
+        _Module* const _module_CH = extract(module_CH);
+        _Module* const _module_AH = extract(module_AH);
         m->throwRuntimeError(
             (_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
             "Either of CH module or entry function name is not provided.");
@@ -3614,14 +3615,14 @@ namespace optixu {
         }
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        const OptixPayloadType optixPayloadType = payloadType.getRawType();
         if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
 
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto hitGroup = new _HitProgramGroup(m, group);
+        const auto hitGroup = new _HitProgramGroup(m, group);
         m->hitProgramGroups.insert(hitGroup);
 
         return hitGroup->getPublicType();
@@ -3643,8 +3644,8 @@ namespace optixu {
             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
             curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER,
             "This is a hit program group for curves.");
-        _Module* _module_CH = extract(module_CH);
-        _Module* _module_AH = extract(module_AH);
+        _Module* const _module_CH = extract(module_CH);
+        _Module* const _module_AH = extract(module_AH);
         m->throwRuntimeError(
             (_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
             "Either of CH module or entry function name is not provided.");
@@ -3681,14 +3682,14 @@ namespace optixu {
         desc.hitgroup.entryFunctionNameIS = nullptr;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        const OptixPayloadType optixPayloadType = payloadType.getRawType();
         if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
 
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto hitGroup = new _HitProgramGroup(m, group);
+        const auto hitGroup = new _HitProgramGroup(m, group);
         m->hitProgramGroups.insert(hitGroup);
 
         return hitGroup->getPublicType();
@@ -3701,8 +3702,8 @@ namespace optixu {
         AllowRandomVertexAccess allowRandomVertexAccess,
         const PayloadType &payloadType) const
     {
-        _Module* _module_CH = extract(module_CH);
-        _Module* _module_AH = extract(module_AH);
+        _Module* const _module_CH = extract(module_CH);
+        _Module* const _module_AH = extract(module_AH);
         m->throwRuntimeError(
             (_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
             "Either of CH module or entry function name is not provided.");
@@ -3739,14 +3740,14 @@ namespace optixu {
         desc.hitgroup.entryFunctionNameIS = nullptr;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        const OptixPayloadType optixPayloadType = payloadType.getRawType();
         if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
 
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto hitGroup = new _HitProgramGroup(m, group);
+        const auto hitGroup = new _HitProgramGroup(m, group);
         m->hitProgramGroups.insert(hitGroup);
 
         return hitGroup->getPublicType();
@@ -3758,9 +3759,9 @@ namespace optixu {
         Module module_IS, const char* entryFunctionNameIS,
         const PayloadType &payloadType) const
     {
-        _Module* _module_CH = extract(module_CH);
-        _Module* _module_AH = extract(module_AH);
-        _Module* _module_IS = extract(module_IS);
+        _Module* const _module_CH = extract(module_CH);
+        _Module* const _module_AH = extract(module_AH);
+        _Module* const _module_IS = extract(module_IS);
         m->throwRuntimeError(
             (_module_CH != nullptr) == (entryFunctionNameCH != nullptr),
             "Either of CH module or entry function name is not provided.");
@@ -3802,14 +3803,14 @@ namespace optixu {
         desc.hitgroup.entryFunctionNameIS = entryFunctionNameIS;
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        const OptixPayloadType optixPayloadType = payloadType.getRawType();
         if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
 
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto hitGroup = new _HitProgramGroup(m, group);
+        const auto hitGroup = new _HitProgramGroup(m, group);
         m->hitProgramGroups.insert(hitGroup);
 
         return hitGroup->getPublicType();
@@ -3823,7 +3824,7 @@ namespace optixu {
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto hitGroup = new _HitProgramGroup(m, group);
+        const auto hitGroup = new _HitProgramGroup(m, group);
         m->hitProgramGroups.insert(hitGroup);
 
         return hitGroup->getPublicType();
@@ -3834,8 +3835,8 @@ namespace optixu {
         Module module_CC, const char* entryFunctionNameCC,
         const PayloadType &payloadType) const
     {
-        _Module* _module_DC = extract(module_DC);
-        _Module* _module_CC = extract(module_CC);
+        _Module* const _module_DC = extract(module_DC);
+        _Module* const _module_CC = extract(module_CC);
         m->throwRuntimeError(
             (_module_DC != nullptr) == (entryFunctionNameDC != nullptr),
             "Either of DC module or entry function name is not provided.");
@@ -3868,14 +3869,14 @@ namespace optixu {
         }
 
         OptixProgramGroupOptions options = {};
-        OptixPayloadType optixPayloadType = payloadType.getRawType();
+        const OptixPayloadType optixPayloadType = payloadType.getRawType();
         if (payloadType.numDwords > 0)
             options.payloadType = &optixPayloadType;
 
         OptixProgramGroup group;
         m->createProgramGroup(desc, options, &group);
 
-        auto callableGroup = new _CallableProgramGroup(m, group);
+        const auto callableGroup = new _CallableProgramGroup(m, group);
         m->callableProgramGroups.insert(callableGroup);
 
         return callableGroup->getPublicType();
@@ -3956,7 +3957,7 @@ namespace optixu {
     }
 
     void Pipeline::setRayGenerationProgram(Program program) const {
-        _Program* _program = extract(program);
+        _Program* const _program = extract(program);
         m->throwRuntimeError(
             _program, "Invalid program %p.", _program);
         m->throwRuntimeError(
@@ -3969,7 +3970,7 @@ namespace optixu {
     }
 
     void Pipeline::setExceptionProgram(Program program) const {
-        _Program* _program = extract(program);
+        _Program* const _program = extract(program);
         m->throwRuntimeError(
             _program,
             "Invalid program %p.",
@@ -3984,7 +3985,7 @@ namespace optixu {
     }
 
     void Pipeline::setMissProgram(uint32_t rayType, Program program) const {
-        _Program* _program = extract(program);
+        _Program* const _program = extract(program);
         m->throwRuntimeError(
             rayType < m->numMissRayTypes,
             "Invalid ray type.");
@@ -4002,7 +4003,7 @@ namespace optixu {
     }
 
     void Pipeline::setCallableProgram(uint32_t index, CallableProgramGroup program) const {
-        _CallableProgramGroup* _program = extract(program);
+        _CallableProgramGroup* const _program = extract(program);
         m->throwRuntimeError(
             index < m->numCallablePrograms,
             "Invalid callable program index.");
@@ -4242,7 +4243,7 @@ namespace optixu {
     void DenoisingTask::getOutputTile(
         int32_t* offsetX, int32_t* offsetY, int32_t* width, int32_t* height) const
     {
-        _DenoisingTask _task(*this);
+        const _DenoisingTask _task(*this);
         *offsetX = _task.outputOffsetX;
         *offsetY = _task.outputOffsetY;
         *width = _task.outputWidth;
@@ -4437,14 +4438,14 @@ namespace optixu {
         const BufferView &denoisedBeauty, const BufferView* denoisedAovs,
         const BufferView &internalGuideLayerForNextFrame) const
     {
-        bool isTemporal =
+        const bool isTemporal =
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL ||
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
-        bool performUpscale =
+        const bool performUpscale =
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
-        bool requireInternalGuideLayer =
+        const bool requireInternalGuideLayer =
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
             m->modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
         m->throwRuntimeError(
@@ -4504,15 +4505,15 @@ namespace optixu {
         params.blendFactor = blendFactor;
         params.temporalModeUsePreviousLayers = !isFirstFrame;
 
-        _DenoisingTask _task(task);
+        const _DenoisingTask _task(task);
 
         const auto setUpInputLayer = [&]
         (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
-            uint32_t pixelStride = getPixelSize(format);
+            const uint32_t pixelStride = getPixelSize(format);
             *layer = {};
             layer->rowStrideInBytes = m->imageWidth * pixelStride;
             layer->pixelStrideInBytes = pixelStride;
-            uintptr_t addressOffset =
+            const uintptr_t addressOffset =
                 _task.inputOffsetY * layer->rowStrideInBytes +
                 _task.inputOffsetX * pixelStride;
             layer->data = baseAddress + addressOffset;
@@ -4522,14 +4523,14 @@ namespace optixu {
         };
         const auto setUpOutputLayer = [&]
         (OptixPixelFormat format, CUdeviceptr baseAddress, OptixImage2D* layer) {
-            uint32_t scale = performUpscale ? 2 : 1;
-            uint32_t pixelStride = format == OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER ?
+            const uint32_t scale = performUpscale ? 2 : 1;
+            const uint32_t pixelStride = format == OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER ?
                 static_cast<uint32_t>(m->sizes.internalGuideLayerPixelSize) :
                 getPixelSize(format);
             *layer = {};
             layer->rowStrideInBytes = scale * m->imageWidth * pixelStride;
             layer->pixelStrideInBytes = pixelStride;
-            uintptr_t addressOffset =
+            const uintptr_t addressOffset =
                 scale * _task.outputOffsetY * layer->rowStrideInBytes +
                 scale * _task.outputOffsetX * pixelStride;
             layer->data = baseAddress + addressOffset;
@@ -4602,8 +4603,8 @@ namespace optixu {
             denoiserLayer.type = layerInfo.aovType;
         }
 
-        int32_t offsetXInWorkingTile = _task.outputOffsetX - _task.inputOffsetX;
-        int32_t offsetYInWorkingTile = _task.outputOffsetY - _task.inputOffsetY;
+        const int32_t offsetXInWorkingTile = _task.outputOffsetX - _task.inputOffsetX;
+        const int32_t offsetYInWorkingTile = _task.outputOffsetY - _task.inputOffsetY;
         OPTIX_CHECK(optixDenoiserInvoke(
             m->rawDenoiser, stream,
             &params,
