@@ -175,7 +175,7 @@ namespace cudau {
         m_GLBufferID = glBufferID;
         m_cudaGfxResource = nullptr;
 
-        size_t size = m_numElements * m_stride;
+        const size_t size = m_numElements * m_stride;
 
         if (m_type == BufferType::Device) {
             CUDADRV_CHECK(cuMemAlloc(&m_devicePointer, size));
@@ -261,14 +261,14 @@ namespace cudau {
         newBuffer.initialize(m_cuContext, m_type, numElements, stride, m_GLBufferID);
         newBuffer.setMappedMemoryPersistent(m_persistentMappedMemory);
 
-        size_t numElementsToCopy = std::min(m_numElements, numElements);
+        const size_t numElementsToCopy = std::min(m_numElements, numElements);
         if (stride == m_stride) {
-            size_t numBytesToCopy = numElementsToCopy * m_stride;
+            const size_t numBytesToCopy = numElementsToCopy * m_stride;
             CUDADRV_CHECK(cuMemcpyDtoDAsync(newBuffer.m_devicePointer, m_devicePointer, numBytesToCopy, stream));
         }
         else {
-            auto src = map<const uint8_t>(stream, BufferMapFlag::ReadOnly);
-            auto dst = newBuffer.map<uint8_t>(stream, BufferMapFlag::WriteOnlyDiscard);
+            const auto src = map<const uint8_t>(stream, BufferMapFlag::ReadOnly);
+            const auto dst = newBuffer.map<uint8_t>(stream, BufferMapFlag::WriteOnlyDiscard);
             for (size_t i = 0; i < numElementsToCopy; ++i) {
                 std::memset(dst, 0, stride);
                 std::memcpy(dst, src, m_stride);
@@ -308,7 +308,7 @@ namespace cudau {
         m_persistentMappedMemory = b;
         if (m_mapFlag == BufferMapFlag::Unmapped) {
             if (m_persistentMappedMemory) {
-                size_t size = m_numElements * m_stride;
+                const size_t size = m_numElements * m_stride;
                 m_mappedPointer = allocHostMem(size);
             }
             else {
@@ -328,7 +328,7 @@ namespace cudau {
             m_type == BufferType::GL_Interop) {
             CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
-            size_t size = m_numElements * m_stride;
+            const size_t size = m_numElements * m_stride;
             if (!m_persistentMappedMemory)
                 m_mappedPointer = allocHostMem(size);
 
@@ -359,7 +359,7 @@ namespace cudau {
             m_type == BufferType::GL_Interop) {
             CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
-            size_t size = m_numElements * m_stride;
+            const size_t size = m_numElements * m_stride;
 
             if (m_mapFlag != BufferMapFlag::ReadOnly)
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(m_devicePointer, m_mappedPointer, size, stream));
@@ -382,7 +382,7 @@ namespace cudau {
         ret.initialize(m_cuContext, m_type, m_numElements, m_stride, m_GLBufferID);
         ret.setMappedMemoryPersistent(m_persistentMappedMemory);
 
-        size_t size = m_numElements * m_stride;
+        const size_t size = m_numElements * m_stride;
         if (m_type == BufferType::Device) {
             CUDADRV_CHECK(cuCtxSetCurrent(m_cuContext));
 
@@ -853,7 +853,7 @@ namespace cudau {
             copyHeight = (copyHeight + 3) / 4;
         }
 
-        size_t sizePerRow = copyWidth * m_stride;
+        const size_t sizePerRow = copyWidth * m_stride;
 
         CUDA_MEMCPY3D params = {};
         params.WidthInBytes = sizePerRow;
@@ -915,7 +915,7 @@ namespace cudau {
         size_t bw;
         size_t bh;
         computeDimensionsOfLevel(mipmapLevel, &bw, &bh);
-        size_t size = std::max<size_t>(1, m_depth) * bh * bw * m_stride;
+        const size_t size = std::max<size_t>(1, m_depth) * bh * bw * m_stride;
 
         m_mappedPointers[mipmapLevel] = allocHostMem(size);
         m_mapFlags[mipmapLevel] = flag;
@@ -942,7 +942,7 @@ namespace cudau {
             size_t bw;
             size_t bh;
             computeDimensionsOfLevel(mipmapLevel, &bw, &bh);
-            size_t size = std::max<size_t>(1, m_depth) * bh * bw * m_stride;
+            const size_t size = std::max<size_t>(1, m_depth) * bh * bw * m_stride;
 
             write(reinterpret_cast<uint8_t*>(m_mappedPointers[mipmapLevel]), size, mipmapLevel, stream);
         }

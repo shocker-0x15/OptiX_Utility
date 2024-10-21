@@ -614,7 +614,7 @@ namespace optixu {
             uint32_t offset = 0;
             for (uint32_t varIdx = 0; varIdx < BaseSignature::numParameters; ++varIdx) {
                 const uint32_t sizeInDwords = BaseSignature::sizesInDwords[varIdx];
-                OptixPayloadSemantics varSem = semantics[varIdx];
+                const OptixPayloadSemantics varSem = semantics[varIdx];
                 for (uint32_t dwIdx = 0; dwIdx < sizeInDwords; ++dwIdx)
                     ret.semantics[offset + dwIdx] = varSem;
                 offset += sizeInDwords;
