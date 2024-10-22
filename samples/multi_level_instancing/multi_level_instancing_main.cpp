@@ -79,16 +79,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setNumMissRayTypes(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
-    uint32_t dcStackSizeFromTrav = 0; // This sample doesn't call a direct callable during traversal.
-    uint32_t dcStackSizeFromState = 0;
-    // Possible Program Paths:
-    // RG - CH
-    // RG - MS
-    uint32_t ccStackSize = rayGenProgram.getStackSize() +
-        std::max(hitProgramGroup.getCHStackSize(), missProgram.getStackSize());
-    // The deepest path: IAS - IAS - SRTXfm - GAS
-    uint32_t maxTraversableGraphDepth = 4;
-    pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, maxTraversableGraphDepth);
+    // JP: このプログラムは深いトラバーサルグラフを使用するため明示的な設定が必要。
+    // EN: This program uses a deep traversal graph depth, therefore requires explicit configuration.
+    {
+        // No direct callable programs at all.
+        uint32_t dcStackSizeFromTrav = 0;
+        uint32_t dcStackSizeFromState = 0;
+
+        // Possible Program Paths:
+        // RG - CH
+        // RG - MS
+        uint32_t ccStackSize = rayGenProgram.getStackSize() +
+            std::max(hitProgramGroup.getCHStackSize(), missProgram.getStackSize());
+        // The deepest path: IAS - IAS - SRTXfm - GAS
+        uint32_t maxTraversableGraphDepth = 4;
+        pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, maxTraversableGraphDepth);
+    }
 
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
