@@ -440,12 +440,12 @@ namespace optixu {
 
     namespace detail {
         template <typename T>
-        RT_DEVICE_FUNCTION constexpr size_t getNumDwords() {
+        RT_DEVICE_FUNCTION RT_INLINE constexpr size_t getNumDwords() {
             return (sizeof(T) + 3) / 4;
         }
 
         template <typename... Types>
-        RT_DEVICE_FUNCTION constexpr size_t calcSumDwords() {
+        RT_DEVICE_FUNCTION RT_INLINE constexpr size_t calcSumDwords() {
             return (0 + ... + getNumDwords<Types>());
         }
     }
@@ -485,12 +485,12 @@ namespace optixu {
         uint32_t m_sbtIndex;
 
     public:
-        RT_COMMON_FUNCTION DirectCallableProgramID() {}
-        RT_COMMON_FUNCTION explicit DirectCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
-        RT_COMMON_FUNCTION explicit operator uint32_t() const { return m_sbtIndex; }
+        RT_COMMON_FUNCTION RT_INLINE DirectCallableProgramID() {}
+        RT_COMMON_FUNCTION RT_INLINE explicit DirectCallableProgramID(uint32_t sbtIndex) : m_sbtIndex(sbtIndex) {}
+        RT_COMMON_FUNCTION RT_INLINE explicit operator uint32_t() const { return m_sbtIndex; }
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
+        RT_DEVICE_FUNCTION RT_INLINE ReturnType operator()(const ArgTypes &... args) const {
             return optixDirectCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
         }
 #endif
@@ -504,13 +504,13 @@ namespace optixu {
         uint32_t m_sbtIndex;
 
     public:
-        RT_COMMON_FUNCTION ContinuationCallableProgramID() {}
-        RT_COMMON_FUNCTION explicit ContinuationCallableProgramID(uint32_t sbtIndex) :
+        RT_COMMON_FUNCTION RT_INLINE ContinuationCallableProgramID() {}
+        RT_COMMON_FUNCTION RT_INLINE explicit ContinuationCallableProgramID(uint32_t sbtIndex) :
             m_sbtIndex(sbtIndex) {}
-        RT_COMMON_FUNCTION explicit operator uint32_t() const { return m_sbtIndex; }
+        RT_COMMON_FUNCTION RT_INLINE explicit operator uint32_t() const { return m_sbtIndex; }
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION ReturnType operator()(const ArgTypes &... args) const {
+        RT_DEVICE_FUNCTION RT_INLINE ReturnType operator()(const ArgTypes &... args) const {
             return optixContinuationCall<ReturnType, ArgTypes...>(m_sbtIndex, args...);
         }
 #endif

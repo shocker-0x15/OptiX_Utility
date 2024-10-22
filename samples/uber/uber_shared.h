@@ -39,11 +39,11 @@ namespace Shared {
         uint64_t state;
 
     public:
-        CUDA_COMMON_FUNCTION PCG32RNG() {}
+        CUDA_COMMON_FUNCTION CUDA_INLINE PCG32RNG() {}
 
-        CUDA_COMMON_FUNCTION void setState(uint32_t _state) { state = _state; }
+        CUDA_COMMON_FUNCTION CUDA_INLINE void setState(uint32_t _state) { state = _state; }
 
-        CUDA_COMMON_FUNCTION uint32_t operator()() {
+        CUDA_COMMON_FUNCTION CUDA_INLINE uint32_t operator()() {
             uint64_t oldstate = state;
             // Advance internal state
             state = oldstate * 6364136223846793005ULL + 1;
@@ -53,7 +53,7 @@ namespace Shared {
             return (xorshifted >> rot) | (xorshifted << ((-static_cast<int32_t>(rot)) & 31));
         }
 
-        CUDA_COMMON_FUNCTION float getFloat0cTo1o() {
+        CUDA_COMMON_FUNCTION CUDA_INLINE float getFloat0cTo1o() {
             uint32_t fractionBits = ((*this)() >> 9) | 0x3f800000;
             return *(float*)&fractionBits - 1.0f;
         }
@@ -83,7 +83,7 @@ namespace Shared {
         int32_t primIndex;
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        CUDA_DEVICE_FUNCTION static HitPointParameter get();
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get();
 #endif
     };
 
