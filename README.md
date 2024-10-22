@@ -24,7 +24,7 @@ Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the p
 ## 機能 / Features
 Currently based on OptiX 8.0.0
 
-[&raquo;] は対応するサンプルコードへのリンク(抜粋)です。\
+[&raquo;] は対応する機能を使うサンプルコードへのリンク(抜粋)です。\
 [&raquo;] links to a sample code (excerpt) which uses a corresponding feature.
 
 - Traversable types
