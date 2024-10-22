@@ -23,35 +23,39 @@ Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the p
 
 ## 機能 / Features
 Currently based on OptiX 8.0.0
+
+[&raquo;] は対応するサンプルコードへのリンク(抜粋)です。\
+[&raquo;] links to a sample code (excerpt) which uses a corresponding feature.
+
 - Traversable types
-  - Single GAS
-  - Single-level instancing
-  - Multi-level instancing
+  - Single GAS [[&raquo;]](samples/single_gas/)
+  - Single-level instancing [[&raquo;]](samples/single_level_instancing/)
+  - Multi-level instancing  [[&raquo;]](samples/multi_level_instancing/)
 - Primitive types
-  - Triangles
-  - Curves
+  - Triangles [[&raquo;]](samples/single_gas/)
+  - Curves [[&raquo;]](samples/curve_primitive/)
     - 1st order: Round linear segments
     - 2nd order: Round quadratic B-splines, Ribbons (Flat quadratic B-splines)
     - 3rd order: Round cubic B-splines, Round Catmull-Rom splines, Round cubic B&#233;zier curves
-  - Spheres
-  - User-defined custom primitives
-- Opacity micro-map (OMM)
-- Displacement micro-map (DMM)
+  - Spheres [[&raquo;]](samples/sphere_primitive/)
+  - User-defined custom primitives [[&raquo;]](samples/custom_primitive/)
+- Opacity micro-map (OMM) [[&raquo;]](samples/opacity_micro_map/)
+- Displacement micro-map (DMM) [[&raquo;]](samples/displacement_micro_map/)
 - Motion blur types
-  - Instance motion blur
-  - Deformation blur
+  - Instance motion blur [[&raquo;]](samples/multi_level_instancing/)
+  - Deformation blur [[&raquo;]](samples/deformation_blur/)
 - Acceleration structure management
-  - Full build
-  - Fast update
-  - Compaction
+  - Full build [[&raquo;]](samples/single_gas/) [[&raquo;]](samples/single_level_instancing/)
+  - Fast update [[&raquo;]](samples/as_update/)
+  - Compaction [[&raquo;]](samples/single_gas/) [[&raquo;]](samples/single_level_instancing/)
 - Shader binding table management
   - Automatic build
   - Memory management is still under user control
-- Geometry instancing with different material sets
-- Callable programs
+- Geometry instancing with different material sets [[&raquo;]](samples/material_sets/)
+- Callable programs [[&raquo;]](samples/callable_program/)
 - OptiX-IR support for better debugging\
   \* but fow now (8.0.0 and the 546.17 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
-- OptiX AI denoiser
+- OptiX AI denoiser [[&raquo;]](samples/denoiser/) [[&raquo;]](samples/temporal_denoiser/)
   - LDR (Not Tested)
   - HDR
   - HDR with Kernel Prediction Model (AOV Output Not Tested)
@@ -61,7 +65,7 @@ Currently based on OptiX 8.0.0
   - HDR Temporal + Upscaling 2x (AOV Output Not Tested)
 - Automatic payload/attribute packing/unpacking in kernel code
   - supports hit objects as well for shader execution reordering (SER)
-- Payload usage annotation to reduce register consumption in complex pipelines
+- Payload usage annotation to reduce register consumption in complex pipelines [[&raquo;]](samples/payload_annotation/)
 
 ### TODO
 - Support SBT offset summation accross all instances in the traversal graph
