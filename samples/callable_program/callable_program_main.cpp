@@ -136,7 +136,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
     // JP: パイプラインが必要とする各種スタックサイズを計算する。
+    //     Direct Callable Programを使用する場合は必ず明示的な設定が必要。
     // EN: Compute the stack sizes the pipeline requires.
+    //     Explicit configuration is required whenever using direct callable programs.
     {
         // JP: このサンプルはトラバーサル中にDirect Callable Programを呼ばない。
         // EN: This sample doesn't call a direct callable program during traversal.
@@ -155,11 +157,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // RG - MS
         uint32_t ccStackSize =
             pathTracingRayGenProgram.getStackSize() +
-            std::max(
-                {
-                    shadingHitProgramGroup.getCHStackSize() + visibilityHitProgramGroup.getAHStackSize(),
-                    missProgram.getStackSize(),
-                });
+            std::max({
+                shadingHitProgramGroup.getCHStackSize() + visibilityHitProgramGroup.getAHStackSize(),
+                missProgram.getStackSize()});
         pipeline.setStackSize(dcStackSizeFromTrav, dcStackSizeFromState, ccStackSize, 1);
     }
 
