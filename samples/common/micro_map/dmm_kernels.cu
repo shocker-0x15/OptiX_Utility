@@ -281,7 +281,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float fetchHeight(
         float2 f2;
         float f;
         float a[4];
-        CUDA_DEVICE_FUNCTION Alias() {}
+        CUDA_DEVICE_FUNCTION CUDA_INLINE Alias() {}
     } alias;
 
     float height;
@@ -443,7 +443,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                     };
                     uint32_t asUInt;
 
-                    CUDA_DEVICE_FUNCTION void update(uint32_t vtxType, int32_t value) {
+                    CUDA_DEVICE_FUNCTION CUDA_INLINE void update(uint32_t vtxType, int32_t value) {
                         if (vtxType == 0)
                             interior = max(value, interior);
                         else if (vtxType == 1)
@@ -453,7 +453,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void buildSingleDisplacementMicroMap(
                         else if (vtxType == 3)
                             edge2 = max(value, edge2);
                     }
-                    CUDA_DEVICE_FUNCTION int32_t get(uint32_t vtxType) const {
+                    CUDA_DEVICE_FUNCTION CUDA_INLINE int32_t get(uint32_t vtxType) const {
                         if (vtxType == 0)
                             return interior;
                         else if (vtxType == 1)

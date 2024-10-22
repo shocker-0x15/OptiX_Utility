@@ -13,7 +13,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float fetchAlpha(
         float2 f2;
         float f;
         float a[4];
-        CUDA_DEVICE_FUNCTION Alias() {}
+        CUDA_DEVICE_FUNCTION CUDA_INLINE Alias() {}
     } alias;
 
     float2 texCoord = make_float2(

@@ -4,6 +4,7 @@
 imgui.ini
 **/desktop.ini
 samples/**/*.png
+data/
 
 tests/gtest
 tests/gtest_build

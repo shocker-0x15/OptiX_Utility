@@ -36,7 +36,7 @@ namespace Shared {
         ROBuffer<Triangle> triangleBuffer;
         Matrix3x3 matSR_N; // pre-transform normal matrix
 
-        CUDA_COMMON_FUNCTION float3 transformNormal(const float3 &n) const {
+        CUDA_COMMON_FUNCTION CUDA_INLINE float3 transformNormal(const float3 &n) const {
             return matSR_N * n;
         }
     };
