@@ -31,6 +31,9 @@ EN:
 - In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
+- JP: - OptiX 8.1.0をサポート。
+  EN: - Supported OptiX 8.1.0.
+
 - JP: - optixReportIntersection()に返り値があることを忘れていたのを修正。
   EN: - fixed forgetting that optixReportIntersection has a return value.
 
@@ -2344,6 +2347,7 @@ char* optixGetExceptionLineInfo();
 unsigned int optixGetGASMotionStepCount(OptixTraversableHandle gas);
 float optixGetGASMotionTimeBegin(OptixTraversableHandle gas);
 float optixGetGASMotionTimeEnd(OptixTraversableHandle gas);
+CUdeviceptr optixGetGASPointerFromHandle(OptixTraversableHandle gas);
 OptixTraversableHandle optixGetGASTraversableHandle();
 unsigned int optixGetHitKind();
 OptixTraversableHandle optixGetInstanceChildFromHandle(OptixTraversableHandle handle);

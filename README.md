@@ -22,7 +22,7 @@ Add the followings to your program which uses OptiX Utility:
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
-Currently based on OptiX 8.0.0
+Currently based on OptiX 8.1.0
 
 [&raquo;] は対応する機能を使うサンプルコードへのリンク(抜粋)です。\
 [&raquo;] links to a sample code (excerpt) which uses a corresponding feature.
@@ -288,10 +288,10 @@ I've confirmed that the programs run correctly in the following environment.
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* [CUDA 12.5 Update 1](https://developer.nvidia.com/cuda-downloads) (probably works with lower CUDA versions)\
+* [CUDA 12.6 Update 2](https://developer.nvidia.com/cuda-downloads) (probably works with lower CUDA versions)\
   Note that CUDA (<= 12.5.0) has compilation issues for C++20 with Visual Studio 2022 17.10.\
   Use CUDA 12.5 Update 1 or newer for C++20.
-* [OptiX 8.0.0](https://developer.nvidia.com/designworks/optix/download) (requires Maxwell or later generation NVIDIA GPU)
+* [OptiX 8.1.0](https://developer.nvidia.com/designworks/optix/download) (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
