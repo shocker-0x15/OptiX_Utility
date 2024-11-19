@@ -86,6 +86,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path resourceDir = getExecutableDirectory() / "displacement_micro_map";
 
     bool takeScreenShot = false;
+    float3 initialCameraPosition = float3(0, 3.5f, 6.0f);
+    Quaternion initialCameraOrientation = qRotateY(pi_v<float>) * qRotateX(0.1f * pi_v<float>);
     bool useDMM = true;
     bool usePreComputedMesh = false;
     auto visualizationMode = Shared::VisualizationMode_Final;
@@ -106,6 +108,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         else if (arg == "--no-dmm") {
             useDMM = false;
+        }
+        else if (arg == "--cam-pos") {
+            if (argIdx + 3 >= argc)
+                throw std::runtime_error("Argument for --cam-pos is not complete.");
+            initialCameraPosition = float3(
+                std::atof(argv[argIdx + 1]),
+                std::atof(argv[argIdx + 2]),
+                std::atof(argv[argIdx + 3]));
+            argIdx += 3;
+        }
+        else if (arg == "--cam-ori") {
+            if (argIdx + 3 >= argc)
+                throw std::runtime_error("Argument for --cam-ori is not complete.");
+            initialCameraOrientation = qFromEulerAngles(
+                std::atof(argv[argIdx + 1]) * pi_v<float> / 180,
+                std::atof(argv[argIdx + 2]) * pi_v<float> / 180,
+                std::atof(argv[argIdx + 3]) * pi_v<float> / 180);
+            argIdx += 3;
         }
         else if (arg == "--visualize") {
             if (argIdx + 1 >= argc)
@@ -1354,8 +1374,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     initConfig.resourceDir = resourceDir;
     initConfig.windowContentRenderWidth = initWindowContentWidth;
     initConfig.windowContentRenderHeight = initWindowContentHeight;
-    initConfig.cameraPosition = float3(0, 3.5f, 6.0f);
-    initConfig.cameraOrientation = qRotateY(pi_v<float>) * qRotateX(0.1f * pi_v<float>);
+    initConfig.cameraPosition = initialCameraPosition;
+    initConfig.cameraOrientation = initialCameraOrientation;
     initConfig.cameraMovingSpeed = 0.1f;
     initConfig.cuContext = cuContext;
 
@@ -1415,6 +1435,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 cameraIsActuallyMoving = true;
             }
             ImGui::Text("Pos. Speed (T/G): %g", args.cameraPositionalMovingSpeed);
+
+            if (frameIndex % 600 == 0) {
+                hpprintf(
+                    "--cam-pos %g %g %g --cam-ori %g %g %g\n",
+                    args.cameraPosition.x, args.cameraPosition.y, args.cameraPosition.z,
+                    rollPitchYaw[0], rollPitchYaw[0], rollPitchYaw[2]);
+            }
 
             ImGui::End();
         }
