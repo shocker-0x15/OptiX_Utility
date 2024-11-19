@@ -480,8 +480,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                    image->component = comp;
                    image->bits = 8;
                    image->pixel_type = TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE;
-                   image->image.resize(width * height * comp);
-                   std::copy(data, data + width * height * comp, image->image.begin());
+                   image->image.resize(width * height * 4);
+                   std::copy(data, data + width * height * 4, image->image.begin());
 
                    stbi_image_free(data);
 
