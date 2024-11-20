@@ -1440,7 +1440,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 hpprintf(
                     "--cam-pos %g %g %g --cam-ori %g %g %g\n",
                     args.cameraPosition.x, args.cameraPosition.y, args.cameraPosition.z,
-                    rollPitchYaw[0], rollPitchYaw[0], rollPitchYaw[2]);
+                    rollPitchYaw[0], rollPitchYaw[1], rollPitchYaw[2]);
             }
 
             ImGui::End();
