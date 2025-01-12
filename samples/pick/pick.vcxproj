@@ -148,7 +148,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
-      <AdditionalOptions>-std=c++17 --use_fast_math -Xcompiler "/wd 4819 /Zc:__cplusplus" -D_DEBUG -O0 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++17 -Xcompiler "/wd 4819 /Zc:__cplusplus" -D_DEBUG -O0 %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
       <GenerateLineInfo>false</GenerateLineInfo>
     </CudaCompile>
@@ -189,7 +189,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Shared</CudaRuntime>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
-      <AdditionalOptions>-std=c++17 --use_fast_math -Xcompiler "/wd 4819 /Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++17 -Xcompiler "/wd 4819 /Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
     </CudaCompile>
     <CudaLink>
