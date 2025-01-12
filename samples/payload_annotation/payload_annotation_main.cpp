@@ -6,12 +6,14 @@ JP: このサンプルはペイロードの使用方法を明示的に指定す�
     ペイロード使用方法のアノテーションを行うことができます。
     アノテーションを適切に行うことによって複雑なパイプラインにおけるレジスター使用量を削減し、
     性能向上につながる可能性があります。
+    各ペイロードがどのようにアノテートされているかは payload_annotation_shared.h を参照してください。
 
 EN: This sample shows how to explicitly annotate payload usages to help pipeline optimization.
     Create data describing access flags in each shader per payload parameter to pass to module and 
     program group creation along with specifying a used payload type in kernel to annotate payload usages.
     Appropriate annotations allow to reduce register consumption in complex pipelines and possibly
     improve performance.
+    Refer to payload_annotation_shared.h for details on how each payload is annotated.
 */
 
 #include "payload_annotation_shared.h"
@@ -55,7 +57,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::PayloadType payloadTypes[2];
     if constexpr (Shared::usePayloadAnnotation) {
         // JP: 2つのレイタイプに関わるペイロードタイプを作成する。
+        //     各ペイロードがどのようにアノテートされているかは
+        //     payload_annotation_shared.hを参照。
         // EN: Create payload types for two ray types.
+        //     Refer to payload_annotation_shared.h
+        //     for details on how each payload is annotated.
         payloadTypes[0] = Shared::SearchRayPayloadSignature::getPayloadType();
         payloadTypes[1] = Shared::VisibilityRayPayloadSignature::getPayloadType();
     }
