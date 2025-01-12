@@ -24,11 +24,9 @@ Note:
 JP:
 - 現状ではあらゆるAPIに破壊的変更が入る可能性がある。
 - (少なくともホスト側コンパイラーがMSVC 16.8.2の場合は)"-std=c++17"をptxのコンパイル時に設定する必要あり。
-- Visual StudioにおけるCUDAのプロパティ"Use Fast Math"はptxコンパイルに対して機能していない？
 EN:
 - It is likely for now that any API will have breaking changes.
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
-- In Visual Studio, does the CUDA property "Use Fast Math" not work for ptx compilation??
 
 変更履歴 / Update History:
 - JP: - OptiX 8.1.0をサポート。
