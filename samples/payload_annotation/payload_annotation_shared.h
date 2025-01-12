@@ -140,9 +140,9 @@ namespace Shared {
                 OPTIX_PAYLOAD_SEMANTICS_AH_NONE |
                 OPTIX_PAYLOAD_SEMANTICS_IS_NONE>,
             // JP: Missプログラムではterminateに書込みしか行っていないように見えるが、
-            //     flagsはビットフィールドなのでRead Writeとして取り扱う必要がある。
+            //     flagsはビットフィールドなのでRead-Writeとして取り扱う必要がある。
             // EN: The miss program seems to only write to "terminate" but
-            //     flags is a bit field so needs to be regarded as read write.
+            //     since flags is a bit field, it needs to be handled as read-write.
             optixu::AnnotatedPayload<
                 PathFlags, // flags
                 OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE |
