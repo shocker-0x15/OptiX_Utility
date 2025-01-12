@@ -54,7 +54,7 @@ Currently based on OptiX 8.1.0
 - Geometry instancing with different material sets [[&raquo;]](samples/material_sets/)
 - Callable programs [[&raquo;]](samples/callable_program/)
 - OptiX-IR support for better debugging\
-  \* but fow now (8.0.0 and the 546.17 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
+  \* but fow now (OptiX 8.1.0 / CUDA 12.6.2 and the 566.03 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser [[&raquo;]](samples/denoiser/) [[&raquo;]](samples/temporal_denoiser/)
   - LDR (Not Tested)
   - HDR
@@ -115,9 +115,9 @@ pipeline.setPipelineOptions(
     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 optixu::Module mainModule =
-    pipeline.createModuleFromPTXString(
-        ptx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO);
+    pipeline.createModuleFromOptixIR(
+        optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        OPTIX_COMPILE_OPTIMIZATION_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_NONE);
 optixu::Program rayGenProgram = pipeline.createRayGenProgram(module, RT_RG_NAME_STR("pathtracing"));
 // ...
 optixu::HitProgramGroup searchRayHitProgramGroup =
@@ -281,20 +281,20 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (23H2) & Visual Studio Community 2022 (17.12.1)
+* Windows 11 (24H2) & Visual Studio Community 2022 (17.12.3)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
 * NVIDIA Driver 566.03
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* [CUDA 12.6 Update 2](https://developer.nvidia.com/cuda-downloads) (probably works with lower CUDA versions)\
+* [CUDA](https://developer.nvidia.com/cuda-downloads) 12.6 Update 2 (probably works with lower CUDA versions)\
   Note that CUDA (<= 12.5.0) has compilation issues for C++20 with Visual Studio 2022 17.10.\
   Use CUDA 12.5 Update 1 or newer for C++20.
-* [OptiX 8.1.0](https://developer.nvidia.com/designworks/optix/download) (requires Maxwell or later generation NVIDIA GPU)
+* [OptiX](https://developer.nvidia.com/designworks/optix/download) 8.1.0 (requires Maxwell or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
 
 ----
-2024 [@Shocker_0x15](https://twitter.com/Shocker_0x15), [@bsky.rayspace.xyz](https://bsky.app/profile/bsky.rayspace.xyz)
+2025 [@Shocker_0x15](https://twitter.com/Shocker_0x15), [@bsky.rayspace.xyz](https://bsky.app/profile/bsky.rayspace.xyz)
