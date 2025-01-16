@@ -6,9 +6,9 @@
 -->細かいところに制御が効く一方で、何をするにも煩雑なセットアップコードを書く必要が出てきました。<!--
 -->このOptiX Utilityは細かい制御性はできる限り保持したまま定形処理になりがちな部分を隠蔽したクラス・関数を提供することを目的としています。
 
-[OptiX](https://developer.nvidia.com/optix) changes its form since OptiX 7 into a low-level oriented API similar to [Direct X Raytracing (DXR)](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html).
-It provides fine-level controllability but requires the user to write troublesome setup code to do anything.
-The purpose of this OptiX Utility is to provide classes and functions which encapsulate parts that tend to be boilerplate code while keeping fine controllability.
+[OptiX](https://developer.nvidia.com/optix) has transformed into a low-level-oriented API similar to [Direct X Raytracing (DXR)](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html) since OptiX 7.
+While it offers fine-grained control, it also requires users to write cumbersome setup code for almost any operation.
+The purpose of this OptiX Utility is to provide classes and functions that encapsulate boilerplate code, while preserving as much fine control as possible.
 
 ## 組込方法 / Integration
 OptiX Utilityを使うプログラムに以下を追加します。\
