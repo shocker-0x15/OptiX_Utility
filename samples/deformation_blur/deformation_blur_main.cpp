@@ -390,8 +390,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         curves.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
         curves.optixGas.setConfiguration(
-            curveASTradeOff, curveASUpdatable, curveASCompactable,
-            useEmbeddedVertexData);
+            curveASTradeOff, curveASUpdatable, curveASCompactable);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
@@ -469,8 +468,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         spheres.optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
         spheres.optixGas.setConfiguration(
-            sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
-            useEmbeddedVertexData);
+            sphereASTradeOff, sphereASUpdatable, sphereASCompactable);
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         spheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);

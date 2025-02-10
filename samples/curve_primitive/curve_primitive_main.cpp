@@ -483,8 +483,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::LinearSegments);
     cudau::Buffer linearCurvesGasMem;
     linearCurvesGas.setConfiguration(
-        curveASTradeOff, curveASUpdatable, curveASCompactable,
-        useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
     linearCurvesGas.setNumMaterialSets(1);
     linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     linearCurvesGas.addChild(linearCurveGeomInst);
@@ -496,8 +495,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplines);
     cudau::Buffer quadraticCurvesGasMem;
     quadraticCurvesGas.setConfiguration(
-        curveASTradeOff, curveASUpdatable, curveASCompactable,
-        useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
     quadraticCurvesGas.setNumMaterialSets(1);
     quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     quadraticCurvesGas.addChild(quadraticCurveGeomInst);
@@ -509,8 +507,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer cubicCurvesGasMem;
     cubicCurvesGas.setConfiguration(
-        curveASTradeOff, curveASUpdatable, curveASCompactable,
-        useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
     cubicCurvesGas.setNumMaterialSets(1);
     cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     cubicCurvesGas.addChild(cubicCurveGeomInst);
@@ -522,8 +519,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CatmullRomSplines);
     cudau::Buffer catmullRomCurvesGasMem;
     catmullRomCurvesGas.setConfiguration(
-        curveASTradeOff, curveASUpdatable, curveASCompactable,
-        useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
     catmullRomCurvesGas.setNumMaterialSets(1);
     catmullRomCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     catmullRomCurvesGas.addChild(catmullRomCurveGeomInst);
@@ -535,8 +531,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBezier);
     cudau::Buffer cubicBezierCurvesGasMem;
     cubicBezierCurvesGas.setConfiguration(
-        curveASTradeOff, curveASUpdatable, curveASCompactable,
-        useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
     cubicBezierCurvesGas.setNumMaterialSets(1);
     cubicBezierCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
     cubicBezierCurvesGas.addChild(cubicBezierCurveGeomInst);
@@ -548,8 +543,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::FlatQuadraticBSplines);
     cudau::Buffer quadraticRibbonsGasMem;
     quadraticRibbonsGas.setConfiguration(
-        curveASTradeOff, curveASUpdatable, curveASCompactable,
-        useEmbeddedVertexData);
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
     quadraticRibbonsGas.setNumMaterialSets(1);
     quadraticRibbonsGas.setNumRayTypes(0, Shared::NumRayTypes);
     quadraticRibbonsGas.addChild(quadraticRibbonGeomInst);
