@@ -65,6 +65,8 @@ Currently based on OptiX 9.0.0
 
 ### TODO
 - Clusters API
+- Rocaps
+- Support new HitObject functionalities
 - Support SBT offset summation accross all instances in the traversal graph
 - Test NVRTC compilation.
 - Test flow vector trustworthiness guiding
