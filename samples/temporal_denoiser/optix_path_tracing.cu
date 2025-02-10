@@ -70,12 +70,6 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(pathTracing)() {
 
     plp.rngBuffer[launchIndex] = rng;
 
-    if (plp.useCameraSpaceNormal) {
-        // Convert the normal into the camera space (right handed, looking down the negative Z-axis).
-        denoiserData.firstHitNormal = transpose(plp.camera.orientation) * denoiserData.firstHitNormal;
-        denoiserData.firstHitNormal.x *= -1;
-    }
-
     float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
     float3 prevAlbedoResult = make_float3(0.0f, 0.0f, 0.0f);
     float3 prevNormalResult = make_float3(0.0f, 0.0f, 0.0f);

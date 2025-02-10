@@ -110,11 +110,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit0)() {
 
     /*
     JP: GeometryInstanceからGAS空間への変換は自前で実装する必要がある。
-        ただしGASのビルド設定でRandom Vertex Accessを有効にしている場合はoptixGetTriangleVertexData()
-        を呼ぶことで位置に関しては変換後の値を取得することができる。
     EN: Transform from GeometryInstance to GAS space should be manually implemented by the user.
-        However, it is possible to get post-transformed values using optixGetTriangleVertexData()
-        only for positions if random vertex access is enabled for GAS build configuration.
     */
     sn = normalize(geom.transformNormal(sn));
 
