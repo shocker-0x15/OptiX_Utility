@@ -34,10 +34,11 @@ EN:
       - DMM APIを削除。
       - Clusters APIは未対応。
   EN: - Started to support OptiX 9.0.0.
-- JP: - OptiX 8.1.0をサポート。
-  EN: - Supported OptiX 8.1.0.
       - Removed the DMM API.
       - Does not support clusters API yet.
+
+- JP: - OptiX 8.1.0をサポート。
+  EN: - Supported OptiX 8.1.0.
 
 - JP: - optixReportIntersection()に返り値があることを忘れていたのを修正。
   EN: - fixed forgetting that optixReportIntersection has a return value.
