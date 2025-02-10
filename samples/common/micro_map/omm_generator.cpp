@@ -319,7 +319,7 @@ void generateOMMArray(
         _context.refTupleIndices, _context.triIndices,
         _context.perTriInfos, _context.hasOmmFlags, _context.ommSizes, numTriangles,
         _context.useIndexBuffer,
-        shared::StridedBuffer<OptixDisplacementMicromapDesc>(
+        shared::StridedBuffer<OptixOpacityMicromapDesc>(
             ommDescs.getCUdeviceptr(),
             static_cast<uint32_t>(ommDescs.numElements()),
             ommDescs.stride()),
@@ -327,35 +327,35 @@ void generateOMMArray(
     if (enableDebugPrint) {
         CUDADRV_CHECK(cuStreamSynchronize(stream));
 
-        std::vector<OptixDisplacementMicromapDesc> ommDescsOnHost(ommDescs.numElements());
+        std::vector<OptixOpacityMicromapDesc> ommDescsOnHost(ommDescs.numElements());
         {
-            std::vector<uint8_t> stridedDmmDescs(ommDescs.sizeInBytes());
+            std::vector<uint8_t> stridedOmmDescs(ommDescs.sizeInBytes());
             CUDADRV_CHECK(cuMemcpyDtoH(
-                stridedDmmDescs.data(),
+                stridedOmmDescs.data(),
                 ommDescs.getCUdeviceptr(),
-                stridedDmmDescs.size()));
+                stridedOmmDescs.size()));
             for (uint32_t i = 0; i < ommDescs.numElements(); ++i) {
-                ommDescsOnHost[i] = reinterpret_cast<OptixDisplacementMicromapDesc &>(
-                    stridedDmmDescs[ommDescs.stride() * i]);
+                ommDescsOnHost[i] = reinterpret_cast<OptixOpacityMicromapDesc &>(
+                    stridedOmmDescs[ommDescs.stride() * i]);
             }
         }
 
         if (_context.useIndexBuffer) {
-            std::vector<uint8_t> stridedDmmIndices(ommIndexBuffer.sizeInBytes());
+            std::vector<uint8_t> stridedOmmIndices(ommIndexBuffer.sizeInBytes());
             CUDADRV_CHECK(cuMemcpyDtoH(
-                stridedDmmIndices.data(),
+                stridedOmmIndices.data(),
                 ommIndexBuffer.getCUdeviceptr(),
-                stridedDmmIndices.size()));
+                stridedOmmIndices.size()));
             if (_context.indexSize == 4) {
                 std::vector<int32_t> ommIndices(numTriangles);
                 for (uint32_t i = 0; i < numTriangles; ++i)
-                    ommIndices[i] = reinterpret_cast<int32_t &>(stridedDmmIndices[ommIndexBuffer.stride() * i]);
+                    ommIndices[i] = reinterpret_cast<int32_t &>(stridedOmmIndices[ommIndexBuffer.stride() * i]);
                 hpprintf("");
             }
             else if (_context.indexSize == 2) {
                 std::vector<int16_t> ommIndices(numTriangles);
                 for (uint32_t i = 0; i < numTriangles; ++i)
-                    ommIndices[i] = reinterpret_cast<int16_t &>(stridedDmmIndices[ommIndexBuffer.stride() * i]);
+                    ommIndices[i] = reinterpret_cast<int16_t &>(stridedOmmIndices[ommIndexBuffer.stride() * i]);
                 hpprintf("");
             }
             hpprintf("");

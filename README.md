@@ -40,7 +40,6 @@ Currently based on OptiX 9.0.0
   - Spheres [[&raquo;]](samples/sphere_primitive/)
   - User-defined custom primitives [[&raquo;]](samples/custom_primitive/)
 - Opacity micro-map (OMM) [[&raquo;]](samples/opacity_micro_map/)
-- Displacement micro-map (DMM) [[&raquo;]](samples/displacement_micro_map/)
 - Motion blur types
   - Instance motion blur [[&raquo;]](samples/multi_level_instancing/)
   - Deformation blur [[&raquo;]](samples/deformation_blur/)
@@ -55,19 +54,17 @@ Currently based on OptiX 9.0.0
 - Callable programs [[&raquo;]](samples/callable_program/)
 - OptiX-IR support for better debugging\
   \* but fow now (OptiX 8.1.0 / CUDA 12.6.2 and the 566.03 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
-- OptiX AI denoiser [[&raquo;]](samples/denoiser/) [[&raquo;]](samples/temporal_denoiser/)
-  - LDR (Not Tested)
+- OptiX AI denoiser (AOV Output Not Tested) [[&raquo;]](samples/denoiser/) [[&raquo;]](samples/temporal_denoiser/)
   - HDR
-  - HDR with Kernel Prediction Model (AOV Output Not Tested)
-  - HDR Upscaling 2x (AOV Output Not Tested)
+  - HDR Upscaling 2x
   - HDR Temporal
-  - HDR Temporal with Kernel Prediction Model (AOV Output Not Tested)
-  - HDR Temporal + Upscaling 2x (AOV Output Not Tested)
+  - HDR Temporal + Upscaling 2x
 - Automatic payload/attribute packing/unpacking in kernel code
   - supports hit objects as well for shader execution reordering (SER)
 - Payload usage annotation to reduce register consumption in complex pipelines [[&raquo;]](samples/payload_annotation/)
 
 ### TODO
+- Clusters API
 - Support SBT offset summation accross all instances in the traversal graph
 - Test NVRTC compilation.
 - Test flow vector trustworthiness guiding
