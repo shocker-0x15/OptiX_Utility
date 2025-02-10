@@ -37,18 +37,16 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
     constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
     float4 controlPoints[numControlPoints];
     if constexpr (useEmbeddedVertexData) {
-        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-        uint32_t sbtGasIndex = optixGetSbtGASIndex();
         if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-            optixGetLinearCurveVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+            optixGetLinearCurveVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-            optixGetQuadraticBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+            optixGetQuadraticBSplineVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-            optixGetCubicBSplineVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+            optixGetCubicBSplineVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
-            optixGetCatmullRomVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+            optixGetCatmullRomVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
-            optixGetCubicBezierVertexData(gasHandle, primIndex, sbtGasIndex, 0.0f, controlPoints);
+            optixGetCubicBezierVertexData(controlPoints);
     }
     else {
         uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];

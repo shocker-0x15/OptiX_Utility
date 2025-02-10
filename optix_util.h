@@ -29,6 +29,8 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 
 変更履歴 / Update History:
+- JP: - OptiX 9.0.0のサポートを開始。
+  EN: - Started to support OptiX 9.0.0.
 - JP: - OptiX 8.1.0をサポート。
   EN: - Supported OptiX 8.1.0.
 
@@ -2336,9 +2338,12 @@ struct float4;
 struct OptixInvalidRayExceptionDetails;
 struct OptixParameterMismatchExceptionDetails;
 
-void optixGetCatmullRomVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
-void optixGetCubicBezierVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
-void optixGetCubicBSplineVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
+void optixGetCatmullRomVertexData(float4 data[4]);
+void optixGetCatmullRomVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
+void optixGetCubicBezierVertexData(float4 data[4]);
+void optixGetCubicBezierVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
+void optixGetCubicBSplineVertexData(float4 data[4]);
+void optixGetCubicBSplineVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
 float optixGetCurveParameter();
 int optixGetExceptionCode();
 char* optixGetExceptionLineInfo();
@@ -2357,7 +2362,8 @@ const float4* optixGetInstanceTransformFromHandle(OptixTraversableHandle handle)
 OptixTraversableHandle optixGetInstanceTraversableFromIAS(OptixTraversableHandle ias, unsigned int instIdx);
 uint3 optixGetLaunchDimensions();
 uint3 optixGetLaunchIndex();
-void optixGetLinearCurveVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[2]);
+void optixGetLinearCurveVertexData(float4 data[2]);
+void optixGetLinearCurveVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[2]);
 const OptixMatrixMotionTransform* optixGetMatrixMotionTransformFromHandle(OptixTraversableHandle handle);
 void optixGetMicroTriangleBarycentricsData(float2 data[3]);
 void optixGetMicroTriangleVertexData(float3 data[3]);
@@ -2367,7 +2373,8 @@ void optixGetObjectToWorldTransformMatrix(float m[12]);
 unsigned int optixGetPrimitiveIndex();
 OptixPrimitiveType optixGetPrimitiveType(unsigned int hitKind);
 OptixPrimitiveType optixGetPrimitiveType();
-void optixGetQuadraticBSplineVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[3]);
+void optixGetQuadraticBSplineVertexData(float4 data[3]);
+void optixGetQuadraticBSplineVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[3]);
 unsigned int optixGetRayFlags();
 float optixGetRayTime();
 float optixGetRayTmax();
@@ -2375,7 +2382,8 @@ float optixGetRayTmin();
 unsigned int optixGetRayVisibilityMask();
 float3 optixGetRibbonNormal(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float2 ribbonParameters);
 float2 optixGetRibbonParameters();
-void optixGetRibbonVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[3]);
+void optixGetRibbonVertexData(float4 data[3]);
+void optixGetRibbonVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[3]);
 CUdeviceptr optixGetSbtDataPointer();
 unsigned int optixGetSbtGASIndex();
 void optixGetSphereData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[1]);
@@ -2385,7 +2393,8 @@ OptixTraversableHandle optixGetTransformListHandle(unsigned int index);
 unsigned int optixGetTransformListSize();
 OptixTransformType optixGetTransformTypeFromHandle(OptixTraversableHandle handle);
 float2 optixGetTriangleBarycentrics();
-void optixGetTriangleVertexData(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float3 data[3]);
+void optixGetTriangleVertexData(float3 data[3]);
+void optixGetTriangleVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float3 data[3]);
 float3 optixGetWorldRayDirection();
 float3 optixGetWorldRayOrigin();
 void optixGetWorldToObjectTransformMatrix(float m[12]);

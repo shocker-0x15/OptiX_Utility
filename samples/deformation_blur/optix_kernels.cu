@@ -65,16 +65,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
     constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
     float4 controlPoints[numControlPoints];
     if constexpr (useEmbeddedVertexData) {
-        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-        uint32_t sbtGasIndex = optixGetSbtGASIndex();
         if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-            optixGetLinearCurveVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+            optixGetLinearCurveVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-            optixGetQuadraticBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+            optixGetQuadraticBSplineVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-            optixGetCubicBSplineVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+            optixGetCubicBSplineVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
-            optixGetCatmullRomVertexData(gasHandle, hpParam.primIndex, sbtGasIndex, rayTime, controlPoints);
+            optixGetCatmullRomVertexData(controlPoints);
     }
     else {
         OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
