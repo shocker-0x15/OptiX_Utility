@@ -29,10 +29,15 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 
 変更履歴 / Update History:
+- !!BREAKING
 - JP: - OptiX 9.0.0のサポートを開始。
+      - DMM APIを削除。
+      - Clusters APIは未対応。
   EN: - Started to support OptiX 9.0.0.
 - JP: - OptiX 8.1.0をサポート。
   EN: - Supported OptiX 8.1.0.
+      - Removed the DMM API.
+      - Does not support clusters API yet.
 
 - JP: - optixReportIntersection()に返り値があることを忘れていたのを修正。
   EN: - fixed forgetting that optixReportIntersection has a return value.
@@ -1299,8 +1304,6 @@ namespace optixu {
               |              +-- GeomInst
               |              |
               |              +-- OMMArray
-              |              |
-              |              +-- DMMArray
               |
               +-- Denoiser
 
@@ -1357,7 +1360,6 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECT(Material); \
     OPTIXU_PREPROCESS_OBJECT(Scene); \
     OPTIXU_PREPROCESS_OBJECT(OpacityMicroMapArray); \
-    OPTIXU_PREPROCESS_OBJECT(DisplacementMicroMapArray); \
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
     OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
     OPTIXU_PREPROCESS_OBJECT(Transform); \
@@ -1616,8 +1618,6 @@ namespace optixu {
         [[nodiscard]]
         OpacityMicroMapArray createOpacityMicroMapArray() const;
         [[nodiscard]]
-        DisplacementMicroMapArray createDisplacementMicroMapArray() const;
-        [[nodiscard]]
         GeometryInstance createGeometryInstance(
             OPTIXU_EN_PRM(GeometryType, geomType, Triangles)) const;
         [[nodiscard]]
@@ -1674,39 +1674,6 @@ namespace optixu {
 
 
 
-    class DisplacementMicroMapArray : public Object<DisplacementMicroMapArray> {
-    public:
-        void destroy();
-
-        // JP: 以下のAPIを呼んだ場合はDMM Arrayが自動でdirty状態になる。
-        // EN: Calling the following APIs automatically marks the DMM array dirty.
-        void setConfiguration(OptixDisplacementMicromapFlags config) const;
-        void computeMemoryUsage(
-            const OptixDisplacementMicromapHistogramEntry* microMapHistogramEntries,
-            uint32_t numMicroMapHistogramEntries,
-            OptixMicromapBufferSizes* memoryRequirement) const;
-        void setBuffers(
-            const BufferView &rawDmmBuffer, const BufferView &perMicroMapDescBuffer,
-            const BufferView &outputBuffer) const;
-
-        // JP: DMM Arrayをdirty状態にする。
-        // EN: Mark the DMM array dirty.
-        void markDirty() const;
-
-        // JP: DMM Arrayをリビルドした場合、それを参照するGASのリビルド、もしくはアップデートが必要。
-        //     アップデートを使う場合は予めGASの設定でDMM Arrayのアップデートを許可する必要がある。
-        // EN: If the DMM array is rebuilt, GASs refering the DMM array need to be rebuilt or updated.
-        //     Allowing DMM array update is required in the GAS setttings when using updating.
-        void rebuild(CUstream stream, const BufferView &scratchBuffer) const;
-
-        bool isReady() const;
-        BufferView getOutputBuffer() const;
-
-        OptixDisplacementMicromapFlags getConfiguration() const;
-    };
-
-
-
     class GeometryInstance : public Object<GeometryInstance> {
     public:
         void destroy();
@@ -1733,16 +1700,6 @@ namespace optixu {
             const OptixOpacityMicromapUsageCount* ommUsageCounts, uint32_t numOmmUsageCounts,
             const BufferView &ommIndexBuffer,
             OPTIXU_EN_PRM(IndexSize, indexSize, k4Bytes), uint32_t indexOffset = 0) const;
-        void setDisplacementMicroMapArray(
-            const BufferView &vertexDirectionBuffer,
-            const BufferView &vertexBiasAndScaleBuffer,
-            const BufferView &triangleFlagsBuffer,
-            DisplacementMicroMapArray displacementMicroMapArray,
-            const OptixDisplacementMicromapUsageCount* dmmUsageCounts, uint32_t numDmmUsageCounts,
-            const BufferView &dmmIndexBuffer,
-            OPTIXU_EN_PRM(IndexSize, indexSize, k4Bytes), uint32_t indexOffset = 0,
-            OptixDisplacementMicromapDirectionFormat vertexDirectionFormat = OPTIX_DISPLACEMENT_MICROMAP_DIRECTION_FORMAT_FLOAT3,
-            OptixDisplacementMicromapBiasAndScaleFormat vertexBiasAndScaleFormat = OPTIX_DISPLACEMENT_MICROMAP_BIAS_AND_SCALE_FORMAT_FLOAT2) const;
         void setSegmentIndexBuffer(const BufferView &segmentIndexBuffer) const;
         void setCurveEndcapFlags(OptixCurveEndcapFlags endcapFlags) const;
         void setSingleRadius(UseSingleRadius useSingleRadius) const;
@@ -1782,14 +1739,6 @@ namespace optixu {
         OpacityMicroMapArray getOpacityMicroMapArray(
             BufferView* ommIndexBuffer = nullptr,
             IndexSize* indexSize = nullptr, uint32_t* indexOffset = nullptr) const;
-        DisplacementMicroMapArray getDisplacementMicroMapArray(
-            BufferView* vertexDirectionBuffer = nullptr,
-            BufferView* vertexBiasAndScaleBuffer = nullptr,
-            BufferView* triangleFlagsBuffer = nullptr,
-            BufferView* dmmIndexBuffer = nullptr,
-            IndexSize* indexSize = nullptr, uint32_t* indexOffset = nullptr,
-            OptixDisplacementMicromapDirectionFormat* vertexDirectionFormat = nullptr,
-            OptixDisplacementMicromapBiasAndScaleFormat* vertexBiasAndScaleFormat = nullptr) const;
         BufferView getSegmentIndexBuffer() const;
         BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
         uint32_t getPrimitiveIndexOffset() const;
@@ -2418,9 +2367,6 @@ bool optixHitObjectIsNop();
 void optixIgnoreIntersection();
 bool optixIsBackFaceHit(unsigned int hitKind);
 bool optixIsBackFaceHit();
-bool optixIsDisplacedMicromeshTriangleBackFaceHit();
-bool optixIsDisplacedMicromeshTriangleFrontFaceHit();
-bool optixIsDisplacedMicromeshTriangleHit();
 bool optixIsFrontFaceHit(unsigned int hitKind);
 bool optixIsFrontFaceHit();
 bool optixIsTriangleBackFaceHit();

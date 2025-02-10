@@ -30,16 +30,6 @@
     </Expand>
   </Type>
 
-  <!-- optixu::DisplacementMicroMapArray -->
-  <Type Name="optixu::DisplacementMicroMapArray">
-    <DisplayString Condition="m != nullptr">{(void*)m}</DisplayString>
-    <DisplayString>empty</DisplayString>
-
-    <Expand>
-      <ExpandedItem Condition="m != nullptr">m</ExpandedItem>
-    </Expand>
-  </Type>
-
   <!-- optixu::GeometryInstance -->
   <Type Name="optixu::GeometryInstance">
     <DisplayString Condition="m != nullptr">{(void*)m}</DisplayString>
