@@ -258,8 +258,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         scene.createGeometryAccelerationStructure(optixu::GeometryType::Spheres);
     cudau::Buffer spheresGasMem;
     spheresGas.setConfiguration(
-        sphereASTradeOff, sphereASUpdatable, sphereASCompactable,
-        useEmbeddedVertexData);
+        sphereASTradeOff, sphereASUpdatable, sphereASCompactable);
     spheresGas.setNumMaterialSets(1);
     spheresGas.setNumRayTypes(0, Shared::NumRayTypes);
     spheresGas.addChild(sphereGeomInst);

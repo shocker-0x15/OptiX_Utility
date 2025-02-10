@@ -33,7 +33,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path resourceDir = getExecutableDirectory() / "temporal_denoiser";
 
     bool takeScreenShot = false;
-    bool useKernelPredictionMode = false;
     bool performUpscale = false;
     bool useLowResRendering;
 
@@ -42,8 +41,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::string_view arg = argv[argIdx];
         if (arg == "--screen-shot")
             takeScreenShot = true;
-        else if (arg == "--kp")
-            useKernelPredictionMode = true;
         else if (arg == "--upscale")
             performUpscale = true;
         else
@@ -51,8 +48,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ++argIdx;
     }
 
-    if (performUpscale)
-        useKernelPredictionMode = true;
     useLowResRendering = performUpscale;
 
 
@@ -751,12 +746,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer internalGuideLayers[2];
     cudau::Buffer hdrNormalizer;
 
-    denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
+    denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV;
     if (performUpscale)
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X;
-    // Use kernel prediction model (AOV denoiser) even if this sample doesn't give any AOV inputs.
-    else if (useKernelPredictionMode)
-        denoiserModel = OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV;
 
     // JP: デノイザーは入出力にリニアなバッファーを必要とするため結果をコピーする必要がある。
     // EN: Denoiser requires linear buffers as input/output, so we need to copy the results.
@@ -1132,13 +1124,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::BeginDisabled(!useLowResRendering);
             if (ImGui::Checkbox("with Upscaling", &performUpscale))
                 denoiserModelChanged = true;
-            if (performUpscale)
-                useKernelPredictionMode = true;
-            ImGui::EndDisabled();
-
-            ImGui::BeginDisabled(performUpscale);
-            if (ImGui::Checkbox("Use Kernel Prediction Model", &useKernelPredictionMode))
-                denoiserModelChanged = true;
             ImGui::EndDisabled();
 
             if (denoiserModelChanged) {
@@ -1153,16 +1138,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         OPTIX_DENOISER_MODEL_KIND_UPSCALE2X;
                 }
                 else {
-                    if (useTemporalDenosier) {
-                        denoiserModel = useKernelPredictionMode ?
-                            OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV :
-                            OPTIX_DENOISER_MODEL_KIND_TEMPORAL;
-                    }
-                    else {
-                        denoiserModel = useKernelPredictionMode ?
-                            OPTIX_DENOISER_MODEL_KIND_AOV :
-                            OPTIX_DENOISER_MODEL_KIND_HDR;
-                    }
+                    denoiserModel = useTemporalDenosier ?
+                        OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV :
+                        OPTIX_DENOISER_MODEL_KIND_AOV;
                 }
 
                 renderWidth = args.windowContentRenderWidth;
@@ -1254,9 +1232,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             numAccumFrames = 0;
         plp.enableJittering = enableJittering;
         plp.resetFlowBuffer = isNewSequence;
-        // Only old models require camera-space normal and
-        // world-space normal is recommended for newer models.
-        plp.useCameraSpaceNormal = denoiserModel == OPTIX_DENOISER_MODEL_KIND_HDR;
 
         // Render
         curGPUTimer.render.start(curStream);
@@ -1289,7 +1264,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             linearBeautyBuffer :
             linearDenoisedBeautyBuffers[(frameIndex + 1) % 2];
         optixu::BufferView internalGuideLayerForNextFrame;
-        if (useTemporalDenosier && useKernelPredictionMode) {
+        if (useTemporalDenosier) {
             inputBuffers.previousInternalGuideLayer = internalGuideLayers[(frameIndex + 1) % 2];
             internalGuideLayerForNextFrame = internalGuideLayers[frameIndex % 2];
 

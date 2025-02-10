@@ -32,7 +32,6 @@ EN: This sample shows how to use the denoiser.
 int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t tileWidth = 0;
     uint32_t tileHeight = 0;
-    bool useKernelPredictionMode = false;
     bool performUpscale = false;
     optixu::GuideAlbedo useAlbedo = optixu::GuideAlbedo::Yes;
     optixu::GuideNormal useNormal = optixu::GuideNormal::Yes;
@@ -47,8 +46,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             tileHeight = static_cast<uint32_t>(atoi(argv[argIdx + 2]));
             argIdx += 2;
         }
-        else if (arg == "--kp")
-            useKernelPredictionMode = true;
         else if (arg == "--upscale")
             performUpscale = true;
         else if (arg == "--no-albedo")
@@ -59,9 +56,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             throw std::runtime_error("Unknown command line argument.");
         ++argIdx;
     }
-
-    if (performUpscale)
-        useKernelPredictionMode = true;
 
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
@@ -701,12 +695,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: デノイザーのセットアップ。
     // EN: Setup a denoiser.
 
-    OptixDenoiserModelKind denoiserModel = OPTIX_DENOISER_MODEL_KIND_HDR;
+    OptixDenoiserModelKind denoiserModel = OPTIX_DENOISER_MODEL_KIND_AOV;
     if (performUpscale)
         denoiserModel = OPTIX_DENOISER_MODEL_KIND_UPSCALE2X;
-    // Use kernel prediction model (AOV denoiser) even if this sample doesn't give any AOV inputs.
-    else if (useKernelPredictionMode)
-        denoiserModel = OPTIX_DENOISER_MODEL_KIND_AOV;
 
     optixu::Denoiser denoiser = optixContext.createDenoiser(
         denoiserModel, useAlbedo, useNormal, OPTIX_DENOISER_ALPHA_MODE_COPY);
@@ -756,9 +747,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
     plp.camera.position = make_float3(0, 0, 3.16f);
     plp.camera.orientation = rotateY3x3(pi_v<float>);
-    // Only old models require camera-space normal and
-    // world-space normal is recommended for newer models.
-    plp.useCameraSpaceNormal = denoiserModel == OPTIX_DENOISER_MODEL_KIND_HDR;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());

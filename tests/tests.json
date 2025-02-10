@@ -87,14 +87,6 @@
         "reference": "reference.png"
     },
     {
-        "name": "denoiser kp",
-        "sample": "denoiser",
-        "options": "--kp",
-        "image": "color_denoised.png",
-        "outputs": ["color.png", "albedo.png", "normal.png", "color_denoised.png"],
-        "reference": "reference_kp.png"
-    },
-    {
         "name": "denoiser upscale",
         "sample": "denoiser",
         "options": "--upscale",
@@ -109,14 +101,6 @@
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference.png"
-    },
-    {
-        "name": "temporal_denoiser kp",
-        "sample": "temporal_denoiser",
-        "options": "--screen-shot --kp",
-        "image": "output.png",
-        "outputs": ["output.png"],
-        "reference": "reference_kp.png"
     },
     {
         "name": "temporal_denoiser upscale",
