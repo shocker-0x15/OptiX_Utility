@@ -206,6 +206,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 param.radius = 0.025f + 0.1f * u01(rng);
             }
 
+            // Sphere intersector does not return back-face hits,
+            // so this sphere is not visible for the camera position of this sample.
             Shared::SphereParameter param;
             param.center = float3(0.0f);
             param.radius = 5.0f;
