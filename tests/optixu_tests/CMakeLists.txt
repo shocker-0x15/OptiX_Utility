@@ -34,7 +34,7 @@ nvcuda_compile_optix_ir(
     "$<$<CONFIG:Debug>:-D_DEBUG=1>"
     "$<$<CONFIG:Debug>:-G>"
     "$<$<CONFIG:Debug>:-O0>"
-    "--gpu-architecture=compute_52"
+    "--gpu-architecture=compute_75"
     "-std=${CPP_VER_CUDA}"
     "-cudart" "shared"
     "--use_fast_math"
