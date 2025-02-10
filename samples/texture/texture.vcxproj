@@ -57,7 +57,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.6.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -69,16 +69,16 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(IncludePath)</IncludePath>
     <TargetName>texture</TargetName>
-    <ExternalIncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 8.1.0\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <ExternalIncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 9.0.0\include;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\lib\x64;$(SolutionDir)..\ext\glfw\lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(IncludePath)</IncludePath>
     <TargetName>texture</TargetName>
-    <ExternalIncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 8.1.0\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <ExternalIncludePath>$(SolutionDir)..\ext\gl3w\include;$(SolutionDir)..\ext\glfw\include;$(SolutionDir)..\ext\imgui;C:\ProgramData\NVIDIA Corporation\OptiX SDK 9.0.0\include;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -113,6 +113,7 @@
       <AdditionalOptions>-std=c++17 -Xcompiler "/wd 4819 /Zc:__cplusplus" -D_DEBUG -O0 %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
       <GenerateLineInfo>false</GenerateLineInfo>
+      <CodeGeneration>compute_75,sm_75</CodeGeneration>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
@@ -153,6 +154,7 @@
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <AdditionalOptions>-std=c++17 -Xcompiler "/wd 4819 /Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
+      <CodeGeneration>compute_75,sm_75</CodeGeneration>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
@@ -160,6 +162,6 @@
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.6.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.targets" />
   </ImportGroup>
 </Project>
