@@ -5,7 +5,6 @@ JP: このサンプルはテンポラルデノイザーの使用方法を示し�
     テンポラルデノイザーはアルベドや法線に加えて、前フレームのデノイズ済みビューティー、
     ピクセルごとの対応を示すフローチャンネルを補助画像として受け取ります。
 
-    --kp: カーネル予測モデルを使用する。
     --upscale: アップスケールも実行する。
 
 EN: This sample shows how to use the temporal denoiser.
@@ -13,7 +12,6 @@ EN: This sample shows how to use the temporal denoiser.
     The temporal denoiser takes the denoised beauty of the previous frame and a flow channel indicating
     per-pixel correspondance as auxiliary images in addition to albedo and normal.
 
-    --kp: Use a kernel prediction model.
     --upscale: Perform upscaling.
 
 */
