@@ -56,7 +56,7 @@ Currently based on OptiX 9.0.0
   \* but fow now (OptiX 8.1.0 / CUDA 12.6.2 and the 566.03 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser (AOV Output Not Tested) [[&raquo;]](samples/denoiser/) [[&raquo;]](samples/temporal_denoiser/)
   - HDR
-  - HDR Upscaling 2x
+  - HDR + Upscaling 2x
   - HDR Temporal
   - HDR Temporal + Upscaling 2x
 - Automatic payload/attribute packing/unpacking in kernel code

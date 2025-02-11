@@ -5,7 +5,6 @@ JP: このサンプルはデノイザーの使用方法を示します。
     画像中のノイズを低減するデノイザーを提供しています。
 
     --tiling: デノイザーのタイリングを有効化する。
-    --kp: カーネル予測モデルを使用する。
     --upscale: アップスケールも実行する。
     --no-albedo: アルベドをデノイザーに入力しない。
     --no-normal: 法線をデノイザーに入力しない。
@@ -15,7 +14,6 @@ EN: This sample shows how to use the denoiser.
     by Monte Carlo ray tracing.
 
     --tiling: Enable a tiled denoiser.
-    --kp: Use a kernel prediction model.
     --upscale: Perform upscaling.
     --no-albedo: Don't input the albedo to the denoiser.
     --no-normal: Don't input the normal to the denoiser.
