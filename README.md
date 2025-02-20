@@ -37,7 +37,7 @@ Currently based on OptiX 9.0.0
     - 1st order: Round linear segments
     - 2nd order: Round quadratic B-splines, Ribbons (Flat quadratic B-splines)
     - 3rd order: Round cubic B-splines, Round Catmull-Rom splines, Round cubic B&#233;zier curves
-    - Each curve type (except for linear and ribbon) has Rocaps (Roving Capsules) variants
+    - Each curve type (except linear and ribbon) has a Rocaps (Roving Capsules) variant
   - Spheres [[&raquo;]](samples/sphere_primitive/)
   - User-defined custom primitives [[&raquo;]](samples/custom_primitive/)
 - Opacity micro-map (OMM) [[&raquo;]](samples/opacity_micro_map/)
