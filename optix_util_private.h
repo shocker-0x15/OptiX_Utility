@@ -641,10 +641,14 @@ namespace optixu {
             }
             else if (geomType == GeometryType::LinearSegments ||
                      geomType == GeometryType::QuadraticBSplines ||
+                     geomType == GeometryType::QuadraticBSplineRocaps ||
                      geomType == GeometryType::FlatQuadraticBSplines ||
                      geomType == GeometryType::CubicBSplines ||
+                     geomType == GeometryType::CubicBSplineRocaps ||
                      geomType == GeometryType::CatmullRomSplines ||
-                     geomType == GeometryType::CubicBezier) {
+                     geomType == GeometryType::CatmullRomSplineRocaps ||
+                     geomType == GeometryType::CubicBezier ||
+                     geomType == GeometryType::CubicBezierRocaps) {
                 geometry = CurveGeometry{};
                 auto &geom = std::get<CurveGeometry>(geometry);
                 geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];

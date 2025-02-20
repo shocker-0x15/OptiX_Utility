@@ -31,9 +31,11 @@ EN:
 変更履歴 / Update History:
 - !!BREAKING
 - JP: - OptiX 9.0.0のサポートを開始。
+      - Rocaps型のカーブをサポート。
       - DMM APIを削除。
       - Clusters APIは未対応。
   EN: - Started to support OptiX 9.0.0.
+      - Supported Rocaps-type curves.
       - Removed the DMM API.
       - Does not support clusters API yet.
 
@@ -1389,12 +1391,17 @@ namespace optixu {
         Triangles = 0,
         LinearSegments,
         QuadraticBSplines,
+        QuadraticBSplineRocaps,
         FlatQuadraticBSplines,
         CubicBSplines,
+        CubicBSplineRocaps,
         CatmullRomSplines,
+        CatmullRomSplineRocaps,
         CubicBezier,
+        CubicBezierRocaps,
         Spheres,
         CustomPrimitives,
+        Count,
     };
 
     enum class ASTradeoff {

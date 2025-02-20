@@ -41,12 +41,20 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
             optixGetLinearCurveVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
             optixGetQuadraticBSplineVertexData(controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS)
+            optixGetQuadraticBSplineRocapsVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
             optixGetCubicBSplineVertexData(controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS)
+            optixGetCubicBSplineRocapsVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
             optixGetCatmullRomVertexData(controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS)
+            optixGetCatmullRomRocapsVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
             optixGetCubicBezierVertexData(controlPoints);
+        else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS)
+            optixGetCubicBezierRocapsVertexData(controlPoints);
     }
     else {
         uint32_t baseIndex = geom.segmentIndexBuffer[primIndex];
@@ -108,28 +116,63 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         sn = b0 * v0.normal + hp.b1 * v1.normal + hp.b2 * v2.normal;
     }
     else if (primType == OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE) {
-        uint32_t primIndex = optixGetPrimitiveIndex();
         float2 ribbonParam = optixGetRibbonParameters();
-        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-        uint32_t sbtGasIndex = optixGetSbtGASIndex();
-        sn = optixGetRibbonNormal(gasHandle, primIndex, sbtGasIndex, 0.0f, ribbonParam);
+        sn = optixGetRibbonNormal(ribbonParam);
     }
     else {
-        uint32_t primIndex = optixGetPrimitiveIndex();
+        float3 rayDir = optixGetWorldRayDirection();
+        float3 hp = optixGetWorldRayOrigin() + optixGetRayTmax() * rayDir;
+        float3 hpInObj = optixTransformPointFromWorldToObjectSpace(hp);
         float curveParam = optixGetCurveParameter();
-        float3 hp = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
-        hp = optixTransformPointFromWorldToObjectSpace(hp);
+        if constexpr (tuneCurveParameterForRocaps) {
+            // Enable this tuning only when normal vectors exhibit artifacts for rocaps curves
+            // and the artifacts cannot be accepted.
+            if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS ||
+                primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS ||
+                primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS ||
+                primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS) {
+                float3 rayDirInObj = optixTransformVectorFromWorldToObjectSpace(rayDir);
+                curveParam = curve::tuneParameterForRocaps(rayDirInObj, hpInObj, primType, curveParam);
+            }
+        }
 
-        if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(geom, primIndex, curveParam, hp);
-        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
-            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER>(geom, primIndex, curveParam, hp);
+        uint32_t primIndex = optixGetPrimitiveIndex();
+        if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER>(
+                geom, primIndex, curveParam, hpInObj);
+        }
+        else if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS) {
+            sn = calcCurveSurfaceNormal<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS>(
+                geom, primIndex, curveParam, hpInObj);
+        }
     }
 
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));

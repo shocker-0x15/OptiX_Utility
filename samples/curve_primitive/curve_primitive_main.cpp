@@ -36,7 +36,7 @@ static void generateCurves(
     float zStart, float zEnd, uint32_t numZ,
     float baseWidth);
 
-static void generateBezierCurves(
+static void generateCubicBezierCurves(
     std::vector<Shared::CurveVertex>* vertices,
     std::vector<uint32_t>* indices,
     float xStart, float xEnd, uint32_t numX,
@@ -86,10 +86,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE_ROCAPS |
         OPTIX_PRIMITIVE_TYPE_FLAGS_FLAT_QUADRATIC_BSPLINE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE_ROCAPS |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM_ROCAPS |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER |
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER_ROCAPS);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.optixir");
@@ -132,8 +136,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
+    optixu::HitProgramGroup hitProgramGroupForQuadraticRocapCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
     optixu::HitProgramGroup hitProgramGroupForCubicCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
+    optixu::HitProgramGroup hitProgramGroupForCubicRocapCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
@@ -142,8 +156,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
+    optixu::HitProgramGroup hitProgramGroupForCatmullRomRocapCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
     optixu::HitProgramGroup hitProgramGroupForCubicBezierCurves = pipeline.createHitProgramGroupForCurveIS(
         OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER, curveEndcap,
+        moduleOptiX, RT_CH_NAME_STR("closesthit"),
+        emptyModule, nullptr,
+        curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
+    optixu::HitProgramGroup hitProgramGroupForCubicBezierRocapCurves = pipeline.createHitProgramGroupForCurveIS(
+        OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS, curveEndcap,
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr,
         curveASTradeOff, curveASUpdatable, curveASCompactable, useEmbeddedVertexData);
@@ -186,12 +210,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
     matForLinearCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForLinearCurves);
     optixu::Material matForQuadraticCurves = optixContext.createMaterial();
     matForQuadraticCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForQuadraticCurves);
+    optixu::Material matForQuadraticRocapCurves = optixContext.createMaterial();
+    matForQuadraticRocapCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForQuadraticRocapCurves);
     optixu::Material matForCubicCurves = optixContext.createMaterial();
     matForCubicCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicCurves);
+    optixu::Material matForCubicRocapCurves = optixContext.createMaterial();
+    matForCubicRocapCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicRocapCurves);
     optixu::Material matForCatmullRomCurves = optixContext.createMaterial();
     matForCatmullRomCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCatmullRomCurves);
+    optixu::Material matForCatmullRomRocapCurves = optixContext.createMaterial();
+    matForCatmullRomRocapCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCatmullRomRocapCurves);
     optixu::Material matForCubicBezierCurves = optixContext.createMaterial();
     matForCubicBezierCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicBezierCurves);
+    optixu::Material matForCubicBezierRocapCurves = optixContext.createMaterial();
+    matForCubicBezierRocapCurves.setHitGroup(Shared::RayType_Primary, hitProgramGroupForCubicBezierRocapCurves);
     optixu::Material matForQuadraticRibbons = optixContext.createMaterial();
     matForQuadraticRibbons.setHitGroup(Shared::RayType_Primary, hitProgramGroupForQuadraticRibbons);
 
@@ -211,14 +243,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<Shared::Triangle> floorTriangleBuffer;
     {
         Shared::Vertex vertices[] = {
-            { make_float3(-1.5f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(0, 0) },
-            { make_float3(-1.5f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(0, 5) },
-            { make_float3(1.5f, 0.0f, 1.0f), make_float3(0, 1, 0), make_float2(5, 5) },
-            { make_float3(1.5f, 0.0f, -1.0f), make_float3(0, 1, 0), make_float2(5, 0) },
+            { make_float3(-1.5f, 0.5f, -2.0f / 3), make_float3(0, 1, 0), make_float2(0, 0) },
+            { make_float3(-1.5f, 0.5f, 2.0f / 3), make_float3(0, 1, 0), make_float2(0, 5) },
+            { make_float3(1.5f, 0.5f, 2.0f / 3), make_float3(0, 1, 0), make_float2(5, 5) },
+            { make_float3(1.5f, 0.5f, -2.0f / 3), make_float3(0, 1, 0), make_float2(5, 0) },
+
+            { make_float3(-1.0f, -0.5f, -2.0f / 3), make_float3(0, 1, 0), make_float2(0, 0) },
+            { make_float3(-1.0f, -0.5f, 2.0f / 3), make_float3(0, 1, 0), make_float2(0, 5) },
+            { make_float3(1.0f, -0.5f, 2.0f / 3), make_float3(0, 1, 0), make_float2(5, 5) },
+            { make_float3(1.0f, -0.5f, -2.0f / 3), make_float3(0, 1, 0), make_float2(5, 0) },
         };
 
         Shared::Triangle triangles[] = {
             { 0, 1, 2 }, { 0, 2, 3 },
+            { 4, 5, 6 }, { 4, 6, 7 },
         };
 
         floorVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
@@ -237,7 +275,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     uint32_t numX = 5;
-    uint32_t numZ = 15;
+    uint32_t numZ = 10;
     float baseWidth = 0.03f;
 
     // JP: カーブ用GeometryInstanceは生成時に指定する必要がある。
@@ -254,7 +292,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
             baseWidth);
 
         linearCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -287,7 +325,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
             baseWidth);
 
         quadraticCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -310,6 +348,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
         quadraticCurveGeomInst.setUserData(geomData);
     }
 
+    // Quadratic B-Spline Rocaps
+    optixu::GeometryInstance quadraticRocapCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::QuadraticBSplineRocaps);
+    cudau::TypedBuffer<Shared::CurveVertex> quadraticRocapCurveVertexBuffer;
+    cudau::TypedBuffer<uint32_t> quadraticRocapCurveSegmentIndexBuffer;
+    {
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS>(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
+            baseWidth);
+
+        quadraticRocapCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        quadraticRocapCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.curveVertexBuffer = quadraticRocapCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = quadraticRocapCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
+
+        quadraticRocapCurveGeomInst.setVertexBuffer(optixu::BufferView(
+            quadraticRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            quadraticRocapCurveVertexBuffer.numElements(), quadraticRocapCurveVertexBuffer.stride()));
+        quadraticRocapCurveGeomInst.setWidthBuffer(optixu::BufferView(
+            quadraticRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            quadraticRocapCurveVertexBuffer.numElements(), quadraticRocapCurveVertexBuffer.stride()));
+        quadraticRocapCurveGeomInst.setSegmentIndexBuffer(quadraticRocapCurveSegmentIndexBuffer);
+        quadraticRocapCurveGeomInst.setCurveEndcapFlags(curveEndcap);
+        quadraticRocapCurveGeomInst.setMaterial(0, 0, matForQuadraticRocapCurves);
+        quadraticRocapCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        quadraticRocapCurveGeomInst.setUserData(geomData);
+    }
+
     // Cubic B-Splines
     optixu::GeometryInstance cubicCurveGeomInst =
         scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
@@ -321,7 +393,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
             baseWidth);
 
         cubicCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -344,6 +416,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cubicCurveGeomInst.setUserData(geomData);
     }
 
+    // Cubic B-Spline Rocaps
+    optixu::GeometryInstance cubicRocapCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CubicBSplineRocaps);
+    cudau::TypedBuffer<Shared::CurveVertex> cubicRocapCurveVertexBuffer;
+    cudau::TypedBuffer<uint32_t> cubicRocapCurveSegmentIndexBuffer;
+    {
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS>(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
+            baseWidth);
+
+        cubicRocapCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        cubicRocapCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.curveVertexBuffer = cubicRocapCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = cubicRocapCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
+
+        cubicRocapCurveGeomInst.setVertexBuffer(optixu::BufferView(
+            cubicRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            cubicRocapCurveVertexBuffer.numElements(), cubicRocapCurveVertexBuffer.stride()));
+        cubicRocapCurveGeomInst.setWidthBuffer(optixu::BufferView(
+            cubicRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            cubicRocapCurveVertexBuffer.numElements(), cubicRocapCurveVertexBuffer.stride()));
+        cubicRocapCurveGeomInst.setSegmentIndexBuffer(cubicRocapCurveSegmentIndexBuffer);
+        cubicRocapCurveGeomInst.setCurveEndcapFlags(curveEndcap);
+        cubicRocapCurveGeomInst.setMaterial(0, 0, matForCubicRocapCurves);
+        cubicRocapCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        cubicRocapCurveGeomInst.setUserData(geomData);
+    }
+
     // Catmull-Rom Splines
     optixu::GeometryInstance catmullRomCurveGeomInst =
         scene.createGeometryInstance(optixu::GeometryType::CatmullRomSplines);
@@ -355,7 +461,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM>(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
             baseWidth);
 
         catmullRomCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -378,6 +484,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
         catmullRomCurveGeomInst.setUserData(geomData);
     }
 
+    // Catmull-Rom Spline Rocaps
+    optixu::GeometryInstance catmullRomRocapCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CatmullRomSplineRocaps);
+    cudau::TypedBuffer<Shared::CurveVertex> catmullRomRocapCurveVertexBuffer;
+    cudau::TypedBuffer<uint32_t> catmullRomRocapCurveSegmentIndexBuffer;
+    {
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateCurves<OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS>(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
+            baseWidth);
+
+        catmullRomRocapCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        catmullRomRocapCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.curveVertexBuffer = catmullRomRocapCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = catmullRomRocapCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
+
+        catmullRomRocapCurveGeomInst.setVertexBuffer(optixu::BufferView(
+            catmullRomRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            catmullRomRocapCurveVertexBuffer.numElements(), catmullRomRocapCurveVertexBuffer.stride()));
+        catmullRomRocapCurveGeomInst.setWidthBuffer(optixu::BufferView(
+            catmullRomRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            catmullRomRocapCurveVertexBuffer.numElements(), catmullRomRocapCurveVertexBuffer.stride()));
+        catmullRomRocapCurveGeomInst.setSegmentIndexBuffer(catmullRomRocapCurveSegmentIndexBuffer);
+        catmullRomRocapCurveGeomInst.setCurveEndcapFlags(curveEndcap);
+        catmullRomRocapCurveGeomInst.setMaterial(0, 0, matForCatmullRomRocapCurves);
+        catmullRomRocapCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        catmullRomRocapCurveGeomInst.setUserData(geomData);
+    }
+
     // Cubic Bezier Curves
     optixu::GeometryInstance cubicBezierCurveGeomInst =
         scene.createGeometryInstance(optixu::GeometryType::CubicBezier);
@@ -386,10 +526,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     {
         std::vector<Shared::CurveVertex> vertices;
         std::vector<uint32_t> indices;
-        generateBezierCurves(
+        generateCubicBezierCurves(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
             baseWidth);
 
         cubicBezierCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -412,6 +552,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cubicBezierCurveGeomInst.setUserData(geomData);
     }
 
+    // Cubic Bezier Rocap Curves
+    optixu::GeometryInstance cubicBezierRocapCurveGeomInst =
+        scene.createGeometryInstance(optixu::GeometryType::CubicBezierRocaps);
+    cudau::TypedBuffer<Shared::CurveVertex> cubicBezierRocapCurveVertexBuffer;
+    cudau::TypedBuffer<uint32_t> cubicBezierRocapCurveSegmentIndexBuffer;
+    {
+        std::vector<Shared::CurveVertex> vertices;
+        std::vector<uint32_t> indices;
+        generateCubicBezierCurves(
+            &vertices, &indices,
+            -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
+            baseWidth);
+
+        cubicBezierRocapCurveVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
+        cubicBezierRocapCurveSegmentIndexBuffer.initialize(cuContext, cudau::BufferType::Device, indices);
+
+        Shared::GeometryData geomData = {};
+        geomData.curveVertexBuffer = cubicBezierRocapCurveVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        geomData.segmentIndexBuffer = cubicBezierRocapCurveSegmentIndexBuffer.getROBuffer<enableBufferOobCheck>();
+
+        cubicBezierRocapCurveGeomInst.setVertexBuffer(optixu::BufferView(
+            cubicBezierRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, position),
+            cubicBezierRocapCurveVertexBuffer.numElements(), cubicBezierRocapCurveVertexBuffer.stride()));
+        cubicBezierRocapCurveGeomInst.setWidthBuffer(optixu::BufferView(
+            cubicBezierRocapCurveVertexBuffer.getCUdeviceptr() + offsetof(Shared::CurveVertex, width),
+            cubicBezierRocapCurveVertexBuffer.numElements(), cubicBezierRocapCurveVertexBuffer.stride()));
+        cubicBezierRocapCurveGeomInst.setSegmentIndexBuffer(cubicBezierRocapCurveSegmentIndexBuffer);
+        cubicBezierRocapCurveGeomInst.setCurveEndcapFlags(curveEndcap);
+        cubicBezierRocapCurveGeomInst.setMaterial(0, 0, matForCubicBezierRocapCurves);
+        cubicBezierRocapCurveGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        cubicBezierRocapCurveGeomInst.setUserData(geomData);
+    }
+
     // Flat Quadratic B-Splines
     optixu::GeometryInstance quadraticRibbonGeomInst =
         scene.createGeometryInstance(optixu::GeometryType::FlatQuadraticBSplines);
@@ -423,7 +597,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         generateRibbons(
             &vertices, &indices,
             -1.0f / 4.0f + 0.05f, 1.0f / 4.0f - 0.05f, numX,
-            -1.0f + 0.05f, 1.0f - 0.05f, numZ,
+            -2.0f / 3 + 0.05f, 2.0f / 3 - 0.05f, numZ,
             0.6f * baseWidth);
 
         quadraticRibbonVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices);
@@ -503,6 +677,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+    optixu::GeometryAccelerationStructure quadraticRocapCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::QuadraticBSplineRocaps);
+    cudau::Buffer quadraticRocapCurvesGasMem;
+    quadraticRocapCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
+    quadraticRocapCurvesGas.setNumMaterialSets(1);
+    quadraticRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    quadraticRocapCurvesGas.addChild(quadraticRocapCurveGeomInst);
+    quadraticRocapCurvesGas.prepareForBuild(&asMemReqs);
+    quadraticRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
     optixu::GeometryAccelerationStructure cubicCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplines);
     cudau::Buffer cubicCurvesGasMem;
@@ -513,6 +699,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cubicCurvesGas.addChild(cubicCurveGeomInst);
     cubicCurvesGas.prepareForBuild(&asMemReqs);
     cubicCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::GeometryAccelerationStructure cubicRocapCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBSplineRocaps);
+    cudau::Buffer cubicRocapCurvesGasMem;
+    cubicRocapCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
+    cubicRocapCurvesGas.setNumMaterialSets(1);
+    cubicRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicRocapCurvesGas.addChild(cubicRocapCurveGeomInst);
+    cubicRocapCurvesGas.prepareForBuild(&asMemReqs);
+    cubicRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     optixu::GeometryAccelerationStructure catmullRomCurvesGas =
@@ -527,6 +725,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     catmullRomCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
+    optixu::GeometryAccelerationStructure catmullRomRocapCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CatmullRomSplineRocaps);
+    cudau::Buffer catmullRomRocapCurvesGasMem;
+    catmullRomRocapCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
+    catmullRomRocapCurvesGas.setNumMaterialSets(1);
+    catmullRomRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    catmullRomRocapCurvesGas.addChild(catmullRomRocapCurveGeomInst);
+    catmullRomRocapCurvesGas.prepareForBuild(&asMemReqs);
+    catmullRomRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
     optixu::GeometryAccelerationStructure cubicBezierCurvesGas =
         scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBezier);
     cudau::Buffer cubicBezierCurvesGasMem;
@@ -537,6 +747,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cubicBezierCurvesGas.addChild(cubicBezierCurveGeomInst);
     cubicBezierCurvesGas.prepareForBuild(&asMemReqs);
     cubicBezierCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::GeometryAccelerationStructure cubicBezierRocapCurvesGas =
+        scene.createGeometryAccelerationStructure(optixu::GeometryType::CubicBezierRocaps);
+    cudau::Buffer cubicBezierRocapCurvesGasMem;
+    cubicBezierRocapCurvesGas.setConfiguration(
+        curveASTradeOff, curveASUpdatable, curveASCompactable);
+    cubicBezierRocapCurvesGas.setNumMaterialSets(1);
+    cubicBezierRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicBezierRocapCurvesGas.addChild(cubicBezierRocapCurveGeomInst);
+    cubicBezierRocapCurvesGas.prepareForBuild(&asMemReqs);
+    cubicBezierRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     optixu::GeometryAccelerationStructure quadraticRibbonsGas =
@@ -560,7 +782,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     float linearCurvesInstXfm[] = {
         1.0f, 0.0f, 0.0f, -1.25f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.5f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance linearCurvesInst = scene.createInstance();
@@ -569,43 +791,79 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     float quadraticCurvesInstXfm[] = {
         1.0f, 0.0f, 0.0f, -0.75f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.5f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance quadraticCurvesInst = scene.createInstance();
     quadraticCurvesInst.setChild(quadraticCurvesGas);
     quadraticCurvesInst.setTransform(quadraticCurvesInstXfm);
 
+    float quadraticRocapCurvesInstXfm[] = {
+        1.0f, 0.0f, 0.0f, -0.75f,
+        0.0f, 1.0f, 0.0f, -0.5f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance quadraticRocapCurvesInst = scene.createInstance();
+    quadraticRocapCurvesInst.setChild(quadraticRocapCurvesGas);
+    quadraticRocapCurvesInst.setTransform(quadraticRocapCurvesInstXfm);
+
     float cubicCurvesInstXfm[] = {
         1.0f, 0.0f, 0.0f, -0.25f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.5f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance cubicCurvesInst = scene.createInstance();
     cubicCurvesInst.setChild(cubicCurvesGas);
     cubicCurvesInst.setTransform(cubicCurvesInstXfm);
 
+    float cubicRocapCurvesInstXfm[] = {
+        1.0f, 0.0f, 0.0f, -0.25f,
+        0.0f, 1.0f, 0.0f, -0.5f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance cubicRocapCurvesInst = scene.createInstance();
+    cubicRocapCurvesInst.setChild(cubicRocapCurvesGas);
+    cubicRocapCurvesInst.setTransform(cubicRocapCurvesInstXfm);
+
     float catmullRomCurvesInstXfm[] = {
         1.0f, 0.0f, 0.0f, 0.25f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.5f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance catmullRomCurvesInst = scene.createInstance();
     catmullRomCurvesInst.setChild(catmullRomCurvesGas);
     catmullRomCurvesInst.setTransform(catmullRomCurvesInstXfm);
 
+    float catmullRomRocapCurvesInstXfm[] = {
+        1.0f, 0.0f, 0.0f, 0.25f,
+        0.0f, 1.0f, 0.0f, -0.5f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance catmullRomRocapCurvesInst = scene.createInstance();
+    catmullRomRocapCurvesInst.setChild(catmullRomRocapCurvesGas);
+    catmullRomRocapCurvesInst.setTransform(catmullRomRocapCurvesInstXfm);
+
     float cubicBezierCurvesInstXfm[] = {
         1.0f, 0.0f, 0.0f, 0.75f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.5f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance cubicBezierCurvesInst = scene.createInstance();
     cubicBezierCurvesInst.setChild(cubicBezierCurvesGas);
     cubicBezierCurvesInst.setTransform(cubicBezierCurvesInstXfm);
 
+    float cubicBezierRocapCurvesInstXfm[] = {
+        1.0f, 0.0f, 0.0f, 0.75f,
+        0.0f, 1.0f, 0.0f, -0.5f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    };
+    optixu::Instance cubicBezierRocapCurvesInst = scene.createInstance();
+    cubicBezierRocapCurvesInst.setChild(cubicBezierRocapCurvesGas);
+    cubicBezierRocapCurvesInst.setTransform(cubicBezierRocapCurvesInstXfm);
+
     float quadraticRibbonsInstXfm[] = {
         1.0f, 0.0f, 0.0f, 1.25f,
-        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.5f,
         0.0f, 0.0f, 1.0f, 0.0f
     };
     optixu::Instance quadraticRibbonsInst = scene.createInstance();
@@ -623,9 +881,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(floorInst);
     ias.addChild(linearCurvesInst);
     ias.addChild(quadraticCurvesInst);
+    ias.addChild(quadraticRocapCurvesInst);
     ias.addChild(cubicCurvesInst);
+    ias.addChild(cubicRocapCurvesInst);
     ias.addChild(catmullRomCurvesInst);
+    ias.addChild(catmullRomRocapCurvesInst);
     ias.addChild(cubicBezierCurvesInst);
+    ias.addChild(cubicBezierRocapCurvesInst);
     ias.addChild(quadraticRibbonsInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -645,9 +907,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorGas.rebuild(cuStream, floorGasMem, asBuildScratchMem);
     linearCurvesGas.rebuild(cuStream, linearCurvesGasMem, asBuildScratchMem);
     quadraticCurvesGas.rebuild(cuStream, quadraticCurvesGasMem, asBuildScratchMem);
+    quadraticRocapCurvesGas.rebuild(cuStream, quadraticRocapCurvesGasMem, asBuildScratchMem);
     cubicCurvesGas.rebuild(cuStream, cubicCurvesGasMem, asBuildScratchMem);
+    cubicRocapCurvesGas.rebuild(cuStream, cubicRocapCurvesGasMem, asBuildScratchMem);
     catmullRomCurvesGas.rebuild(cuStream, catmullRomCurvesGasMem, asBuildScratchMem);
+    catmullRomRocapCurvesGas.rebuild(cuStream, catmullRomRocapCurvesGasMem, asBuildScratchMem);
     cubicBezierCurvesGas.rebuild(cuStream, cubicBezierCurvesGasMem, asBuildScratchMem);
+    cubicBezierRocapCurvesGas.rebuild(cuStream, cubicBezierRocapCurvesGasMem, asBuildScratchMem);
     quadraticRibbonsGas.rebuild(cuStream, quadraticRibbonsGasMem, asBuildScratchMem);
 
     // JP: 静的なメッシュはコンパクションもしておく。
@@ -664,9 +930,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
         { floorGas, &floorGasMem, 0, 0 },
         { linearCurvesGas, &linearCurvesGasMem, 0, 0 },
         { quadraticCurvesGas, &quadraticCurvesGasMem, 0, 0 },
+        { quadraticRocapCurvesGas, &quadraticRocapCurvesGasMem, 0, 0 },
         { cubicCurvesGas, &cubicCurvesGasMem, 0, 0 },
+        { cubicRocapCurvesGas, &cubicRocapCurvesGasMem, 0, 0 },
         { catmullRomCurvesGas, &catmullRomCurvesGasMem, 0, 0 },
+        { catmullRomRocapCurvesGas, &catmullRomRocapCurvesGasMem, 0, 0 },
         { cubicBezierCurvesGas, &cubicBezierCurvesGasMem, 0, 0 },
+        { cubicBezierRocapCurvesGas, &cubicBezierRocapCurvesGasMem, 0, 0 },
         { quadraticRibbonsGas, &quadraticRibbonsGasMem, 0, 0 },
     };
     size_t compactedASMemOffset = 0;
@@ -768,21 +1038,33 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.destroy();
 
     quadraticRibbonsInst.destroy();
+    cubicBezierRocapCurvesInst.destroy();
     cubicBezierCurvesInst.destroy();
+    catmullRomRocapCurvesInst.destroy();
     catmullRomCurvesInst.destroy();
+    cubicRocapCurvesInst.destroy();
     cubicCurvesInst.destroy();
+    quadraticRocapCurvesInst.destroy();
     quadraticCurvesInst.destroy();
     linearCurvesInst.destroy();
     floorInst.destroy();
 
     quadraticRibbonsGasMem.finalize();
     quadraticRibbonsGas.destroy();
+    cubicBezierRocapCurvesGasMem.finalize();
+    cubicBezierRocapCurvesGas.destroy();
     cubicBezierCurvesGasMem.finalize();
     cubicBezierCurvesGas.destroy();
+    catmullRomRocapCurvesGasMem.finalize();
+    catmullRomRocapCurvesGas.destroy();
     catmullRomCurvesGasMem.finalize();
     catmullRomCurvesGas.destroy();
+    cubicRocapCurvesGasMem.finalize();
+    cubicRocapCurvesGas.destroy();
     cubicCurvesGasMem.finalize();
     cubicCurvesGas.destroy();
+    quadraticRocapCurvesGasMem.finalize();
+    quadraticRocapCurvesGas.destroy();
     quadraticCurvesGasMem.finalize();
     quadraticCurvesGas.destroy();
     linearCurvesGasMem.finalize();
@@ -794,17 +1076,33 @@ int32_t main(int32_t argc, const char* argv[]) try {
     quadraticRibbonVertexBuffer.finalize();
     quadraticRibbonGeomInst.destroy();
 
+    cubicBezierRocapCurveSegmentIndexBuffer.finalize();
+    cubicBezierRocapCurveVertexBuffer.finalize();
+    cubicBezierRocapCurveGeomInst.destroy();
+
     cubicBezierCurveSegmentIndexBuffer.finalize();
     cubicBezierCurveVertexBuffer.finalize();
     cubicBezierCurveGeomInst.destroy();
+
+    catmullRomRocapCurveSegmentIndexBuffer.finalize();
+    catmullRomRocapCurveVertexBuffer.finalize();
+    catmullRomRocapCurveGeomInst.destroy();
 
     catmullRomCurveSegmentIndexBuffer.finalize();
     catmullRomCurveVertexBuffer.finalize();
     catmullRomCurveGeomInst.destroy();
 
+    cubicRocapCurveSegmentIndexBuffer.finalize();
+    cubicRocapCurveVertexBuffer.finalize();
+    cubicRocapCurveGeomInst.destroy();
+
     cubicCurveSegmentIndexBuffer.finalize();
     cubicCurveVertexBuffer.finalize();
     cubicCurveGeomInst.destroy();
+
+    quadraticRocapCurveSegmentIndexBuffer.finalize();
+    quadraticRocapCurveVertexBuffer.finalize();
+    quadraticRocapCurveGeomInst.destroy();
 
     quadraticCurveSegmentIndexBuffer.finalize();
     quadraticCurveVertexBuffer.finalize();
@@ -821,9 +1119,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     scene.destroy();
 
     matForQuadraticRibbons.destroy();
+    matForCubicBezierRocapCurves.destroy();
     matForCubicBezierCurves.destroy();
+    matForCatmullRomRocapCurves.destroy();
     matForCatmullRomCurves.destroy();
+    matForCubicRocapCurves.destroy();
     matForCubicCurves.destroy();
+    matForQuadraticRocapCurves.destroy();
     matForQuadraticCurves.destroy();
     matForLinearCurves.destroy();
     matForTriangles.destroy();
@@ -833,9 +1135,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.finalize();
 
     hitProgramGroupForQuadraticRibbons.destroy();
+    hitProgramGroupForCubicBezierRocapCurves.destroy();
     hitProgramGroupForCubicBezierCurves.destroy();
+    hitProgramGroupForCatmullRomRocapCurves.destroy();
     hitProgramGroupForCatmullRomCurves.destroy();
+    hitProgramGroupForCubicRocapCurves.destroy();
     hitProgramGroupForCubicCurves.destroy();
+    hitProgramGroupForQuadraticRocapCurves.destroy();
     hitProgramGroupForQuadraticCurves.destroy();
     hitProgramGroupForLinearCurves.destroy();
     hitProgramGroupForTriangles.destroy();
@@ -873,16 +1179,30 @@ static void generateCurves(
     std::uniform_real_distribution<float> u01;
 
     uint32_t curveDegree;
-    if (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+    if constexpr (
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
+    {
         curveDegree = 1;
-    else if (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)
+    }
+    else if constexpr (
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS)
+    {
         curveDegree = 2;
-    else if (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
-             curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
-             curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER)
+    }
+    else if constexpr (
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS ||
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS ||
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER ||
+        curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS)
+    {
         curveDegree = 3;
-    else
-        Assert_ShouldNotBeCalled();
+    }
+    else {
+        static_assert(false, "Invalid curve type.");
+    }
 
     vertices->clear();
     indices->clear();
@@ -949,7 +1269,7 @@ static void generateCurves(
     }
 }
 
-static void generateBezierCurves(
+static void generateCubicBezierCurves(
     std::vector<Shared::CurveVertex>* vertices,
     std::vector<uint32_t>* indices,
     float xStart, float xEnd, uint32_t numX,
@@ -973,7 +1293,6 @@ static void generateBezierCurves(
 
             uint32_t numSegments = uSeg(rng);
             uint32_t indexStart = vertices->size();
-
 
             // Base
             {
