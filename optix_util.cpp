@@ -283,10 +283,14 @@ namespace optixu {
             geomType == GeometryType::Triangles ||
             geomType == GeometryType::LinearSegments ||
             geomType == GeometryType::QuadraticBSplines ||
+            geomType == GeometryType::QuadraticBSplineRocaps ||
             geomType == GeometryType::FlatQuadraticBSplines ||
             geomType == GeometryType::CubicBSplines ||
+            geomType == GeometryType::CubicBSplineRocaps ||
             geomType == GeometryType::CatmullRomSplines ||
+            geomType == GeometryType::CatmullRomSplineRocaps ||
             geomType == GeometryType::CubicBezier ||
+            geomType == GeometryType::CubicBezierRocaps ||
             geomType == GeometryType::Spheres ||
             geomType == GeometryType::CustomPrimitives,
             "Invalid geometry type: %u.",
@@ -299,10 +303,14 @@ namespace optixu {
             geomType == GeometryType::Triangles ||
             geomType == GeometryType::LinearSegments ||
             geomType == GeometryType::QuadraticBSplines ||
+            geomType == GeometryType::QuadraticBSplineRocaps ||
             geomType == GeometryType::FlatQuadraticBSplines ||
             geomType == GeometryType::CubicBSplines ||
+            geomType == GeometryType::CubicBSplineRocaps ||
             geomType == GeometryType::CatmullRomSplines ||
+            geomType == GeometryType::CatmullRomSplineRocaps ||
             geomType == GeometryType::CubicBezier ||
+            geomType == GeometryType::CubicBezierRocaps ||
             geomType == GeometryType::Spheres ||
             geomType == GeometryType::CustomPrimitives,
             "Invalid geometry type: %u.",
@@ -618,14 +626,22 @@ namespace optixu {
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR;
             else if (geomType == GeometryType::QuadraticBSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE;
+            else if (geomType == GeometryType::QuadraticBSplineRocaps)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS;
             else if (geomType == GeometryType::FlatQuadraticBSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE;
             else if (geomType == GeometryType::CubicBSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE;
+            else if (geomType == GeometryType::CubicBSplineRocaps)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS;
             else if (geomType == GeometryType::CatmullRomSplines)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM;
+            else if (geomType == GeometryType::CatmullRomSplineRocaps)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS;
             else if (geomType == GeometryType::CubicBezier)
                 curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER;
+            else if (geomType == GeometryType::CubicBezierRocaps)
+                curveArray.curveType = OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS;
             else
                 optixuAssert_ShouldNotBeCalled();
             curveArray.endcapFlags = geom.endcapFlags;
@@ -1612,11 +1628,19 @@ namespace optixu {
             "triangles",
             "linear segments",
             "quadratic B-splines",
+            "quadratic B-spline rocaps",
             "flat quadratic B-splines",
             "cubic B-splines",
+            "cubic B-spline rocaps",
             "Catmull-Rom splines",
+            "Catmull-Rom spline rocaps",
             "cubic Bezier splines",
+            "cubic Bezier spline rocaps",
+            "spheres",
             "custom primitives" };
+        static_assert(
+            std::size(geomTypeStrs) == static_cast<uint32_t>(GeometryType::Count),
+            "Unexpected geometry type counts.");
         m->throwRuntimeError(
             _geomInst->getGeometryType() == m->geomType,
             "This GAS was created for %s.",
@@ -3015,10 +3039,14 @@ namespace optixu {
     {
         if (primType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS &&
             primType != OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS &&
             primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER &&
+            primType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS &&
             primType != OPTIX_PRIMITIVE_TYPE_SPHERE)
             return nullptr;
 
@@ -3371,12 +3399,16 @@ namespace optixu {
         const PayloadType &payloadType) const
     {
         m->throwRuntimeError(
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
-            curveType != OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE ||
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
-            curveType != OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER,
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS ||
+            curveType == OPTIX_PRIMITIVE_TYPE_FLAT_QUADRATIC_BSPLINE ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER ||
+            curveType == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS,
             "This is a hit program group for curves.");
         _Module* const _module_CH = extract(module_CH);
         _Module* const _module_AH = extract(module_AH);

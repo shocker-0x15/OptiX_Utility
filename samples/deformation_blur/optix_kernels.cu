@@ -102,10 +102,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcSphereSurfaceNormal(
     const GeometryData &geom, uint32_t primIndex, float rayTime, const float3 &hp) {
     float3 center;
     if constexpr (useEmbeddedVertexData) {
-        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-        uint32_t sbtGasIndex = optixGetSbtGASIndex();
         float4 centerAndRadius;
-        optixGetSphereData(gasHandle, primIndex, sbtGasIndex, rayTime, &centerAndRadius);
+        optixGetSphereData(&centerAndRadius);
         center = make_float3(centerAndRadius);
     }
     else {

@@ -6,6 +6,7 @@ namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;
 
     static constexpr bool useEmbeddedVertexData = true;
+    static constexpr bool tuneCurveParameterForRocaps = true;
 
 
 
