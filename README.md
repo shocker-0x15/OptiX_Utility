@@ -54,7 +54,7 @@ Currently based on OptiX 9.0.0
 - Geometry instancing with different material sets [[&raquo;]](samples/material_sets/)
 - Callable programs [[&raquo;]](samples/callable_program/)
 - OptiX-IR support for better debugging\
-  \* but fow now (OptiX 8.1.0 / CUDA 12.6.2 and the 566.03 diver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
+  \* but for now (OptiX 8.1.0 / CUDA 12.6.2 and the 566.03 driver), OptiX-IR itself causes some weird behavior, so using traditional ptx input is recommended until we get the update...
 - OptiX AI denoiser (AOV Output Not Tested) [[&raquo;]](samples/denoiser/) [[&raquo;]](samples/temporal_denoiser/)
   - HDR
   - HDR + Upscaling 2x
