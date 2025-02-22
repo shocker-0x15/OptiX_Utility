@@ -45,6 +45,7 @@
     {
         "name": "curve_primitive",
         "sample": "curve_primitive",
+        "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference.png"

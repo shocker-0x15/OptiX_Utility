@@ -6,7 +6,6 @@ namespace Shared {
     static constexpr float Pi = 3.14159265358979323846f;
 
     static constexpr bool useEmbeddedVertexData = true;
-    static constexpr bool tuneCurveParameterForRocaps = true;
 
 
 
@@ -95,8 +94,11 @@ namespace Shared {
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
         int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
-        optixu::BlockBuffer2D<float4, 1> resultBuffer;
+        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
+        float2 subPixelOffset;
+        uint32_t sampleIndex : 8;
+        uint32_t enableRocapsRefinement : 1;
     };
 
     using MyPayloadSignature = optixu::PayloadSignature<float3>;
