@@ -76,8 +76,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
-    float x = static_cast<float>(launchIndex.x + 0.5f) / plp.imageSize.x;
-    float y = static_cast<float>(launchIndex.y + 0.5f) / plp.imageSize.y;
+    float x = static_cast<float>(launchIndex.x + plp.subPixelOffset.x) / plp.imageSize.x;
+    float y = static_cast<float>(launchIndex.y + plp.subPixelOffset.y) / plp.imageSize.y;
     float vh = 2 * std::tan(plp.camera.fovY * 0.5f);
     float vw = plp.camera.aspect * vh;
 
@@ -91,7 +91,12 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         RayType_Primary, NumRayTypes, RayType_Primary,
         color);
 
-    plp.resultBuffer[launchIndex] = make_float4(color, 1.0f);
+    float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
+    if (plp.sampleIndex > 0)
+        prevColorResult = getXYZ(plp.colorAccumBuffer.read(launchIndex));
+    float curWeight = 1.0f / (1 + plp.sampleIndex);
+    float3 colorResult = (1 - curWeight) * prevColorResult + curWeight * color;
+    plp.colorAccumBuffer.write(launchIndex, make_float4(colorResult, 1.0f));
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
@@ -124,7 +129,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         float3 hp = optixGetWorldRayOrigin() + optixGetRayTmax() * rayDir;
         float3 hpInObj = optixTransformPointFromWorldToObjectSpace(hp);
         float curveParam = optixGetCurveParameter();
-        if constexpr (tuneCurveParameterForRocaps) {
+        if (plp.enableRocapsRefinement) {
             // Enable this tuning only when normal vectors exhibit artifacts for rocaps curves
             // and the artifacts cannot be accepted.
             if (primType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS ||

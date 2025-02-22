@@ -28,6 +28,8 @@ EN: This sample shows how to handle curves.
 
 #include "curve_primitive_shared.h"
 
+#include "../common/gui_common.h"
+
 template <OptixPrimitiveType curveType>
 static void generateCurves(
     std::vector<Shared::CurveVertex>* vertices,
@@ -51,6 +53,21 @@ static void generateRibbons(
     float width);
 
 int32_t main(int32_t argc, const char* argv[]) try {
+    const std::filesystem::path resourceDir = getExecutableDirectory() / "curve_primitive";
+
+    bool takeScreenShot = false;
+
+    uint32_t argIdx = 1;
+    while (argIdx < argc) {
+        std::string_view arg = argv[argIdx];
+        if (arg == "--screen-shot") {
+            takeScreenShot = true;
+        }
+        else
+            throw std::runtime_error("Unknown command line argument.");
+        ++argIdx;
+    }
+
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
@@ -984,24 +1001,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    constexpr uint32_t renderTargetSizeX = 1280;
-    constexpr uint32_t renderTargetSizeY = 720;
-    optixu::HostBlockBuffer2D<float4, 1> accumBuffer;
-    accumBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
+    constexpr int32_t initWindowContentWidth = 1280;
+    constexpr int32_t initWindowContentHeight = 720;
 
-
+    const auto computeHaltonSequence = []
+    (uint32_t base, uint32_t idx) {
+        const float recBase = 1.0f / base;
+        float ret = 0.0f;
+        float scale = 1.0f;
+        while (idx) {
+            scale *= recBase;
+            ret += (idx % base) * scale;
+            idx /= base;
+        }
+        return ret;
+    };
+    float2 subPixelOffsets[64];
+    for (int i = 0; i < lengthof(subPixelOffsets); ++i)
+        subPixelOffsets[i] = float2(computeHaltonSequence(2, i), computeHaltonSequence(3, i));
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
-    plp.imageSize.x = renderTargetSizeX;
-    plp.imageSize.y = renderTargetSizeY;
-    plp.resultBuffer = accumBuffer.getBlockBuffer2D();
+    plp.imageSize = int2(initWindowContentWidth, initWindowContentHeight);
     plp.camera.fovY = 50 * pi_v<float> / 180;
-    plp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    plp.camera.position = make_float3(0, 1.3f, 2.6f);
-    plp.camera.orientation = rotateX3x3(-pi_v<float> / 7) * rotateY3x3(pi_v<float>);
-    //plp.camera.position = make_float3(0, 0.01f, 2.5f);
-    //plp.camera.orientation = rotateY3x3(pi_v<float>);
+    plp.camera.aspect = static_cast<float>(initWindowContentWidth) / initWindowContentHeight;
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -1011,19 +1034,196 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-    pipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+    // ----------------------------------------------------------------
+    // JP: ウインドウの表示。
+    // EN: Display the window.
 
-    saveImage("output.png", accumBuffer, false, false);
+    InitialConfig initConfig = {};
+    initConfig.windowTitle = "OptiX Utility - Curve Primitive";
+    initConfig.resourceDir = resourceDir;
+    initConfig.windowContentRenderWidth = initWindowContentWidth;
+    initConfig.windowContentRenderHeight = initWindowContentHeight;
+    initConfig.cameraPosition = make_float3(0, 1.3f, 2.6f);
+    initConfig.cameraOrientation = qRotateX(-pi_v<float> / 7) * qRotateY(pi_v<float>);
+    initConfig.cameraMovingSpeed = 0.025f;
+    initConfig.cuContext = cuContext;
+
+    GUIFramework framework;
+    framework.initialize(initConfig);
+
+    cudau::Array outputArray;
+    outputArray.initializeFromGLTexture2D(
+        cuContext, framework.getOutputTexture().getHandle(),
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+
+    cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
+    outputBufferSurfaceHolder.initialize({ &outputArray });
+
+    struct GPUTimer {
+        cudau::Timer render;
+
+        void initialize(CUcontext context) {
+            render.initialize(context);
+        }
+        void finalize() {
+            render.finalize();
+        }
+    };
+
+    GPUTimer gpuTimers[2];
+    gpuTimers[0].initialize(cuContext);
+    gpuTimers[1].initialize(cuContext);
+
+    const auto onRenderLoop = [&]
+    (const RunArguments &args) {
+        const uint64_t frameIndex = args.frameIndex;
+        const CUstream curStream = args.curStream;
+        GPUTimer &curGPUTimer = gpuTimers[frameIndex % 2];
+
+        // Camera Window
+        bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
+        {
+            ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Camera & Rendering", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("W/A/S/D/R/F: Move, Q/E: Tilt");
+            ImGui::Text("Mouse Middle Drag: Rotate");
+
+            if (ImGui::InputFloat3("Position", reinterpret_cast<float*>(&args.cameraPosition)))
+                cameraIsActuallyMoving = true;
+            static float rollPitchYaw[3];
+            args.tempCameraOrientation.toEulerAngles(&rollPitchYaw[0], &rollPitchYaw[1], &rollPitchYaw[2]);
+            rollPitchYaw[0] *= 180 / pi_v<float>;
+            rollPitchYaw[1] *= 180 / pi_v<float>;
+            rollPitchYaw[2] *= 180 / pi_v<float>;
+            if (ImGui::InputFloat3("Roll/Pitch/Yaw", rollPitchYaw)) {
+                args.cameraOrientation = qFromEulerAngles(
+                    rollPitchYaw[0] * pi_v<float> / 180,
+                    rollPitchYaw[1] * pi_v<float> / 180,
+                    rollPitchYaw[2] * pi_v<float> / 180);
+                cameraIsActuallyMoving = true;
+            }
+            ImGui::Text("Pos. Speed (T/G): %g", args.cameraPositionalMovingSpeed);
+
+            ImGui::End();
+        }
+
+        plp.camera.position = args.cameraPosition;
+        plp.camera.orientation = args.tempCameraOrientation.toMatrix3x3();
+
+
+
+        // Debug Window
+        bool visModeChanged = false;
+        static bool enableRocapsRefinement = true;
+        {
+            ImGui::SetNextWindowPos(ImVec2(944, 8), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            visModeChanged |= ImGui::Checkbox("Refine for Rocaps", &enableRocapsRefinement);
+
+            ImGui::End();
+        }
+
+        // Stats Window
+        {
+            ImGui::SetNextWindowPos(ImVec2(8, 144), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            static MovingAverageTime renderTime;
+
+            renderTime.append(curGPUTimer.render.report());
+
+            //ImGui::SetNextItemWidth(100.0f);
+            ImGui::Text("render: %.3f [ms]", renderTime.getAverage());
+
+            ImGui::End();
+        }
+
+
+
+        bool firstAccumFrame =
+            cameraIsActuallyMoving ||
+            args.resized ||
+            frameIndex == 0 ||
+            visModeChanged;
+        bool isNewSequence = args.resized || frameIndex == 0;
+        static uint32_t numAccumFrames = 0;
+        if (firstAccumFrame)
+            numAccumFrames = 0;
+
+        outputBufferSurfaceHolder.beginCUDAAccess(curStream);
+
+        // Render
+        {
+            curGPUTimer.render.start(curStream);
+
+            plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
+            plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
+            plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
+            plp.enableRocapsRefinement = enableRocapsRefinement;
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
+            pipeline.launch(
+                curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);
+            ++numAccumFrames;
+
+            curGPUTimer.render.stop(curStream);
+        }
+
+        outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
+
+
+
+        ReturnValuesToRenderLoop ret = {};
+        ret.enable_sRGB = false;
+        ret.finish = false;
+
+        if (takeScreenShot && frameIndex + 1 == lengthof(subPixelOffsets)) {
+            CUDADRV_CHECK(cuStreamSynchronize(curStream));
+            const uint32_t numPixels = args.windowContentRenderWidth * args.windowContentRenderHeight;
+            auto rawImage = new float4[numPixels];
+            glGetTextureSubImage(
+                args.outputTexture->getHandle(), 0,
+                0, 0, 0, args.windowContentRenderWidth, args.windowContentRenderHeight, 1,
+                GL_RGBA, GL_FLOAT, sizeof(float4) * numPixels, rawImage);
+            saveImage("output.png", args.windowContentRenderWidth, args.windowContentRenderHeight, rawImage,
+                      false, ret.enable_sRGB);
+            delete[] rawImage;
+            ret.finish = true;
+        }
+
+        return ret;
+    };
+
+    const auto onResolutionChange = [&]
+    (CUstream curStream, uint64_t frameIndex,
+     int32_t windowContentWidth, int32_t windowContentHeight) {
+        outputArray.finalize();
+        outputArray.initializeFromGLTexture2D(
+            cuContext, framework.getOutputTexture().getHandle(),
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable);
+
+        // EN: update the pipeline parameters.
+        plp.imageSize = int2(windowContentWidth, windowContentHeight);
+        plp.camera.aspect = static_cast<float>(windowContentWidth) / windowContentHeight;
+    };
+
+    framework.run(onRenderLoop, onResolutionChange);
+
+    gpuTimers[1].finalize();
+    gpuTimers[0].finalize();
+
+    outputBufferSurfaceHolder.finalize();
+    outputArray.finalize();
+
+    framework.finalize();
+
+    // END: Display the window.
+    // ----------------------------------------------------------------
 
 
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
-
-
-
-    accumBuffer.finalize();
 
 
 
