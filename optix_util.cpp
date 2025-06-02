@@ -126,6 +126,10 @@ namespace optixu {
         return m->cuContext;
     }
 
+    OptixDeviceContext Context::getOptixDeviceContext() const {
+        return m->rawContext;
+    }
+
 
 
     void Material::Priv::setRecordHeader(
