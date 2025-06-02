@@ -960,7 +960,9 @@ struct AABB {
     float3 minP;
     float3 maxP;
 
-    CUDA_COMMON_FUNCTION AABB() : minP(make_float3(INFINITY)), maxP(make_float3(-INFINITY)) {}
+    CUDA_COMMON_FUNCTION AABB() :
+        minP(make_float3(INFINITY)),
+        maxP(make_float3(-INFINITY)) {}
     CUDA_COMMON_FUNCTION AABB(const float3 &_minP, const float3 &_maxP) :
         minP(_minP), maxP(_maxP) {}
 
@@ -990,8 +992,8 @@ struct AABBAsOrderedInt {
     float3AsOrderedInt maxP;
 
     CUDA_COMMON_FUNCTION AABBAsOrderedInt() :
-        minP(make_float3(INFINITY)), maxP(make_float3(-INFINITY)) {
-    }
+        minP(make_float3(INFINITY)),
+        maxP(make_float3(-INFINITY)) {}
     CUDA_COMMON_FUNCTION AABBAsOrderedInt(const AABB &v) :
         minP(v.minP), maxP(v.maxP) {
     }

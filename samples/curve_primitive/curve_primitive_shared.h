@@ -39,32 +39,6 @@ namespace Shared {
 
 
 
-    class PCG32RNG {
-        uint64_t state;
-
-    public:
-        CUDA_COMMON_FUNCTION CUDA_INLINE PCG32RNG() {}
-
-        CUDA_COMMON_FUNCTION CUDA_INLINE void setState(uint32_t _state) { state = _state; }
-
-        CUDA_COMMON_FUNCTION CUDA_INLINE uint32_t operator()() {
-            uint64_t oldstate = state;
-            // Advance internal state
-            state = oldstate * 6364136223846793005ULL + 1;
-            // Calculate output function (XSH RR), uses old state for max ILP
-            uint32_t xorshifted = static_cast<uint32_t>(((oldstate >> 18u) ^ oldstate) >> 27u);
-            uint32_t rot = oldstate >> 59u;
-            return (xorshifted >> rot) | (xorshifted << ((-static_cast<int32_t>(rot)) & 31));
-        }
-
-        CUDA_COMMON_FUNCTION CUDA_INLINE float getFloat0cTo1o() {
-            uint32_t fractionBits = ((*this)() >> 9) | 0x3f800000;
-            return *(float*)&fractionBits - 1.0f;
-        }
-    };
-
-
-
     struct PerspectiveCamera {
         float aspect;
         float fovY;
