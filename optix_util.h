@@ -1527,6 +1527,7 @@ namespace optixu {
         void destroy();
 
         CUcontext getCUcontext() const;
+        OptixDeviceContext getOptixDeviceContext() const;
 
         void setLogCallback(OptixLogCallback callback, void* callbackData, uint32_t logLevel) const;
 
