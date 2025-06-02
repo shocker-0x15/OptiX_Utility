@@ -239,6 +239,7 @@ add_basic_sample(denoiser)
 add_basic_sample(temporal_denoiser)
 add_basic_sample(payload_annotation)
 add_basic_sample(opacity_micro_map)
+add_basic_sample(clusters)
 
 add_subdirectory(pick)
 add_subdirectory(scene_edit)

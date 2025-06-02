@@ -45,6 +45,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "__support_files", "__suppor
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "10.callable_program", "callable_program\callable_program.vcxproj", "{457B5783-F24A-4B0E-B07F-B4B03B89781B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "12.temporal_denoiser", "clusters\clusters.vcxproj", "{3A69F7C7-4C3E-4960-8675-4B4BF0853A17}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -127,6 +129,10 @@ Global
 		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Debug|x64.Build.0 = Debug|x64
 		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Release|x64.ActiveCfg = Release|x64
 		{457B5783-F24A-4B0E-B07F-B4B03B89781B}.Release|x64.Build.0 = Release|x64
+		{3A69F7C7-4C3E-4960-8675-4B4BF0853A17}.Debug|x64.ActiveCfg = Debug|x64
+		{3A69F7C7-4C3E-4960-8675-4B4BF0853A17}.Debug|x64.Build.0 = Debug|x64
+		{3A69F7C7-4C3E-4960-8675-4B4BF0853A17}.Release|x64.ActiveCfg = Release|x64
+		{3A69F7C7-4C3E-4960-8675-4B4BF0853A17}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -150,6 +156,7 @@ Global
 		{92CD031A-E0E6-4364-B0CE-F22CC05B6E60} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
 		{A6882C6F-6687-4A3A-9703-6832C32D7C3B} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
 		{457B5783-F24A-4B0E-B07F-B4B03B89781B} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
+		{3A69F7C7-4C3E-4960-8675-4B4BF0853A17} = {CAD44712-C9FF-4010-ADEB-A446AB5DB2B3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A089BF53-6CD1-4F82-BFB8-00CE152F27F8}

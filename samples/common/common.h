@@ -44,6 +44,7 @@
 #   include <sstream>
 #   include <array>
 #   include <vector>
+#   include <span>
 #   include <set>
 #   include <map>
 #   include <unordered_set>
