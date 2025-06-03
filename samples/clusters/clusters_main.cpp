@@ -201,12 +201,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
     himesh.read(
         cuContext, R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
 
+    constexpr uint32_t lodLevel = 0;
+    const uint32_t levelStartClusterIndex = himesh.levelStartClusterIndicesOnHost[lodLevel];
+    const uint32_t nextLevelStartClusterIndex =
+        (lodLevel + 1) < himesh.levelStartClusterIndicesOnHost.size() ?
+        himesh.levelStartClusterIndicesOnHost[lodLevel + 1] :
+        himesh.clusters.numElements();
+    const uint32_t levelClusterCount = nextLevelStartClusterIndex - levelStartClusterIndex;
+    uint32_t maxClusterCount = levelClusterCount;
+
     cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> clusterArgs;
     cudau::Buffer clasSetMem;
     cudau::Buffer clasSetScratchMem;
     cudau::TypedBuffer<CUdeviceptr> clasHandles;
     cudau::TypedBuffer<uint32_t> clusterCount;
-    uint32_t maxClusterCount = 0;
     {
 #define OPTIX_CHECK(call) \
     do { \
@@ -235,29 +243,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
             sizeof(maxTriangleCountPerCluster)));
         Assert(himesh.maxTriCountPerCluster < maxTriangleCountPerCluster);
 
-        constexpr uint32_t lodLevel = 0;
-        const uint32_t levelStartClusterIndex = himesh.levelStartClusterIndicesOnHost[lodLevel];
-        const uint32_t nextLevelStartClusterIndex =
-            (lodLevel + 1) < himesh.levelStartClusterIndicesOnHost.size() ?
-            himesh.levelStartClusterIndicesOnHost[lodLevel + 1] :
-            himesh.clusters.numElements();
-        const uint32_t levelClusterCount = /*nextLevelStartClusterIndex - levelStartClusterIndex*/1;
-        maxClusterCount = std::max(levelClusterCount, maxClusterCount);
-
         std::vector<HierarchicalMesh::Cluster> clustersOnHost = himesh.clusters;
-        {
-            std::vector<Shared::Triangle> trianglesOnHost = himesh.trianglePool;
-            std::span<Shared::Triangle> clusterTris(
-                trianglesOnHost.data() + clustersOnHost[0].triPoolStartIndex,
-                clustersOnHost[0].triangleCount);
-            std::set<uint32_t> vtxIdxSet;
-            for (const Shared::Triangle &tri : clusterTris) {
-                vtxIdxSet.insert(tri.index0);
-                vtxIdxSet.insert(tri.index1);
-                vtxIdxSet.insert(tri.index2);
-			}
-            hpprintf("");
-        }
+        //{
+        //    std::vector<Shared::Triangle> trianglesOnHost = himesh.trianglePool;
+        //    std::span<Shared::Triangle> clusterTris(
+        //        trianglesOnHost.data() + clustersOnHost[0].triPoolStartIndex,
+        //        clustersOnHost[0].triangleCount);
+        //    std::set<uint32_t> vtxIdxSet;
+        //    for (const Shared::Triangle &tri : clusterTris) {
+        //        vtxIdxSet.insert(tri.index0);
+        //        vtxIdxSet.insert(tri.index1);
+        //        vtxIdxSet.insert(tri.index2);
+        //    }
+        //    hpprintf("");
+        //}
         std::vector<OptixClusterAccelBuildInputTrianglesArgs> clusterArgsOnHost(levelClusterCount);
         uint32_t maxSbtIndexValue = 0;
         for (uint32_t cIdx = 0; cIdx < levelClusterCount; ++cIdx) {
@@ -273,7 +272,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             args.opacityMicromapIndexFormat = 0; // not used in this sample
             args.basePrimitiveInfo.sbtIndex = 0;
             args.basePrimitiveInfo.primitiveFlags = OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_NONE;
-            args.indexBufferStrideInBytes = sizeof(Shared::Triangle);
+            args.indexBufferStrideInBytes = /*sizeof(Shared::Triangle)*/sizeof(uint32_t);
             args.vertexBufferStrideInBytes = sizeof(Shared::Vertex);
             args.primitiveInfoBufferStrideInBytes = 0; // not used in this sample
             args.opacityMicromapIndexBufferStrideInBytes = 0; // not used in this sample
@@ -338,13 +337,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
             clusterArgs.getCUdeviceptr(), clusterCount.getCUdeviceptr(), clusterArgs.stride()));
     }
 
+    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> cgasArgs;
     cudau::Buffer cgasSetMem;
     cudau::Buffer cgasSetScratchMem;
     cudau::TypedBuffer<OptixTraversableHandle> cgasHandles;
+    cudau::TypedBuffer<uint32_t> cgasCount;
     {
+        OptixClusterAccelBuildInputClustersArgs cgasArgOnHost = {};
+        {
+            cgasArgOnHost.clusterHandlesCount = levelClusterCount;
+            cgasArgOnHost.clusterHandlesBufferStrideInBytes = clasHandles.stride();
+            cgasArgOnHost.clusterHandlesBuffer = clasHandles.getCUdeviceptr();
+        }
+        cgasArgs.initialize(cuContext, cudau::BufferType::Device, &cgasArgOnHost, 1);
+
         OptixClusterAccelBuildInput buildInput = {};
         buildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS;
-        OptixClusterAccelBuildInputClusters clusterBuildInput = buildInput.clusters;
+        OptixClusterAccelBuildInputClusters &clusterBuildInput = buildInput.clusters;
         clusterBuildInput.flags = OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE;
         clusterBuildInput.maxArgCount = 1;
         clusterBuildInput.maxTotalClusterCount = maxClusterCount;
@@ -365,6 +374,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cuContext, cudau::BufferType::Device, asMemReqs.tempSizeInBytes, 1);
         cgasHandles.initialize(
             cuContext, cudau::BufferType::Device, 1);
+        cgasCount.initialize(
+            cuContext, cudau::BufferType::Device, 1);
+        cgasCount.fill(1);
 
         OptixClusterAccelBuildModeDesc buildModeDesc = {};
         buildModeDesc.mode = accelBuildMode;
@@ -382,7 +394,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_CHECK(optixClusterAccelBuild(
             optixContext.getOptixDeviceContext(), cuStream,
             &buildModeDesc, &buildInput,
-            clusterArgs.getCUdeviceptr(), clusterCount.getCUdeviceptr(), clusterArgs.stride()));
+            cgasArgs.getCUdeviceptr(), cgasCount.getCUdeviceptr(), cgasArgs.stride()));
     }
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
