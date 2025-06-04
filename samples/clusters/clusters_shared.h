@@ -22,6 +22,11 @@ namespace Shared {
         uint32_t index0, index1, index2;
     };
 
+    struct LocalTriangle {
+        uint8_t index0, index1, index2;
+        uint8_t padding;
+    };
+
 
 
     struct PerspectiveCamera {
