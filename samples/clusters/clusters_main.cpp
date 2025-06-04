@@ -30,6 +30,7 @@ public:
 
 struct HierarchicalMesh {
     struct Cluster {
+        uint32_t vertPoolStartIndex;
         uint32_t triPoolStartIndex;
         uint32_t childIndexPoolStartIndex;
         uint32_t parentStartClusterIndex;
@@ -39,8 +40,8 @@ struct HierarchicalMesh {
         uint32_t parentCount : 4;
     };
 
-    cudau::TypedBuffer<Shared::Vertex> vertices;
-    cudau::TypedBuffer<Shared::Triangle> trianglePool;
+    cudau::TypedBuffer<Shared::Vertex> vertexPool;
+    cudau::TypedBuffer<Shared::LocalTriangle> trianglePool;
     cudau::TypedBuffer<uint32_t> childIndexPool;
     cudau::TypedBuffer<Cluster> clusters;
     cudau::TypedBuffer<uint32_t> levelStartClusterIndices;
@@ -66,7 +67,7 @@ struct HierarchicalMesh {
             .read(&levelCount);
 
         std::vector<Shared::Vertex> verticesOnHost(vertexCount);
-        std::vector<Shared::Triangle> trianglesOnHost(triangleCount);
+        std::vector<Shared::LocalTriangle> trianglesOnHost(triangleCount);
         std::vector<uint32_t> childIndicesOnHost(childIndexCount);
         std::vector<Cluster> clustersOnHost(clusterCount);
         levelStartClusterIndicesOnHost.resize(levelCount);
@@ -77,7 +78,7 @@ struct HierarchicalMesh {
             .read(clustersOnHost)
             .read(levelStartClusterIndicesOnHost);
 
-        vertices.initialize(
+        vertexPool.initialize(
             cuContext, cudau::BufferType::Device, verticesOnHost);
         trianglePool.initialize(
             cuContext, cudau::BufferType::Device, trianglesOnHost);
@@ -268,16 +269,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
             args.triangleCount = cluster.triangleCount;
             args.vertexCount = cluster.vertexCount;
             args.positionTruncateBitCount = 0;
-            args.indexFormat = OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_32BIT;
+            args.indexFormat = OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_8BIT;
             args.opacityMicromapIndexFormat = 0; // not used in this sample
             args.basePrimitiveInfo.sbtIndex = 0;
             args.basePrimitiveInfo.primitiveFlags = OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_NONE;
-            args.indexBufferStrideInBytes = /*sizeof(Shared::Triangle)*/sizeof(uint32_t);
+            args.indexBufferStrideInBytes = sizeof(uint8_t);
             args.vertexBufferStrideInBytes = sizeof(Shared::Vertex);
             args.primitiveInfoBufferStrideInBytes = 0; // not used in this sample
             args.opacityMicromapIndexBufferStrideInBytes = 0; // not used in this sample
             args.indexBuffer = himesh.trianglePool.getCUdeviceptrAt(cluster.triPoolStartIndex);
-            args.vertexBuffer = himesh.vertices.getCUdeviceptr();
+            args.vertexBuffer = himesh.vertexPool.getCUdeviceptrAt(cluster.vertPoolStartIndex);
             args.primitiveInfoBuffer = 0; // not used in this sample
             args.opacityMicromapArray = 0; // not used in this sample
             args.opacityMicromapIndexBuffer = 0; // not used in this sample
