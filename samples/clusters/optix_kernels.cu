@@ -63,17 +63,13 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     auto sbtr = HitGroupSBTRecordData::get();
-    const GeometryData &geom = sbtr.geomData;
 
-    auto hp = HitPointParameter::get();
-    const Triangle &triangle = geom.triangleBuffer[hp.primIndex];
-    const Vertex &v0 = geom.vertexBuffer[triangle.index0];
-    const Vertex &v1 = geom.vertexBuffer[triangle.index1];
-    const Vertex &v2 = geom.vertexBuffer[triangle.index2];
+    float3 positions[3];
+    optixGetTriangleVertexData(positions);
 
     float3 gn = normalize(cross(
-        v1.position - v0.position,
-		v2.position - v0.position));
+        positions[1] - positions[0],
+		positions[2] - positions[0]));
     gn = normalize(optixTransformNormalFromObjectToWorldSpace(gn));
 
     // JP: 法線を可視化。
