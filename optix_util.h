@@ -1365,6 +1365,7 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECT(OpacityMicroMapArray); \
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
     OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
+    OPTIXU_PREPROCESS_OBJECT(ClusterGeometryAccelerationStructure); \
     OPTIXU_PREPROCESS_OBJECT(Transform); \
     OPTIXU_PREPROCESS_OBJECT(Instance); \
     OPTIXU_PREPROCESS_OBJECT(InstanceAccelerationStructure); \
@@ -1419,6 +1420,7 @@ namespace optixu {
 
     enum class ChildType {
         GAS = 0,
+        CGAS,
         IAS,
         Transform,
         Invalid
@@ -1438,6 +1440,9 @@ namespace optixu {
             m_numElements(numElements), m_stride(stride) {}
 
         CUdeviceptr getCUdeviceptr() const { return m_devicePtr; }
+        CUdeviceptr getCUdeviceptrAt(uint32_t idx) const {
+            return m_devicePtr + m_stride * idx;
+        }
         size_t numElements() const { return m_numElements; }
         uint32_t stride() const { return m_stride; }
         size_t sizeInBytes() const { return m_numElements * m_stride; }
@@ -1633,6 +1638,8 @@ namespace optixu {
         GeometryAccelerationStructure createGeometryAccelerationStructure(
             OPTIXU_EN_PRM(GeometryType, geomType, Triangles)) const;
         [[nodiscard]]
+        ClusterGeometryAccelerationStructure createClusterGeometryAccelerationStructure() const;
+        [[nodiscard]]
         Transform createTransform() const;
         [[nodiscard]]
         Instance createInstance() const;
@@ -1645,6 +1652,7 @@ namespace optixu {
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
+        size_t getCGAS_SBTOffset(ClusterGeometryAccelerationStructure cgas) const;
         bool shaderBindingTableLayoutIsReady() const;
     };
 
@@ -1874,6 +1882,17 @@ namespace optixu {
 
 
 
+    class ClusterGeometryAccelerationStructure : public Object<ClusterGeometryAccelerationStructure> {
+    public:
+        void setHandleAddress(CUdeviceptr addr) const;
+        void setSbtRequirements(uint32_t sbtDataSize, uint32_t sbtDataAlign, uint32_t numSbtRecords) const;
+        void setNumRayTypes(uint32_t numRayTypes) const;
+
+        void destroy();
+    };
+
+
+
     class Transform : public Object<Transform> {
     public:
         void destroy();
@@ -1928,6 +1947,7 @@ namespace optixu {
         // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a IAS to which the instance belongs is required.
         void setChild(GeometryAccelerationStructure child, uint32_t matSetIdx = 0) const;
+        void setChild(ClusterGeometryAccelerationStructure child) const;
         void setChild(InstanceAccelerationStructure child) const;
         void setChild(Transform child, uint32_t matSetIdx = 0) const;
 
@@ -1951,16 +1971,6 @@ namespace optixu {
 
 
 
-    /*
-    TODO: インスタンスバッファーもユーザー管理にしたいため、rebuild()が今の形になっているが微妙かもしれない。
-          インスタンスバッファーを内部で1つ持つようにすると、
-          あるフレームでIASをビルド、次のフレームでインスタンスの追加がありリビルドの必要が生じた場合に
-          1フレーム目のGPU処理の終了を待たないと危険という状況になってしまう。
-          OptiX的にはASのビルド完了後にはインスタンスバッファーは不要となるが、
-          アップデート処理はリビルド時に書かれたインスタンスバッファーの内容を期待しているため、
-          基本的にインスタンスバッファーとASのメモリ(コンパクション版にもなり得る)
-          は同じ寿命で扱ったほうが良さそう。
-    */
     class InstanceAccelerationStructure : public Object<InstanceAccelerationStructure> {
     public:
         void destroy();

@@ -210,6 +210,14 @@ namespace optixu {
         geomASs.erase(gas->getSerialID());
     }
 
+    void Scene::Priv::addCGAS(_ClusterGeometryAccelerationStructure* cgas) {
+        clusterGASs[cgas->getSerialID()] = cgas;
+    }
+
+    void Scene::Priv::removeCGAS(_ClusterGeometryAccelerationStructure* cgas) {
+        clusterGASs.erase(cgas->getSerialID());
+    }
+
     void Scene::Priv::markSBTLayoutDirty() {
         sbtLayoutIsUpToDate = false;
 
@@ -220,10 +228,14 @@ namespace optixu {
     uint32_t Scene::Priv::getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx) {
         SBTOffsetKey key = SBTOffsetKey{ gas->getSerialID(), matSetIdx };
         throwRuntimeError(
-            sbtOffsets.count(key),
+            gasSbtOffsets.count(key),
             "GAS %s: material set index %u is out of bounds.",
             gas->getName().c_str(), matSetIdx);
-        return sbtOffsets.at(key);
+        return gasSbtOffsets.at(key);
+    }
+
+    uint32_t Scene::Priv::getSBTOffset(_ClusterGeometryAccelerationStructure* cgas) {
+        return clusterGasSbtOffsets.at(cgas->getSerialID());
     }
 
     void Scene::Priv::setupHitGroupSBT(
@@ -326,6 +338,14 @@ namespace optixu {
         return (new _GeometryAccelerationStructure(m, m->nextGeomASSerialID++, geomType))->getPublicType();
     }
 
+    ClusterGeometryAccelerationStructure Scene::createClusterGeometryAccelerationStructure() const {
+        // JP: CGASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
+        // EN: Only generating a CGAS doesn't affect a SBT layout, no need to invalidate it.
+        optixuAssert(m->clusterGASs.count(m->nextClusterGASSerialID) == 0,
+                     "Too many CGAS creation beyond expectation has been done.");
+        return (new _ClusterGeometryAccelerationStructure(m, m->nextClusterGASSerialID++))->getPublicType();
+    }
+
     Transform Scene::createTransform() const {
         return (new _Transform(m))->getPublicType();
     }
@@ -349,7 +369,7 @@ namespace optixu {
         }
 
         uint32_t sbtOffset = 0;
-        m->sbtOffsets.clear();
+        m->gasSbtOffsets.clear();
         SizeAlign maxRecordSizeAlign;
         maxRecordSizeAlign += SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
         // JP: GASの仮想アドレスが実行の度に変わる環境でSBTのレイアウトを固定するため、
@@ -364,9 +384,18 @@ namespace optixu {
                 gas.second->calcSBTRequirements(matSetIdx, &gasRecordSizeAlign, &gasNumSBTRecords);
                 maxRecordSizeAlign = max(maxRecordSizeAlign, gasRecordSizeAlign);
                 const _Scene::SBTOffsetKey key = { gas.first, matSetIdx };
-                m->sbtOffsets[key] = sbtOffset;
+                m->gasSbtOffsets[key] = sbtOffset;
                 sbtOffset += gasNumSBTRecords;
             }
+        }
+        m->clusterGasSbtOffsets.clear();
+        for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructure*> &cgas : m->clusterGASs) {
+            SizeAlign gasRecordSizeAlign;
+            uint32_t gasNumSBTRecords;
+            cgas.second->calcSBTRequirements(&gasRecordSizeAlign, &gasNumSBTRecords);
+            maxRecordSizeAlign = max(maxRecordSizeAlign, gasRecordSizeAlign);
+            m->clusterGasSbtOffsets[cgas.first] = sbtOffset;
+            sbtOffset += gasNumSBTRecords;
         }
         maxRecordSizeAlign.alignUp();
         m->singleRecordSize = maxRecordSizeAlign.size;
@@ -374,6 +403,11 @@ namespace optixu {
         m->sbtLayoutIsUpToDate = true;
 
         *memorySize = m->singleRecordSize * std::max(m->numSBTRecords, 1u);
+    }
+
+    size_t Scene::getCGAS_SBTOffset(ClusterGeometryAccelerationStructure cgas) const {
+        _ClusterGeometryAccelerationStructure* const _cgas = extract(cgas);
+        return m->clusterGasSbtOffsets.at(_cgas->getSerialID());
     }
 
     bool Scene::shaderBindingTableLayoutIsReady() const {
@@ -2090,6 +2124,40 @@ namespace optixu {
 
 
 
+    void ClusterGeometryAccelerationStructure::Priv::calcSBTRequirements(
+        SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const
+    {
+        *maxRecordSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
+        *maxRecordSizeAlign += sbtRecordDataSizeAlign;
+        *numSBTRecords = numSbtRecords * numRayTypes;
+    }
+
+    void ClusterGeometryAccelerationStructure::setHandleAddress(CUdeviceptr addr) const {
+        m->handleAddress = addr;
+    }
+
+    void ClusterGeometryAccelerationStructure::setSbtRequirements(
+        uint32_t sbtDataSize, uint32_t sbtDataAlign, uint32_t numSbtRecords) const
+    {
+        m->sbtRecordDataSizeAlign = SizeAlign(sbtDataSize, sbtDataAlign);
+        m->numSbtRecords = numSbtRecords;
+    }
+
+    void ClusterGeometryAccelerationStructure::setNumRayTypes(uint32_t numRayTypes) const {
+        m->numRayTypes = numRayTypes;
+        m->scene->markSBTLayoutDirty();
+    }
+
+    void ClusterGeometryAccelerationStructure::destroy() {
+        if (m) {
+            m->scene->markSBTLayoutDirty();
+            delete m;
+        }
+        m = nullptr;
+    }
+
+
+
     _GeometryAccelerationStructure* Transform::Priv::getDescendantGAS() const {
         if (std::holds_alternative<_GeometryAccelerationStructure*>(child))
             return std::get<_GeometryAccelerationStructure*>(child);
@@ -2462,6 +2530,12 @@ namespace optixu {
             instance->traversableHandle = gas->getHandle();
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
+        else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
+            const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
+            //throwRuntimeError(gas->isReady(), "CGAS %s is not ready.", gas->getName().c_str());
+            instance->traversableHandle = 0;
+            instance->sbtOffset = scene->getSBTOffset(cgas);
+        }
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
             const auto ias = std::get<_InstanceAccelerationStructure*>(child);
             throwRuntimeError(ias->isReady(), "IAS %s is not ready.", ias->getName().c_str());
@@ -2495,6 +2569,11 @@ namespace optixu {
             throwRuntimeError(gas->isReady(), "GAS %s is not ready.", gas->getName().c_str());
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
+        else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
+            const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
+            //throwRuntimeError(gas->isReady(), "CGAS %s is not ready.", gas->getName().c_str());
+            instance->sbtOffset = scene->getSBTOffset(cgas);
+        }
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
             const auto ias = std::get<_InstanceAccelerationStructure*>(child);
             throwRuntimeError(ias->isReady(), "IAS %s is not ready.", ias->getName().c_str());
@@ -2515,6 +2594,16 @@ namespace optixu {
 
         instance->visibilityMask = visibilityMask;
         instance->flags = flags;
+    }
+
+    void Instance::Priv::copyTraversableHandle(CUstream stream, CUdeviceptr instDescAddress) const {
+        if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
+            const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
+            CUDADRV_CHECK(cuMemcpyDtoDAsync(
+                instDescAddress + offsetof(OptixInstance, traversableHandle),
+                cgas->getHandleAddress(), sizeof(OptixTraversableHandle),
+                stream));
+        }
     }
 
     bool Instance::Priv::isMotionAS() const {
@@ -2547,6 +2636,20 @@ namespace optixu {
             _child->getName().c_str());
         m->child = _child;
         m->matSetIndex = matSetIdx;
+    }
+
+    void Instance::setChild(ClusterGeometryAccelerationStructure child) const {
+        _ClusterGeometryAccelerationStructure* const _child = extract(child);
+        m->throwRuntimeError(
+            _child,
+            "Invalid CGAS %p.",
+            _child);
+        m->throwRuntimeError(
+            _child->getScene() == m->scene,
+            "Scene mismatch for the given GAS %s.",
+            _child->getName().c_str());
+        m->child = _child;
+        m->matSetIndex = 0;
     }
 
     void Instance::setChild(InstanceAccelerationStructure child) const {
@@ -2610,6 +2713,8 @@ namespace optixu {
     ChildType Instance::getChildType() const {
         if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
             return ChildType::GAS;
+        else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(m->child))
+            return ChildType::CGAS;
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
             return ChildType::IAS;
         else if (std::holds_alternative<_Transform*>(m->child))
@@ -2625,6 +2730,7 @@ namespace optixu {
         return std::get<typename T::Priv*>(m->child)->getPublicType();
     }
     template GeometryAccelerationStructure Instance::getChild<GeometryAccelerationStructure>() const;
+    template ClusterGeometryAccelerationStructure Instance::getChild<ClusterGeometryAccelerationStructure>() const;
     template InstanceAccelerationStructure Instance::getChild<InstanceAccelerationStructure>() const;
     template Transform Instance::getChild<Transform>() const;
 
@@ -2650,8 +2756,8 @@ namespace optixu {
 
 
 
-    void InstanceAccelerationStructure::Priv::markDirty(bool readyToBuild) {
-        readyToBuild = readyToBuild;
+    void InstanceAccelerationStructure::Priv::markDirty(bool _readyToBuild) {
+        readyToBuild = _readyToBuild;
         available = false;
         readyToCompact = false;
         compactedAvailable = false;
@@ -2795,6 +2901,9 @@ namespace optixu {
             instanceBuffer.getCUdeviceptr(), m->instances.data(),
             m->instances.size() * sizeof(OptixInstance),
             stream));
+        childIdx = 0;
+        for (const _Instance* child : m->children)
+            child->copyTraversableHandle(stream, instanceBuffer.getCUdeviceptrAt(childIdx));
         m->buildInput.instanceArray.instances = m->children.size() > 0 ? instanceBuffer.getCUdeviceptr() : 0;
 
         const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;

@@ -34,7 +34,9 @@
 #   pragma warning(push)
 #   pragma warning(disable:4819)
 #endif // if defined(OPTIXU_Platform_Windows_MSVC)
-#include <optix_function_table_definition.h>
+#if !OPTIXU_ENABLE_PRIVATE_ACCESS
+#   include <optix_function_table_definition.h>
+#endif
 #include <cuda.h>
 #if defined(OPTIXU_Platform_Windows_MSVC)
 #   pragma warning(pop)
@@ -215,7 +217,16 @@ namespace optixu {
 
 
 
+#if OPTIXU_ENABLE_PRIVATE_ACCESS
+#   define OPTIXU_PRIV_ACCESS_SPECIFIER public
+#else
+#   define OPTIXU_PRIV_ACCESS_SPECIFIER private
+#endif
+
+
+
     class Context::Priv {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         CUcontext cuContext;
         OptixDeviceContext rawContext;
         uint32_t rtCoreVersion;
@@ -322,6 +333,7 @@ namespace optixu {
 
 
     class PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
     public:
         virtual _Context* getContext() const = 0;
         OptixDeviceContext getRawContext() const {
@@ -343,6 +355,7 @@ namespace optixu {
 
     template <>
     class Object<Material>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         struct Key {
             const _Pipeline* pipeline;
             uint32_t rayType;
@@ -408,6 +421,7 @@ namespace optixu {
 
     template <>
     class Object<Scene>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         struct SBTOffsetKey {
             uint32_t gasSerialID;
             uint32_t matSetIndex;
@@ -442,8 +456,11 @@ namespace optixu {
 
         _Context* context;
         std::unordered_map<uint32_t, _GeometryAccelerationStructure*> geomASs;
-        std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> sbtOffsets;
+        std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> gasSbtOffsets;
+        std::unordered_map<uint32_t, _ClusterGeometryAccelerationStructure*> clusterGASs;
+        std::unordered_map<uint32_t, uint32_t> clusterGasSbtOffsets;
         uint32_t nextGeomASSerialID;
+        uint32_t nextClusterGASSerialID;
         uint32_t singleRecordSize;
         uint32_t numSBTRecords;
         std::unordered_set<_Transform*> transforms;
@@ -454,7 +471,7 @@ namespace optixu {
         OPTIXU_OPAQUE_BRIDGE(Scene);
 
         Priv(_Context* ctxt) : context(ctxt),
-            nextGeomASSerialID(0),
+            nextGeomASSerialID(0), nextClusterGASSerialID(0),
             singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
             sbtLayoutIsUpToDate(false)
         {}
@@ -471,6 +488,8 @@ namespace optixu {
 
         void addGAS(_GeometryAccelerationStructure* gas);
         void removeGAS(_GeometryAccelerationStructure* gas);
+        void addCGAS(_ClusterGeometryAccelerationStructure* cgas);
+        void removeCGAS(_ClusterGeometryAccelerationStructure* cgas);
         void addTransform(_Transform* tr) {
             transforms.insert(tr);
         }
@@ -489,6 +508,7 @@ namespace optixu {
         }
         void markSBTLayoutDirty();
         uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx);
+        uint32_t getSBTOffset(_ClusterGeometryAccelerationStructure* gas);
 
         uint32_t getSingleRecordSize() const {
             return singleRecordSize;
@@ -502,6 +522,7 @@ namespace optixu {
 
     template <>
     class Object<OpacityMicroMapArray>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Scene* scene;
         OptixOpacityMicromapFlags flags;
 
@@ -551,6 +572,7 @@ namespace optixu {
 
     template <>
     class Object<GeometryInstance>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Scene* scene;
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
@@ -751,6 +773,7 @@ namespace optixu {
 
     template <>
     class Object<GeometryAccelerationStructure>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         struct Child {
             _GeometryInstance* geomInst;
             CUdeviceptr preTransform;
@@ -881,7 +904,59 @@ namespace optixu {
 
 
     template <>
+    class Object<ClusterGeometryAccelerationStructure>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
+        _Scene* scene;
+        uint32_t serialID;
+        SizeAlign sbtRecordDataSizeAlign;
+
+        CUdeviceptr handleAddress;
+        uint32_t numSbtRecords;
+        uint32_t numRayTypes;
+
+    public:
+        OPTIXU_OPAQUE_BRIDGE(ClusterGeometryAccelerationStructure);
+
+        Priv(_Scene* _scene, uint32_t _serialID) :
+            scene(_scene),
+            serialID(_serialID),
+            handleAddress(0),
+            numSbtRecords(0),
+            numRayTypes(0)
+        {
+            scene->addCGAS(this);
+        }
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
+
+        const _Scene* getScene() const {
+            return scene;
+        }
+        _Context* getContext() const override {
+            return scene->getContext();
+        }
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("CGAS");
+
+
+
+        uint32_t getSerialID() const {
+            return serialID;
+        }
+
+        void calcSBTRequirements(
+            SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+        CUdeviceptr getHandleAddress() const {
+            throwRuntimeError(handleAddress != 0, "Handle address is not set.");
+            return handleAddress;
+        }
+    };
+
+
+
+    template <>
     class Object<Transform>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Scene* scene;
         std::variant<
             void*,
@@ -948,10 +1023,12 @@ namespace optixu {
 
     template <>
     class Object<Instance>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Scene* scene;
         std::variant<
             void*,
             _GeometryAccelerationStructure*,
+            _ClusterGeometryAccelerationStructure*,
             _InstanceAccelerationStructure*,
             _Transform*
         > child;
@@ -994,6 +1071,7 @@ namespace optixu {
 
         void fillInstance(OptixInstance* instance) const;
         void updateInstance(OptixInstance* instance) const;
+        void copyTraversableHandle(CUstream stream, CUdeviceptr instDescAddress) const;
         bool isMotionAS() const;
         bool isTransform() const;
     };
@@ -1002,6 +1080,7 @@ namespace optixu {
 
     template <>
     class Object<InstanceAccelerationStructure>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Scene* scene;
 
         std::vector<_Instance*> children;
@@ -1077,7 +1156,7 @@ namespace optixu {
 
 
 
-        void markDirty(bool readyToBuild);
+        void markDirty(bool _readyToBuild);
         bool isReady() const {
             return available || compactedAvailable;
         }
@@ -1097,6 +1176,7 @@ namespace optixu {
 
     template <>
     class Object<Pipeline>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         struct KeyForBuiltinISModule {
             OptixPrimitiveType curveType;
             OptixCurveEndcapFlags endcapFlags;
@@ -1229,6 +1309,7 @@ namespace optixu {
 
     template <>
     class Object<Module>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         const _Pipeline* pipeline;
         OptixModule rawModule;
 
@@ -1257,6 +1338,7 @@ namespace optixu {
 
     template <>
     class Object<Program>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Pipeline* pipeline;
         OptixProgramGroup rawGroup;
         OptixProgramGroupKind kind;
@@ -1309,6 +1391,7 @@ namespace optixu {
 
     template <>
     class Object<HitProgramGroup>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Pipeline* pipeline;
         OptixProgramGroup rawGroup;
         uint32_t stackSizeCH;
@@ -1357,6 +1440,7 @@ namespace optixu {
 
     template <>
     class Object<CallableProgramGroup>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Pipeline* pipeline;
         OptixProgramGroup rawGroup;
         uint32_t stackSizeDC;
@@ -1456,6 +1540,7 @@ namespace optixu {
 
     template <>
     class Object<Denoiser>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Context* context;
         OptixDenoiser rawDenoiser;
         OptixDenoiserModelKind modelKind;
