@@ -68,14 +68,19 @@ struct HierarchicalMesh {
             .read(&clusterCount)
             .read(&levelCount);
 
+        size_t const triBufSize = triangleCount * sizeof(Shared::LocalTriangle);
+        size_t const paddingByteCount = ((triBufSize + 3) / 4 * 4) - triBufSize;
+
         std::vector<Shared::Vertex> verticesOnHost(vertexCount);
         std::vector<Shared::LocalTriangle> trianglesOnHost(triangleCount);
+        std::vector<uint8_t> padding(paddingByteCount, 0);
         std::vector<uint32_t> childIndicesOnHost(childIndexCount);
         std::vector<Cluster> clustersOnHost(clusterCount);
         levelStartClusterIndicesOnHost.resize(levelCount);
         ifs
             .read(verticesOnHost)
             .read(trianglesOnHost)
+            .read(padding)
             .read(childIndicesOnHost)
             .read(clustersOnHost)
             .read(levelStartClusterIndicesOnHost);

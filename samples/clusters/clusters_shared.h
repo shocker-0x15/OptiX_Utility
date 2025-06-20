@@ -24,7 +24,6 @@ namespace Shared {
 
     struct LocalTriangle {
         uint8_t index0, index1, index2;
-        uint8_t padding;
     };
 
 
