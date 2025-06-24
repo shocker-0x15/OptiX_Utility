@@ -30,6 +30,10 @@ EN:
 
 変更履歴 / Update History:
 - !!BREAKING
+- JP: - PipelineのsetPipelineOptions()のパラメターを変更。
+  EN: - Changed the parameters of Pipeline::setPipelineOptions().
+
+- !!BREAKING
 - JP: - OptiX 9.0.0のサポートを開始。
       - Rocaps型のカーブをサポート。
       - DMM APIを削除。
