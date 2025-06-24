@@ -98,18 +98,39 @@ struct HierarchicalMesh {
 
         return true;
     }
+
+    void finalize() {
+        vertexPool.finalize();
+        trianglePool.finalize();
+        childIndexPool.finalize();
+        clusters.finalize();
+        levelStartClusterIndices.finalize();
+    }
 };
 
 int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path resourceDir = getExecutableDirectory() / "clusters";
 
     bool takeScreenShot = false;
+    auto visualizationMode = Shared::VisualizationMode_GeometricNormal;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
         std::string_view arg = argv[argIdx];
         if (arg == "--screen-shot") {
             takeScreenShot = true;
+        }
+        else if (arg == "--visualize") {
+            if (argIdx + 1 >= argc)
+                throw std::runtime_error("Argument for --visualize is not complete.");
+            std::string_view visType = argv[argIdx + 1];
+            if (visType == "geom-normal")
+                visualizationMode = Shared::VisualizationMode_GeometricNormal;
+            else if (visType == "cluster")
+                visualizationMode = Shared::VisualizationMode_Cluster;
+            else
+                throw std::runtime_error("Argument for --visualize is invalid.");
+            argIdx += 1;
         }
         else
             throw std::runtime_error("Unknown command line argument.");
@@ -342,8 +363,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         clusterBuildInput.maxClusterCountPerArg = maxClusterCount;
 
         OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
-            optixContext.getOptixDeviceContext(),
-            cgasAccelBuildMode,
+            optixContext.getOptixDeviceContext(), cgasAccelBuildMode,
             &cgasBuildInput, &asMemReqs));
         maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
@@ -572,9 +592,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         // Debug Window
+        bool visModeChanged = false;
         {
             ImGui::SetNextWindowPos(ImVec2(712, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::Text("Visualization");
+            visModeChanged |= ImGui::RadioButtonE(
+                "Geometric Normal", &visualizationMode, Shared::VisualizationMode_GeometricNormal);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Cluster", &visualizationMode, Shared::VisualizationMode_Cluster);
 
             ImGui::End();
         }
@@ -630,7 +657,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             //animate ||
             cameraIsActuallyMoving ||
             args.resized ||
-            frameIndex == 0;
+            frameIndex == 0 ||
+            visModeChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
             numAccumFrames = 0;
@@ -644,6 +672,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
             plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
             plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
+            plp.visMode = visualizationMode;
             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
             {
                 using namespace optixu;
@@ -655,10 +684,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     Shared::RayType_Primary, sbtHostMem + 0,
                     &curSizeAlign);
                 uint32_t offset;
-                optixu::SizeAlign userDatSizeAlign(
+                optixu::SizeAlign userDataSizeAlign(
                     sizeof(Shared::GeometryData),
                     alignof(Shared::GeometryData));
-                curSizeAlign.add(userDatSizeAlign, &offset);
+                curSizeAlign.add(userDataSizeAlign, &offset);
             }
             pipeline.launch(
                 curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);
@@ -723,6 +752,33 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     CUDADRV_CHECK(cuMemFree(plpOnDevice));
+
+
+
+    hitGroupSBT.finalize();
+
+    asBuildScratchMem.finalize();
+
+    instanceBuffer.finalize();
+    iasMem.finalize();
+    ias.destroy();
+
+    bunnyInst.destroy();
+
+    cgasCount.finalize();
+    cgasHandles.finalize();
+    cgasSetMem.finalize();
+    cgasArgs.finalize();
+    cgas.destroy();
+
+    clusterCount.finalize();
+    clasHandles.finalize();
+    clasSetMem.finalize();
+    clusterArgs.finalize();
+
+    himesh.finalize();
+
+    scene.destroy();
 
 
 

@@ -41,12 +41,32 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
-    float3 color;
+    uint32_t clusterId;
+    float3 geomNormal;
     MyPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
-        color);
+        clusterId, geomNormal);
+
+    bool hit = geomNormal != make_float3(0, 0, 0);
+    float3 color = make_float3(0.0f, 0.0f, 0.1f);
+    if (hit) {
+        if (plp.visMode == VisualizationMode_GeometricNormal) {
+            color = 0.5f * geomNormal + make_float3(0.5f);
+        } else if (plp.visMode == VisualizationMode_Cluster) {
+            if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
+                color = make_float3(0.0f, 0.0f, 0.0f);
+            }
+            else {
+                const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
+                const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
+                color = HSVtoRGB(
+                    std::fmod((GoldenAngle * clusterId) / (2 * pi_v<float>), 1.0f),
+                    1.0f, 1.0f);
+            }
+        }
+    }
 
     float3 prevColorResult = make_float3(0.0f, 0.0f, 0.0f);
     if (plp.sampleIndex > 0)
@@ -57,23 +77,20 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
-    float3 color = make_float3(0, 0, 0.1f);
-    MyPayloadSignature::set(&color);
+    constexpr uint32_t clusterId = OPTIX_CLUSTER_ID_INVALID;
+    float3 geomNormal = make_float3(0, 0, 0);
+    MyPayloadSignature::set(&clusterId, &geomNormal);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
-    auto sbtr = HitGroupSBTRecordData::get();
-
     float3 positions[3];
     optixGetTriangleVertexData(positions);
 
-    float3 gn = normalize(cross(
+    float3 geomNormal = normalize(cross(
         positions[1] - positions[0],
-		positions[2] - positions[0]));
-    gn = normalize(optixTransformNormalFromObjectToWorldSpace(gn));
+        positions[2] - positions[0]));
+    geomNormal = normalize(optixTransformNormalFromObjectToWorldSpace(geomNormal));
 
-    // JP: 法線を可視化。
-    // EN: Visualize the normal.
-    float3 color = 0.5f * gn + make_float3(0.5f);
-    MyPayloadSignature::set(&color);
+    uint32_t clusterId = optixGetClusterId();
+    MyPayloadSignature::set(&clusterId, &geomNormal);
 }
