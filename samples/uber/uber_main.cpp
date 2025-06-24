@@ -451,19 +451,25 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    pipeline.setPipelineOptions(
-        std::max(Shared::SearchRayPayloadSignature::numDwords,
-                 Shared::VisibilityRayPayloadSignature::numDwords),
-        std::max<uint32_t>(optixu::calcSumDwords<float2>(),
-                           Shared::SphereAttributeSignature::numDwords),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-        DEBUG_SELECT((OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
-                      OPTIX_EXCEPTION_FLAG_TRACE_DEPTH),
-                     OPTIX_EXCEPTION_FLAG_NONE),
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = std::max(
+        Shared::SearchRayPayloadSignature::numDwords,
+        Shared::VisibilityRayPayloadSignature::numDwords);
+    pipelineOptions.numAttributeValuesInDwords = std::max<uint32_t>(
+        optixu::calcSumDwords<float2>(),
+        Shared::SphereAttributeSignature::numDwords);
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+    pipelineOptions.exceptionFlags = DEBUG_SELECT(
+        (OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
+         OPTIX_EXCEPTION_FLAG_TRACE_DEPTH),
+        OPTIX_EXCEPTION_FLAG_NONE);
+    pipelineOptions.supportedPrimitiveTypeFlags =
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     // JP: Debug構成だとOptiX-IRを使うと何故か動作しない。
     //     質問中:

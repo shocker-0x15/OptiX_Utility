@@ -42,14 +42,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     インスタンスモーションブラーも使用するのでUseMotionBlur::Yesを指定する。
     // EN: This sample uses multi-level AS and transforms.
     //     Specify UseMotionBlur::Yes since the sample also uses instance motion blur.
-    pipeline.setPipelineOptions(
-        Shared::MyPayloadSignature::numDwords,
-        optixu::calcSumDwords<float2>(),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
-        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE,
-        optixu::UseMotionBlur::Yes);
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+    pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+    pipelineOptions.useMotionBlur = optixu::UseMotionBlur::Yes;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "multi_level_instancing/ptxes/optix_kernels.optixir");

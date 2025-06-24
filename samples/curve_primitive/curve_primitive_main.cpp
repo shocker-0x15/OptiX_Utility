@@ -93,13 +93,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         There are multiple curve types and the sample use all of them.
         The attribute size of curves is 1 Dword (float).
     */
-    pipeline.setPipelineOptions(
-        Shared::MyPayloadSignature::numDwords,
-        std::max(optixu::calcSumDwords<float2>(),
-                 optixu::calcSumDwords<float>()),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.numAttributeValuesInDwords = std::max(
+        optixu::calcSumDwords<float2>(),
+        optixu::calcSumDwords<float>());
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pipelineOptions.supportedPrimitiveTypeFlags =
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
@@ -110,7 +113,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM_ROCAPS |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER_ROCAPS);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER_ROCAPS;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.optixir");

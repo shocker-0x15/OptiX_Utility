@@ -60,20 +60,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
         custom primitive intersection.
         Specify UseMotionBlur::Yes since the sample uses deformation motion blur.
     */
-    pipeline.setPipelineOptions(
-        Shared::MyPayloadSignature::numDwords,
-        std::max<uint32_t>({
-            optixu::calcSumDwords<float2>(),
-            optixu::calcSumDwords<float>(),
-            Shared::PartialSphereAttributeSignature::numDwords }),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.numAttributeValuesInDwords = std::max<uint32_t>({
+        optixu::calcSumDwords<float2>(),
+        optixu::calcSumDwords<float>(),
+        Shared::PartialSphereAttributeSignature::numDwords });
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pipelineOptions.supportedPrimitiveTypeFlags =
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE |
         OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM,
-        optixu::UseMotionBlur::Yes);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM;
+    pipelineOptions.useMotionBlur = optixu::UseMotionBlur::Yes;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     const std::vector<char> optixIr =
         readBinaryFile(resourceDir / "ptxes/optix_kernels.optixir");

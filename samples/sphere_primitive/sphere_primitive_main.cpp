@@ -34,15 +34,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //     球のアトリビュートサイズは1Dword(float)。
     // EN: Appropriately setting primitive type flags is required since this sample uses sphere intersection.
     //     The attribute size of spheres is 1 Dword (float).
-    pipeline.setPipelineOptions(
-        Shared::MyPayloadSignature::numDwords,
-        std::max(optixu::calcSumDwords<float2>(),
-                 optixu::calcSumDwords<float>()),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.numAttributeValuesInDwords = std::max(
+        optixu::calcSumDwords<float2>(),
+        optixu::calcSumDwords<float>());
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pipelineOptions.supportedPrimitiveTypeFlags =
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE |
-        OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE);
+        OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "sphere_primitive/ptxes/optix_kernels.optixir");
