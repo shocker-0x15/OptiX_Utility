@@ -65,6 +65,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcCurveSurfaceNormal(
     constexpr uint32_t numControlPoints = curve::getNumControlPoints<curveType>();
     float4 controlPoints[numControlPoints];
     if constexpr (useEmbeddedVertexData) {
+        // OptiX Programming Guide
+        // > This data fetch of the currently intersected curve does not require
+        // > building the corresponding geometry acceleration structure with flag
+        // > OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS.
+        // JP: 直近に交差した曲線の制御点取得だけであればGASビルド時に
+        //     OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESSを指定する必要はない。
+        // EN: It is not necessary to specify OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS
+        //     when building the GAS just to get the control points of the most recently intersected curve.
         if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR)
             optixGetLinearCurveVertexData(controlPoints);
         else if constexpr (curveType == OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE)

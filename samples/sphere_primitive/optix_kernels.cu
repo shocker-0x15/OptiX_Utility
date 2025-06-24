@@ -46,10 +46,16 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcSphereSurfaceNormal(
     const GeometryData &geom, uint32_t primIndex, const float3 &hp) {
     float3 center;
     if constexpr (useEmbeddedVertexData) {
-        OptixTraversableHandle gasHandle = optixGetGASTraversableHandle();
-        uint32_t sbtGasIndex = optixGetSbtGASIndex();
+        // OptiX Programming Guide
+        // > Similar to curves, if only the vertex data of a currently intersected sphere is used,
+        // > it is recommended to use the function without 'FromHandle'.
+        // > This does not require build flag OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS.
+        // JP: 直近に交差した球のパラメター取得だけであればGASビルド時に
+        //     OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESSを指定する必要はない。
+        // EN: It is not necessary to specify OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS
+        //     when only retrieving the parameters of the most recently intersected sphere.
         float4 centerAndRadius;
-        optixGetSphereData(gasHandle, primIndex, sbtGasIndex, 0.0f, &centerAndRadius);
+        optixGetSphereData(&centerAndRadius);
         center = make_float3(centerAndRadius);
     }
     else {
