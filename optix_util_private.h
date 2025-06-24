@@ -950,6 +950,10 @@ namespace optixu {
             throwRuntimeError(handleAddress != 0, "Handle address is not set.");
             return handleAddress;
         }
+
+        bool isReady() const {
+            return handleAddress != 0;
+        }
     };
 
 

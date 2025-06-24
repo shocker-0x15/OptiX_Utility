@@ -2532,7 +2532,7 @@ namespace optixu {
         }
         else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
             const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
-            //throwRuntimeError(gas->isReady(), "CGAS %s is not ready.", gas->getName().c_str());
+            throwRuntimeError(cgas->isReady(), "CGAS %s is not ready.", cgas->getName().c_str());
             instance->traversableHandle = 0;
             instance->sbtOffset = scene->getSBTOffset(cgas);
         }

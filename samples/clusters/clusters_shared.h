@@ -54,6 +54,13 @@ namespace Shared {
 
 
 
+    enum VisualizationMode : uint32_t {
+        VisualizationMode_GeometricNormal = 0,
+        VisualizationMode_Cluster,
+    };
+
+
+
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
         int2 imageSize;
@@ -61,9 +68,10 @@ namespace Shared {
         PerspectiveCamera camera;
         float2 subPixelOffset;
         uint32_t sampleIndex : 8;
+        uint32_t visMode : 3;
     };
 
 
 
-    using MyPayloadSignature = optixu::PayloadSignature<float3>;
+    using MyPayloadSignature = optixu::PayloadSignature<uint32_t, float3>;
 }
