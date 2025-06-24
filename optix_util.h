@@ -1509,6 +1509,7 @@ namespace optixu {
     OPTIXU_DECLARE_TYPED_BOOL(AllowRandomInstanceAccess);
     OPTIXU_DECLARE_TYPED_BOOL(UseMotionBlur);
     OPTIXU_DECLARE_TYPED_BOOL(UseOpacityMicroMaps);
+    OPTIXU_DECLARE_TYPED_BOOL(AllowClusteredGeometry);
     OPTIXU_DECLARE_TYPED_BOOL(IsFirstFrame);
 
 #undef OPTIXU_DECLARE_TYPED_BOOL
@@ -2030,18 +2031,36 @@ namespace optixu {
 
 
 
+    struct PipelineOptions {
+        uint32_t numPayloadValuesInDwords;
+        uint32_t numAttributeValuesInDwords;
+        const char* launchParamsVariableName;
+        size_t sizeOfLaunchParams;
+        OptixTraversableGraphFlags traversableGraphFlags;
+        OptixExceptionFlags exceptionFlags;
+        OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags;
+        UseMotionBlur useMotionBlur;
+        UseOpacityMicroMaps useOpacityMicroMaps;
+        AllowClusteredGeometry allowClusteredGeometry;
+
+        PipelineOptions() :
+            numPayloadValuesInDwords(0),
+            numAttributeValuesInDwords(0),
+            launchParamsVariableName(nullptr),
+            sizeOfLaunchParams(0),
+            traversableGraphFlags(OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING),
+            exceptionFlags(OPTIX_EXCEPTION_FLAG_NONE),
+            supportedPrimitiveTypeFlags(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE),
+            useMotionBlur(UseMotionBlur::No),
+            useOpacityMicroMaps(UseOpacityMicroMaps::No),
+            allowClusteredGeometry(AllowClusteredGeometry::No) {}
+    };
+
     class Pipeline : public Object<Pipeline> {
     public:
         void destroy();
 
-        void setPipelineOptions(
-            uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
-            const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-            OptixTraversableGraphFlags traversableGraphFlags,
-            OptixExceptionFlags exceptionFlags,
-            OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
-            OPTIXU_EN_PRM(UseMotionBlur, useMotionBlur, No),
-            OPTIXU_EN_PRM(UseOpacityMicroMaps, useOpacityMicroMaps, No)) const;
+        void setPipelineOptions(const PipelineOptions &options) const;
 
         [[nodiscard]]
         Module createModuleFromPTXString(

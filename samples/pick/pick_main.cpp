@@ -78,15 +78,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Pipeline &p = pickPipeline;
         optixu::Pipeline &optixPipeline = p.pipeline;
 
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.numPayloadValuesInDwords = Shared::PickPayloadSignature::numDwords;
+        pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PickPipelineLaunchParameters);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
         optixPipeline = optixContext.createPipeline();
-        optixPipeline.setPipelineOptions(
-            Shared::PickPayloadSignature::numDwords,
-            optixu::calcSumDwords<float2>(),
-            "plp", sizeof(Shared::PickPipelineLaunchParameters),
-            OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-            OPTIX_EXCEPTION_FLAG_NONE,
-            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+        optixPipeline.setPipelineOptions(pipelineOptions);
 
         const std::vector<char> optixIr =
             readBinaryFile(resourceDir / "ptxes/optix_pick_kernels.optixir");
@@ -123,15 +124,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Pipeline &p = renderPipeline;
         optixu::Pipeline &optixPipeline = p.pipeline;
 
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.numPayloadValuesInDwords = Shared::RenderPayloadSignature::numDwords;
+        pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(Shared::RenderPipelineLaunchParameters);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
         optixPipeline = optixContext.createPipeline();
-        optixPipeline.setPipelineOptions(
-            Shared::RenderPayloadSignature::numDwords,
-            optixu::calcSumDwords<float2>(),
-            "plp", sizeof(Shared::RenderPipelineLaunchParameters),
-            OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-            OPTIX_EXCEPTION_FLAG_NONE,
-            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+        optixPipeline.setPipelineOptions(pipelineOptions);
 
         const std::vector<char> optixIr =
             readBinaryFile(resourceDir / "ptxes/optix_render_kernels.optixir");

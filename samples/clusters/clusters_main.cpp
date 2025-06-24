@@ -155,20 +155,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     /*
-    JP: カーブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
-        複数のカーブタイプがあり、このサンプルでは全て使用する。
-        カーブのアトリビュートサイズは1Dword(float)。
-    EN: Appropriately setting primitive type flags is required since this sample uses curve intersection.
-        There are multiple curve types and the sample use all of them.
-        The attribute size of curves is 1 Dword (float).
+    JP: 
+    EN: 
     */
-    pipeline.setPipelineOptions(
-        Shared::MyPayloadSignature::numDwords,
-        optixu::calcSumDwords<float2>(),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
-        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+    pipelineOptions.allowClusteredGeometry = optixu::AllowClusteredGeometry::Yes;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "clusters/ptxes/optix_kernels.optixir");

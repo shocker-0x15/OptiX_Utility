@@ -284,13 +284,15 @@ TEST(MaterialTest, MaterialBasic) {
         optixu::Context context = optixu::Context::create(cuContext, 4, optixu::EnableValidation::Yes);
 
         optixu::Pipeline pipeline0 = context.createPipeline();
-        pipeline0.setPipelineOptions(
-            shared::Pipeline0Payload0Signature::numDwords,
-            optixu::calcSumDwords<float2>(),
-            "plp", sizeof(shared::PipelineLaunchParameters0),
-            OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
-            OPTIX_EXCEPTION_FLAG_NONE,
-            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+        optixu::PipelineOptions pipelineOptions0;
+        pipelineOptions0.numPayloadValuesInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions0.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions0.launchParamsVariableName = "plp";
+        pipelineOptions0.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions0.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions0.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions0.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+        pipeline0.setPipelineOptions(pipelineOptions0);
 
         const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
         optixu::Module moduleOptiX = pipeline0.createModuleFromOptixIR(

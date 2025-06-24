@@ -34,14 +34,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
-    pipeline.setPipelineOptions(
-        Shared::MyPayloadSignature::numDwords,
-        std::max<uint32_t>(optixu::calcSumDwords<float2>(),
-                           Shared::PartialSphereAttributeSignature::numDwords),
-        "plp", sizeof(Shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
-        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM);
+    optixu::PipelineOptions pipelineOptions;
+    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.numAttributeValuesInDwords = std::max<uint32_t>(
+        optixu::calcSumDwords<float2>(),
+        Shared::PartialSphereAttributeSignature::numDwords);
+    pipelineOptions.launchParamsVariableName = "plp";
+    pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
+    pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pipelineOptions.supportedPrimitiveTypeFlags =
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM;
+    pipeline.setPipelineOptions(pipelineOptions);
 
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "custom_primitive/ptxes/optix_kernels.optixir");

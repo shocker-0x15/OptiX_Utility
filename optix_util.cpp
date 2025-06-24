@@ -3310,14 +3310,7 @@ namespace optixu {
         m = nullptr;
     }
 
-    void Pipeline::setPipelineOptions(
-        uint32_t numPayloadValuesInDwords, uint32_t numAttributeValuesInDwords,
-        const char* launchParamsVariableName, size_t sizeOfLaunchParams,
-        OptixTraversableGraphFlags traversableGraphFlags,
-        OptixExceptionFlags exceptionFlags,
-        OptixPrimitiveTypeFlags supportedPrimitiveTypeFlags,
-        UseMotionBlur useMotionBlur, UseOpacityMicroMaps useOpacityMicroMaps) const
-    {
+    void Pipeline::setPipelineOptions(const PipelineOptions &options) const {
         m->throwRuntimeError(
             !m->pipelineIsLinked,
             "Changing pipeline options after linking is not supported yet.");
@@ -3325,16 +3318,17 @@ namespace optixu {
         // JP: パイプライン中のモジュール、そしてパイプライン自体に共通なコンパイルオプションの設定。
         // EN: Set pipeline compile options common among modules in the pipeline and the pipeline itself.
         m->pipelineCompileOptions = {};
-        m->pipelineCompileOptions.numPayloadValues = numPayloadValuesInDwords;
-        m->pipelineCompileOptions.numAttributeValues = numAttributeValuesInDwords;
-        m->pipelineCompileOptions.pipelineLaunchParamsVariableName = launchParamsVariableName;
-        m->pipelineCompileOptions.usesMotionBlur = useMotionBlur;
-        m->pipelineCompileOptions.allowOpacityMicromaps = useOpacityMicroMaps;
-        m->pipelineCompileOptions.traversableGraphFlags = traversableGraphFlags;
-        m->pipelineCompileOptions.exceptionFlags = exceptionFlags;
-        m->pipelineCompileOptions.usesPrimitiveTypeFlags = supportedPrimitiveTypeFlags;
+        m->pipelineCompileOptions.numPayloadValues = options.numPayloadValuesInDwords;
+        m->pipelineCompileOptions.numAttributeValues = options.numAttributeValuesInDwords;
+        m->pipelineCompileOptions.pipelineLaunchParamsVariableName = options.launchParamsVariableName;
+        m->pipelineCompileOptions.usesMotionBlur = options.useMotionBlur;
+        m->pipelineCompileOptions.allowOpacityMicromaps = options.useOpacityMicroMaps;
+        m->pipelineCompileOptions.traversableGraphFlags = options.traversableGraphFlags;
+        m->pipelineCompileOptions.exceptionFlags = options.exceptionFlags;
+        m->pipelineCompileOptions.usesPrimitiveTypeFlags = options.supportedPrimitiveTypeFlags;
+        m->pipelineCompileOptions.allowClusteredGeometry = options.allowClusteredGeometry;
 
-        m->sizeOfPipelineLaunchParams = sizeOfLaunchParams;
+        m->sizeOfPipelineLaunchParams = options.sizeOfLaunchParams;
     }
 
     Module Pipeline::createModuleFromPTXString(
