@@ -31,21 +31,10 @@ public:
 };
 
 struct HierarchicalMesh {
-    struct Cluster {
-        uint32_t vertPoolStartIndex;
-        uint32_t triPoolStartIndex;
-        uint32_t childIndexPoolStartIndex;
-        uint32_t parentStartClusterIndex;
-        uint32_t vertexCount : 12;
-        uint32_t triangleCount : 12;
-        uint32_t childCount : 4;
-        uint32_t parentCount : 4;
-    };
-
     cudau::TypedBuffer<Shared::Vertex> vertexPool;
     cudau::TypedBuffer<Shared::LocalTriangle> trianglePool;
     cudau::TypedBuffer<uint32_t> childIndexPool;
-    cudau::TypedBuffer<Cluster> clusters;
+    cudau::TypedBuffer<Shared::Cluster> clusters;
     cudau::TypedBuffer<uint32_t> levelStartClusterIndices;
     std::vector<uint32_t> levelStartClusterIndicesOnHost;
     uint32_t maxVertCountPerCluster;
@@ -75,7 +64,7 @@ struct HierarchicalMesh {
         std::vector<Shared::LocalTriangle> trianglesOnHost(triangleCount);
         std::vector<uint8_t> padding(paddingByteCount, 0);
         std::vector<uint32_t> childIndicesOnHost(childIndexCount);
-        std::vector<Cluster> clustersOnHost(clusterCount);
+        std::vector<Shared::Cluster> clustersOnHost(clusterCount);
         levelStartClusterIndicesOnHost.resize(levelCount);
         ifs
             .read(verticesOnHost)
@@ -204,6 +193,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.setMappedMemoryPersistent(true);
     pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
+    // JP: 
+    // EN: 
+    CUmodule lodDecisionModule;
+    CUDADRV_CHECK(cuModuleLoad(
+        &lodDecisionModule, (resourceDir / "ptxes/lod_decision_kernels.ptx").string().c_str()));
+    cudau::Kernel emitClusterArgsArray(lodDecisionModule, "emitClusterArgsArray", cudau::dim3(32), 0);
+    cudau::Kernel emitCgasArgsArray(lodDecisionModule, "emitCgasArgsArray", cudau::dim3(32), 0);
+
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
 
@@ -225,34 +222,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: シーンのセットアップ。
     // EN: Setup a scene.
 
-    optixu::Scene scene = optixContext.createScene();
-
-    size_t maxSizeOfScratchBuffer = 0;
-    OptixAccelBufferSizes asMemReqs;
-
-    cudau::Buffer asBuildScratchMem;
-
-    HierarchicalMesh himesh;
-    himesh.read(
-        cuContext, R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
-
-    constexpr uint32_t lodLevel = 0;
-    const uint32_t levelStartClusterIndex = himesh.levelStartClusterIndicesOnHost[lodLevel];
-    const uint32_t nextLevelStartClusterIndex =
-        (lodLevel + 1) < himesh.levelStartClusterIndicesOnHost.size() ?
-        himesh.levelStartClusterIndicesOnHost[lodLevel + 1] :
-        himesh.clusters.numElements();
-    const uint32_t levelClusterCount = nextLevelStartClusterIndex - levelStartClusterIndex;
-    uint32_t maxClusterCount = levelClusterCount;
-
-    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> clusterArgs;
-    OptixClusterAccelBuildInput clasBuildInput = {};
-    OptixClusterAccelBuildMode constexpr clasAccelBuildMode =
-        OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
-    cudau::Buffer clasSetMem;
-    cudau::TypedBuffer<CUdeviceptr> clasHandles;
-    cudau::TypedBuffer<uint32_t> clusterCount;
-    {
 #define OPTIX_CHECK(call) \
     do { \
         const OptixResult error = call; \
@@ -264,53 +233,46 @@ int32_t main(int32_t argc, const char* argv[]) try {
         } \
     } while (0)
 
-        Assert(
-            himesh.maxVertCountPerCluster <= optixContext.getMaxVertexCountPerCluster(),
-            "Too many vertices per cluster %u > %u.",
-            himesh.maxVertCountPerCluster, optixContext.getMaxVertexCountPerCluster());
+    optixu::Scene scene = optixContext.createScene();
 
-        Assert(
-            himesh.maxTriCountPerCluster <= optixContext.getMaxTriangleCountPerCluster(),
-            "Too many triangles per cluster %u > %u.",
-            himesh.maxTriCountPerCluster, optixContext.getMaxTriangleCountPerCluster());
+    size_t maxSizeOfScratchBuffer = 0;
+    OptixAccelBufferSizes asMemReqs;
 
-        std::vector<HierarchicalMesh::Cluster> clustersOnHost = himesh.clusters;
-        std::vector<OptixClusterAccelBuildInputTrianglesArgs> clusterArgsOnHost(levelClusterCount);
-        uint32_t maxSbtIndexValue = 0;
-        for (uint32_t cIdx = 0; cIdx < levelClusterCount; ++cIdx) {
-            const HierarchicalMesh::Cluster &cluster = clustersOnHost[levelStartClusterIndex + cIdx];
-            OptixClusterAccelBuildInputTrianglesArgs &args = clusterArgsOnHost[cIdx];
-            args = {};
-            args.clusterId = levelStartClusterIndex + cIdx;
-            args.clusterFlags = OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_NONE;
-            args.triangleCount = cluster.triangleCount;
-            args.vertexCount = cluster.vertexCount;
-            args.positionTruncateBitCount = 0;
-            args.indexFormat = OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_8BIT;
-            args.opacityMicromapIndexFormat = 0; // not used in this sample
-            args.basePrimitiveInfo.sbtIndex = 0;
-            args.basePrimitiveInfo.primitiveFlags = OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_NONE;
-            args.indexBufferStrideInBytes = sizeof(uint8_t);
-            args.vertexBufferStrideInBytes = sizeof(Shared::Vertex);
-            args.primitiveInfoBufferStrideInBytes = 0; // not used in this sample
-            args.opacityMicromapIndexBufferStrideInBytes = 0; // not used in this sample
-            args.indexBuffer = himesh.trianglePool.getCUdeviceptrAt(cluster.triPoolStartIndex);
-            args.vertexBuffer = himesh.vertexPool.getCUdeviceptrAt(cluster.vertPoolStartIndex);
-            args.primitiveInfoBuffer = 0; // not used in this sample
-            args.opacityMicromapArray = 0; // not used in this sample
-            args.opacityMicromapIndexBuffer = 0; // not used in this sample
-            args.instantiationBoundingBoxLimit = 0; // ignored for this arg type
+    cudau::Buffer asBuildScratchMem;
 
-            maxSbtIndexValue = std::max(maxSbtIndexValue, args.basePrimitiveInfo.sbtIndex);
-        }
-        clusterArgs.initialize(cuContext, cudau::BufferType::Device, clusterArgsOnHost);
+    HierarchicalMesh himesh;
+    himesh.read(
+        cuContext, R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
+
+    Assert(
+        himesh.maxVertCountPerCluster <= optixContext.getMaxVertexCountPerCluster(),
+        "Too many vertices per cluster %u > %u.",
+        himesh.maxVertCountPerCluster, optixContext.getMaxVertexCountPerCluster());
+    Assert(
+        himesh.maxTriCountPerCluster <= optixContext.getMaxTriangleCountPerCluster(),
+        "Too many triangles per cluster %u > %u.",
+        himesh.maxTriCountPerCluster, optixContext.getMaxTriangleCountPerCluster());
+
+    const uint32_t maxInflightClusterCount =
+        himesh.levelStartClusterIndicesOnHost[1] - himesh.levelStartClusterIndicesOnHost[0];
+
+    cudau::TypedBuffer<uint32_t> clusterCount;
+    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> clusterArgs;
+    OptixClusterAccelBuildInput clasBuildInput = {};
+    OptixClusterAccelBuildMode constexpr clasAccelBuildMode =
+        OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
+    cudau::Buffer clasSetMem;
+    cudau::TypedBuffer<CUdeviceptr> clasHandles;
+    {
+        clusterCount.initialize(cuContext, cudau::BufferType::Device, 1);
+        clusterArgs.initialize(cuContext, cudau::BufferType::Device, maxInflightClusterCount);
 
         clasBuildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES;
         OptixClusterAccelBuildInputTriangles &triBuildInput = clasBuildInput.triangles;
         triBuildInput.flags = OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE;
-        triBuildInput.maxArgCount = levelClusterCount;
+        triBuildInput.maxArgCount = maxInflightClusterCount;
         triBuildInput.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-        triBuildInput.maxSbtIndexValue = maxSbtIndexValue;
+        triBuildInput.maxSbtIndexValue = 0;
         triBuildInput.maxUniqueSbtIndexCountPerArg = 1;
         triBuildInput.maxTriangleCountPerArg = himesh.maxTriCountPerCluster;
         triBuildInput.maxVertexCountPerArg = himesh.maxVertCountPerCluster;
@@ -326,34 +288,27 @@ int32_t main(int32_t argc, const char* argv[]) try {
         clasSetMem.initialize(
             cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
         clasHandles.initialize(
-            cuContext, cudau::BufferType::Device, levelClusterCount, CUdeviceptr(0xFFFF'FFFF'FFFF'FFFF));
-        clusterCount.initialize(
-            cuContext, cudau::BufferType::Device, &levelClusterCount, 1);
+            cuContext, cudau::BufferType::Device, maxInflightClusterCount);
     }
 
     optixu::ClusterGeometryAccelerationStructure cgas = scene.createClusterGeometryAccelerationStructure();
+    cudau::TypedBuffer<uint32_t> cgasCount;
     cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> cgasArgs;
     OptixClusterAccelBuildInput cgasBuildInput = {};
     OptixClusterAccelBuildMode constexpr cgasAccelBuildMode =
         OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
     cudau::Buffer cgasSetMem;
     cudau::TypedBuffer<OptixTraversableHandle> cgasHandles;
-    cudau::TypedBuffer<uint32_t> cgasCount;
     {
-        OptixClusterAccelBuildInputClustersArgs cgasArgOnHost = {};
-        {
-            cgasArgOnHost.clusterHandlesCount = levelClusterCount;
-            cgasArgOnHost.clusterHandlesBufferStrideInBytes = clasHandles.stride();
-            cgasArgOnHost.clusterHandlesBuffer = clasHandles.getCUdeviceptr();
-        }
-        cgasArgs.initialize(cuContext, cudau::BufferType::Device, &cgasArgOnHost, 1);
+        cgasCount.initialize(cuContext, cudau::BufferType::Device, 1);
+        cgasArgs.initialize(cuContext, cudau::BufferType::Device, 1);
 
         cgasBuildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS;
         OptixClusterAccelBuildInputClusters &clusterBuildInput = cgasBuildInput.clusters;
         clusterBuildInput.flags = OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE;
         clusterBuildInput.maxArgCount = 1;
-        clusterBuildInput.maxTotalClusterCount = maxClusterCount;
-        clusterBuildInput.maxClusterCountPerArg = maxClusterCount;
+        clusterBuildInput.maxTotalClusterCount = maxInflightClusterCount;
+        clusterBuildInput.maxClusterCountPerArg = maxInflightClusterCount;
 
         OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
             optixContext.getOptixDeviceContext(), cgasAccelBuildMode,
@@ -363,10 +318,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cgasSetMem.initialize(
             cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
         cgasHandles.initialize(
-            cuContext, cudau::BufferType::Device, 1, CUdeviceptr(0xFFFF'FFFF'FFFF'FFFF));
-        cgasCount.initialize(
             cuContext, cudau::BufferType::Device, 1);
-        cgasCount.fill(1);
 
         cgas.setHandleAddress(cgasHandles.getCUdeviceptrAt(0));
         cgas.setNumRayTypes(Shared::NumRayTypes);
@@ -406,48 +358,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    {
-        OptixClusterAccelBuildModeDesc buildModeDesc = {};
-        buildModeDesc.mode = clasAccelBuildMode;
-        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
-            buildModeDesc.implicitDest;
-        buildModeDescImpDst.outputBuffer = clasSetMem.getCUdeviceptr();
-        buildModeDescImpDst.outputBufferSizeInBytes = clasSetMem.sizeInBytes();
-        buildModeDescImpDst.tempBuffer = asBuildScratchMem.getCUdeviceptr();
-        buildModeDescImpDst.tempBufferSizeInBytes = asBuildScratchMem.sizeInBytes();
-        buildModeDescImpDst.outputHandlesBuffer = clasHandles.getCUdeviceptr();
-        buildModeDescImpDst.outputHandlesStrideInBytes = clasHandles.stride();
-        buildModeDescImpDst.outputSizesBuffer = 0; // optional
-        buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
-
-        OPTIX_CHECK(optixClusterAccelBuild(
-            optixContext.getOptixDeviceContext(), cuStream,
-            &buildModeDesc, &clasBuildInput,
-            clusterArgs.getCUdeviceptr(), clusterCount.getCUdeviceptr(), clusterArgs.stride()));
-    }
-
-    {
-        OptixClusterAccelBuildModeDesc buildModeDesc = {};
-        buildModeDesc.mode = cgasAccelBuildMode;
-        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
-            buildModeDesc.implicitDest;
-        buildModeDescImpDst.outputBuffer = cgasSetMem.getCUdeviceptr();
-        buildModeDescImpDst.outputBufferSizeInBytes = cgasSetMem.sizeInBytes();
-        buildModeDescImpDst.tempBuffer = asBuildScratchMem.getCUdeviceptr();
-        buildModeDescImpDst.tempBufferSizeInBytes = asBuildScratchMem.sizeInBytes();
-        buildModeDescImpDst.outputHandlesBuffer = cgasHandles.getCUdeviceptr();
-        buildModeDescImpDst.outputHandlesStrideInBytes = cgasHandles.stride();
-        buildModeDescImpDst.outputSizesBuffer = 0; // optional
-        buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
-
-        OPTIX_CHECK(optixClusterAccelBuild(
-            optixContext.getOptixDeviceContext(), cuStream,
-            &buildModeDesc, &cgasBuildInput,
-            cgasArgs.getCUdeviceptr(), cgasCount.getCUdeviceptr(), cgasArgs.stride()));
-    }
-
-
-
     // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
     //     確定している必要がある。
     // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
@@ -457,10 +367,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
-
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
-
-    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -585,12 +491,26 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         // Debug Window
+        static Shared::LoDMode lodMode = Shared::LoDMode_ViewAdaptive;
+        static int32_t lodLevel = 0;
+        bool lodModeChanged = false;
+        bool lodLevelChanged = false;
         bool visModeChanged = false;
         {
             ImGui::SetNextWindowPos(ImVec2(712, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-            ImGui::Text("Visualization");
+            const Shared::LoDMode oldLodMode = lodMode;
+            const uint32_t oldLodLevel = lodLevel;
+            ImGui::CollapsingHeader("LoD", ImGuiTreeNodeFlags_DefaultOpen);
+            ImGui::RadioButtonE("View Adaptive", &lodMode, Shared::LoDMode_ViewAdaptive);
+            ImGui::RadioButtonE("Manual Uniform", &lodMode, Shared::LoDMode_ManualUniform);
+            if (ImGui::SliderInt("Level", &lodLevel, 0, 15))
+                lodMode = Shared::LoDMode_ManualUniform;
+            lodModeChanged = lodMode != oldLodMode;
+            lodLevelChanged = lodLevel != oldLodLevel;
+
+            ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
             visModeChanged |= ImGui::RadioButtonE(
                 "Geometric Normal", &visualizationMode, Shared::VisualizationMode_GeometricNormal);
             visModeChanged |= ImGui::RadioButtonE(
@@ -618,6 +538,61 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         curGPUTimer.frame.start(curStream);
+
+        if (lodModeChanged || lodLevelChanged || frameIndex == 0) {
+            clusterCount.fill(0, curStream);
+            emitClusterArgsArray.launchWithThreadDim(
+                curStream, cudau::dim3(himesh.clusters.numElements()),
+                lodMode, lodLevel,
+                himesh.vertexPool, himesh.trianglePool,
+                himesh.clusters, himesh.clusters.numElements(),
+                himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),
+                clusterArgs, clusterCount);
+            {
+                OptixClusterAccelBuildModeDesc buildModeDesc = {};
+                buildModeDesc.mode = clasAccelBuildMode;
+                OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
+                    buildModeDesc.implicitDest;
+                buildModeDescImpDst.outputBuffer = clasSetMem.getCUdeviceptr();
+                buildModeDescImpDst.outputBufferSizeInBytes = clasSetMem.sizeInBytes();
+                buildModeDescImpDst.tempBuffer = asBuildScratchMem.getCUdeviceptr();
+                buildModeDescImpDst.tempBufferSizeInBytes = asBuildScratchMem.sizeInBytes();
+                buildModeDescImpDst.outputHandlesBuffer = clasHandles.getCUdeviceptr();
+                buildModeDescImpDst.outputHandlesStrideInBytes = clasHandles.stride();
+                buildModeDescImpDst.outputSizesBuffer = 0; // optional
+                buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
+
+                OPTIX_CHECK(optixClusterAccelBuild(
+                    optixContext.getOptixDeviceContext(), curStream,
+                    &buildModeDesc, &clasBuildInput,
+                    clusterArgs.getCUdeviceptr(), clusterCount.getCUdeviceptr(), clusterArgs.stride()));
+            }
+
+            cgasCount.fill(0, curStream);
+            emitCgasArgsArray.launchWithThreadDim(
+                curStream, cudau::dim3(1),
+                clasHandles, clasHandles.stride(), clusterCount,
+                cgasArgs, cgasCount);
+            {
+                OptixClusterAccelBuildModeDesc buildModeDesc = {};
+                buildModeDesc.mode = cgasAccelBuildMode;
+                OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
+                    buildModeDesc.implicitDest;
+                buildModeDescImpDst.outputBuffer = cgasSetMem.getCUdeviceptr();
+                buildModeDescImpDst.outputBufferSizeInBytes = cgasSetMem.sizeInBytes();
+                buildModeDescImpDst.tempBuffer = asBuildScratchMem.getCUdeviceptr();
+                buildModeDescImpDst.tempBufferSizeInBytes = asBuildScratchMem.sizeInBytes();
+                buildModeDescImpDst.outputHandlesBuffer = cgasHandles.getCUdeviceptr();
+                buildModeDescImpDst.outputHandlesStrideInBytes = cgasHandles.stride();
+                buildModeDescImpDst.outputSizesBuffer = 0; // optional
+                buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
+
+                OPTIX_CHECK(optixClusterAccelBuild(
+                    optixContext.getOptixDeviceContext(), curStream,
+                    &buildModeDesc, &cgasBuildInput,
+                    cgasArgs.getCUdeviceptr(), cgasCount.getCUdeviceptr(), cgasArgs.stride()));
+            }
+        }
 
         //// JP: 各インスタンスのトランスフォームを更新する。
         //// EN: Update the transform of each instance.
@@ -651,6 +626,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cameraIsActuallyMoving ||
             args.resized ||
             frameIndex == 0 ||
+            lodModeChanged || lodLevelChanged ||
             visModeChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
@@ -764,10 +740,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cgasArgs.finalize();
     cgas.destroy();
 
-    clusterCount.finalize();
     clasHandles.finalize();
     clasSetMem.finalize();
     clusterArgs.finalize();
+    clusterCount.finalize();
 
     himesh.finalize();
 
@@ -778,6 +754,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     mat.destroy();
 
 
+
+    CUDADRV_CHECK(cuModuleUnload(lodDecisionModule));
 
     shaderBindingTable.finalize();
 

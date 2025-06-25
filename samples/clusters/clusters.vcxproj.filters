@@ -159,8 +159,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="optix_path_tracing.cu" />
-    <CudaCompile Include="copy_buffers.cu" />
+    <CudaCompile Include="optix_kernels.cu" />
+    <CudaCompile Include="lod_decision_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">
