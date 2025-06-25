@@ -830,6 +830,24 @@ namespace cudau {
             *pointer = head.getCUdeviceptr();
             *argPointer = pointer;
         }
+        else if constexpr (
+            std::is_same_v<RawHeadType, bool> ||
+            std::is_same_v<RawHeadType, int8_t> ||
+            std::is_same_v<RawHeadType, uint8_t> ||
+            std::is_same_v<RawHeadType, int16_t> ||
+            std::is_same_v<RawHeadType, uint16_t> ||
+            std::is_same_v<RawHeadType, int32_t> ||
+            std::is_same_v<RawHeadType, uint32_t> ||
+            std::is_same_v<RawHeadType, int64_t> ||
+            std::is_same_v<RawHeadType, uint64_t> ||
+            std::is_same_v<RawHeadType, float> ||
+            std::is_same_v<RawHeadType, double> ||
+            std::is_pointer_v<RawHeadType> ||
+            std::is_enum_v<RawHeadType>)
+        {
+			*reinterpret_cast<RawHeadType*>(pointer) = head;
+            *argPointer = pointer;
+        }
         else {
             *argPointer = &head;
         }
