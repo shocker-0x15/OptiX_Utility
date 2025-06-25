@@ -26,6 +26,17 @@ namespace Shared {
         uint8_t index0, index1, index2;
     };
 
+    struct Cluster {
+        uint32_t vertPoolStartIndex;
+        uint32_t triPoolStartIndex;
+        uint32_t childIndexPoolStartIndex;
+        uint32_t parentStartClusterIndex;
+        uint32_t vertexCount : 12;
+        uint32_t triangleCount : 12;
+        uint32_t childCount : 4;
+        uint32_t parentCount : 4;
+    };
+
 
 
     struct PerspectiveCamera {
@@ -53,6 +64,11 @@ namespace Shared {
     };
 
 
+
+    enum LoDMode : uint32_t {
+        LoDMode_ViewAdaptive = 0,
+        LoDMode_ManualUniform,
+    };
 
     enum VisualizationMode : uint32_t {
         VisualizationMode_GeometricNormal = 0,
