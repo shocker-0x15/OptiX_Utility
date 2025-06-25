@@ -65,6 +65,10 @@
 
 #include <stdexcept>
 
+#ifdef CUDADRV_CHECK
+#   undef CUDADRV_CHECK
+#endif
+
 #define CUDADRV_CHECK(call) \
     do { \
         const CUresult error = call; \
@@ -231,8 +235,11 @@ namespace optixu {
         OptixDeviceContext rawContext;
         uint32_t rtCoreVersion;
         uint32_t shaderExecutionReorderingFlags;
+        uint32_t clusterAccelFlags;
         uint32_t maxInstanceID;
         uint32_t numVisibilityMaskBits;
+        uint32_t maxVertexCountPerCluster;
+        uint32_t maxTriangleCountPerCluster;
         std::unordered_map<const void*, std::string> registeredNames;
 
     public:
@@ -264,6 +271,15 @@ namespace optixu {
             OPTIX_CHECK(optixDeviceContextGetProperty(
                 rawContext, OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING,
                 &shaderExecutionReorderingFlags, sizeof(shaderExecutionReorderingFlags)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_CLUSTER_ACCEL,
+                &clusterAccelFlags, sizeof(clusterAccelFlags)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_CLUSTER_VERTICES,
+                &maxVertexCountPerCluster, sizeof(maxVertexCountPerCluster)));
+            OPTIX_CHECK(optixDeviceContextGetProperty(
+                rawContext, OPTIX_DEVICE_PROPERTY_LIMIT_MAX_CLUSTER_TRIANGLES,
+                &maxTriangleCountPerCluster, sizeof(maxTriangleCountPerCluster)));
         }
         ~Priv() {
             optixDeviceContextDestroy(rawContext);

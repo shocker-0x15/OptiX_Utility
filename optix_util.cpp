@@ -122,6 +122,18 @@ namespace optixu {
         return m->shaderExecutionReorderingFlags;
     }
 
+    uint32_t Context::getClusterAccelFlags() const {
+        return m->clusterAccelFlags;
+    }
+
+    uint32_t Context::getMaxVertexCountPerCluster() const {
+        return m->maxVertexCountPerCluster;
+    }
+
+    uint32_t Context::getMaxTriangleCountPerCluster() const {
+        return m->maxTriangleCountPerCluster;
+    }
+
     CUcontext Context::getCUcontext() const {
         return m->cuContext;
     }

@@ -264,21 +264,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         } \
     } while (0)
 
-        uint32_t maxVertexCountPerCluster;
-        OPTIX_CHECK(optixDeviceContextGetProperty(
-            optixContext.getOptixDeviceContext(),
-            OPTIX_DEVICE_PROPERTY_LIMIT_MAX_CLUSTER_VERTICES,
-            &maxVertexCountPerCluster,
-            sizeof(maxVertexCountPerCluster)));
-        Assert(himesh.maxVertCountPerCluster < maxVertexCountPerCluster);
+        Assert(
+            himesh.maxVertCountPerCluster <= optixContext.getMaxVertexCountPerCluster(),
+            "Too many vertices per cluster %u > %u.",
+            himesh.maxVertCountPerCluster, optixContext.getMaxVertexCountPerCluster());
 
-        uint32_t maxTriangleCountPerCluster;
-        OPTIX_CHECK(optixDeviceContextGetProperty(
-            optixContext.getOptixDeviceContext(),
-            OPTIX_DEVICE_PROPERTY_LIMIT_MAX_CLUSTER_TRIANGLES,
-            &maxTriangleCountPerCluster,
-            sizeof(maxTriangleCountPerCluster)));
-        Assert(himesh.maxTriCountPerCluster < maxTriangleCountPerCluster);
+        Assert(
+            himesh.maxTriCountPerCluster <= optixContext.getMaxTriangleCountPerCluster(),
+            "Too many triangles per cluster %u > %u.",
+            himesh.maxTriCountPerCluster, optixContext.getMaxTriangleCountPerCluster());
 
         std::vector<HierarchicalMesh::Cluster> clustersOnHost = himesh.clusters;
         std::vector<OptixClusterAccelBuildInputTrianglesArgs> clusterArgsOnHost(levelClusterCount);
