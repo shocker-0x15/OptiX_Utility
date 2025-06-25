@@ -1556,6 +1556,9 @@ namespace optixu {
 
         uint32_t getRTCoreVersion() const;
         uint32_t getShaderExecutionReorderingFlags() const;
+        uint32_t getClusterAccelFlags() const;
+        uint32_t getMaxVertexCountPerCluster() const;
+        uint32_t getMaxTriangleCountPerCluster() const;
 
         operator bool() const { return m; }
         bool operator==(const Context &r) const { return m == r.m; }
