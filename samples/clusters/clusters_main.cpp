@@ -539,11 +539,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         curGPUTimer.frame.start(curStream);
 
-        if (lodModeChanged || lodLevelChanged || frameIndex == 0) {
+        if (lodMode == Shared::LoDMode_ViewAdaptive ||
+            lodModeChanged ||
+            lodLevelChanged ||
+            frameIndex == 0)
+        {
             clusterCount.fill(0, curStream);
             emitClusterArgsArray.launchWithThreadDim(
                 curStream, cudau::dim3(himesh.clusters.numElements()),
                 lodMode, lodLevel,
+                plp.camera.position, plp.camera.orientation,
+                plp.camera.fovY, args.windowContentRenderHeight,
                 himesh.vertexPool, himesh.trianglePool,
                 himesh.clusters, himesh.clusters.numElements(),
                 himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),

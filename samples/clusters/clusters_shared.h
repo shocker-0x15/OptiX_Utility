@@ -26,7 +26,16 @@ namespace Shared {
         uint8_t index0, index1, index2;
     };
 
+    struct Sphere {
+        float3 center;
+        float radius;
+    };
+
     struct Cluster {
+        Sphere bounds;
+        float error;
+        Sphere parentBounds;
+        float parentError;
         uint32_t vertPoolStartIndex;
         uint32_t triPoolStartIndex;
         uint32_t childIndexPoolStartIndex;
@@ -35,6 +44,7 @@ namespace Shared {
         uint32_t triangleCount : 12;
         uint32_t childCount : 4;
         uint32_t parentCount : 4;
+        uint32_t padding0;
     };
 
 
