@@ -18,8 +18,21 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t identifyLevel(
     return level;
 }
 
+CUDA_DEVICE_FUNCTION CUDA_INLINE float estimateClusterErrorInNormalizedScreen(
+    const Sphere &bounds, const float errorInWorld,
+    const float3 &cameraPosition, const Matrix3x3 &/*cameraOrientation*/,
+    const float cameraFovY)
+{
+    const float3 diff = bounds.center - cameraPosition;
+    const float dist = max(length(diff) - bounds.radius, 0.0f);
+    const float screenHeightInWorld = 2.0f * dist * tanf(0.5f * cameraFovY);
+    return errorInWorld / screenHeightInWorld;
+}
+
 CUDA_DEVICE_KERNEL void emitClusterArgsArray(
     const LoDMode lodMode, const uint32_t manualUniformLevel,
+    const float3 cameraPosition, const Matrix3x3 cameraOrientation,
+    const float cameraFovY, const uint32_t imageHeight,
     const Vertex* const vertexPool, const LocalTriangle* const trianglePool,
     const Cluster* const clusters, const uint32_t clusterCount,
     const uint32_t* const levelStartClusterIndices, const uint32_t levelCount,
@@ -31,7 +44,16 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
     if (clusterIdx < clusterCount) {
         const uint32_t level = identifyLevel(levelStartClusterIndices, levelCount, clusterIdx);
         if (lodMode == LoDMode_ViewAdaptive) {
-            emit = level == 0;
+            const Cluster &cluster = clusters[clusterIdx];
+            const float onePixelInNS = 1.0f / imageHeight;
+            const float threshold = 0.5f * onePixelInNS;
+            const float selfErrorInNS = estimateClusterErrorInNormalizedScreen(
+                cluster.bounds, cluster.error,
+                cameraPosition, cameraOrientation, cameraFovY);
+            const float parentErrorInNS = estimateClusterErrorInNormalizedScreen(
+                cluster.parentBounds, cluster.parentError,
+                cameraPosition, cameraOrientation, cameraFovY);
+            emit = selfErrorInNS <= threshold && parentErrorInNS > threshold;
         }
         else if (lodMode == LoDMode_ManualUniform) {
             emit = level == manualUniformLevel;
