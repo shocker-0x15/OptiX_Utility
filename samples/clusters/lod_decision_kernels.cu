@@ -25,7 +25,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float estimateClusterErrorInNormalizedScreen(
 {
     const float3 diff = bounds.center - cameraPosition;
     const float dist = max(length(diff) - bounds.radius, 0.0f);
-    const float screenHeightInWorld = 2.0f * dist * tanf(0.5f * cameraFovY);
+    const float screenHeightInWorld = 2.0f * dist * std::tan(0.5f * cameraFovY);
     return errorInWorld / screenHeightInWorld;
 }
 
@@ -34,15 +34,15 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
     const float3 cameraPosition, const Matrix3x3 cameraOrientation,
     const float cameraFovY, const uint32_t imageHeight,
     const Vertex* const vertexPool, const LocalTriangle* const trianglePool,
-    const Cluster* const clusters, const uint32_t clusterCount,
+    const Cluster* clusters, const OptixClusterAccelBuildInputTrianglesArgs* const srcClusterArgsArray,
+    const uint32_t clusterCount,
     const uint32_t* const levelStartClusterIndices, const uint32_t levelCount,
-    OptixClusterAccelBuildInputTrianglesArgs* const clusterArgsArray,
+    OptixClusterAccelBuildInputTrianglesArgs* const dstClusterArgsArray,
     uint32_t* const emittedClusterCount)
 {
     const uint32_t clusterIdx = blockDim.x * blockIdx.x + threadIdx.x;
     bool emit = false;
     if (clusterIdx < clusterCount) {
-        const uint32_t level = identifyLevel(levelStartClusterIndices, levelCount, clusterIdx);
         if (lodMode == LoDMode_ViewAdaptive) {
             const Cluster &cluster = clusters[clusterIdx];
             const float onePixelInNS = 1.0f / imageHeight;
@@ -56,7 +56,8 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
             emit = selfErrorInNS <= threshold && parentErrorInNS > threshold;
         }
         else if (lodMode == LoDMode_ManualUniform) {
-            emit = level == manualUniformLevel;
+            const uint32_t level = identifyLevel(levelStartClusterIndices, levelCount, clusterIdx);
+            emit = level == min(manualUniformLevel, levelCount - 1);
         }
     }
 
@@ -71,30 +72,7 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
     }
 
     if (emit) {
-        const Cluster &cluster = clusters[clusterIdx];
-
-        OptixClusterAccelBuildInputTrianglesArgs args = {};
-        args.clusterId = clusterIdx;
-        args.clusterFlags = OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_NONE;
-        args.triangleCount = cluster.triangleCount;
-        args.vertexCount = cluster.vertexCount;
-        args.positionTruncateBitCount = 0;
-        args.indexFormat = OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_8BIT;
-        args.opacityMicromapIndexFormat = 0; // not used in this sample
-        args.basePrimitiveInfo.sbtIndex = 0;
-        args.basePrimitiveInfo.primitiveFlags = OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_NONE;
-        args.indexBufferStrideInBytes = sizeof(uint8_t);
-        args.vertexBufferStrideInBytes = sizeof(Shared::Vertex);
-        args.primitiveInfoBufferStrideInBytes = 0; // not used in this sample
-        args.opacityMicromapIndexBufferStrideInBytes = 0; // not used in this sample
-        args.indexBuffer = reinterpret_cast<CUdeviceptr>(&trianglePool[cluster.triPoolStartIndex]);
-        args.vertexBuffer = reinterpret_cast<CUdeviceptr>(&vertexPool[cluster.vertPoolStartIndex]);
-        args.primitiveInfoBuffer = 0; // not used in this sample
-        args.opacityMicromapArray = 0; // not used in this sample
-        args.opacityMicromapIndexBuffer = 0; // not used in this sample
-        args.instantiationBoundingBoxLimit = 0; // ignored for this arg type
-
-        clusterArgsArray[clusterArgsIdx] = args;
+        dstClusterArgsArray[clusterArgsIdx] = srcClusterArgsArray[clusterIdx];
     }
 }
 
