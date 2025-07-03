@@ -525,22 +525,27 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // Debug Window
         static Shared::LoDMode lodMode = Shared::LoDMode_ViewAdaptive;
         static int32_t lodLevel = 0;
+        static bool lockLod = false;
         bool lodModeChanged = false;
         bool lodLevelChanged = false;
         bool visModeChanged = false;
+        bool lockLodChanged = false;
         {
             ImGui::SetNextWindowPos(ImVec2(712, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             const Shared::LoDMode oldLodMode = lodMode;
             const uint32_t oldLodLevel = lodLevel;
+            const bool oldLockLod = lockLod;
             ImGui::CollapsingHeader("LoD", ImGuiTreeNodeFlags_DefaultOpen);
             ImGui::RadioButtonE("View Adaptive", &lodMode, Shared::LoDMode_ViewAdaptive);
             ImGui::RadioButtonE("Manual Uniform", &lodMode, Shared::LoDMode_ManualUniform);
             if (ImGui::SliderInt("Level", &lodLevel, 0, 15))
                 lodMode = Shared::LoDMode_ManualUniform;
+            ImGui::Checkbox("Lock LoD", &lockLod);
             lodModeChanged = lodMode != oldLodMode;
             lodLevelChanged = lodLevel != oldLodLevel;
+            lockLodChanged = lockLod != oldLockLod;
 
             ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
             visModeChanged |= ImGui::RadioButtonE(
@@ -571,9 +576,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         curGPUTimer.frame.start(curStream);
 
-        if (lodMode == Shared::LoDMode_ViewAdaptive ||
-            lodModeChanged ||
-            lodLevelChanged ||
+        if ((lodMode == Shared::LoDMode_ViewAdaptive ||
+             lodModeChanged ||
+             lodLevelChanged) && !lockLod ||
             frameIndex == 0)
         {
             clusterCount.fill(0, curStream);
@@ -665,7 +670,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cameraIsActuallyMoving ||
             args.resized ||
             frameIndex == 0 ||
-            lodModeChanged || lodLevelChanged ||
+            lodModeChanged || lodLevelChanged || lockLodChanged ||
             visModeChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
