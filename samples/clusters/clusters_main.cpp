@@ -36,6 +36,7 @@ struct HierarchicalMesh {
     cudau::TypedBuffer<uint32_t> childIndexPool;
     cudau::TypedBuffer<Shared::Cluster> clusters;
     cudau::TypedBuffer<uint32_t> levelStartClusterIndices;
+    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> argsArray;
     std::vector<uint32_t> levelStartClusterIndicesOnHost;
     uint32_t maxVertCountPerCluster;
     uint32_t maxTriCountPerCluster;
@@ -85,6 +86,36 @@ struct HierarchicalMesh {
         levelStartClusterIndices.initialize(
             cuContext, cudau::BufferType::Device, levelStartClusterIndicesOnHost);
 
+        std::vector<OptixClusterAccelBuildInputTrianglesArgs> argsArrayOnHost(clusterCount);
+        for (uint32_t cIdx = 0; cIdx < clusterCount; ++cIdx) {
+            const Shared::Cluster &cluster = clustersOnHost[cIdx];
+
+            OptixClusterAccelBuildInputTrianglesArgs args = {};
+            args.clusterId = cIdx;
+            args.clusterFlags = OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_NONE;
+            args.triangleCount = cluster.triangleCount;
+            args.vertexCount = cluster.vertexCount;
+            args.positionTruncateBitCount = 0;
+            args.indexFormat = OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_8BIT;
+            args.opacityMicromapIndexFormat = 0; // not used in this sample
+            args.basePrimitiveInfo.sbtIndex = 0;
+            args.basePrimitiveInfo.primitiveFlags = OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_NONE;
+            args.indexBufferStrideInBytes = sizeof(uint8_t);
+            args.vertexBufferStrideInBytes = sizeof(Shared::Vertex);
+            args.primitiveInfoBufferStrideInBytes = 0; // not used in this sample
+            args.opacityMicromapIndexBufferStrideInBytes = 0; // not used in this sample
+            args.indexBuffer = trianglePool.getCUdeviceptrAt(cluster.triPoolStartIndex);
+            args.vertexBuffer = vertexPool.getCUdeviceptrAt(cluster.vertPoolStartIndex);
+            args.primitiveInfoBuffer = 0; // not used in this sample
+            args.opacityMicromapArray = 0; // not used in this sample
+            args.opacityMicromapIndexBuffer = 0; // not used in this sample
+            args.instantiationBoundingBoxLimit = 0; // ignored for this arg type
+
+            argsArrayOnHost[cIdx] = args;
+        }
+        argsArray.initialize(
+            cuContext, cudau::BufferType::Device, argsArrayOnHost);
+
         return true;
     }
 
@@ -94,6 +125,7 @@ struct HierarchicalMesh {
         childIndexPool.finalize();
         clusters.finalize();
         levelStartClusterIndices.finalize();
+        argsArray.finalize();
     }
 };
 
@@ -551,7 +583,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 plp.camera.position, plp.camera.orientation,
                 plp.camera.fovY, args.windowContentRenderHeight,
                 himesh.vertexPool, himesh.trianglePool,
-                himesh.clusters, himesh.clusters.numElements(),
+                himesh.clusters, himesh.argsArray,
+                himesh.clusters.numElements(),
                 himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),
                 clusterArgs, clusterCount);
             {
