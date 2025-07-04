@@ -2915,7 +2915,7 @@ namespace optixu {
             stream));
         childIdx = 0;
         for (const _Instance* child : m->children)
-            child->copyTraversableHandle(stream, instanceBuffer.getCUdeviceptrAt(childIdx));
+            child->copyTraversableHandle(stream, instanceBuffer.getCUdeviceptrAt(childIdx++));
         m->buildInput.instanceArray.instances = m->children.size() > 0 ? instanceBuffer.getCUdeviceptr() : 0;
 
         const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;

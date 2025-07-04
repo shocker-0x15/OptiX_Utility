@@ -33,25 +33,40 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
     const LoDMode lodMode, const uint32_t manualUniformLevel,
     const float3 cameraPosition, const Matrix3x3 cameraOrientation,
     const float cameraFovY, const uint32_t imageHeight,
-    const Vertex* const vertexPool, const LocalTriangle* const trianglePool,
+    const InstanceTransform instTransform,
     const Cluster* clusters, const OptixClusterAccelBuildInputTrianglesArgs* const srcClusterArgsArray,
     const uint32_t clusterCount,
     const uint32_t* const levelStartClusterIndices, const uint32_t levelCount,
-    OptixClusterAccelBuildInputTrianglesArgs* const dstClusterArgsArray,
-    uint32_t* const emittedClusterCount)
+    ClusterSetInfo* const clusterSetInfo,
+    ClusterGasInfo* const clusterGasInfo)
 {
     const uint32_t clusterIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    const uint32_t usedFlagsBinIdx = clusterIdx / 32;
+    const uint32_t usedFlagIdxInBin = clusterIdx % 32;
+
     bool emit = false;
+    bool alreadyEmitted = false;
     if (clusterIdx < clusterCount) {
+        alreadyEmitted = ((clusterSetInfo->usedFlags[usedFlagsBinIdx] >> usedFlagIdxInBin) & 0b1) != 0;
+
         if (lodMode == LoDMode_ViewAdaptive) {
             const Cluster &cluster = clusters[clusterIdx];
             const float onePixelInNS = 1.0f / imageHeight;
             const float threshold = 0.5f * onePixelInNS;
+
+            const Matrix3x3 matRot = instTransform.orientation.toMatrix3x3();
+            Sphere selfBounds = cluster.bounds;
+            selfBounds.center = matRot * selfBounds.center + instTransform.position;
+            selfBounds.radius *= instTransform.scale;
+            Sphere parentBounds = cluster.parentBounds;
+            parentBounds.center = matRot * parentBounds.center + instTransform.position;
+            parentBounds.radius *= instTransform.scale;
+
             const float selfErrorInNS = estimateClusterErrorInNormalizedScreen(
-                cluster.bounds, cluster.error,
+                selfBounds, instTransform.scale * cluster.error,
                 cameraPosition, cameraOrientation, cameraFovY);
             const float parentErrorInNS = estimateClusterErrorInNormalizedScreen(
-                cluster.parentBounds, cluster.parentError,
+                parentBounds, instTransform.scale * cluster.parentError,
                 cameraPosition, cameraOrientation, cameraFovY);
             emit = selfErrorInNS <= threshold && parentErrorInNS > threshold;
         }
@@ -61,37 +76,52 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
         }
     }
 
-    uint32_t clusterArgsIdx;
+    uint32_t clasBuildIdx;
     {
-        const uint32_t waveEmitFlags = __ballot_sync(0xFFFF'FFFF, emit);
-        uint32_t clusterArgsBaseIdx = 0;
-        if (threadIdx.x == 0)
-            clusterArgsBaseIdx = atomicAdd(emittedClusterCount, popcnt(waveEmitFlags));
-        clusterArgsIdx = __shfl_sync(0xFFFF'FFFF, clusterArgsBaseIdx, 0) +
-            popcnt(waveEmitFlags & ((1u << threadIdx.x) - 1));
+        const uint32_t waveNewEmitFlags = __ballot_sync(0xFFFF'FFFF, emit && !alreadyEmitted);
+        uint32_t clusterBuildBaseIdx = 0;
+        if (threadIdx.x == 0) {
+            atomicOr(&clusterSetInfo->usedFlags[usedFlagsBinIdx], waveNewEmitFlags);
+            clusterBuildBaseIdx = atomicAdd(&clusterSetInfo->argsCountToBuild, popcnt(waveNewEmitFlags));
+        }
+        clasBuildIdx = __shfl_sync(0xFFFF'FFFF, clusterBuildBaseIdx, 0) +
+            popcnt(waveNewEmitFlags & ((1u << threadIdx.x) - 1));
     }
 
     if (emit) {
-        dstClusterArgsArray[clusterArgsIdx] = srcClusterArgsArray[clusterIdx];
+        if (alreadyEmitted) {
+            clasBuildIdx = clusterSetInfo->indexMapClusterToClasBuild[clusterIdx];
+        }
+        else {
+            clusterSetInfo->argsArray[clasBuildIdx] = srcClusterArgsArray[clusterIdx];
+            clusterSetInfo->indexMapClusterToClasBuild[clusterIdx] = clasBuildIdx;
+        }
     }
+
+    uint32_t clasHandleIdx;
+    {
+        const uint32_t waveEmitFlags = __ballot_sync(0xFFFF'FFFF, emit);
+        uint32_t compactClusterBaseIdx = 0;
+        if (threadIdx.x == 0)
+            compactClusterBaseIdx = atomicAdd(&clusterGasInfo->clasHandleCount, popcnt(waveEmitFlags));
+        clasHandleIdx = __shfl_sync(0xFFFF'FFFF, compactClusterBaseIdx, 0) +
+            popcnt(waveEmitFlags & ((1u << threadIdx.x) - 1));
+    }
+
+    if (emit)
+        clusterGasInfo->indexMapClasHandleToClasBuild[clasHandleIdx] = clasBuildIdx;
 }
 
 
 
-CUDA_DEVICE_KERNEL void emitCgasArgsArray(
-    const CUdeviceptr clasHandles, const uint32_t clasHandleStride,
-    const uint32_t* const clusterCount,
-    OptixClusterAccelBuildInputClustersArgs* const cgasArgsArray,
-    uint32_t* const emittedCgasCount)
+CUDA_DEVICE_KERNEL void copyClasHandles(
+    ClusterSetInfo* const clusterSetInfo,
+    ClusterGasInfo* const clusterGasInfo)
 {
-    if (threadIdx.x > 0)
+    const uint32_t clasHandleIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (clasHandleIdx >= clusterGasInfo->clasHandleCount)
         return;
 
-    OptixClusterAccelBuildInputClustersArgs cgasArgs = {};
-    cgasArgs.clusterHandlesBuffer = clasHandles;
-    cgasArgs.clusterHandlesCount = *clusterCount;
-    cgasArgs.clusterHandlesBufferStrideInBytes = clasHandleStride;
-
-    cgasArgsArray[0] = cgasArgs;
-    *emittedCgasCount = 1;
+    const uint32_t clasBuildIdx = clusterGasInfo->indexMapClasHandleToClasBuild[clasHandleIdx];
+    clusterGasInfo->clasHandles[clasHandleIdx] = clusterSetInfo->clasHandles[clasBuildIdx];
 }
