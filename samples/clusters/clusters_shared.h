@@ -47,6 +47,26 @@ namespace Shared {
         uint32_t padding0;
     };
 
+    struct ClusterSetInfo {
+        OptixClusterAccelBuildInputTrianglesArgs* argsArray; // args array for CLAS set build
+        CUdeviceptr* clasHandles; // CLAS handles' destination for CLAS set build
+        uint32_t* usedFlags;
+        uint32_t* indexMapClusterToClasBuild; // cluster index => CLAS build index
+        uint32_t argsCountToBuild;
+    };
+
+    struct InstanceTransform {
+        float scale;
+        Quaternion orientation;
+        float3 position;
+    };
+
+    struct ClusterGasInfo {
+        uint32_t* indexMapClasHandleToClasBuild; // CLAS handle index for GAS build => CLAS build index
+        CUdeviceptr* clasHandles; // handles for Cluster GAS build
+        uint32_t clasHandleCount;
+    };
+
 
 
     struct PerspectiveCamera {
