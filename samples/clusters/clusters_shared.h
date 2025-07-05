@@ -109,12 +109,24 @@ namespace Shared {
 
 
 
+    struct PickInfo {
+        uint32_t instanceIndex;
+        uint32_t clusterId;
+        uint32_t primitiveIndex;
+        float2 barycentrics;
+        Cluster cluster;
+    };
+
+
+
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
         int2 imageSize;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
         Shared::Cluster* clusters;
+        PickInfo* pickInfo;
+        uint2 mousePosition;
         float2 subPixelOffset;
         uint32_t sampleIndex : 8;
         uint32_t visMode : 3;
@@ -122,5 +134,5 @@ namespace Shared {
 
 
 
-    using MyPayloadSignature = optixu::PayloadSignature<uint32_t, float3>;
+    using MyPayloadSignature = optixu::PayloadSignature<uint32_t, uint32_t, uint32_t, float2, float3>;
 }
