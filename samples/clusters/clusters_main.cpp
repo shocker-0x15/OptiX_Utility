@@ -568,8 +568,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float2(0.0f, 0.0f)
     };
     cudau::TypedBuffer<Shared::PickInfo> pickInfos[2];
-    for (uint32_t i = 0; i < lengthof(pickInfos); ++i)
-        pickInfos[i].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
+    pickInfos[0].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
+    pickInfos[1].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
 
     struct GPUTimer {
         cudau::Timer frame;
@@ -943,6 +943,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     gpuTimers[1].finalize();
     gpuTimers[0].finalize();
+
+    pickInfos[1].finalize();
+    pickInfos[0].finalize();
 
     outputBufferSurfaceHolder.finalize();
     outputArray.finalize();
