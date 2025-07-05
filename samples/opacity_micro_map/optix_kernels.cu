@@ -30,25 +30,6 @@ struct HitGroupSBTRecordData {
 
 
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE float3 calcFalseColor(
-    int32_t value, int32_t minValue, int32_t maxValue) {
-    float t = static_cast<float>(value - minValue) / (maxValue - minValue);
-    t = min(max(t, 0.0f), 1.0f);
-    constexpr float3 R = { 1.0f, 0.0f, 0.0f };
-    constexpr float3 G = { 0.0f, 1.0f, 0.0f };
-    constexpr float3 B = { 0.0f, 0.0f, 1.0f };
-    float3 ret;
-    if (t < 0.5f) {
-        t = (t - 0.0f) / 0.5f;
-        ret = B * (1 - t) + G * t;
-    }
-    else {
-        t = (t - 0.5f) / 0.5f;
-        ret = G * (1 - t) + R * t;
-    }
-    return ret;
-}
-
 CUDA_DEVICE_FUNCTION CUDA_INLINE float fetchAlpha(
     const GeometryInstanceData &geomInst, const HitPointParameter &hp) {
     if (!geomInst.texture)

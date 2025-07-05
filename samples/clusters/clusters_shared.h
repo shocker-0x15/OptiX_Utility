@@ -44,7 +44,8 @@ namespace Shared {
         uint32_t triangleCount : 12;
         uint32_t childCount : 4;
         uint32_t parentCount : 4;
-        uint32_t padding0;
+        uint32_t level : 6;
+        uint32_t padding0 : 26;
     };
 
     struct ClusterSetInfo {
@@ -103,6 +104,7 @@ namespace Shared {
     enum VisualizationMode : uint32_t {
         VisualizationMode_GeometricNormal = 0,
         VisualizationMode_Cluster,
+        VisualizationMode_Level,
     };
 
 
@@ -112,6 +114,7 @@ namespace Shared {
         int2 imageSize;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
+        Shared::Cluster* clusters;
         float2 subPixelOffset;
         uint32_t sampleIndex : 8;
         uint32_t visMode : 3;

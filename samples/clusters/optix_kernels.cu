@@ -54,7 +54,8 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     if (hit) {
         if (plp.visMode == VisualizationMode_GeometricNormal) {
             color = 0.5f * geomNormal + make_float3(0.5f);
-        } else if (plp.visMode == VisualizationMode_Cluster) {
+        }
+        else if (plp.visMode == VisualizationMode_Cluster) {
             if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
                 color = make_float3(0.0f, 0.0f, 0.0f);
             }
@@ -64,6 +65,14 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
                 color = HSVtoRGB(
                     std::fmod((GoldenAngle * clusterId) / (2 * pi_v<float>), 1.0f),
                     1.0f, 1.0f);
+            }
+        }
+        else if (plp.visMode == VisualizationMode_Level) {
+            if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
+                color = make_float3(0.0f, 0.0f, 0.0f);
+            }
+            else {
+                color = calcFalseColor(plp.clusters[clusterId].level, 0, 10);
             }
         }
     }
