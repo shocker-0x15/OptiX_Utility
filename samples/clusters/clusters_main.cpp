@@ -561,6 +561,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::InteropSurfaceObjectHolder<2> outputBufferSurfaceHolder;
     outputBufferSurfaceHolder.initialize({ &outputArray });
 
+    constexpr Shared::PickInfo initPickInfo = {
+        0xFFFF'FFFF,
+        OPTIX_CLUSTER_ID_INVALID,
+        0xFFFF'FFFF,
+        float2(0.0f, 0.0f)
+    };
+    cudau::TypedBuffer<Shared::PickInfo> pickInfos[2];
+    for (uint32_t i = 0; i < lengthof(pickInfos); ++i)
+        pickInfos[i].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
+
     struct GPUTimer {
         cudau::Timer frame;
         cudau::Timer update;
@@ -587,6 +597,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const uint64_t frameIndex = args.frameIndex;
         const CUstream curStream = args.curStream;
         GPUTimer &curGPUTimer = gpuTimers[frameIndex % 2];
+        cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[frameIndex % 2];
 
         // Camera Window
         bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
@@ -622,9 +633,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         // Debug Window
+        static bool enableJittering = false;
         static Shared::LoDMode lodMode = Shared::LoDMode_ViewAdaptive;
         static int32_t lodLevel = 0;
         static bool lockLod = false;
+        bool enableJitteringChanged = false;
         bool lodModeChanged = false;
         bool lodLevelChanged = false;
         bool visModeChanged = false;
@@ -632,6 +645,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         {
             ImGui::SetNextWindowPos(ImVec2(712, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            const bool oldEnableJittering = enableJittering;
+            ImGui::Checkbox("Jittering", &enableJittering);
+            enableJitteringChanged = enableJittering != oldEnableJittering;
 
             const Shared::LoDMode oldLodMode = lodMode;
             const uint32_t oldLodLevel = lodLevel;
@@ -655,6 +672,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
             visModeChanged |= ImGui::RadioButtonE(
                 "Level", &visualizationMode, Shared::VisualizationMode_Level);
             ImGui::PopID();
+
+            const Shared::PickInfo pickInfo = curPickInfo.map(curStream)[0];
+            curPickInfo.unmap(curStream);
+
+            ImGui::CollapsingHeader("Cursor Info", ImGuiTreeNodeFlags_DefaultOpen);
+            ImGui::Text(
+                "Cursor: %u, %u",
+                uint32_t(args.mouseX), uint32_t(args.mouseY));
+            ImGui::Text("Instance Index: %u", pickInfo.instanceIndex);
+            ImGui::Text("Cluster ID: %u", pickInfo.clusterId);
+            ImGui::Text("Primitive Index: %u", pickInfo.primitiveIndex);
+            ImGui::Text("Barycentrics: %.3f, %.3f", pickInfo.barycentrics.x, pickInfo.barycentrics.y);
+            ImGui::Text("Cluster Info");
+            ImGui::Text("  Level: %u", pickInfo.cluster.level);
+            ImGui::Text("  Vertex Count: %u", pickInfo.cluster.vertexCount);
+            ImGui::Text("  Triangle Count: %u", pickInfo.cluster.triangleCount);
 
             ImGui::End();
         }
@@ -818,7 +851,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cameraIsActuallyMoving ||
             args.resized ||
             frameIndex == 0 ||
-            lodModeChanged || lodLevelChanged || lockLodChanged ||
+            enableJitteringChanged || lodModeChanged || lodLevelChanged || lockLodChanged ||
             visModeChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
@@ -832,7 +865,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
             plp.clusters = himesh.clusters.getDevicePointer();
-            plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
+            plp.pickInfo = curPickInfo.getDevicePointer();
+            plp.mousePosition = uint2(uint32_t(args.mouseX), uint32_t(args.mouseY));
+            plp.subPixelOffset = enableJittering ?
+                subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))] :
+                float2(0.5f, 0.5f);
             plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
             plp.visMode = visualizationMode;
             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));

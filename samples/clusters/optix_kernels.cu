@@ -8,7 +8,7 @@ RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters plp;
 
 struct HitPointParameter {
     float b1, b2;
-    int32_t primIndex;
+    uint32_t primIndex;
 
     CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get() {
         HitPointParameter ret;
@@ -41,13 +41,31 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
+    uint32_t instIndex;
     uint32_t clusterId;
+    uint32_t primIdx;
+    float2 barycentrics;
     float3 geomNormal;
     MyPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
-        clusterId, geomNormal);
+        instIndex, clusterId, primIdx, barycentrics, geomNormal);
+
+    if (launchIndex == plp.mousePosition) {
+        plp.pickInfo->instanceIndex = instIndex;
+        plp.pickInfo->clusterId = clusterId;
+        plp.pickInfo->primitiveIndex = primIdx;
+        plp.pickInfo->barycentrics = barycentrics;
+        if (clusterId != OPTIX_CLUSTER_ID_INVALID) {
+            plp.pickInfo->cluster = plp.clusters[clusterId];
+        }
+        else {
+            plp.pickInfo->cluster.level = 0;
+            plp.pickInfo->cluster.vertexCount = 0;
+            plp.pickInfo->cluster.triangleCount = 0;
+        }
+    }
 
     bool hit = geomNormal != make_float3(0, 0, 0);
     float3 color = make_float3(0.0f, 0.0f, 0.1f);
@@ -86,12 +104,17 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
+    constexpr uint32_t instIndex = 0xFFFF'FFFF;
     constexpr uint32_t clusterId = OPTIX_CLUSTER_ID_INVALID;
+    constexpr uint32_t primIdx = 0xFFFF'FFFF;
+    constexpr float2 barycentrics = { 0.0f, 0.0f };
     float3 geomNormal = make_float3(0, 0, 0);
-    MyPayloadSignature::set(&clusterId, &geomNormal);
+    MyPayloadSignature::set(&instIndex, &clusterId, &primIdx, &barycentrics, &geomNormal);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
+    auto hp = HitPointParameter::get();
+
     float3 positions[3];
     optixGetTriangleVertexData(positions);
 
@@ -100,6 +123,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         positions[2] - positions[0]));
     geomNormal = normalize(optixTransformNormalFromObjectToWorldSpace(geomNormal));
 
+    uint32_t instIndex = optixGetInstanceIndex();
     uint32_t clusterId = optixGetClusterId();
-    MyPayloadSignature::set(&clusterId, &geomNormal);
+    float2 barycentrics = make_float2(hp.b1, hp.b2);
+    MyPayloadSignature::set(&instIndex, &clusterId, &hp.primIndex, &barycentrics, &geomNormal);
 }
