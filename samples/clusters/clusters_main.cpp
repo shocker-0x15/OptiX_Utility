@@ -647,10 +647,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             lockLodChanged = lockLod != oldLockLod;
 
             ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
+            ImGui::PushID("visMode");
             visModeChanged |= ImGui::RadioButtonE(
                 "Geometric Normal", &visualizationMode, Shared::VisualizationMode_GeometricNormal);
             visModeChanged |= ImGui::RadioButtonE(
                 "Cluster", &visualizationMode, Shared::VisualizationMode_Cluster);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Level", &visualizationMode, Shared::VisualizationMode_Level);
+            ImGui::PopID();
 
             ImGui::End();
         }
@@ -827,6 +831,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curGPUTimer.render.start(curStream);
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
+            plp.clusters = himesh.clusters.getDevicePointer();
             plp.subPixelOffset = subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))];
             plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
             plp.visMode = visualizationMode;

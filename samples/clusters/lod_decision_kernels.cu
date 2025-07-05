@@ -49,8 +49,8 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
     if (clusterIdx < clusterCount) {
         alreadyEmitted = ((clusterSetInfo->usedFlags[usedFlagsBinIdx] >> usedFlagIdxInBin) & 0b1) != 0;
 
+        const Cluster &cluster = clusters[clusterIdx];
         if (lodMode == LoDMode_ViewAdaptive) {
-            const Cluster &cluster = clusters[clusterIdx];
             const float onePixelInNS = 1.0f / imageHeight;
             const float threshold = 0.5f * onePixelInNS;
 
@@ -71,8 +71,7 @@ CUDA_DEVICE_KERNEL void emitClusterArgsArray(
             emit = selfErrorInNS <= threshold && parentErrorInNS > threshold;
         }
         else if (lodMode == LoDMode_ManualUniform) {
-            const uint32_t level = identifyLevel(levelStartClusterIndices, levelCount, clusterIdx);
-            emit = level == min(manualUniformLevel, levelCount - 1);
+            emit = cluster.level == min(manualUniformLevel, levelCount - 1);
         }
     }
 
