@@ -211,50 +211,58 @@ struct HierarchicalMesh {
 struct ClusterGasInstance {
     optixu::ClusterGeometryAccelerationStructure optixCgas;
     optixu::Instance optixInst;
-    Shared::InstanceTransform transform;
-    cudau::TypedBuffer<uint32_t> indexMapClasHandleToClasBuild;
+    cudau::TypedBuffer<uint32_t> indexMapClasHandleToCluster;
     cudau::TypedBuffer<CUdeviceptr> clasHandles;
-    cudau::TypedBuffer<Shared::ClusterGasInfo> cgasInfo;
+    Shared::ClusterGasInstanceInfo instInfoOnHost;
+    uint32_t instanceId;
 
-    void initialize(const CUcontext cuContext, const optixu::Scene scene, const uint32_t maxClasCount) {
+    void initialize(
+        const CUcontext cuContext, const optixu::Scene scene, const uint32_t maxClasCount,
+        const uint32_t instId)
+    {
         optixCgas = scene.createClusterGeometryAccelerationStructure();
 
         optixInst = scene.createInstance();
         optixInst.setChild(optixCgas);
 
-        transform.scale = 1.0f;
-        transform.orientation = Quaternion();
-        transform.position = make_float3(0, 0, 0);
+        instanceId = instId;
 
-        indexMapClasHandleToClasBuild.initialize(
+        indexMapClasHandleToCluster.initialize(
             cuContext, cudau::BufferType::Device, maxClasCount);
         clasHandles.initialize(
             cuContext, cudau::BufferType::Device, maxClasCount);
-        Shared::ClusterGasInfo cgasInfoOnHost = {};
-        cgasInfoOnHost.indexMapClasHandleToClasBuild = indexMapClasHandleToClasBuild.getDevicePointer();
-        cgasInfoOnHost.clasHandles = clasHandles.getDevicePointer();
-        cgasInfoOnHost.clasHandleCount = 0;
-        cgasInfo.initialize(
-            cuContext, cudau::BufferType::Device, 1, cgasInfoOnHost);
+
+        instInfoOnHost = {};
+        instInfoOnHost.indexMapClasHandleToCluster = indexMapClasHandleToCluster.getDevicePointer();
+        instInfoOnHost.clasHandles = clasHandles.getDevicePointer();
+        instInfoOnHost.clasHandleCount = 0;
+
+        instInfoOnHost.transform.scale = 1.0f;
+        instInfoOnHost.transform.orientation = Quaternion();
+        instInfoOnHost.transform.position = make_float3(0, 0, 0);
     }
 
     void finalize() {
         optixCgas.destroy();
         optixInst.destroy();
-        indexMapClasHandleToClasBuild.finalize();
+        indexMapClasHandleToCluster.finalize();
         clasHandles.finalize();
-        cgasInfo.finalize();
     }
 
     void setTransform(const Shared::InstanceTransform &xfm) {
-        transform = xfm;
-        const Matrix3x3 matSR = transform.scale * transform.orientation.toMatrix3x3();
+        instInfoOnHost.transform = xfm;
+        const Matrix3x3 matSR = xfm.scale * xfm.orientation.toMatrix3x3();
         const float xfm_values[] = {
-            matSR.m00, matSR.m01, matSR.m02, transform.position.x,
-            matSR.m10, matSR.m11, matSR.m12, transform.position.y,
-            matSR.m20, matSR.m21, matSR.m22, transform.position.z,
+            matSR.m00, matSR.m01, matSR.m02, xfm.position.x,
+            matSR.m10, matSR.m11, matSR.m12, xfm.position.y,
+            matSR.m20, matSR.m21, matSR.m22, xfm.position.z,
         };
         optixInst.setTransform(xfm_values);
+    }
+
+    void setInstanceInfo(Shared::ClusterGasInstanceInfo* const instInfoBuffer) {
+        instInfoOnHost.clasHandleCount = 0;
+        instInfoBuffer[instanceId] = instInfoOnHost;
     }
 };
 
@@ -361,8 +369,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUmodule lodDecisionModule;
     CUDADRV_CHECK(cuModuleLoad(
         &lodDecisionModule, (resourceDir / "ptxes/lod_decision_kernels.ptx").string().c_str()));
-    cudau::Kernel emitClusterArgsArray(lodDecisionModule, "emitClusterArgsArray", cudau::dim3(32), 0);
+    cudau::Kernel emitClasArgsArray(lodDecisionModule, "emitClasArgsArray", cudau::dim3(32), 0);
     cudau::Kernel copyClasHandles(lodDecisionModule, "copyClasHandles", cudau::dim3(32), 0);
+    cudau::Kernel emitClusterGasArgsArray(lodDecisionModule, "emitClusterGasArgsArray", cudau::dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -403,6 +412,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::Buffer asBuildScratchMem;
 
+    uint32_t clusterGasInstId = 0;
+
     HierarchicalMesh himesh;
     himesh.read(
         cuContext, optixContext,
@@ -420,6 +431,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         { 1.0f, Quaternion(), float3(6.0f, -0.5f, -10.0f) },
     };
 
+    const uint32_t maxClasCountPerCgas =
+        himesh.levelStartClusterIndicesOnHost[1] - himesh.levelStartClusterIndicesOnHost[0];
+
     OptixClusterAccelBuildMode constexpr cgasAccelBuildMode =
         OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
     cudau::TypedBuffer<uint32_t> cgasCount(
@@ -429,9 +443,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer cgasSetMem;
     OptixClusterAccelBuildInput cgasBuildInput = {};
     {
-        const uint32_t maxClasCountPerCgas =
-            himesh.levelStartClusterIndicesOnHost[1] - himesh.levelStartClusterIndicesOnHost[0];
-
         cgasArgsArray.initialize(
             cuContext, cudau::BufferType::Device, bunnyCount);
         cgasHandles.initialize(
@@ -439,7 +450,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
             ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
-            bunnyInst.initialize(cuContext, scene, maxClasCountPerCgas);
+            bunnyInst.initialize(cuContext, scene, maxClasCountPerCgas, clusterGasInstId++);
 
             bunnyInst.optixCgas.setHandleAddress(cgasHandles.getCUdeviceptrAt(bunnyIdx));
             bunnyInst.optixCgas.setNumRayTypes(Shared::NumRayTypes);
@@ -480,6 +491,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> clusterGasInstInfoBuffers[2];
+    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx) {
+        clusterGasInstInfoBuffers[bufIdx].initialize(
+            cuContext, cudau::BufferType::Device, bunnyCount);
+    }
 
 
 
@@ -571,6 +588,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pickInfos[0].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
     pickInfos[1].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
 
+    cudau::TypedBuffer<uint32_t> clasBuildCounts[2];
+    clasBuildCounts[0].initialize(cuContext, cudau::BufferType::Device, 1, 0);
+    clasBuildCounts[1].initialize(cuContext, cudau::BufferType::Device, 1, 0);
+
     struct GPUTimer {
         cudau::Timer frame;
         cudau::Timer update;
@@ -597,6 +618,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const uint64_t frameIndex = args.frameIndex;
         const CUstream curStream = args.curStream;
         GPUTimer &curGPUTimer = gpuTimers[frameIndex % 2];
+        cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> &curClusterGasInstInfoBuffer =
+            clusterGasInstInfoBuffers[frameIndex % 2];
+        cudau::TypedBuffer<uint32_t> &curClasBuildCount = clasBuildCounts[frameIndex % 2];
         cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[frameIndex % 2];
 
         // Camera Window
@@ -705,12 +729,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Text("  Update: %.3f [ms]", updateTime);
             ImGui::Text("  Render: %.3f [ms]", renderTime);
 
+            ImGui::Separator();
+            uint32_t clasCountToBuild = 0;
+            CUDADRV_CHECK(cuMemcpyDtoHAsync(
+                &clasCountToBuild, curClasBuildCount.getCUdeviceptr(),
+                sizeof(uint32_t), curStream));
+            ImGui::Text("CLAS Count: %u", clasCountToBuild);
+
             ImGui::End();
         }
 
 
 
         curGPUTimer.frame.start(curStream);
+
+        // JP: 
+        // EN: 
+        {
+            Shared::ClusterGasInstanceInfo* const clusterGasInstInfos = curClusterGasInstInfoBuffer.map(curStream);
+            for (uint32_t i = 0; i < bunnyInsts.size(); ++i)
+                bunnyInsts[i].setInstanceInfo(clusterGasInstInfos);
+            curClusterGasInstInfoBuffer.unmap(curStream);
+        }
 
         if ((lodMode == Shared::LoDMode_ViewAdaptive ||
              lodModeChanged ||
@@ -725,30 +765,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
             CUDADRV_CHECK(cuMemsetD32Async(
                 himesh.usedFlags.getCUdeviceptr(), 0, himesh.usedFlags.sizeInBytes() / 4, curStream));
 
-            // JP: メッシュのインスタンスを巡回してビルドの必要のあるクラスターを特定する。
+            // JP: メッシュの各インスタンス・各クラスターをテストして、ビルドの必要があるクラスターを特定する。
             // EN: 
-            for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
-                const ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
+            const uint32_t meshTotalClusterCount = himesh.clusters.numElements();
+            const uint32_t instClusterCountStride = (meshTotalClusterCount + 31) / 32 * 32;
+            emitClasArgsArray.launchWithThreadDim(
+                curStream, cudau::dim3(instClusterCountStride * bunnyCount),
+                lodMode, lodLevel,
+                plp.camera.position, plp.camera.orientation,
+                plp.camera.fovY, args.windowContentRenderHeight,
+                himesh.clusters, himesh.argsArray,
+                meshTotalClusterCount,
+                himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),
+                himesh.clusterSetInfo, curClusterGasInstInfoBuffer, bunnyCount);
 
-                // JP: インスタンスのCLAS数カウンターをリセットする。
-                // EN: 
-                CUDADRV_CHECK(cuMemsetD32Async(
-                    bunnyInst.cgasInfo.getCUdeviceptr() + offsetof(Shared::ClusterGasInfo, clasHandleCount),
-                    0, 1, curStream));
-
-                // JP: インスタンスが使用するクラスターを特定してArgsを設定する。
-                // EN: 
-                emitClusterArgsArray.launchWithThreadDim(
-                    curStream, cudau::dim3(himesh.clusters.numElements()),
-                    lodMode, lodLevel,
-                    plp.camera.position, plp.camera.orientation,
-                    plp.camera.fovY, args.windowContentRenderHeight,
-                    bunnyInst.transform,
-                    himesh.clusters, himesh.argsArray,
-                    himesh.clusters.numElements(),
-                    himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),
-                    himesh.clusterSetInfo, bunnyInst.cgasInfo);
-            }
+            CUDADRV_CHECK(cuMemcpyDtoDAsync(
+                curClasBuildCount.getCUdeviceptr(),
+                himesh.clusterSetInfo.getCUdeviceptr() + offsetof(Shared::ClusterSetInfo, argsCountToBuild),
+                sizeof(uint32_t), curStream));
 
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
             // EN: 
@@ -773,28 +807,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     clasCountToBuild, himesh.argsArrayToBuild.stride()));
             }
 
+            // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
+            //     対応するクラスターのハンドルをコピーする。
+            copyClasHandles.launchWithThreadDim(
+                curStream, cudau::dim3(maxClasCountPerCgas * bunnyCount),
+                maxClasCountPerCgas, himesh.clusterSetInfo,
+                curClusterGasInstInfoBuffer, bunnyCount);
+
             // JP: 各インスタンスに対応するCGAS入力を生成する。
             // EN: 
-            for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
-                const ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
-
-                copyClasHandles.launchWithThreadDim(
-                    curStream, cudau::dim3(bunnyInst.clasHandles.numElements()),
-                    himesh.clusterSetInfo, bunnyInst.cgasInfo);
-
-                OptixClusterAccelBuildInputClustersArgs cgasArgs = {};
-                cgasArgs.clusterHandlesBuffer = bunnyInst.clasHandles.getCUdeviceptr();
-                cgasArgs.clusterHandlesBufferStrideInBytes = bunnyInst.clasHandles.stride();
-                CUDADRV_CHECK(cuMemcpyHtoDAsync(
-                    cgasArgsArray.getCUdeviceptrAt(bunnyIdx),
-                    &cgasArgs, sizeof(cgasArgs), curStream));
-                CUDADRV_CHECK(cuMemcpyDtoDAsync(
-                    cgasArgsArray.getCUdeviceptrAt(bunnyIdx) +
-                    offsetof(OptixClusterAccelBuildInputClustersArgs, clusterHandlesCount),
-                    bunnyInst.cgasInfo.getCUdeviceptr() +
-                    offsetof(Shared::ClusterGasInfo, clasHandleCount),
-                    sizeof(uint32_t), curStream));
-            }
+            emitClusterGasArgsArray.launchWithThreadDim(
+                curStream, cudau::dim3(bunnyCount),
+                curClusterGasInstInfoBuffer, bunnyCount,
+                cgasArgsArray);
 
             // JP: CGAS集合をビルドする。
             // EN: 
@@ -818,19 +843,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cgasArgsArray.getCUdeviceptr(), cgasCount.getCUdeviceptr(), cgasArgsArray.stride()));
             }
         }
-
-        //// JP: 各インスタンスのトランスフォームを更新する。
-        //// EN: Update the transform of each instance.
-        //if (animate || lastFrameWasAnimated) {
-        //    for (int i = 0; i < bunnyInsts.size(); ++i) {
-        //        MovingInstance &bunnyInst = bunnyInsts[i];
-        //        bunnyInst.update(animate ? 1.0f / 60.0f : 0.0f);
-        //        // TODO: まとめて送る。
-        //        CUDADRV_CHECK(cuMemcpyHtoDAsync(
-        //            instDataBuffer.getCUdeviceptrAt(bunnyInst.ID),
-        //            &bunnyInst.instData, sizeof(bunnyInsts[i].instData), curStream));
-        //    }
-        //}
 
         /*
         JP: IASのリビルドを行う。
@@ -866,6 +878,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
             plp.clusters = himesh.clusters.getDevicePointer();
             plp.pickInfo = curPickInfo.getDevicePointer();
+            plp.clusterGasInstInfoBuffer = curClusterGasInstInfoBuffer.getDevicePointer();
             plp.mousePosition = uint2(uint32_t(args.mouseX), uint32_t(args.mouseY));
             plp.subPixelOffset = enableJittering ?
                 subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))] :
@@ -944,6 +957,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gpuTimers[1].finalize();
     gpuTimers[0].finalize();
 
+    clasBuildCounts[1].finalize();
+    clasBuildCounts[0].finalize();
+
     pickInfos[1].finalize();
     pickInfos[0].finalize();
 
@@ -964,6 +980,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hitGroupSBT.finalize();
 
     asBuildScratchMem.finalize();
+
+    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx) {
+        clusterGasInstInfoBuffers[bufIdx].finalize();
+    }
 
     instanceBuffer.finalize();
     iasMem.finalize();
