@@ -16,6 +16,7 @@ namespace Shared {
 
     struct Vertex {
         float3 position;
+        float3 normal;
     };
 
     struct Triangle {
@@ -103,7 +104,8 @@ namespace Shared {
     };
 
     enum VisualizationMode : uint32_t {
-        VisualizationMode_GeometricNormal = 0,
+        VisualizationMode_ShadingNormal = 0,
+        VisualizationMode_GeometricNormal,
         VisualizationMode_Cluster,
         VisualizationMode_Level,
     };
@@ -125,6 +127,8 @@ namespace Shared {
         int2 imageSize;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
+        Vertex* vertexPool;
+        LocalTriangle* trianglePool;
         Cluster* clusters;
         ClusterGasInstanceInfo* clusterGasInstInfoBuffer;
         PickInfo* pickInfo;
@@ -136,5 +140,5 @@ namespace Shared {
 
 
 
-    using MyPayloadSignature = optixu::PayloadSignature<uint32_t, uint32_t, uint32_t, float2, float3>;
+    using MyPayloadSignature = optixu::PayloadSignature<uint32_t, uint32_t, uint32_t, float2, float3, float3>;
 }

@@ -45,12 +45,13 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint32_t clusterId;
     uint32_t primIdx;
     float2 barycentrics;
+    float3 shadingNormal;
     float3 geomNormal;
     MyPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
-        instIndex, clusterId, primIdx, barycentrics, geomNormal);
+        instIndex, clusterId, primIdx, barycentrics, shadingNormal, geomNormal);
 
     if (launchIndex == plp.mousePosition) {
         plp.pickInfo->instanceIndex = instIndex;
@@ -70,7 +71,10 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     bool hit = geomNormal != make_float3(0, 0, 0);
     float3 color = make_float3(0.0f, 0.0f, 0.1f);
     if (hit) {
-        if (plp.visMode == VisualizationMode_GeometricNormal) {
+        if (plp.visMode == VisualizationMode_ShadingNormal) {
+            color = 0.5f * shadingNormal + make_float3(0.5f);
+        }
+        else if (plp.visMode == VisualizationMode_GeometricNormal) {
             color = 0.5f * geomNormal + make_float3(0.5f);
         }
         else if (plp.visMode == VisualizationMode_Cluster) {
@@ -108,23 +112,41 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
     constexpr uint32_t clusterId = OPTIX_CLUSTER_ID_INVALID;
     constexpr uint32_t primIdx = 0xFFFF'FFFF;
     constexpr float2 barycentrics = { 0.0f, 0.0f };
+    float3 shadingNormal = make_float3(0, 0, 0);
     float3 geomNormal = make_float3(0, 0, 0);
-    MyPayloadSignature::set(&instIndex, &clusterId, &primIdx, &barycentrics, &geomNormal);
+    MyPayloadSignature::set(&instIndex, &clusterId, &primIdx, &barycentrics, &shadingNormal, &geomNormal);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
-    auto hp = HitPointParameter::get();
+    const uint32_t clusterId = optixGetClusterId();
+    const auto hp = HitPointParameter::get();
 
-    float3 positions[3];
-    optixGetTriangleVertexData(positions);
+    const Cluster &cluster = plp.clusters[clusterId];
+    const LocalTriangle &tri = plp.trianglePool[cluster.triPoolStartIndex + hp.primIndex];
+    const Vertex (&vs)[] = {
+        plp.vertexPool[cluster.vertPoolStartIndex + tri.index0],
+        plp.vertexPool[cluster.vertPoolStartIndex + tri.index1],
+        plp.vertexPool[cluster.vertPoolStartIndex + tri.index2],
+    };
 
+    float bcB = hp.b1;
+    float bcC = hp.b2;
+    float bcA = 1.0f - bcB - bcC;
+    float3 shadingNormal =
+        bcA * vs[0].normal + bcB * vs[1].normal + bcC * vs[2].normal;
+    shadingNormal = normalize(optixTransformNormalFromObjectToWorldSpace(shadingNormal));
+
+    //float3 positions[3];
+    //optixGetTriangleVertexData(positions);
+    //float3 geomNormal = normalize(cross(
+    //    positions[1] - positions[0],
+    //    positions[2] - positions[0]));
     float3 geomNormal = normalize(cross(
-        positions[1] - positions[0],
-        positions[2] - positions[0]));
+        vs[1].position - vs[0].position,
+        vs[2].position - vs[0].position));
     geomNormal = normalize(optixTransformNormalFromObjectToWorldSpace(geomNormal));
 
     uint32_t instIndex = optixGetInstanceIndex();
-    uint32_t clusterId = optixGetClusterId();
     float2 barycentrics = make_float2(hp.b1, hp.b2);
-    MyPayloadSignature::set(&instIndex, &clusterId, &hp.primIndex, &barycentrics, &geomNormal);
+    MyPayloadSignature::set(&instIndex, &clusterId, &hp.primIndex, &barycentrics, &shadingNormal, &geomNormal);
 }

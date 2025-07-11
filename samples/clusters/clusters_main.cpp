@@ -272,7 +272,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path resourceDir = getExecutableDirectory() / "clusters";
 
     bool takeScreenShot = false;
-    auto visualizationMode = Shared::VisualizationMode_GeometricNormal;
+    auto visualizationMode = Shared::VisualizationMode_ShadingNormal;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -284,7 +284,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (argIdx + 1 >= argc)
                 throw std::runtime_error("Argument for --visualize is not complete.");
             std::string_view visType = argv[argIdx + 1];
-            if (visType == "geom-normal")
+            if (visType == "shading-normal")
+                visualizationMode = Shared::VisualizationMode_ShadingNormal;
+            else if (visType == "geom-normal")
                 visualizationMode = Shared::VisualizationMode_GeometricNormal;
             else if (visType == "cluster")
                 visualizationMode = Shared::VisualizationMode_Cluster;
@@ -690,6 +692,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
             ImGui::PushID("visMode");
             visModeChanged |= ImGui::RadioButtonE(
+                "Shading Normal", &visualizationMode, Shared::VisualizationMode_ShadingNormal);
+            visModeChanged |= ImGui::RadioButtonE(
                 "Geometric Normal", &visualizationMode, Shared::VisualizationMode_GeometricNormal);
             visModeChanged |= ImGui::RadioButtonE(
                 "Cluster", &visualizationMode, Shared::VisualizationMode_Cluster);
@@ -876,6 +880,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curGPUTimer.render.start(curStream);
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
+            plp.vertexPool = himesh.vertexPool.getDevicePointer();
+            plp.trianglePool = himesh.trianglePool.getDevicePointer();
             plp.clusters = himesh.clusters.getDevicePointer();
             plp.pickInfo = curPickInfo.getDevicePointer();
             plp.clusterGasInstInfoBuffer = curClusterGasInstInfoBuffer.getDevicePointer();
