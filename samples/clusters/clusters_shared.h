@@ -62,10 +62,11 @@ namespace Shared {
         float3 position;
     };
 
-    struct ClusterGasInfo {
-        uint32_t* indexMapClasHandleToClasBuild; // CLAS handle index for GAS build => CLAS build index
+    struct ClusterGasInstanceInfo {
+        uint32_t* indexMapClasHandleToCluster; // CLAS handle index for GAS build => cluster index
         CUdeviceptr* clasHandles; // handles for Cluster GAS build
         uint32_t clasHandleCount;
+        InstanceTransform transform;
     };
 
 
@@ -124,7 +125,8 @@ namespace Shared {
         int2 imageSize;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
-        Shared::Cluster* clusters;
+        Cluster* clusters;
+        ClusterGasInstanceInfo* clusterGasInstInfoBuffer;
         PickInfo* pickInfo;
         uint2 mousePosition;
         float2 subPixelOffset;

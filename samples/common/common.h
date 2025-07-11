@@ -739,6 +739,9 @@ CUDA_COMMON_FUNCTION CUDA_INLINE float2 max(const float2 &v0, const float2 &v1) 
     return make_float2(shared::max(v0.x, v1.x),
                        shared::max(v0.y, v1.y));
 }
+CUDA_COMMON_FUNCTION CUDA_INLINE float dot(const float2 &v0, const float2 &v1) {
+    return v0.x * v1.x + v0.y * v1.y;
+}
 CUDA_COMMON_FUNCTION CUDA_INLINE float cross(const float2 &v0, const float2 &v1) {
     return v0.x * v1.y - v0.y * v1.x;
 }
