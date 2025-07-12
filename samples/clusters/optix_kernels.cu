@@ -41,25 +41,20 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     float3 origin = plp.camera.position;
     float3 direction = normalize(plp.camera.orientation * make_float3(vw * (0.5f - x), vh * (0.5f - y), 1));
 
-    uint32_t instIndex;
-    uint32_t clusterId;
-    uint32_t primIdx;
-    float2 barycentrics;
-    float3 shadingNormal;
-    float3 geomNormal;
+    HitInfo hitInfo;
     MyPayloadSignature::trace(
         plp.travHandle, origin, direction,
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         RayType_Primary, NumRayTypes, RayType_Primary,
-        instIndex, clusterId, primIdx, barycentrics, shadingNormal, geomNormal);
+        hitInfo);
 
     if (launchIndex == plp.mousePosition) {
-        plp.pickInfo->instanceIndex = instIndex;
-        plp.pickInfo->clusterId = clusterId;
-        plp.pickInfo->primitiveIndex = primIdx;
-        plp.pickInfo->barycentrics = barycentrics;
-        if (clusterId != OPTIX_CLUSTER_ID_INVALID) {
-            plp.pickInfo->cluster = plp.clusters[clusterId];
+        plp.pickInfo->instanceIndex = hitInfo.instIndex;
+        plp.pickInfo->clusterId = hitInfo.clusterId;
+        plp.pickInfo->primitiveIndex = hitInfo.primIndex;
+        plp.pickInfo->barycentrics = hitInfo.barycentrics;
+        if (hitInfo.clusterId != OPTIX_CLUSTER_ID_INVALID) {
+            plp.pickInfo->cluster = plp.clusters[hitInfo.clusterId];
         }
         else {
             plp.pickInfo->cluster.level = 0;
@@ -68,34 +63,39 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         }
     }
 
-    bool hit = geomNormal != make_float3(0, 0, 0);
+    bool hit = hitInfo.geomNormal != make_float3(0, 0, 0);
     float3 color = make_float3(0.0f, 0.0f, 0.1f);
     if (hit) {
+        const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
+        const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
         if (plp.visMode == VisualizationMode_ShadingNormal) {
-            color = 0.5f * shadingNormal + make_float3(0.5f);
+            color = 0.5f * hitInfo.shadingNormal + make_float3(0.5f);
         }
         else if (plp.visMode == VisualizationMode_GeometricNormal) {
-            color = 0.5f * geomNormal + make_float3(0.5f);
+            color = 0.5f * hitInfo.geomNormal + make_float3(0.5f);
         }
         else if (plp.visMode == VisualizationMode_Cluster) {
-            if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
+            if (hitInfo.clusterId == OPTIX_CLUSTER_ID_INVALID) {
                 color = make_float3(0.0f, 0.0f, 0.0f);
             }
             else {
-                const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
-                const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
                 color = HSVtoRGB(
-                    std::fmod((GoldenAngle * clusterId) / (2 * pi_v<float>), 1.0f),
+                    std::fmod((GoldenAngle * hitInfo.clusterId) / (2 * pi_v<float>), 1.0f),
                     1.0f, 1.0f);
             }
         }
         else if (plp.visMode == VisualizationMode_Level) {
-            if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
+            if (hitInfo.clusterId == OPTIX_CLUSTER_ID_INVALID) {
                 color = make_float3(0.0f, 0.0f, 0.0f);
             }
             else {
-                color = calcFalseColor(plp.clusters[clusterId].level, 0, 10);
+                color = calcFalseColor(plp.clusters[hitInfo.clusterId].level, 0, 10);
             }
+        }
+        else if (plp.visMode == VisualizationMode_Triangle) {
+            color = HSVtoRGB(
+                std::fmod((GoldenAngle * hitInfo.primIndex) / (2 * pi_v<float>), 1.0f),
+                1.0f, 1.0f);
         }
     }
 
@@ -108,13 +108,14 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
-    constexpr uint32_t instIndex = 0xFFFF'FFFF;
-    constexpr uint32_t clusterId = OPTIX_CLUSTER_ID_INVALID;
-    constexpr uint32_t primIdx = 0xFFFF'FFFF;
-    constexpr float2 barycentrics = { 0.0f, 0.0f };
-    float3 shadingNormal = make_float3(0, 0, 0);
-    float3 geomNormal = make_float3(0, 0, 0);
-    MyPayloadSignature::set(&instIndex, &clusterId, &primIdx, &barycentrics, &shadingNormal, &geomNormal);
+    HitInfo missInfo = {};
+    missInfo.instIndex = 0xFFFF'FFFF;
+    missInfo.clusterId = OPTIX_CLUSTER_ID_INVALID;
+    missInfo.primIndex = 0xFFFF'FFFF;
+    missInfo.barycentrics = { 0.0f, 0.0f };
+    missInfo.shadingNormal = make_float3(0, 0, 0);
+    missInfo.geomNormal = make_float3(0, 0, 0);
+    MyPayloadSignature::set(&missInfo);
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
@@ -129,9 +130,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         plp.vertexPool[cluster.vertPoolStartIndex + tri.index2],
     };
 
-    float bcB = hp.b1;
-    float bcC = hp.b2;
-    float bcA = 1.0f - bcB - bcC;
+    HitInfo hitInfo = {};
+
+    const float bcB = hp.b1;
+    const float bcC = hp.b2;
+    const float bcA = 1.0f - bcB - bcC;
     float3 shadingNormal =
         bcA * vs[0].normal + bcB * vs[1].normal + bcC * vs[2].normal;
     shadingNormal = normalize(optixTransformNormalFromObjectToWorldSpace(shadingNormal));
@@ -146,7 +149,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         vs[2].position - vs[0].position));
     geomNormal = normalize(optixTransformNormalFromObjectToWorldSpace(geomNormal));
 
-    uint32_t instIndex = optixGetInstanceIndex();
-    float2 barycentrics = make_float2(hp.b1, hp.b2);
-    MyPayloadSignature::set(&instIndex, &clusterId, &hp.primIndex, &barycentrics, &shadingNormal, &geomNormal);
+    hitInfo.instIndex = optixGetInstanceIndex();
+    hitInfo.clusterId = clusterId;
+    hitInfo.primIndex = hp.primIndex;
+    hitInfo.barycentrics = make_float2(hp.b1, hp.b2);
+    hitInfo.shadingNormal = shadingNormal;
+    hitInfo.geomNormal = geomNormal;
+    MyPayloadSignature::set(&hitInfo);
 }

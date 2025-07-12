@@ -108,9 +108,19 @@ namespace Shared {
         VisualizationMode_GeometricNormal,
         VisualizationMode_Cluster,
         VisualizationMode_Level,
+        VisualizationMode_Triangle,
     };
 
 
+
+    struct HitInfo {
+        uint32_t instIndex;
+        uint32_t clusterId;
+        uint32_t primIndex;
+        float2 barycentrics;
+        float3 shadingNormal;
+        float3 geomNormal;
+    };
 
     struct PickInfo {
         uint32_t instanceIndex;
@@ -140,5 +150,5 @@ namespace Shared {
 
 
 
-    using MyPayloadSignature = optixu::PayloadSignature<uint32_t, uint32_t, uint32_t, float2, float3, float3>;
+    using MyPayloadSignature = optixu::PayloadSignature<HitInfo>;
 }
