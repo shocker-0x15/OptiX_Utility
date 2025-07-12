@@ -700,6 +700,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 "Cluster", &visualizationMode, Shared::VisualizationMode_Cluster);
             visModeChanged |= ImGui::RadioButtonE(
                 "Level", &visualizationMode, Shared::VisualizationMode_Level);
+            visModeChanged |= ImGui::RadioButtonE(
+                "Triangle", &visualizationMode, Shared::VisualizationMode_Triangle);
             ImGui::PopID();
 
             const Shared::PickInfo pickInfo = curPickInfo.map(curStream)[0];
