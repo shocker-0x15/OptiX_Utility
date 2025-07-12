@@ -845,7 +845,7 @@ namespace cudau {
             std::is_pointer_v<RawHeadType> ||
             std::is_enum_v<RawHeadType>)
         {
-			*reinterpret_cast<RawHeadType*>(pointer) = head;
+            *reinterpret_cast<RawHeadType*>(pointer) = head;
             *argPointer = pointer;
         }
         else {

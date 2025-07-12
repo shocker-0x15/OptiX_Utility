@@ -61,7 +61,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
         const Cluster &cluster = clusters[clusterIdx];
         if (lodMode == LoDMode_ViewAdaptive) {
             const float onePixelInNS = 1.0f / imageHeight;
-            const float threshold = 0.5f * onePixelInNS;
+            const float threshold = 1.0f * onePixelInNS;
 
             const InstanceTransform &xfm = clusterGasInstInfo.transform;
             const Matrix3x3 matRot = xfm.orientation.toMatrix3x3();

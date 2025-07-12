@@ -429,8 +429,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     std::vector<ClusterGasInstance> bunnyInsts(bunnyCount);
     const Shared::InstanceTransform bunnyInstXfms[bunnyCount] = {
         { 1.0f, Quaternion(), float3(0.0f, -0.5f, 0.0f) },
-        { 1.0f, Quaternion(), float3(-3.0f, -0.5f, -3.0f) },
-        { 1.0f, Quaternion(), float3(6.0f, -0.5f, -10.0f) },
+        { 1.0f, Quaternion(), float3(-3.0f, -0.5f, -5.0f) },
+        { 1.0f, Quaternion(), float3(15.0f, -0.5f, -50.0f) },
     };
 
     const uint32_t maxClasCountPerCgas =
@@ -564,9 +564,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     initConfig.resourceDir = resourceDir;
     initConfig.windowContentRenderWidth = initWindowContentWidth;
     initConfig.windowContentRenderHeight = initWindowContentHeight;
-    initConfig.cameraPosition = make_float3(0, 0, 3.16f);
+    initConfig.cameraPosition = make_float3(0, 0.5f, 3.16f);
     initConfig.cameraOrientation = qRotateY(pi_v<float>);
-    initConfig.cameraMovingSpeed = 0.01f;
+    initConfig.cameraMovingSpeed = 0.05f;
     initConfig.cuContext = cuContext;
 
     GUIFramework framework;
@@ -619,11 +619,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     (const RunArguments &args) {
         const uint64_t frameIndex = args.frameIndex;
         const CUstream curStream = args.curStream;
-        GPUTimer &curGPUTimer = gpuTimers[frameIndex % 2];
+        const uint32_t bufIdx = frameIndex % 2;
+        GPUTimer &curGPUTimer = gpuTimers[bufIdx];
         cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> &curClusterGasInstInfoBuffer =
-            clusterGasInstInfoBuffers[frameIndex % 2];
-        cudau::TypedBuffer<uint32_t> &curClasBuildCount = clasBuildCounts[frameIndex % 2];
-        cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[frameIndex % 2];
+            clusterGasInstInfoBuffers[bufIdx];
+        cudau::TypedBuffer<uint32_t> &curClasBuildCount = clasBuildCounts[bufIdx];
+        cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[bufIdx];
 
         // Camera Window
         bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
@@ -738,7 +739,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             CUDADRV_CHECK(cuMemcpyDtoHAsync(
                 &clasCountToBuild, curClasBuildCount.getCUdeviceptr(),
                 sizeof(uint32_t), curStream));
-            ImGui::Text("CLAS Count: %u", clasCountToBuild);
+            ImGui::Text("Total CLAS Count: %u", clasCountToBuild);
+
+            std::vector<Shared::ClusterGasInstanceInfo> clusterGasInstInfos(bunnyCount);
+            curClusterGasInstInfoBuffer.read(clusterGasInstInfos, curStream);
+            for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
+                const Shared::ClusterGasInstanceInfo &instInfo = clusterGasInstInfos[bunnyIdx];
+                ImGui::Text("  Inst %u CLAS Count: %u", bunnyIdx, instInfo.clasHandleCount);
+            }
 
             ImGui::End();
         }
@@ -747,20 +755,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         curGPUTimer.frame.start(curStream);
 
-        // JP: 
-        // EN: 
-        {
-            Shared::ClusterGasInstanceInfo* const clusterGasInstInfos = curClusterGasInstInfoBuffer.map(curStream);
-            for (uint32_t i = 0; i < bunnyInsts.size(); ++i)
-                bunnyInsts[i].setInstanceInfo(clusterGasInstInfos);
-            curClusterGasInstInfoBuffer.unmap(curStream);
-        }
-
         if ((lodMode == Shared::LoDMode_ViewAdaptive ||
              lodModeChanged ||
              lodLevelChanged) && !lockLod ||
             frameIndex == 0)
         {
+            // JP: 
+            // EN: 
+            Shared::ClusterGasInstanceInfo* const clusterGasInstInfos = curClusterGasInstInfoBuffer.map(curStream);
+            for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyInsts.size(); ++bunnyIdx)
+                bunnyInsts[bunnyIdx].setInstanceInfo(clusterGasInstInfos);
+            curClusterGasInstInfoBuffer.unmap(curStream);
+
             // JP: ビルドするCLAS数カウンターとArgs設定済みを表すフラグ列をリセットする。
             // EN: 
             const CUdeviceptr clasCountToBuild =
