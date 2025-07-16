@@ -350,6 +350,10 @@ namespace optixu {
         return (new _GeometryAccelerationStructure(m, m->nextGeomASSerialID++, geomType))->getPublicType();
     }
 
+    ClusterAccelerationStructureSet Scene::createClusterAccelerationStructureSet() const {
+        return (new _ClusterAccelerationStructureSet(m))->getPublicType();
+    }
+
     ClusterGeometryAccelerationStructure Scene::createClusterGeometryAccelerationStructure() const {
         // JP: CGASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
         // EN: Only generating a CGAS doesn't affect a SBT layout, no need to invalidate it.
@@ -2132,6 +2136,88 @@ namespace optixu {
             *size = m->userDataSizeAlign.size;
         if (alignment)
             *alignment = m->userDataSizeAlign.alignment;
+    }
+
+
+
+    void ClusterAccelerationStructureSet::Priv::markDirty() {
+        available = false;
+    }
+
+    void ClusterAccelerationStructureSet::destroy() {
+        if (m) {
+            m->scene->markSBTLayoutDirty();
+            delete m;
+        }
+        m = nullptr;
+    }
+
+    void ClusterAccelerationStructureSet::setBuildInput(
+        OptixClusterAccelBuildFlags flags,
+        uint32_t maxArgCount, OptixVertexFormat vertexFormat,
+        uint32_t maxSbtIndexValue, uint32_t maxUniqueSbtIndexCountPerArg,
+        uint32_t maxTriCountPerArg, uint32_t maxVertCountPerArg,
+        uint32_t maxTotalTriCount, uint32_t maxTotalVertCount,
+        uint32_t minPositionTruncateBitCount,
+        OptixAccelBufferSizes* memoryRequirement) const
+    {
+        m->throwRuntimeError(
+            maxTriCountPerArg <= getContext().getMaxTriangleCountPerCluster(),
+            "Too many triangles per cluster %u > %u.",
+            maxTriCountPerArg, getContext().getMaxTriangleCountPerCluster());
+        m->throwRuntimeError(
+            maxVertCountPerArg <= getContext().getMaxVertexCountPerCluster(),
+            "Too many vertices per cluster %u > %u.",
+            maxVertCountPerArg, getContext().getMaxVertexCountPerCluster());
+
+        m->buildInput = {};
+        m->buildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES;
+        OptixClusterAccelBuildInputTriangles &triBuildInput = m->buildInput.triangles;
+        triBuildInput.flags = flags;
+        triBuildInput.maxArgCount = maxArgCount;
+        triBuildInput.vertexFormat = vertexFormat;
+        triBuildInput.maxSbtIndexValue = maxSbtIndexValue;
+        triBuildInput.maxUniqueSbtIndexCountPerArg = maxUniqueSbtIndexCountPerArg;
+        triBuildInput.maxTriangleCountPerArg = maxTriCountPerArg;
+        triBuildInput.maxVertexCountPerArg = maxVertCountPerArg;
+        triBuildInput.maxTotalTriangleCount = maxTotalTriCount;
+        triBuildInput.maxTotalVertexCount = maxTotalVertCount;
+        triBuildInput.minPositionTruncateBitCount = minPositionTruncateBitCount;
+
+        OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
+            m->getRawContext(), _ClusterAccelerationStructureSet::s_buildMode,
+            &m->buildInput, &m->memoryRequirement));
+
+        *memoryRequirement = m->memoryRequirement;
+
+        m->markDirty();
+    }
+
+    void ClusterAccelerationStructureSet::rebuild(
+        CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
+        const BufferView &accelBuffer, const BufferView &scratchBuffer,
+        const BufferView &clasHandleBuffer) const
+    {
+        OptixClusterAccelBuildModeDesc buildModeDesc = {};
+        buildModeDesc.mode = _ClusterAccelerationStructureSet::s_buildMode;
+        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
+            buildModeDesc.implicitDest;
+        buildModeDescImpDst.outputBuffer = accelBuffer.getCUdeviceptr();
+        buildModeDescImpDst.outputBufferSizeInBytes = accelBuffer.sizeInBytes();
+        buildModeDescImpDst.tempBuffer = scratchBuffer.getCUdeviceptr();
+        buildModeDescImpDst.tempBufferSizeInBytes = scratchBuffer.sizeInBytes();
+        buildModeDescImpDst.outputHandlesBuffer = clasHandleBuffer.getCUdeviceptr();
+        buildModeDescImpDst.outputHandlesStrideInBytes = clasHandleBuffer.stride();
+        buildModeDescImpDst.outputSizesBuffer = 0; // optional
+        buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
+
+        OPTIX_CHECK(optixClusterAccelBuild(
+            m->getRawContext(), stream,
+            &buildModeDesc, &m->buildInput,
+            clusterArgsBuffer.getCUdeviceptr(),
+            clusterCount, clusterArgsBuffer.stride()));
+
+        m->available = true;
     }
 
 

@@ -1369,6 +1369,7 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECT(OpacityMicroMapArray); \
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
     OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
+    OPTIXU_PREPROCESS_OBJECT(ClusterAccelerationStructureSet); \
     OPTIXU_PREPROCESS_OBJECT(ClusterGeometryAccelerationStructure); \
     OPTIXU_PREPROCESS_OBJECT(Transform); \
     OPTIXU_PREPROCESS_OBJECT(Instance); \
@@ -1646,6 +1647,8 @@ namespace optixu {
         GeometryAccelerationStructure createGeometryAccelerationStructure(
             OPTIXU_EN_PRM(GeometryType, geomType, Triangles)) const;
         [[nodiscard]]
+        ClusterAccelerationStructureSet createClusterAccelerationStructureSet() const;
+        [[nodiscard]]
         ClusterGeometryAccelerationStructure createClusterGeometryAccelerationStructure() const;
         [[nodiscard]]
         Transform createTransform() const;
@@ -1886,6 +1889,27 @@ namespace optixu {
         void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
             getUserData(reinterpret_cast<void*>(data), size, alignment);
         }
+    };
+
+
+
+    class ClusterAccelerationStructureSet : public Object<ClusterAccelerationStructureSet> {
+    public:
+        void setBuildInput(
+            OptixClusterAccelBuildFlags flags,
+            uint32_t maxArgCount, OptixVertexFormat vertexFormat,
+            uint32_t maxSbtIndexValue, uint32_t maxUniqueSbtIndexCountPerArg,
+            uint32_t maxTriCountPerArg, uint32_t maxVertCountPerArg,
+            uint32_t maxTotalTriCount, uint32_t maxTotalVertCount,
+            uint32_t minPositionTruncateBitCount,
+            OptixAccelBufferSizes* memoryRequirement) const;
+
+        void rebuild(
+            CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
+            const BufferView &accelBuffer, const BufferView &scratchBuffer,
+            const BufferView &clasHandleBuffer) const;
+
+        void destroy();
     };
 
 
