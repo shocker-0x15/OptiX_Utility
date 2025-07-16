@@ -47,7 +47,7 @@ struct HierarchicalMesh {
     cudau::TypedBuffer<uint32_t> indexMapClusterToClasBuild;
     cudau::TypedBuffer<Shared::ClusterSetInfo> clusterSetInfo;
     cudau::Buffer clasSetMem;
-    OptixClusterAccelBuildInput clasBuildInput;
+    optixu::ClusterAccelerationStructureSet clasSet;
     OptixAccelBufferSizes asMemReqs;
 
     std::vector<uint32_t> levelStartClusterIndicesOnHost;
@@ -55,7 +55,7 @@ struct HierarchicalMesh {
     uint32_t maxTriCountPerCluster;
 
     bool read(
-        const CUcontext cuContext, const optixu::Context optixContext,
+        const CUcontext cuContext, const optixu::Scene scene,
         const std::filesystem::path &filePath)
     {
         ExIfStream ifs(filePath, std::ios::binary);
@@ -65,15 +65,6 @@ struct HierarchicalMesh {
         ifs
             .read(&maxVertCountPerCluster)
             .read(&maxTriCountPerCluster);
-
-        Assert(
-            maxVertCountPerCluster <= optixContext.getMaxVertexCountPerCluster(),
-            "Too many vertices per cluster %u > %u.",
-            maxVertCountPerCluster, optixContext.getMaxVertexCountPerCluster());
-        Assert(
-            maxTriCountPerCluster <= optixContext.getMaxTriangleCountPerCluster(),
-            "Too many triangles per cluster %u > %u.",
-            maxTriCountPerCluster, optixContext.getMaxTriangleCountPerCluster());
 
         uint32_t vertexCount, triangleCount, childIndexCount, clusterCount, levelCount;
         ifs
@@ -165,23 +156,12 @@ struct HierarchicalMesh {
         clusterSetInfo.initialize(
             cuContext, cudau::BufferType::Device, 1, clusterSetInfoOnHost);
 
-        clasBuildInput = {};
-        clasBuildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES;
-        OptixClusterAccelBuildInputTriangles &triBuildInput = clasBuildInput.triangles;
-        triBuildInput.flags = OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE;
-        triBuildInput.maxArgCount = clusterCount;
-        triBuildInput.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-        triBuildInput.maxSbtIndexValue = 0;
-        triBuildInput.maxUniqueSbtIndexCountPerArg = 1;
-        triBuildInput.maxTriangleCountPerArg = maxTriCountPerCluster;
-        triBuildInput.maxVertexCountPerArg = maxVertCountPerCluster;
-        triBuildInput.maxTotalTriangleCount = 0; // optional
-        triBuildInput.maxTotalVertexCount = 0; // optional
-        triBuildInput.minPositionTruncateBitCount = 0;
-
-        OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
-            optixContext.getOptixDeviceContext(), clasAccelBuildMode,
-            &clasBuildInput, &asMemReqs));
+        clasSet = scene.createClusterAccelerationStructureSet();
+        clasSet.setBuildInput(
+            OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
+            clusterCount, OPTIX_VERTEX_FORMAT_FLOAT3,
+            0, 1, maxTriCountPerCluster, maxVertCountPerCluster,
+            0, 0, 0, &asMemReqs);
 
         clasSetMem.initialize(
             cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -202,6 +182,7 @@ struct HierarchicalMesh {
         usedFlags.finalize();
         indexMapClusterToClasBuild.finalize();
         clusterSetInfo.finalize();
+        clasSet.destroy();
         clasSetMem.finalize();
     }
 };
@@ -418,7 +399,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     HierarchicalMesh himesh;
     himesh.read(
-        cuContext, optixContext,
+        cuContext, scene,
         R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
 
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, himesh.asMemReqs.tempSizeInBytes);
@@ -771,9 +752,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // JP: ビルドするCLAS数カウンターとArgs設定済みを表すフラグ列をリセットする。
             // EN: 
-            const CUdeviceptr clasCountToBuild =
+            const CUdeviceptr clasCountToBuildPtr =
                 himesh.clusterSetInfo.getCUdeviceptr() + offsetof(Shared::ClusterSetInfo, argsCountToBuild);
-            CUDADRV_CHECK(cuMemsetD32Async(clasCountToBuild, 0, 1, curStream));
+            CUDADRV_CHECK(cuMemsetD32Async(clasCountToBuildPtr, 0, 1, curStream));
             CUDADRV_CHECK(cuMemsetD32Async(
                 himesh.usedFlags.getCUdeviceptr(), 0, himesh.usedFlags.sizeInBytes() / 4, curStream));
 
@@ -791,33 +772,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),
                 himesh.clusterSetInfo, curClusterGasInstInfoBuffer, bunnyCount);
 
-            CUDADRV_CHECK(cuMemcpyDtoDAsync(
-                curClasBuildCount.getCUdeviceptr(),
-                himesh.clusterSetInfo.getCUdeviceptr() + offsetof(Shared::ClusterSetInfo, argsCountToBuild),
-                sizeof(uint32_t), curStream));
-
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
             // EN: 
-            {
-                OptixClusterAccelBuildModeDesc buildModeDesc = {};
-                buildModeDesc.mode = HierarchicalMesh::clasAccelBuildMode;
-                OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
-                    buildModeDesc.implicitDest;
-                buildModeDescImpDst.outputBuffer = himesh.clasSetMem.getCUdeviceptr();
-                buildModeDescImpDst.outputBufferSizeInBytes = himesh.clasSetMem.sizeInBytes();
-                buildModeDescImpDst.tempBuffer = asBuildScratchMem.getCUdeviceptr();
-                buildModeDescImpDst.tempBufferSizeInBytes = asBuildScratchMem.sizeInBytes();
-                buildModeDescImpDst.outputHandlesBuffer = himesh.clasHandles.getCUdeviceptr();
-                buildModeDescImpDst.outputHandlesStrideInBytes = himesh.clasHandles.stride();
-                buildModeDescImpDst.outputSizesBuffer = 0; // optional
-                buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
-
-                OPTIX_CHECK(optixClusterAccelBuild(
-                    optixContext.getOptixDeviceContext(), curStream,
-                    &buildModeDesc, &himesh.clasBuildInput,
-                    himesh.argsArrayToBuild.getCUdeviceptr(),
-                    clasCountToBuild, himesh.argsArrayToBuild.stride()));
-            }
+            himesh.clasSet.rebuild(
+                curStream,
+                himesh.argsArrayToBuild, clasCountToBuildPtr,
+                himesh.clasSetMem, asBuildScratchMem,
+                himesh.clasHandles);
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
             //     対応するクラスターのハンドルをコピーする。
@@ -854,6 +815,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     &buildModeDesc, &cgasBuildInput,
                     cgasArgsArray.getCUdeviceptr(), cgasCount.getCUdeviceptr(), cgasArgsArray.stride()));
             }
+
+            CUDADRV_CHECK(cuMemcpyDtoDAsync(
+                curClasBuildCount.getCUdeviceptr(), clasCountToBuildPtr,
+                sizeof(uint32_t), curStream));
         }
 
         /*

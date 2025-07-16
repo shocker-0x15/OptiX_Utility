@@ -920,6 +920,48 @@ namespace optixu {
 
 
     template <>
+    class Object<ClusterAccelerationStructureSet>::Priv : public PrivateObject {
+    OPTIXU_PRIV_ACCESS_SPECIFIER:
+        static constexpr OptixClusterAccelBuildMode s_buildMode =
+            OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
+
+        _Scene* scene;
+
+        OptixClusterAccelBuildInput buildInput;
+        OptixAccelBufferSizes memoryRequirement;
+
+        uint32_t available : 1;
+
+    public:
+        OPTIXU_OPAQUE_BRIDGE(ClusterAccelerationStructureSet);
+
+        Priv(_Scene* _scene) :
+            scene(_scene),
+            available(false)
+        {}
+        ~Priv() {
+            getContext()->unregisterName(this);
+        }
+
+        const _Scene* getScene() const {
+            return scene;
+        }
+        _Context* getContext() const override {
+            return scene->getContext();
+        }
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("CLASSet");
+
+
+
+        void markDirty();
+        bool isReady() const {
+            return available;
+        }
+    };
+
+
+
+    template <>
     class Object<ClusterGeometryAccelerationStructure>::Priv : public PrivateObject {
     OPTIXU_PRIV_ACCESS_SPECIFIER:
         _Scene* scene;
