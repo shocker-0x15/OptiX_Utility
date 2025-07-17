@@ -1310,6 +1310,10 @@ namespace optixu {
               |              |
               |              +-- GeomInst
               |              |
+              |              +-- CGAS
+              |              |
+              |              +-- CLAS
+              |              |
               |              +-- OMMArray
               |
               +-- Denoiser
@@ -1370,7 +1374,7 @@ namespace optixu {
     OPTIXU_PREPROCESS_OBJECT(GeometryInstance); \
     OPTIXU_PREPROCESS_OBJECT(GeometryAccelerationStructure); \
     OPTIXU_PREPROCESS_OBJECT(ClusterAccelerationStructureSet); \
-    OPTIXU_PREPROCESS_OBJECT(ClusterGeometryAccelerationStructure); \
+    OPTIXU_PREPROCESS_OBJECT(ClusterGeometryAccelerationStructureSet); \
     OPTIXU_PREPROCESS_OBJECT(Transform); \
     OPTIXU_PREPROCESS_OBJECT(Instance); \
     OPTIXU_PREPROCESS_OBJECT(InstanceAccelerationStructure); \
@@ -1649,7 +1653,7 @@ namespace optixu {
         [[nodiscard]]
         ClusterAccelerationStructureSet createClusterAccelerationStructureSet() const;
         [[nodiscard]]
-        ClusterGeometryAccelerationStructure createClusterGeometryAccelerationStructure() const;
+        ClusterGeometryAccelerationStructureSet createClusterGeometryAccelerationStructureSet() const;
         [[nodiscard]]
         Transform createTransform() const;
         [[nodiscard]]
@@ -1663,7 +1667,7 @@ namespace optixu {
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
-        size_t getCGAS_SBTOffset(ClusterGeometryAccelerationStructure cgas) const;
+        size_t getCGAS_Set_SBTOffset(ClusterGeometryAccelerationStructureSet cgasSet) const;
         bool shaderBindingTableLayoutIsReady() const;
     };
 
@@ -1895,6 +1899,8 @@ namespace optixu {
 
     class ClusterAccelerationStructureSet : public Object<ClusterAccelerationStructureSet> {
     public:
+        void destroy();
+
         void setBuildInput(
             OptixClusterAccelBuildFlags flags,
             uint32_t maxArgCount, OptixVertexFormat vertexFormat,
@@ -1908,19 +1914,27 @@ namespace optixu {
             CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,
             const BufferView &clasHandleBuffer) const;
-
-        void destroy();
     };
 
 
 
-    class ClusterGeometryAccelerationStructure : public Object<ClusterGeometryAccelerationStructure> {
+    class ClusterGeometryAccelerationStructureSet : public Object<ClusterGeometryAccelerationStructureSet> {
     public:
-        void setHandleAddress(CUdeviceptr addr) const;
+        void destroy();
+
+        void setBuildInput(
+            OptixClusterAccelBuildFlags flags,
+            uint32_t maxArgCount,
+            uint32_t maxClusterCountPerArg, uint32_t maxTotalClusterCount,
+            OptixAccelBufferSizes* memoryRequirement) const;
+
         void setSbtRequirements(uint32_t sbtDataSize, uint32_t sbtDataAlign, uint32_t numSbtRecords) const;
         void setNumRayTypes(uint32_t numRayTypes) const;
 
-        void destroy();
+        void rebuild(
+            CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
+            const BufferView &accelBuffer, const BufferView &scratchBuffer,
+            const BufferView &travHandleBuffer) const;
     };
 
 
@@ -1979,7 +1993,7 @@ namespace optixu {
         // JP: 所属するIASのmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a IAS to which the instance belongs is required.
         void setChild(GeometryAccelerationStructure child, uint32_t matSetIdx = 0) const;
-        void setChild(ClusterGeometryAccelerationStructure child) const;
+        void setChild(ClusterGeometryAccelerationStructureSet cgasSet, uint32_t cgasIdx) const;
         void setChild(InstanceAccelerationStructure child) const;
         void setChild(Transform child, uint32_t matSetIdx = 0) const;
 
@@ -1994,6 +2008,7 @@ namespace optixu {
         ChildType getChildType() const;
         template <typename T>
         T getChild() const;
+        uint32_t getCgasIndex() const;
         uint32_t getID() const;
         uint32_t getVisibilityMask() const;
         OptixInstanceFlags getFlags() const;

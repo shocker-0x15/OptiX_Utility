@@ -222,12 +222,12 @@ namespace optixu {
         geomASs.erase(gas->getSerialID());
     }
 
-    void Scene::Priv::addCGAS(_ClusterGeometryAccelerationStructure* cgas) {
-        clusterGASs[cgas->getSerialID()] = cgas;
+    void Scene::Priv::addCgasSet(_ClusterGeometryAccelerationStructureSet* cgasSet) {
+        clusterGasSets[cgasSet->getSerialID()] = cgasSet;
     }
 
-    void Scene::Priv::removeCGAS(_ClusterGeometryAccelerationStructure* cgas) {
-        clusterGASs.erase(cgas->getSerialID());
+    void Scene::Priv::removeCgasSet(_ClusterGeometryAccelerationStructureSet* cgasSet) {
+        clusterGasSets.erase(cgasSet->getSerialID());
     }
 
     void Scene::Priv::markSBTLayoutDirty() {
@@ -246,8 +246,8 @@ namespace optixu {
         return gasSbtOffsets.at(key);
     }
 
-    uint32_t Scene::Priv::getSBTOffset(_ClusterGeometryAccelerationStructure* cgas) {
-        return clusterGasSbtOffsets.at(cgas->getSerialID());
+    uint32_t Scene::Priv::getSBTOffset(_ClusterGeometryAccelerationStructureSet* cgasSet) {
+        return clusterGasSetSbtOffsets.at(cgasSet->getSerialID());
     }
 
     void Scene::Priv::setupHitGroupSBT(
@@ -354,12 +354,12 @@ namespace optixu {
         return (new _ClusterAccelerationStructureSet(m))->getPublicType();
     }
 
-    ClusterGeometryAccelerationStructure Scene::createClusterGeometryAccelerationStructure() const {
-        // JP: CGASを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
-        // EN: Only generating a CGAS doesn't affect a SBT layout, no need to invalidate it.
-        optixuAssert(m->clusterGASs.count(m->nextClusterGASSerialID) == 0,
+    ClusterGeometryAccelerationStructureSet Scene::createClusterGeometryAccelerationStructureSet() const {
+        // JP: CGASセットを生成するだけならSBTレイアウトには影響を与えないので無効化は不要。
+        // EN: Only generating a CGAS set doesn't affect the SBT layout, no need to invalidate it.
+        optixuAssert(m->clusterGasSets.count(m->nextClusterGasSetSerialID) == 0,
                      "Too many CGAS creation beyond expectation has been done.");
-        return (new _ClusterGeometryAccelerationStructure(m, m->nextClusterGASSerialID++))->getPublicType();
+        return (new _ClusterGeometryAccelerationStructureSet(m, m->nextClusterGasSetSerialID++))->getPublicType();
     }
 
     Transform Scene::createTransform() const {
@@ -404,13 +404,13 @@ namespace optixu {
                 sbtOffset += gasNumSBTRecords;
             }
         }
-        m->clusterGasSbtOffsets.clear();
-        for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructure*> &cgas : m->clusterGASs) {
+        m->clusterGasSetSbtOffsets.clear();
+        for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructureSet*> &cgasSet : m->clusterGasSets) {
             SizeAlign gasRecordSizeAlign;
             uint32_t gasNumSBTRecords;
-            cgas.second->calcSBTRequirements(&gasRecordSizeAlign, &gasNumSBTRecords);
+            cgasSet.second->calcSBTRequirements(&gasRecordSizeAlign, &gasNumSBTRecords);
             maxRecordSizeAlign = max(maxRecordSizeAlign, gasRecordSizeAlign);
-            m->clusterGasSbtOffsets[cgas.first] = sbtOffset;
+            m->clusterGasSetSbtOffsets[cgasSet.first] = sbtOffset;
             sbtOffset += gasNumSBTRecords;
         }
         maxRecordSizeAlign.alignUp();
@@ -421,9 +421,9 @@ namespace optixu {
         *memorySize = m->singleRecordSize * std::max(m->numSBTRecords, 1u);
     }
 
-    size_t Scene::getCGAS_SBTOffset(ClusterGeometryAccelerationStructure cgas) const {
-        _ClusterGeometryAccelerationStructure* const _cgas = extract(cgas);
-        return m->clusterGasSbtOffsets.at(_cgas->getSerialID());
+    size_t Scene::getCGAS_Set_SBTOffset(ClusterGeometryAccelerationStructureSet cgasSet) const {
+        _ClusterGeometryAccelerationStructureSet* const _cgasSet = extract(cgasSet);
+        return m->clusterGasSetSbtOffsets.at(_cgasSet->getSerialID());
     }
 
     bool Scene::shaderBindingTableLayoutIsReady() const {
@@ -2212,17 +2212,15 @@ namespace optixu {
         buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
 
         OPTIX_CHECK(optixClusterAccelBuild(
-            m->getRawContext(), stream,
-            &buildModeDesc, &m->buildInput,
-            clusterArgsBuffer.getCUdeviceptr(),
-            clusterCount, clusterArgsBuffer.stride()));
+            m->getRawContext(), stream, &buildModeDesc, &m->buildInput,
+            clusterArgsBuffer.getCUdeviceptr(), clusterCount, clusterArgsBuffer.stride()));
 
         m->available = true;
     }
 
 
 
-    void ClusterGeometryAccelerationStructure::Priv::calcSBTRequirements(
+    void ClusterGeometryAccelerationStructureSet::Priv::calcSBTRequirements(
         SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const
     {
         *maxRecordSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
@@ -2230,28 +2228,79 @@ namespace optixu {
         *numSBTRecords = numSbtRecords * numRayTypes;
     }
 
-    void ClusterGeometryAccelerationStructure::setHandleAddress(CUdeviceptr addr) const {
-        m->handleAddress = addr;
+    void ClusterGeometryAccelerationStructureSet::Priv::markDirty() {
+        available = false;
     }
 
-    void ClusterGeometryAccelerationStructure::setSbtRequirements(
+    void ClusterGeometryAccelerationStructureSet::setBuildInput(
+        OptixClusterAccelBuildFlags flags,
+        uint32_t maxArgCount,
+        uint32_t maxClusterCountPerArg, uint32_t maxTotalClusterCount,
+        OptixAccelBufferSizes* memoryRequirement) const
+    {
+        m->buildInput = {};
+        m->buildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS;
+        OptixClusterAccelBuildInputClusters &clusterBuildInput = m->buildInput.clusters;
+        clusterBuildInput.flags = flags;
+        clusterBuildInput.maxArgCount = maxArgCount;
+        clusterBuildInput.maxTotalClusterCount = maxTotalClusterCount;
+        clusterBuildInput.maxClusterCountPerArg = maxClusterCountPerArg;
+
+        OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
+            m->getRawContext(), _ClusterGeometryAccelerationStructureSet::s_buildMode,
+            &m->buildInput, &m->memoryRequirement));
+
+        *memoryRequirement = m->memoryRequirement;
+
+        m->markDirty();
+    }
+
+    // TODO: unify with setNumRayTypes()?
+    void ClusterGeometryAccelerationStructureSet::setSbtRequirements(
         uint32_t sbtDataSize, uint32_t sbtDataAlign, uint32_t numSbtRecords) const
     {
         m->sbtRecordDataSizeAlign = SizeAlign(sbtDataSize, sbtDataAlign);
         m->numSbtRecords = numSbtRecords;
+        m->scene->markSBTLayoutDirty();
     }
 
-    void ClusterGeometryAccelerationStructure::setNumRayTypes(uint32_t numRayTypes) const {
+    void ClusterGeometryAccelerationStructureSet::setNumRayTypes(uint32_t numRayTypes) const {
         m->numRayTypes = numRayTypes;
         m->scene->markSBTLayoutDirty();
     }
 
-    void ClusterGeometryAccelerationStructure::destroy() {
+    void ClusterGeometryAccelerationStructureSet::destroy() {
         if (m) {
             m->scene->markSBTLayoutDirty();
             delete m;
         }
         m = nullptr;
+    }
+
+    void ClusterGeometryAccelerationStructureSet::rebuild(
+        CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
+        const BufferView &accelBuffer, const BufferView &scratchBuffer,
+        const BufferView &travHandleBuffer) const
+    {
+        OptixClusterAccelBuildModeDesc buildModeDesc = {};
+        buildModeDesc.mode = _ClusterGeometryAccelerationStructureSet::s_buildMode;
+        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
+            buildModeDesc.implicitDest;
+        buildModeDescImpDst.outputBuffer = accelBuffer.getCUdeviceptr();
+        buildModeDescImpDst.outputBufferSizeInBytes = accelBuffer.sizeInBytes();
+        buildModeDescImpDst.tempBuffer = scratchBuffer.getCUdeviceptr();
+        buildModeDescImpDst.tempBufferSizeInBytes = scratchBuffer.sizeInBytes();
+        buildModeDescImpDst.outputHandlesBuffer = travHandleBuffer.getCUdeviceptr();
+        buildModeDescImpDst.outputHandlesStrideInBytes = travHandleBuffer.stride();
+        buildModeDescImpDst.outputSizesBuffer = 0; // optional
+        buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
+
+        OPTIX_CHECK(optixClusterAccelBuild(
+            m->getRawContext(), stream, &buildModeDesc, &m->buildInput,
+            cgasArgsBuffer.getCUdeviceptr(), cgasCount, cgasArgsBuffer.stride()));
+
+        m->travHandleBuffer = travHandleBuffer;
+        m->available = true;
     }
 
 
@@ -2628,11 +2677,11 @@ namespace optixu {
             instance->traversableHandle = gas->getHandle();
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
-        else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
-            const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
-            throwRuntimeError(cgas->isReady(), "CGAS %s is not ready.", cgas->getName().c_str());
+        else if (std::holds_alternative<_ClusterGeometryAccelerationStructureSet*>(child)) {
+            const auto cgasSet = std::get<_ClusterGeometryAccelerationStructureSet*>(child);
+            throwRuntimeError(cgasSet->isReady(), "CGAS set %s is not ready.", cgasSet->getName().c_str());
             instance->traversableHandle = 0;
-            instance->sbtOffset = scene->getSBTOffset(cgas);
+            instance->sbtOffset = scene->getSBTOffset(cgasSet);
         }
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
             const auto ias = std::get<_InstanceAccelerationStructure*>(child);
@@ -2667,10 +2716,10 @@ namespace optixu {
             throwRuntimeError(gas->isReady(), "GAS %s is not ready.", gas->getName().c_str());
             instance->sbtOffset = scene->getSBTOffset(gas, matSetIndex);
         }
-        else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
-            const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
-            //throwRuntimeError(gas->isReady(), "CGAS %s is not ready.", gas->getName().c_str());
-            instance->sbtOffset = scene->getSBTOffset(cgas);
+        else if (std::holds_alternative<_ClusterGeometryAccelerationStructureSet*>(child)) {
+            const auto cgasSet = std::get<_ClusterGeometryAccelerationStructureSet*>(child);
+            throwRuntimeError(cgasSet->isReady(), "CGAS set %s is not ready.", cgasSet->getName().c_str());
+            instance->sbtOffset = scene->getSBTOffset(cgasSet);
         }
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(child)) {
             const auto ias = std::get<_InstanceAccelerationStructure*>(child);
@@ -2695,11 +2744,11 @@ namespace optixu {
     }
 
     void Instance::Priv::copyTraversableHandle(CUstream stream, CUdeviceptr instDescAddress) const {
-        if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(child)) {
-            const auto cgas = std::get<_ClusterGeometryAccelerationStructure*>(child);
+        if (std::holds_alternative<_ClusterGeometryAccelerationStructureSet*>(child)) {
+            const auto _cgasSet = std::get<_ClusterGeometryAccelerationStructureSet*>(child);
             CUDADRV_CHECK(cuMemcpyDtoDAsync(
                 instDescAddress + offsetof(OptixInstance, traversableHandle),
-                cgas->getHandleAddress(), sizeof(OptixTraversableHandle),
+                _cgasSet->getTravHandleAddress(cgasIndex), sizeof(OptixTraversableHandle),
                 stream));
         }
     }
@@ -2736,18 +2785,19 @@ namespace optixu {
         m->matSetIndex = matSetIdx;
     }
 
-    void Instance::setChild(ClusterGeometryAccelerationStructure child) const {
-        _ClusterGeometryAccelerationStructure* const _child = extract(child);
+    void Instance::setChild(ClusterGeometryAccelerationStructureSet cgasSet, uint32_t cgasIdx) const {
+        _ClusterGeometryAccelerationStructureSet* const _cgasSet = extract(cgasSet);
         m->throwRuntimeError(
-            _child,
-            "Invalid CGAS %p.",
-            _child);
+            _cgasSet,
+            "Invalid CGAS Set %p.",
+            _cgasSet);
         m->throwRuntimeError(
-            _child->getScene() == m->scene,
-            "Scene mismatch for the given GAS %s.",
-            _child->getName().c_str());
-        m->child = _child;
+            _cgasSet->getScene() == m->scene,
+            "Scene mismatch for the given CGAS Set %s.",
+            _cgasSet->getName().c_str());
+        m->child = _cgasSet;
         m->matSetIndex = 0;
+        m->cgasIndex = cgasIdx;
     }
 
     void Instance::setChild(InstanceAccelerationStructure child) const {
@@ -2811,7 +2861,7 @@ namespace optixu {
     ChildType Instance::getChildType() const {
         if (std::holds_alternative<_GeometryAccelerationStructure*>(m->child))
             return ChildType::GAS;
-        else if (std::holds_alternative<_ClusterGeometryAccelerationStructure*>(m->child))
+        else if (std::holds_alternative<_ClusterGeometryAccelerationStructureSet*>(m->child))
             return ChildType::CGAS;
         else if (std::holds_alternative<_InstanceAccelerationStructure*>(m->child))
             return ChildType::IAS;
@@ -2828,9 +2878,16 @@ namespace optixu {
         return std::get<typename T::Priv*>(m->child)->getPublicType();
     }
     template GeometryAccelerationStructure Instance::getChild<GeometryAccelerationStructure>() const;
-    template ClusterGeometryAccelerationStructure Instance::getChild<ClusterGeometryAccelerationStructure>() const;
+    template ClusterGeometryAccelerationStructureSet Instance::getChild<ClusterGeometryAccelerationStructureSet>() const;
     template InstanceAccelerationStructure Instance::getChild<InstanceAccelerationStructure>() const;
     template Transform Instance::getChild<Transform>() const;
+
+    uint32_t Instance::getCgasIndex() const {
+        m->throwRuntimeError(
+            std::holds_alternative<_ClusterGeometryAccelerationStructureSet*>(m->child),
+            "This instance currently stores a non-CGAS child.");
+        return m->cgasIndex;
+    }
 
     uint32_t Instance::getID() const {
         return m->id;
