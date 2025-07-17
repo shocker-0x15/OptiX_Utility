@@ -473,10 +473,10 @@ namespace optixu {
         _Context* context;
         std::unordered_map<uint32_t, _GeometryAccelerationStructure*> geomASs;
         std::unordered_map<SBTOffsetKey, uint32_t, SBTOffsetKey::Hash> gasSbtOffsets;
-        std::unordered_map<uint32_t, _ClusterGeometryAccelerationStructure*> clusterGASs;
-        std::unordered_map<uint32_t, uint32_t> clusterGasSbtOffsets;
+        std::unordered_map<uint32_t, _ClusterGeometryAccelerationStructureSet*> clusterGasSets;
+        std::unordered_map<uint32_t, uint32_t> clusterGasSetSbtOffsets;
         uint32_t nextGeomASSerialID;
-        uint32_t nextClusterGASSerialID;
+        uint32_t nextClusterGasSetSerialID;
         uint32_t singleRecordSize;
         uint32_t numSBTRecords;
         std::unordered_set<_Transform*> transforms;
@@ -487,7 +487,7 @@ namespace optixu {
         OPTIXU_OPAQUE_BRIDGE(Scene);
 
         Priv(_Context* ctxt) : context(ctxt),
-            nextGeomASSerialID(0), nextClusterGASSerialID(0),
+            nextGeomASSerialID(0), nextClusterGasSetSerialID(0),
             singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
             sbtLayoutIsUpToDate(false)
         {}
@@ -504,8 +504,8 @@ namespace optixu {
 
         void addGAS(_GeometryAccelerationStructure* gas);
         void removeGAS(_GeometryAccelerationStructure* gas);
-        void addCGAS(_ClusterGeometryAccelerationStructure* cgas);
-        void removeCGAS(_ClusterGeometryAccelerationStructure* cgas);
+        void addCgasSet(_ClusterGeometryAccelerationStructureSet* cgasSet);
+        void removeCgasSet(_ClusterGeometryAccelerationStructureSet* cgasSet);
         void addTransform(_Transform* tr) {
             transforms.insert(tr);
         }
@@ -524,7 +524,7 @@ namespace optixu {
         }
         void markSBTLayoutDirty();
         uint32_t getSBTOffset(_GeometryAccelerationStructure* gas, uint32_t matSetIdx);
-        uint32_t getSBTOffset(_ClusterGeometryAccelerationStructure* gas);
+        uint32_t getSBTOffset(_ClusterGeometryAccelerationStructureSet* cgasSet);
 
         uint32_t getSingleRecordSize() const {
             return singleRecordSize;
@@ -962,27 +962,36 @@ namespace optixu {
 
 
     template <>
-    class Object<ClusterGeometryAccelerationStructure>::Priv : public PrivateObject {
+    class Object<ClusterGeometryAccelerationStructureSet>::Priv : public PrivateObject {
     OPTIXU_PRIV_ACCESS_SPECIFIER:
+        static constexpr OptixClusterAccelBuildMode s_buildMode =
+            OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
+
         _Scene* scene;
         uint32_t serialID;
         SizeAlign sbtRecordDataSizeAlign;
 
-        CUdeviceptr handleAddress;
+        OptixClusterAccelBuildInput buildInput;
+        OptixAccelBufferSizes memoryRequirement;
+
+        BufferView travHandleBuffer;
+
         uint32_t numSbtRecords;
         uint32_t numRayTypes;
 
+        uint32_t available : 1;
+
     public:
-        OPTIXU_OPAQUE_BRIDGE(ClusterGeometryAccelerationStructure);
+        OPTIXU_OPAQUE_BRIDGE(ClusterGeometryAccelerationStructureSet);
 
         Priv(_Scene* _scene, uint32_t _serialID) :
             scene(_scene),
             serialID(_serialID),
-            handleAddress(0),
             numSbtRecords(0),
-            numRayTypes(0)
+            numRayTypes(0),
+            available(false)
         {
-            scene->addCGAS(this);
+            scene->addCgasSet(this);
         }
         ~Priv() {
             getContext()->unregisterName(this);
@@ -994,7 +1003,7 @@ namespace optixu {
         _Context* getContext() const override {
             return scene->getContext();
         }
-        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("CGAS");
+        OPTIXU_DEFINE_THROW_RUNTIME_ERROR("CGASSet");
 
 
 
@@ -1004,13 +1013,20 @@ namespace optixu {
 
         void calcSBTRequirements(
             SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
-        CUdeviceptr getHandleAddress() const {
-            throwRuntimeError(handleAddress != 0, "Handle address is not set.");
-            return handleAddress;
+
+        CUdeviceptr getTravHandleAddress(uint32_t clasIdx) const {
+            throwRuntimeError(
+                available,
+                "CGAS set is not available yet.");
+            throwRuntimeError(
+                clasIdx < travHandleBuffer.numElements(),
+                "Invalid CGAS index %u.", clasIdx);
+            return travHandleBuffer.getCUdeviceptrAt(clasIdx);
         }
 
+        void markDirty();
         bool isReady() const {
-            return handleAddress != 0;
+            return available;
         }
     };
 
@@ -1090,11 +1106,12 @@ namespace optixu {
         std::variant<
             void*,
             _GeometryAccelerationStructure*,
-            _ClusterGeometryAccelerationStructure*,
+            _ClusterGeometryAccelerationStructureSet*,
             _InstanceAccelerationStructure*,
             _Transform*
         > child;
         uint32_t matSetIndex;
+        uint32_t cgasIndex;
         uint32_t id;
         uint32_t visibilityMask;
         OptixInstanceFlags flags;
@@ -1107,6 +1124,7 @@ namespace optixu {
             scene(_scene)
         {
             matSetIndex = 0xFFFFFFFF;
+            cgasIndex = 0xFFFFFFFF;
             id = 0;
             visibilityMask = 0xFF;
             flags = OPTIX_INSTANCE_FLAG_NONE;

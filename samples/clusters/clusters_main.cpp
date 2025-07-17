@@ -131,21 +131,13 @@ struct HierarchicalMesh {
 
             argsArrayOnHost[cIdx] = args;
         }
-        argsArray.initialize(
-            cuContext, cudau::BufferType::Device, argsArrayOnHost);
+        argsArray.initialize(cuContext, cudau::BufferType::Device, argsArrayOnHost);
 
-        argsArrayToBuild.initialize(
-            cuContext, cudau::BufferType::Device, clusterCount);
-
-        clasHandles.initialize(
-            cuContext, cudau::BufferType::Device, clusterCount);
-
+        argsArrayToBuild.initialize(cuContext, cudau::BufferType::Device, clusterCount);
+        clasHandles.initialize(cuContext, cudau::BufferType::Device, clusterCount);
         const uint32_t usedFlagsBinCount = (clusterCount + 31) / 32;
-        usedFlags.initialize(
-            cuContext, cudau::BufferType::Device, usedFlagsBinCount);
-
-        indexMapClusterToClasBuild.initialize(
-            cuContext, cudau::BufferType::Device, clusterCount);
+        usedFlags.initialize(cuContext, cudau::BufferType::Device, usedFlagsBinCount);
+        indexMapClusterToClasBuild.initialize(cuContext, cudau::BufferType::Device, clusterCount);
 
         Shared::ClusterSetInfo clusterSetInfoOnHost = {};
         clusterSetInfoOnHost.argsArray = argsArrayToBuild.getDevicePointer();
@@ -153,8 +145,7 @@ struct HierarchicalMesh {
         clusterSetInfoOnHost.usedFlags = usedFlags.getDevicePointer();
         clusterSetInfoOnHost.indexMapClusterToClasBuild = indexMapClusterToClasBuild.getDevicePointer();
         clusterSetInfoOnHost.argsCountToBuild = 0;
-        clusterSetInfo.initialize(
-            cuContext, cudau::BufferType::Device, 1, clusterSetInfoOnHost);
+        clusterSetInfo.initialize(cuContext, cudau::BufferType::Device, 1, clusterSetInfoOnHost);
 
         clasSet = scene.createClusterAccelerationStructureSet();
         clasSet.setBuildInput(
@@ -163,8 +154,7 @@ struct HierarchicalMesh {
             0, 1, maxTriCountPerCluster, maxVertCountPerCluster,
             0, 0, 0, &asMemReqs);
 
-        clasSetMem.initialize(
-            cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        clasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
 
         return true;
     }
@@ -190,7 +180,6 @@ struct HierarchicalMesh {
 
 
 struct ClusterGasInstance {
-    optixu::ClusterGeometryAccelerationStructure optixCgas;
     optixu::Instance optixInst;
     cudau::TypedBuffer<uint32_t> indexMapClasHandleToCluster;
     cudau::TypedBuffer<CUdeviceptr> clasHandles;
@@ -198,20 +187,17 @@ struct ClusterGasInstance {
     uint32_t instanceId;
 
     void initialize(
-        const CUcontext cuContext, const optixu::Scene scene, const uint32_t maxClasCount,
-        const uint32_t instId)
+        const CUcontext cuContext, const optixu::Scene scene,
+        const optixu::ClusterGeometryAccelerationStructureSet optixCgas,
+        const uint32_t instId, const uint32_t maxClasCount)
     {
-        optixCgas = scene.createClusterGeometryAccelerationStructure();
-
         optixInst = scene.createInstance();
-        optixInst.setChild(optixCgas);
+        optixInst.setChild(optixCgas, instId);
 
         instanceId = instId;
 
-        indexMapClasHandleToCluster.initialize(
-            cuContext, cudau::BufferType::Device, maxClasCount);
-        clasHandles.initialize(
-            cuContext, cudau::BufferType::Device, maxClasCount);
+        indexMapClasHandleToCluster.initialize(cuContext, cudau::BufferType::Device, maxClasCount);
+        clasHandles.initialize(cuContext, cudau::BufferType::Device, maxClasCount);
 
         instInfoOnHost = {};
         instInfoOnHost.indexMapClasHandleToCluster = indexMapClasHandleToCluster.getDevicePointer();
@@ -224,7 +210,6 @@ struct ClusterGasInstance {
     }
 
     void finalize() {
-        optixCgas.destroy();
         optixInst.destroy();
         indexMapClasHandleToCluster.finalize();
         clasHandles.finalize();
@@ -242,7 +227,6 @@ struct ClusterGasInstance {
     }
 
     void setInstanceInfo(Shared::ClusterGasInstanceInfo* const instInfoBuffer) {
-        instInfoOnHost.clasHandleCount = 0;
         instInfoBuffer[instanceId] = instInfoOnHost;
     }
 };
@@ -377,22 +361,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: シーンのセットアップ。
     // EN: Setup a scene.
 
-#define OPTIX_CHECK(call) \
-    do { \
-        const OptixResult error = call; \
-        if (error != OPTIX_SUCCESS) { \
-            std::stringstream ss; \
-            ss << "OptiX call (" << #call << ") failed: " \
-               << "(" __FILE__ << ":" << __LINE__ << ")\n"; \
-            throw std::runtime_error(ss.str().c_str()); \
-        } \
-    } while (0)
-
     optixu::Scene scene = optixContext.createScene();
 
-    size_t maxSizeOfScratchBuffer = 0;
     OptixAccelBufferSizes asMemReqs;
-
+    size_t maxSizeOfScratchBuffer = 0;
     cudau::Buffer asBuildScratchMem;
 
     uint32_t clusterGasInstId = 0;
@@ -417,47 +389,32 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const uint32_t maxClasCountPerCgas =
         himesh.levelStartClusterIndicesOnHost[1] - himesh.levelStartClusterIndicesOnHost[0];
 
-    OptixClusterAccelBuildMode constexpr cgasAccelBuildMode =
-        OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
+    optixu::ClusterGeometryAccelerationStructureSet cgasSet =
+        scene.createClusterGeometryAccelerationStructureSet();
+    cgasSet.setSbtRequirements(
+        sizeof(Shared::GeometryData), alignof(Shared::GeometryData), 1);
+    cgasSet.setNumRayTypes(Shared::NumRayTypes);
+    cgasSet.setBuildInput(
+        OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
+        bunnyCount, maxClasCountPerCgas, maxClasCountPerCgas * bunnyCount,
+        &asMemReqs);
+
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    cudau::Buffer cgasSetMem;
+    cgasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+
     cudau::TypedBuffer<uint32_t> cgasCount(
         cuContext, cudau::BufferType::Device, 1, bunnyCount);
-    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> cgasArgsArray;
-    cudau::TypedBuffer<OptixTraversableHandle> cgasHandles;
-    cudau::Buffer cgasSetMem;
-    OptixClusterAccelBuildInput cgasBuildInput = {};
-    {
-        cgasArgsArray.initialize(
-            cuContext, cudau::BufferType::Device, bunnyCount);
-        cgasHandles.initialize(
-            cuContext, cudau::BufferType::Device, bunnyCount);
+    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> cgasArgsArray(
+        cuContext, cudau::BufferType::Device, bunnyCount);
+    cudau::TypedBuffer<OptixTraversableHandle> cgasHandles(
+        cuContext, cudau::BufferType::Device, bunnyCount);
 
-        for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
-            ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
-            bunnyInst.initialize(cuContext, scene, maxClasCountPerCgas, clusterGasInstId++);
-
-            bunnyInst.optixCgas.setHandleAddress(cgasHandles.getCUdeviceptrAt(bunnyIdx));
-            bunnyInst.optixCgas.setNumRayTypes(Shared::NumRayTypes);
-            bunnyInst.optixCgas.setSbtRequirements(
-                sizeof(Shared::GeometryData), alignof(Shared::GeometryData),
-                1);
-
-            bunnyInst.setTransform(bunnyInstXfms[bunnyIdx]);
-        }
-
-        cgasBuildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS;
-        OptixClusterAccelBuildInputClusters &clusterBuildInput = cgasBuildInput.clusters;
-        clusterBuildInput.flags = OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE;
-        clusterBuildInput.maxArgCount = bunnyCount;
-        clusterBuildInput.maxTotalClusterCount = maxClasCountPerCgas * bunnyCount;
-        clusterBuildInput.maxClusterCountPerArg = maxClasCountPerCgas;
-
-        OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
-            optixContext.getOptixDeviceContext(), cgasAccelBuildMode,
-            &cgasBuildInput, &asMemReqs));
-        maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-        cgasSetMem.initialize(
-            cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
+        ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
+        bunnyInst.initialize(cuContext, scene, cgasSet, clusterGasInstId++, maxClasCountPerCgas);
+        bunnyInst.setTransform(bunnyInstXfms[bunnyIdx]);
     }
 
 
@@ -776,8 +733,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // EN: 
             himesh.clasSet.rebuild(
                 curStream,
-                himesh.argsArrayToBuild, clasCountToBuildPtr,
-                himesh.clasSetMem, asBuildScratchMem,
+                himesh.argsArrayToBuild, clasCountToBuildPtr, himesh.clasSetMem, asBuildScratchMem,
                 himesh.clasHandles);
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
@@ -796,25 +752,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // JP: CGAS集合をビルドする。
             // EN: 
-            {
-                OptixClusterAccelBuildModeDesc buildModeDesc = {};
-                buildModeDesc.mode = cgasAccelBuildMode;
-                OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
-                    buildModeDesc.implicitDest;
-                buildModeDescImpDst.outputBuffer = cgasSetMem.getCUdeviceptr();
-                buildModeDescImpDst.outputBufferSizeInBytes = cgasSetMem.sizeInBytes();
-                buildModeDescImpDst.tempBuffer = asBuildScratchMem.getCUdeviceptr();
-                buildModeDescImpDst.tempBufferSizeInBytes = asBuildScratchMem.sizeInBytes();
-                buildModeDescImpDst.outputHandlesBuffer = cgasHandles.getCUdeviceptr();
-                buildModeDescImpDst.outputHandlesStrideInBytes = cgasHandles.stride();
-                buildModeDescImpDst.outputSizesBuffer = 0; // optional
-                buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
-
-                OPTIX_CHECK(optixClusterAccelBuild(
-                    optixContext.getOptixDeviceContext(), curStream,
-                    &buildModeDesc, &cgasBuildInput,
-                    cgasArgsArray.getCUdeviceptr(), cgasCount.getCUdeviceptr(), cgasArgsArray.stride()));
-            }
+            cgasSet.rebuild(
+                curStream,
+                cgasArgsArray, cgasCount.getCUdeviceptr(), cgasSetMem, asBuildScratchMem,
+                cgasHandles);
 
             CUDADRV_CHECK(cuMemcpyDtoDAsync(
                 curClasBuildCount.getCUdeviceptr(), clasCountToBuildPtr,
@@ -968,12 +909,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasMem.finalize();
     ias.destroy();
 
-    cgasSetMem.finalize();
     for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx)
         bunnyInsts[bunnyIdx].finalize();
     cgasHandles.finalize();
     cgasArgsArray.finalize();
     cgasCount.finalize();
+    cgasSetMem.finalize();
+    cgasSet.destroy();
 
     himesh.finalize();
 
