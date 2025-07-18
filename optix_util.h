@@ -1667,7 +1667,6 @@ namespace optixu {
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
-        size_t getCGAS_Set_SBTOffset(ClusterGeometryAccelerationStructureSet cgasSet) const;
         bool shaderBindingTableLayoutIsReady() const;
     };
 
@@ -1904,16 +1903,31 @@ namespace optixu {
         void setBuildInput(
             OptixClusterAccelBuildFlags flags,
             uint32_t maxArgCount, OptixVertexFormat vertexFormat,
-            uint32_t maxSbtIndexValue, uint32_t maxUniqueSbtIndexCountPerArg,
+            uint32_t maxMaterialCount, uint32_t maxUniqueMaterialCountPerArg,
             uint32_t maxTriCountPerArg, uint32_t maxVertCountPerArg,
             uint32_t maxTotalTriCount, uint32_t maxTotalVertCount,
             uint32_t minPositionTruncateBitCount,
             OptixAccelBufferSizes* memoryRequirement) const;
 
+        void setMaterial(uint32_t matIdx, Material mat) const;
+        void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
+        template <typename T>
+        void setUserData(const T &data) const {
+            setUserData(&data, sizeof(T), alignof(T));
+        }
+
         void rebuild(
             CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,
             const BufferView &clasHandleBuffer) const;
+
+        uint32_t getNumMaterials() const;
+        Material getMaterial(uint32_t matIdx) const;
+        void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
+        template <typename T>
+        void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+            getUserData(reinterpret_cast<void*>(data), size, alignment);
+        }
     };
 
 
@@ -1927,14 +1941,38 @@ namespace optixu {
             uint32_t maxArgCount,
             uint32_t maxClusterCountPerArg, uint32_t maxTotalClusterCount,
             OptixAccelBufferSizes* memoryRequirement) const;
+        void setChild(ClusterAccelerationStructureSet clasSet) const;
 
-        void setSbtRequirements(uint32_t sbtDataSize, uint32_t sbtDataAlign, uint32_t numSbtRecords) const;
         void setNumRayTypes(uint32_t numRayTypes) const;
 
         void rebuild(
             CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,
             const BufferView &travHandleBuffer) const;
+
+        /*
+        JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+            パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+            シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+            アラインメントを変更する場合レイアウトが自動で無効化される。
+        EN: Updating a shader binding table is required when calling the following APIs.
+            Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+            In the case where user data size and/or alignment changes again after generating the layout of
+            a shader binding table, the layout is automatically invalidated.
+        */
+        void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
+        template <typename T>
+        void setUserData(const T &data) const {
+            setUserData(&data, sizeof(T), alignof(T));
+        }
+
+        ClusterAccelerationStructureSet getChild() const;
+        uint32_t getNumRayTypes() const;
+        void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
+        template <typename T>
+        void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
+            getUserData(reinterpret_cast<void*>(data), size, alignment);
+        }
     };
 
 

@@ -926,9 +926,13 @@ namespace optixu {
             OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
 
         _Scene* scene;
+        SizeAlign userDataSizeAlign;
+        std::vector<uint8_t> userData;
 
         OptixClusterAccelBuildInput buildInput;
         OptixAccelBufferSizes memoryRequirement;
+
+        std::vector<_Material*> materials;
 
         uint32_t available : 1;
 
@@ -937,6 +941,7 @@ namespace optixu {
 
         Priv(_Scene* _scene) :
             scene(_scene),
+            userData(sizeof(uint32_t)),
             available(false)
         {}
         ~Priv() {
@@ -951,7 +956,13 @@ namespace optixu {
         }
         OPTIXU_DEFINE_THROW_RUNTIME_ERROR("CLASSet");
 
-
+        void calcSBTRequirements(
+            const SizeAlign &cgasSetUserDataSizeAlign,
+            SizeAlign* maxRecordSizeAlign, uint32_t* sbtRecordCount) const;
+        uint32_t fillSBTRecords(
+            const _Pipeline* pipeline,
+            const void* cgasSetUserData, const SizeAlign &cgasSetUserDataSizeAlign,
+            uint32_t rayTypeCount, uint8_t* records) const;
 
         void markDirty();
         bool isReady() const {
@@ -969,15 +980,17 @@ namespace optixu {
 
         _Scene* scene;
         uint32_t serialID;
-        SizeAlign sbtRecordDataSizeAlign;
+        SizeAlign userDataSizeAlign;
+        std::vector<uint8_t> userData;
+
+        uint32_t rayTypeCount;
+
+        _ClusterAccelerationStructureSet* child;
 
         OptixClusterAccelBuildInput buildInput;
         OptixAccelBufferSizes memoryRequirement;
 
         BufferView travHandleBuffer;
-
-        uint32_t numSbtRecords;
-        uint32_t numRayTypes;
 
         uint32_t available : 1;
 
@@ -987,8 +1000,8 @@ namespace optixu {
         Priv(_Scene* _scene, uint32_t _serialID) :
             scene(_scene),
             serialID(_serialID),
-            numSbtRecords(0),
-            numRayTypes(0),
+            userData(sizeof(uint32_t)),
+            rayTypeCount(0),
             available(false)
         {
             scene->addCgasSet(this);
@@ -1012,7 +1025,8 @@ namespace optixu {
         }
 
         void calcSBTRequirements(
-            SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+            SizeAlign* maxRecordSizeAlign, uint32_t* sbtRecordCount) const;
+        uint32_t fillSBTRecords(const _Pipeline* pipeline, uint8_t* records) const;
 
         CUdeviceptr getTravHandleAddress(uint32_t clasIdx) const {
             throwRuntimeError(

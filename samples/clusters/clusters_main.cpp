@@ -7,8 +7,6 @@ EN:
 */
 
 #include "clusters_shared.h"
-#define OPTIXU_ENABLE_PRIVATE_ACCESS 1
-#include "../../optix_util_private.h"
 
 #include "../common/gui_common.h"
 
@@ -55,7 +53,7 @@ struct HierarchicalMesh {
     uint32_t maxTriCountPerCluster;
 
     bool read(
-        const CUcontext cuContext, const optixu::Scene scene,
+        const CUcontext cuContext, const optixu::Scene scene, const optixu::Material mat,
         const std::filesystem::path &filePath)
     {
         ExIfStream ifs(filePath, std::ios::binary);
@@ -151,8 +149,9 @@ struct HierarchicalMesh {
         clasSet.setBuildInput(
             OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
             clusterCount, OPTIX_VERTEX_FORMAT_FLOAT3,
-            0, 1, maxTriCountPerCluster, maxVertCountPerCluster,
+            1, 1, maxTriCountPerCluster, maxVertCountPerCluster,
             0, 0, 0, &asMemReqs);
+        clasSet.setMaterial(0, mat);
 
         clasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
 
@@ -371,7 +370,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     HierarchicalMesh himesh;
     himesh.read(
-        cuContext, scene,
+        cuContext, scene, mat,
         R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
 
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, himesh.asMemReqs.tempSizeInBytes);
@@ -391,13 +390,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::ClusterGeometryAccelerationStructureSet cgasSet =
         scene.createClusterGeometryAccelerationStructureSet();
-    cgasSet.setSbtRequirements(
-        sizeof(Shared::GeometryData), alignof(Shared::GeometryData), 1);
     cgasSet.setNumRayTypes(Shared::NumRayTypes);
     cgasSet.setBuildInput(
         OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
         bunnyCount, maxClasCountPerCgas, maxClasCountPerCgas * bunnyCount,
         &asMemReqs);
+    cgasSet.setChild(himesh.clasSet);
 
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
@@ -433,10 +431,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> clusterGasInstInfoBuffers[2];
-    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx) {
-        clusterGasInstInfoBuffers[bufIdx].initialize(
-            cuContext, cudau::BufferType::Device, bunnyCount);
-    }
+    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx)
+        clusterGasInstInfoBuffers[bufIdx].initialize(cuContext, cudau::BufferType::Device, bunnyCount);
 
 
 
@@ -806,27 +802,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
             plp.visMode = visualizationMode;
             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
-            {
-                using namespace optixu;
-                uint8_t* sbtHostMem = reinterpret_cast<uint8_t*>(hitGroupSBT.getMappedPointer());
-                for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
-                    _Material* _mat = std::bit_cast<optixu::_Material*>(mat);
-                    SizeAlign curSizeAlign;
-                    _mat->setRecordHeader(
-                        optixu::extract(pipeline),
-                        Shared::RayType_Primary, sbtHostMem + 0,
-                        &curSizeAlign);
-                    uint32_t offset;
-                    optixu::SizeAlign userDataSizeAlign(
-                        sizeof(Shared::GeometryData),
-                        alignof(Shared::GeometryData));
-                    curSizeAlign.add(userDataSizeAlign, &offset);
 
-                    sbtHostMem += curSizeAlign.size;
-                }
-            }
             pipeline.launch(
                 curStream, plpOnDevice, args.windowContentRenderWidth, args.windowContentRenderHeight, 1);
+
             ++numAccumFrames;
 
             curGPUTimer.render.stop(curStream);
@@ -901,9 +880,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     asBuildScratchMem.finalize();
 
-    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx) {
+    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx)
         clusterGasInstInfoBuffers[bufIdx].finalize();
-    }
 
     instanceBuffer.finalize();
     iasMem.finalize();

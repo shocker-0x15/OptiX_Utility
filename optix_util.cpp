@@ -266,6 +266,10 @@ namespace optixu {
                 records += numRecords * singleRecordSize;
             }
         }
+        for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructureSet*> &cgasSet : clusterGasSets) {
+            const uint32_t numRecords = cgasSet.second->fillSBTRecords(pipeline, records);
+            records += numRecords * singleRecordSize;
+        }
 
         CUDADRV_CHECK(cuMemcpyHtoDAsync(sbt.getCUdeviceptr(), hostMem, sbt.sizeInBytes(), stream));
     }
@@ -419,11 +423,6 @@ namespace optixu {
         m->sbtLayoutIsUpToDate = true;
 
         *memorySize = m->singleRecordSize * std::max(m->numSBTRecords, 1u);
-    }
-
-    size_t Scene::getCGAS_Set_SBTOffset(ClusterGeometryAccelerationStructureSet cgasSet) const {
-        _ClusterGeometryAccelerationStructureSet* const _cgasSet = extract(cgasSet);
-        return m->clusterGasSetSbtOffsets.at(_cgasSet->getSerialID());
     }
 
     bool Scene::shaderBindingTableLayoutIsReady() const {
@@ -1034,7 +1033,8 @@ namespace optixu {
         SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const
     {
         *maxRecordSizeAlign = SizeAlign();
-        for (int matIdx = 0; matIdx < materials.size(); ++matIdx) {
+        const uint32_t numMaterials = static_cast<uint32_t>(materials.size());
+        for (uint32_t matIdx = 0; matIdx < numMaterials; ++matIdx) {
             throwRuntimeError(
                 materials[matIdx][0],
                 "Default material (== material set 0) is not set for the slot %u.",
@@ -1046,10 +1046,10 @@ namespace optixu {
             SizeAlign recordSizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
             recordSizeAlign += gasUserDataSizeAlign;
             recordSizeAlign += gasChildUserDataSizeAlign;
+            recordSizeAlign += userDataSizeAlign;
             recordSizeAlign += mat->getUserDataSizeAlign();
             *maxRecordSizeAlign = max(*maxRecordSizeAlign, recordSizeAlign);
         }
-        *maxRecordSizeAlign += userDataSizeAlign;
         *numSBTRecords = static_cast<uint32_t>(buildInputFlags.size());
     }
 
@@ -1582,7 +1582,6 @@ namespace optixu {
             *maxRecordSizeAlign = max(*maxRecordSizeAlign, geomInstRecordSizeAlign);
             *numSBTRecords += geomInstNumSBTRecords;
         }
-        *maxRecordSizeAlign += userDataSizeAlign;
         *numSBTRecords *= numRayTypesPerMaterialSet[matSetIdx];
     }
 
@@ -2140,6 +2139,55 @@ namespace optixu {
 
 
 
+    void ClusterAccelerationStructureSet::Priv::calcSBTRequirements(
+        const SizeAlign &cgasSetUserDataSizeAlign,
+        SizeAlign* maxRecordSizeAlign, uint32_t* sbtRecordCount) const
+    {
+        *maxRecordSizeAlign = SizeAlign();
+        const uint32_t matCount = static_cast<uint32_t>(materials.size());
+        for (uint32_t matIdx = 0; matIdx < matCount; ++matIdx) {
+            throwRuntimeError(
+                materials[matIdx],
+                "Material is not set for the slot %u.",
+                matIdx);
+            const _Material* mat = materials[matIdx];
+            SizeAlign recordSizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
+            recordSizeAlign += cgasSetUserDataSizeAlign;
+            recordSizeAlign += userDataSizeAlign;
+            recordSizeAlign += mat->getUserDataSizeAlign();
+            *maxRecordSizeAlign = max(*maxRecordSizeAlign, recordSizeAlign);
+        }
+        *sbtRecordCount = matCount;
+    }
+
+    uint32_t ClusterAccelerationStructureSet::Priv::fillSBTRecords(
+        const _Pipeline* pipeline,
+        const void* cgasSetUserData, const SizeAlign &cgasSetUserDataSizeAlign,
+        uint32_t rayTypeCount, uint8_t* records) const
+    {
+        const uint32_t matCount = static_cast<uint32_t>(materials.size());
+        for (uint32_t matIdx = 0; matIdx < matCount; ++matIdx) {
+            throwRuntimeError(
+                materials[matIdx],
+                "Material is not set for material %u.",
+                matIdx);
+            const _Material* mat = materials[matIdx];
+            for (uint32_t rIdx = 0; rIdx < rayTypeCount; ++rIdx) {
+                SizeAlign curSizeAlign;
+                mat->setRecordHeader(pipeline, rIdx, records, &curSizeAlign);
+                uint32_t offset;
+                curSizeAlign.add(cgasSetUserDataSizeAlign, &offset);
+                std::memcpy(records + offset, cgasSetUserData, cgasSetUserDataSizeAlign.size);
+                curSizeAlign.add(userDataSizeAlign, &offset);
+                std::memcpy(records + offset, userData.data(), userDataSizeAlign.size);
+                mat->setRecordData(records, &curSizeAlign);
+                records += scene->getSingleRecordSize();
+            }
+        }
+
+        return matCount * rayTypeCount;
+    }
+
     void ClusterAccelerationStructureSet::Priv::markDirty() {
         available = false;
     }
@@ -2155,12 +2203,14 @@ namespace optixu {
     void ClusterAccelerationStructureSet::setBuildInput(
         OptixClusterAccelBuildFlags flags,
         uint32_t maxArgCount, OptixVertexFormat vertexFormat,
-        uint32_t maxSbtIndexValue, uint32_t maxUniqueSbtIndexCountPerArg,
+        uint32_t maxMaterialCount, uint32_t maxUniqueMaterialCountPerArg,
         uint32_t maxTriCountPerArg, uint32_t maxVertCountPerArg,
         uint32_t maxTotalTriCount, uint32_t maxTotalVertCount,
         uint32_t minPositionTruncateBitCount,
         OptixAccelBufferSizes* memoryRequirement) const
     {
+        m->throwRuntimeError(
+            maxMaterialCount > 0, "Invalid number of materials %u.", maxMaterialCount);
         m->throwRuntimeError(
             maxTriCountPerArg <= getContext().getMaxTriangleCountPerCluster(),
             "Too many triangles per cluster %u > %u.",
@@ -2176,8 +2226,8 @@ namespace optixu {
         triBuildInput.flags = flags;
         triBuildInput.maxArgCount = maxArgCount;
         triBuildInput.vertexFormat = vertexFormat;
-        triBuildInput.maxSbtIndexValue = maxSbtIndexValue;
-        triBuildInput.maxUniqueSbtIndexCountPerArg = maxUniqueSbtIndexCountPerArg;
+        triBuildInput.maxSbtIndexValue = maxMaterialCount - 1;
+        triBuildInput.maxUniqueSbtIndexCountPerArg = maxUniqueMaterialCountPerArg;
         triBuildInput.maxTriangleCountPerArg = maxTriCountPerArg;
         triBuildInput.maxVertexCountPerArg = maxVertCountPerArg;
         triBuildInput.maxTotalTriangleCount = maxTotalTriCount;
@@ -2189,8 +2239,36 @@ namespace optixu {
             &m->buildInput, &m->memoryRequirement));
 
         *memoryRequirement = m->memoryRequirement;
+        m->materials.resize(maxMaterialCount);
 
         m->markDirty();
+    }
+
+    void ClusterAccelerationStructureSet::setMaterial(uint32_t matIdx, Material mat) const {
+        const size_t numMaterials = m->materials.size();
+        m->throwRuntimeError(
+            matIdx < numMaterials, "Out of material bounds [0, %u).",
+            static_cast<uint32_t>(numMaterials));
+        m->materials[matIdx] = extract(mat);
+    }
+
+    void ClusterAccelerationStructureSet::setUserData(
+        const void* data, uint32_t size, uint32_t alignment) const
+    {
+        m->throwRuntimeError(
+            size <= s_maxGeometryInstanceUserDataSize,
+            "Maximum user data size for CLAS set is %u bytes.",
+            s_maxGeometryInstanceUserDataSize);
+        m->throwRuntimeError(
+            alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+            "Valid alignment range is [1, %u].",
+            OPTIX_SBT_RECORD_ALIGNMENT);
+        if (m->userDataSizeAlign.size != size ||
+            m->userDataSizeAlign.alignment != alignment)
+            m->scene->markSBTLayoutDirty();
+        m->userDataSizeAlign = SizeAlign(size, alignment);
+        m->userData.resize(size);
+        std::memcpy(m->userData.data(), data, size);
     }
 
     void ClusterAccelerationStructureSet::rebuild(
@@ -2218,14 +2296,56 @@ namespace optixu {
         m->available = true;
     }
 
+    uint32_t ClusterAccelerationStructureSet::getNumMaterials() const {
+        return static_cast<uint32_t>(m->materials.size());
+    }
+
+    Material ClusterAccelerationStructureSet::getMaterial(uint32_t matIdx) const {
+        const size_t matCount = m->materials.size();
+        m->throwRuntimeError(
+            matIdx < matCount, "Out of material bounds [0, %u).",
+            static_cast<uint32_t>(matCount));
+        return m->materials[matIdx]->getPublicType();
+    }
+
+    void ClusterAccelerationStructureSet::getUserData(
+        void* data, uint32_t* size, uint32_t* alignment) const
+    {
+        if (data)
+            std::memcpy(data, m->userData.data(), m->userDataSizeAlign.size);
+        if (size)
+            *size = m->userDataSizeAlign.size;
+        if (alignment)
+            *alignment = m->userDataSizeAlign.alignment;
+    }
+
 
 
     void ClusterGeometryAccelerationStructureSet::Priv::calcSBTRequirements(
-        SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const
+        SizeAlign* maxRecordSizeAlign, uint32_t* sbtRecordCount) const
     {
-        *maxRecordSizeAlign = SizeAlign(OPTIX_SBT_RECORD_HEADER_SIZE, OPTIX_SBT_RECORD_ALIGNMENT);
-        *maxRecordSizeAlign += sbtRecordDataSizeAlign;
-        *numSBTRecords = numSbtRecords * numRayTypes;
+        throwRuntimeError(
+            child,
+            "Child CLAS set is not set for the CGAS set %s.",
+            getName().c_str());
+        SizeAlign clasSetRecordSizeAlign;
+        uint32_t clasSetSbtRecordCount;
+        child->calcSBTRequirements(
+            userDataSizeAlign,
+            &clasSetRecordSizeAlign, &clasSetSbtRecordCount);
+        *sbtRecordCount = clasSetSbtRecordCount * rayTypeCount;
+        *maxRecordSizeAlign = clasSetRecordSizeAlign;
+    }
+
+    uint32_t ClusterGeometryAccelerationStructureSet::Priv::fillSBTRecords(
+        const _Pipeline* pipeline, uint8_t* records) const
+    {
+        const uint32_t numRecords = child->fillSBTRecords(
+            pipeline,
+            userData.data(), userDataSizeAlign,
+            rayTypeCount, records);
+
+        return numRecords;
     }
 
     void ClusterGeometryAccelerationStructureSet::Priv::markDirty() {
@@ -2255,17 +2375,25 @@ namespace optixu {
         m->markDirty();
     }
 
-    // TODO: unify with setNumRayTypes()?
-    void ClusterGeometryAccelerationStructureSet::setSbtRequirements(
-        uint32_t sbtDataSize, uint32_t sbtDataAlign, uint32_t numSbtRecords) const
-    {
-        m->sbtRecordDataSizeAlign = SizeAlign(sbtDataSize, sbtDataAlign);
-        m->numSbtRecords = numSbtRecords;
+    void ClusterGeometryAccelerationStructureSet::setChild(ClusterAccelerationStructureSet clasSet) const {
+        _ClusterAccelerationStructureSet* const _clasSet = extract(clasSet);
+        m->throwRuntimeError(
+          _clasSet,
+            "Invalid CLAS set %p.",
+            _clasSet);
+        m->throwRuntimeError(
+            _clasSet->getScene() == m->scene,
+            "Scene mismatch for the given CLAS set %s.",
+            _clasSet->getName().c_str());
+
+        m->child = _clasSet;
+
+        m->markDirty();
         m->scene->markSBTLayoutDirty();
     }
 
     void ClusterGeometryAccelerationStructureSet::setNumRayTypes(uint32_t numRayTypes) const {
-        m->numRayTypes = numRayTypes;
+        m->rayTypeCount = numRayTypes;
         m->scene->markSBTLayoutDirty();
     }
 
@@ -2301,6 +2429,44 @@ namespace optixu {
 
         m->travHandleBuffer = travHandleBuffer;
         m->available = true;
+    }
+
+    void ClusterGeometryAccelerationStructureSet::setUserData(
+        const void* data, uint32_t size, uint32_t alignment) const
+    {
+        m->throwRuntimeError(
+            size <= s_maxGASUserDataSize,
+            "Maximum user data size for CGAS is %u bytes.",
+            s_maxGASUserDataSize);
+        m->throwRuntimeError(
+            alignment > 0 && alignment <= OPTIX_SBT_RECORD_ALIGNMENT,
+            "Valid alignment range is [1, %u].",
+            OPTIX_SBT_RECORD_ALIGNMENT);
+        if (m->userDataSizeAlign.size != size ||
+            m->userDataSizeAlign.alignment != alignment)
+            m->scene->markSBTLayoutDirty();
+        m->userDataSizeAlign = SizeAlign(size, alignment);
+        m->userData.resize(size);
+        std::memcpy(m->userData.data(), data, size);
+    }
+
+    ClusterAccelerationStructureSet ClusterGeometryAccelerationStructureSet::getChild() const {
+        return m->child->getPublicType();
+    }
+
+    uint32_t ClusterGeometryAccelerationStructureSet::getNumRayTypes() const {
+        return m->rayTypeCount;
+    }
+
+    void ClusterGeometryAccelerationStructureSet::getUserData(
+        void* data, uint32_t* size, uint32_t* alignment) const
+    {
+        if (data)
+            std::memcpy(data, m->userData.data(), m->userDataSizeAlign.size);
+        if (size)
+            *size = m->userDataSizeAlign.size;
+        if (alignment)
+            *alignment = m->userDataSizeAlign.alignment;
     }
 
 
