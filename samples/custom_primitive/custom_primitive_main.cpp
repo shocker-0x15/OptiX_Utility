@@ -35,8 +35,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: カスタムプリミティブとの衝突判定を使うためプリミティブ種別のフラグを適切に設定する必要がある。
     // EN: Appropriately setting primitive type flags is required since this sample uses custom primitive intersection.
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = std::max<uint32_t>(
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = std::max<uint32_t>(
         optixu::calcSumDwords<float2>(),
         Shared::PartialSphereAttributeSignature::numDwords);
     pipelineOptions.launchParamsVariableName = "plp";
@@ -79,7 +79,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     cudau::Buffer shaderBindingTable;
@@ -168,7 +168,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, optixu::BufferView());
+        roomGeomInst.setMaterialCount(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, matForTriangles);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
@@ -198,7 +198,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         areaLightGeomInst.setVertexBuffer(areaLightVertexBuffer);
         areaLightGeomInst.setTriangleBuffer(areaLightTriangleBuffer);
-        areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
+        areaLightGeomInst.setMaterialCount(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, matForTriangles);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLightGeomInst.setUserData(geomData);
@@ -258,7 +258,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         geomData.paramBuffer = spheresParamBuffer.getROBuffer<enableBufferOobCheck>();
 
         customPrimsGeomInst.setCustomPrimitiveAABBBuffer(customPrimsAabbBuffer);
-        customPrimsGeomInst.setNumMaterials(1, optixu::BufferView());
+        customPrimsGeomInst.setMaterialCount(1, optixu::BufferView());
         customPrimsGeomInst.setMaterial(0, 0, matForSpheres);
         customPrimsGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         customPrimsGeomInst.setUserData(geomData);
@@ -279,8 +279,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    roomGas.setNumMaterialSets(1);
-    roomGas.setNumRayTypes(0, Shared::NumRayTypes);
+    roomGas.setMaterialSetCount(1);
+    roomGas.setRayTypeCount(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
     roomGas.addChild(areaLightGeomInst);
     roomGas.prepareForBuild(&asMemReqs);
@@ -298,8 +298,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    customPrimitivesGas.setNumMaterialSets(1);
-    customPrimitivesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    customPrimitivesGas.setMaterialSetCount(1);
+    customPrimitivesGas.setRayTypeCount(0, Shared::NumRayTypes);
     customPrimitivesGas.addChild(customPrimsGeomInst);
     customPrimitivesGas.prepareForBuild(&asMemReqs);
     customPrimitivesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -327,7 +327,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(customPrimitivesInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

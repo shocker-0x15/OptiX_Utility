@@ -39,8 +39,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         The attribute size used by the kernel is 2 Dwords (triangle barycentrics float2).
     */
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
     pipelineOptions.launchParamsVariableName = "plp";
     pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
     pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
@@ -81,7 +81,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     /*
@@ -200,7 +200,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         */
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, optixu::BufferView());
+        roomGeomInst.setMaterialCount(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, mat0);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         // JP: GeometryInstanceに設定したユーザーデータはGPUカーネル内で参照できる。
@@ -260,7 +260,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 #if !defined(USE_TRIANGLE_SOUP_FOR_AREA_LIGHT)
         areaLightGeomInst.setTriangleBuffer(&areaLightTriangleBuffer);
 #endif
-        areaLightGeomInst.setNumMaterials(1, optixu::BufferView());
+        areaLightGeomInst.setMaterialCount(1, optixu::BufferView());
         areaLightGeomInst.setMaterial(0, 0, mat0);
         areaLightGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLightGeomInst.setUserData(geomData);
@@ -305,7 +305,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         bunnyGeomInst.setVertexBuffer(bunnyVertexBuffer);
         bunnyGeomInst.setTriangleBuffer(bunnyTriangleBuffer);
-        bunnyGeomInst.setNumMaterials(1, optixu::BufferView());
+        bunnyGeomInst.setMaterialCount(1, optixu::BufferView());
         bunnyGeomInst.setMaterial(0, 0, mat0);
         bunnyGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunnyGeomInst.setUserData(geomData);
@@ -328,8 +328,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::Default,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    gas.setNumMaterialSets(1);
-    gas.setNumRayTypes(0, Shared::NumRayTypes);
+    gas.setMaterialSetCount(1);
+    gas.setRayTypeCount(0, Shared::NumRayTypes);
     gas.addChild(roomGeomInst/*, preTransformBuffer.getCUdeviceptrAt(0)*/); // Identity transform can be ommited.
     /*
     JP: GASにGeometryInstanceを追加するときに追加の静的Transformを指定できる。

@@ -285,8 +285,8 @@ TEST(MaterialTest, MaterialBasic) {
 
         optixu::Pipeline pipeline0 = context.createPipeline();
         optixu::PipelineOptions pipelineOptions0;
-        pipelineOptions0.numPayloadValuesInDwords = shared::Pipeline0Payload0Signature::numDwords;
-        pipelineOptions0.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions0.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions0.attributeCountInDwords = optixu::calcSumDwords<float2>();
         pipelineOptions0.launchParamsVariableName = "plp";
         pipelineOptions0.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
         pipelineOptions0.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
@@ -577,7 +577,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             optixu::GeometryInstance geomInst = geomInstTri;
 
             // JP: まずはデフォルト値の取得。
-            EXPECT_EQ(geomInst.getNumMotionSteps(), 1);
+            EXPECT_EQ(geomInst.getMotionStepCount(), 1);
             EXPECT_EQ(geomInst.getVertexFormat(), OPTIX_VERTEX_FORMAT_FLOAT3);
             EXPECT_EQ(geomInst.getVertexBuffer(), optixu::BufferView());
             EXPECT_EXCEPTION(geomInst.getWidthBuffer());
@@ -589,7 +589,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), 0);
             optixu::BufferView retMatIndexBuffer;
             optixu::IndexSize retMatIndexSize;
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), 1);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), 1);
             EXPECT_EQ(retMatIndexBuffer, optixu::BufferView());
             EXPECT_EQ(retMatIndexSize, optixu::IndexSize::None);
             EXPECT_EQ(geomInst.getGeometryFlags(0), OPTIX_GEOMETRY_FLAG_NONE);
@@ -603,8 +603,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
 
             uint32_t numMotionSteps = 5;
-            geomInst.setNumMotionSteps(numMotionSteps);
-            EXPECT_EQ(geomInst.getNumMotionSteps(), numMotionSteps);
+            geomInst.setMotionStepCount(numMotionSteps);
+            EXPECT_EQ(geomInst.getMotionStepCount(), numMotionSteps);
 
             OptixVertexFormat vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
             geomInst.setVertexFormat(vertexFormat);
@@ -653,23 +653,23 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
-            geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
+            geomInst.setMaterialCount(numMaterials, matIndexBuffer, matIndexSize);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = optixu::IndexSize::k2Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
-            geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
+            geomInst.setMaterialCount(numMaterials, matIndexBuffer, matIndexSize);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
-            EXPECT_EXCEPTION(geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize));
+            EXPECT_EXCEPTION(geomInst.setMaterialCount(numMaterials, matIndexBuffer, matIndexSize));
 
             for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
                 geomInst.setGeometryFlags(matIdx, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
@@ -729,7 +729,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             optixu::GeometryInstance geomInst = curveGeomInsts[curveDim - 1];
 
             // JP: まずはデフォルト値の取得。
-            EXPECT_EQ(geomInst.getNumMotionSteps(), 1);
+            EXPECT_EQ(geomInst.getMotionStepCount(), 1);
             EXPECT_EXCEPTION(geomInst.getVertexFormat());
             EXPECT_EQ(geomInst.getVertexBuffer(), optixu::BufferView());
             EXPECT_EQ(geomInst.getWidthBuffer(), optixu::BufferView());
@@ -739,7 +739,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), 0);
             optixu::BufferView retMatIndexBuffer;
             optixu::IndexSize retMatIndexSize;
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), 1);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), 1);
             EXPECT_EQ(retMatIndexBuffer, optixu::BufferView());
             EXPECT_EQ(retMatIndexSize, optixu::IndexSize::None);
             EXPECT_EQ(geomInst.getGeometryFlags(0), OPTIX_GEOMETRY_FLAG_NONE);
@@ -753,8 +753,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
 
             uint32_t numMotionSteps = 5;
-            geomInst.setNumMotionSteps(numMotionSteps);
-            EXPECT_EQ(geomInst.getNumMotionSteps(), numMotionSteps);
+            geomInst.setMotionStepCount(numMotionSteps);
+            EXPECT_EQ(geomInst.getMotionStepCount(), numMotionSteps);
 
             EXPECT_EXCEPTION(geomInst.setVertexFormat(OPTIX_VERTEX_FORMAT_FLOAT3));
 
@@ -799,7 +799,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             optixu::IndexSize matIndexSize;
             matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer = optixu::BufferView(static_cast<CUdeviceptr>(12345678), numSegments, sizeof(uint32_t));
-            EXPECT_EXCEPTION(geomInst.setNumMaterials(2, matIndexBuffer, matIndexSize));
+            EXPECT_EXCEPTION(geomInst.setMaterialCount(2, matIndexBuffer, matIndexSize));
 
             for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
                 geomInst.setGeometryFlags(matIdx, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);
@@ -856,7 +856,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             optixu::GeometryInstance geomInst = geomInstCustom;
 
             // JP: まずはデフォルト値の取得。
-            EXPECT_EQ(geomInst.getNumMotionSteps(), 1);
+            EXPECT_EQ(geomInst.getMotionStepCount(), 1);
             EXPECT_EXCEPTION(geomInst.getVertexFormat());
             EXPECT_EXCEPTION(geomInst.getVertexBuffer());
             EXPECT_EXCEPTION(geomInst.getWidthBuffer());
@@ -866,7 +866,7 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), 0);
             optixu::BufferView retMatIndexBuffer;
             optixu::IndexSize retMatIndexSize;
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), 1);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), 1);
             EXPECT_EQ(retMatIndexBuffer, optixu::BufferView());
             EXPECT_EQ(retMatIndexSize, optixu::IndexSize::None);
             EXPECT_EQ(geomInst.getGeometryFlags(0), OPTIX_GEOMETRY_FLAG_NONE);
@@ -880,8 +880,8 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
 
             uint32_t numMotionSteps = 5;
-            geomInst.setNumMotionSteps(numMotionSteps);
-            EXPECT_EQ(geomInst.getNumMotionSteps(), numMotionSteps);
+            geomInst.setMotionStepCount(numMotionSteps);
+            EXPECT_EQ(geomInst.getMotionStepCount(), numMotionSteps);
 
             EXPECT_EXCEPTION(geomInst.setVertexFormat(OPTIX_VERTEX_FORMAT_FLOAT3));
             EXPECT_EXCEPTION(geomInst.setVertexBuffer(optixu::BufferView(), 0));
@@ -911,23 +911,23 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
             matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
-            geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
+            geomInst.setMaterialCount(numMaterials, matIndexBuffer, matIndexSize);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = optixu::IndexSize::k2Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint32_t));
-            geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize);
-            EXPECT_EQ(geomInst.getNumMaterials(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
+            geomInst.setMaterialCount(numMaterials, matIndexBuffer, matIndexSize);
+            EXPECT_EQ(geomInst.getMaterialCount(&retMatIndexBuffer, &retMatIndexSize), numMaterials);
             EXPECT_EQ(retMatIndexBuffer, matIndexBuffer);
             EXPECT_EQ(retMatIndexSize, matIndexSize);
 
             matIndexSize = optixu::IndexSize::k4Bytes;
             matIndexBuffer =
                 optixu::BufferView(static_cast<CUdeviceptr>(12345678), numPrimitives, sizeof(uint16_t));
-            EXPECT_EXCEPTION(geomInst.setNumMaterials(numMaterials, matIndexBuffer, matIndexSize));
+            EXPECT_EXCEPTION(geomInst.setMaterialCount(numMaterials, matIndexBuffer, matIndexSize));
 
             for (int matIdx = 0; matIdx < numMaterials; ++matIdx) {
                 geomInst.setGeometryFlags(matIdx, OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL);

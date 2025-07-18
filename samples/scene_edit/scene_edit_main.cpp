@@ -242,7 +242,7 @@ void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* 
         geomInst->optixGeomInst = optixEnv->scene.createGeometryInstance();
         geomInst->optixGeomInst.setVertexBuffer(*vertexBuffer);
         geomInst->optixGeomInst.setTriangleBuffer(geomInst->triangleBuffer);
-        geomInst->optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        geomInst->optixGeomInst.setMaterialCount(1, optixu::BufferView());
         geomInst->optixGeomInst.setMaterial(0, 0, optixEnv->material);
         Shared::GeometryData geomData = {};
         geomData.vertexBuffer = vertexBuffer->getROBuffer<enableBufferOobCheck>();
@@ -841,8 +841,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
     pipelineOptions.launchParamsVariableName = "plp";
     pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
     pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
@@ -876,7 +876,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     cudau::Buffer shaderBindingTable;
@@ -1104,8 +1104,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         geomGroup->name = name;
                         geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
                         geomGroup->optixGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
-                        geomGroup->optixGAS.setNumMaterialSets(1);
-                        geomGroup->optixGAS.setNumRayTypes(0, Shared::NumRayTypes);
+                        geomGroup->optixGas.setMaterialSetCount(1);
+                        geomGroup->optixGAS.setRayTypeCount(0, Shared::NumRayTypes);
                         geomGroup->preTransforms.resize(numSelectedGeomInsts);
                         geomGroup->preTransformBuffer.initialize(
                             optixEnv.cuContext, g_bufferType, numSelectedGeomInsts);
@@ -1669,17 +1669,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             //     if you don't want to interfere CPU/GPU asynchronous execution.
             if (group->optixIasMem.isInitialized()) {
                 if (bufferSizes.outputSizeInBytes > group->optixIasMem.sizeInBytes() ||
-                    group->optixIAS.getNumChildren() > group->optixInstanceBuffer.numElements()) {
+                    group->optixIAS.getChildCount() > group->optixInstanceBuffer.numElements()) {
                     CUDADRV_CHECK(cuStreamSynchronize(curStream));
                     group->optixIasMem.resize(bufferSizes.outputSizeInBytes, 1, curStream);
-                    group->optixInstanceBuffer.resize(group->optixIAS.getNumChildren());
+                    group->optixInstanceBuffer.resize(group->optixIAS.getChildCount());
                     // TODO: curStreamを待つのではなくresize()にdefault streamを渡して待つようにしても良いかもしれない。
                 }
             }
             else {
                 CUDADRV_CHECK(cuStreamSynchronize(curStream));
                 group->optixIasMem.initialize(optixEnv.cuContext, g_bufferType, bufferSizes.outputSizeInBytes, 1);
-                group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, group->optixIAS.getNumChildren());
+                group->optixInstanceBuffer.initialize(optixEnv.cuContext, g_bufferType, group->optixIAS.getChildCount());
             }
             group->optixIAS.rebuild(curStream, group->optixInstanceBuffer, group->optixIasMem, optixEnv.asScratchBuffer);
         }

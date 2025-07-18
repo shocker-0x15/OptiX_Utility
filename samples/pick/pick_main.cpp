@@ -79,8 +79,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::Pipeline &optixPipeline = p.pipeline;
 
         optixu::PipelineOptions pipelineOptions;
-        pipelineOptions.numPayloadValuesInDwords = Shared::PickPayloadSignature::numDwords;
-        pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.payloadCountInDwords = Shared::PickPayloadSignature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
         pipelineOptions.launchParamsVariableName = "plp";
         pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PickPipelineLaunchParameters);
         pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -109,7 +109,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixPipeline.link(1);
 
-        optixPipeline.setNumMissRayTypes(Shared::NumPickRayTypes);
+        optixPipeline.setMissRayTypeCount(Shared::NumPickRayTypes);
         optixPipeline.setMissProgram(Shared::PickRayType_Primary, p.missProgram);
 
         size_t sbtSize;
@@ -125,8 +125,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::Pipeline &optixPipeline = p.pipeline;
 
         optixu::PipelineOptions pipelineOptions;
-        pipelineOptions.numPayloadValuesInDwords = Shared::RenderPayloadSignature::numDwords;
-        pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.payloadCountInDwords = Shared::RenderPayloadSignature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
         pipelineOptions.launchParamsVariableName = "plp";
         pipelineOptions.sizeOfLaunchParams = sizeof(Shared::RenderPipelineLaunchParameters);
         pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -155,7 +155,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         optixPipeline.link(1);
 
-        optixPipeline.setNumMissRayTypes(Shared::NumRayTypes);
+        optixPipeline.setMissRayTypeCount(Shared::NumRayTypes);
         optixPipeline.setMissProgram(Shared::RayType_Primary, p.missProgram);
 
         size_t sbtSize;
@@ -372,7 +372,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         group.optixGeomInst = scene.createGeometryInstance();
         group.optixGeomInst.setVertexBuffer(room.vertexBuffer);
         group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-        group.optixGeomInst.setNumMaterials(5, group.matIndexBuffer, optixu::IndexSize::k1Byte);
+        group.optixGeomInst.setMaterialCount(5, group.matIndexBuffer, optixu::IndexSize::k1Byte);
         group.optixGeomInst.setMaterial(0, 0, floorMat);
         group.optixGeomInst.setMaterial(0, 1, farSideWallMat);
         group.optixGeomInst.setMaterial(0, 2, ceilingMat);
@@ -415,7 +415,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         group.optixGeomInst = scene.createGeometryInstance();
         group.optixGeomInst.setVertexBuffer(areaLight.vertexBuffer);
         group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-        group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         group.optixGeomInst.setMaterial(0, 0, areaLightMat);
         group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         group.optixGeomInst.setUserData(geomData);
@@ -458,7 +458,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         group.optixGeomInst = scene.createGeometryInstance();
         group.optixGeomInst.setVertexBuffer(bunny.vertexBuffer);
         group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-        group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
             group.optixGeomInst.setMaterial(matSetIdx, 0, bunnyMats[matSetIdx]);
         group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -480,15 +480,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        roomGroup.optixGas.setNumMaterialSets(1);
-        roomGroup.optixGas.setNumRayTypes(0, maxNumRayTypes);
+        roomGroup.optixGas.setMaterialSetCount(1);
+        roomGroup.optixGas.setRayTypeCount(0, maxNumRayTypes);
         for (auto it = room.groups.cbegin(); it != room.groups.cend(); ++it)
             roomGroup.optixGas.addChild(it->optixGeomInst);
         for (auto it = areaLight.groups.cbegin(); it != areaLight.groups.cend(); ++it)
             roomGroup.optixGas.addChild(it->optixGeomInst);
         Shared::GASChildData childData = {};
         childData.gasChildID = 0;
-        for (int i = 0; i < roomGroup.optixGas.getNumChildren(); ++i) {
+        for (int i = 0; i < roomGroup.optixGas.getChildCount(); ++i) {
             roomGroup.optixGas.setChildUserData(childData.gasChildID, childData);
             ++childData.gasChildID;
         }
@@ -509,14 +509,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        bunnyGroup.optixGas.setNumMaterialSets(NumBunnies);
+        bunnyGroup.optixGas.setMaterialSetCount(NumBunnies);
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
-            bunnyGroup.optixGas.setNumRayTypes(matSetIdx, maxNumRayTypes);
+            bunnyGroup.optixGas.setRayTypeCount(matSetIdx, maxNumRayTypes);
         for (auto it = bunny.groups.cbegin(); it != bunny.groups.cend(); ++it)
             bunnyGroup.optixGas.addChild(it->optixGeomInst);
         Shared::GASChildData childData = {};
         childData.gasChildID = 0;
-        for (int i = 0; i < bunnyGroup.optixGas.getNumChildren(); ++i) {
+        for (int i = 0; i < bunnyGroup.optixGas.getChildCount(); ++i) {
             bunnyGroup.optixGas.setChildUserData(childData.gasChildID, childData);
             ++childData.gasChildID;
         }
@@ -577,7 +577,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ias.addChild(bunnyInsts[i]);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

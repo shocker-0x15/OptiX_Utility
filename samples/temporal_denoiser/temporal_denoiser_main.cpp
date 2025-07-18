@@ -70,10 +70,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = std::max(
+    pipelineOptions.payloadCountInDwords = std::max(
         Shared::SearchRayPayloadSignature::numDwords,
         Shared::VisibilityRayPayloadSignature::numDwords);
-    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
     pipelineOptions.launchParamsVariableName = "plp";
     pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
     pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -109,7 +109,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, missProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, emptyMissProgram);
 
@@ -381,7 +381,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         room.optixGeomInst = scene.createGeometryInstance();
         room.optixGeomInst.setVertexBuffer(room.vertexBuffer);
         room.optixGeomInst.setTriangleBuffer(room.triangleBuffer);
-        room.optixGeomInst.setNumMaterials(5, room.matIndexBuffer, optixu::IndexSize::k1Byte);
+        room.optixGeomInst.setMaterialCount(5, room.matIndexBuffer, optixu::IndexSize::k1Byte);
         room.optixGeomInst.setMaterial(0, 0, floorMat);
         room.optixGeomInst.setMaterial(0, 1, farSideWallMat);
         room.optixGeomInst.setMaterial(0, 2, ceilingMat);
@@ -399,8 +399,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        room.optixGas.setNumMaterialSets(1);
-        room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        room.optixGas.setMaterialSetCount(1);
+        room.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         room.optixGas.addChild(room.optixGeomInst);
         room.optixGas.prepareForBuild(&asMemReqs);
         room.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -430,7 +430,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLight.optixGeomInst = scene.createGeometryInstance();
         areaLight.optixGeomInst.setVertexBuffer(areaLight.vertexBuffer);
         areaLight.optixGeomInst.setTriangleBuffer(areaLight.triangleBuffer);
-        areaLight.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        areaLight.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         areaLight.optixGeomInst.setMaterial(0, 0, areaLightMat);
         areaLight.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         areaLight.optixGeomInst.setUserData(geomData);
@@ -440,8 +440,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        areaLight.optixGas.setNumMaterialSets(1);
-        areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        areaLight.optixGas.setMaterialSetCount(1);
+        areaLight.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         areaLight.optixGas.addChild(areaLight.optixGeomInst);
         areaLight.optixGas.prepareForBuild(&asMemReqs);
         areaLight.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -479,7 +479,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGeomInst = scene.createGeometryInstance();
         bunny.optixGeomInst.setVertexBuffer(bunny.vertexBuffer);
         bunny.optixGeomInst.setTriangleBuffer(bunny.triangleBuffer);
-        bunny.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        bunny.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
             bunny.optixGeomInst.setMaterial(matSetIdx, 0, bunnyMats[matSetIdx]);
         bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
@@ -490,9 +490,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        bunny.optixGas.setNumMaterialSets(NumBunnies);
+        bunny.optixGas.setMaterialSetCount(NumBunnies);
         for (int matSetIdx = 0; matSetIdx < NumBunnies; ++matSetIdx)
-            bunny.optixGas.setNumRayTypes(matSetIdx, Shared::NumRayTypes);
+            bunny.optixGas.setRayTypeCount(matSetIdx, Shared::NumRayTypes);
         bunny.optixGas.addChild(bunny.optixGeomInst);
         bunny.optixGas.prepareForBuild(&asMemReqs);
         bunny.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -649,7 +649,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ias.addChild(bunnyInsts[i].inst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 
