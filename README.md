@@ -156,7 +156,7 @@ cudau::TypedBuffer<Triangle> triangleBuffer;
 geomInst0.setVertexBuffer(vertexBuffer);
 geomInst0.setTriangleBuffer(triangleBuffer);
 geomInst0.setUserData(...);
-geomInst0.setNumMaterials(1, BufferView());
+geomInst0.setMaterialCount(1, BufferView());
 geomInst0.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
 geomInst0.setMaterial(0, 0, defaultMat);
 

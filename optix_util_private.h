@@ -478,7 +478,7 @@ namespace optixu {
         uint32_t nextGeomASSerialID;
         uint32_t nextClusterGasSetSerialID;
         uint32_t singleRecordSize;
-        uint32_t numSBTRecords;
+        uint32_t sbtRecordCount;
         std::unordered_set<_Transform*> transforms;
         std::unordered_set<_InstanceAccelerationStructure*> instASs;
         uint32_t sbtLayoutIsUpToDate : 1;
@@ -488,7 +488,7 @@ namespace optixu {
 
         Priv(_Context* ctxt) : context(ctxt),
             nextGeomASSerialID(0), nextClusterGasSetSerialID(0),
-            singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), numSBTRecords(0),
+            singleRecordSize(OPTIX_SBT_RECORD_HEADER_SIZE), sbtRecordCount(0),
             sbtLayoutIsUpToDate(false)
         {}
         ~Priv() {
@@ -642,7 +642,7 @@ namespace optixu {
             CustomPrimitiveGeometry
         > geometry;
         GeometryType geomType;
-        uint32_t numMotionSteps;
+        uint32_t motionStepCount;
         uint32_t primitiveIndexOffset;
         std::vector<OptixGeometryFlags> buildInputFlags; // per SBT record
 
@@ -661,12 +661,12 @@ namespace optixu {
             materials.resize(1);
             materials[0].resize(1, nullptr);
 
-            numMotionSteps = 1;
+            motionStepCount = 1;
             if (geomType == GeometryType::Triangles) {
                 geometry = TriangleGeometry{};
                 auto &geom = std::get<TriangleGeometry>(geometry);
-                geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.vertexBuffers = new BufferView[numMotionSteps];
+                geom.vertexBufferArray = new CUdeviceptr[motionStepCount];
+                geom.vertexBuffers = new BufferView[motionStepCount];
                 geom.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
                 geom.indexFormat = OPTIX_INDICES_FORMAT_NONE;
 
@@ -689,30 +689,30 @@ namespace optixu {
                      geomType == GeometryType::CubicBezierRocaps) {
                 geometry = CurveGeometry{};
                 auto &geom = std::get<CurveGeometry>(geometry);
-                geom.vertexBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.vertexBuffers = new BufferView[numMotionSteps];
-                geom.widthBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.widthBuffers = new BufferView[numMotionSteps];
+                geom.vertexBufferArray = new CUdeviceptr[motionStepCount];
+                geom.vertexBuffers = new BufferView[motionStepCount];
+                geom.widthBufferArray = new CUdeviceptr[motionStepCount];
+                geom.widthBuffers = new BufferView[motionStepCount];
                 if (geomType == GeometryType::FlatQuadraticBSplines) {
-                    geom.normalBufferArray = new CUdeviceptr[numMotionSteps];
-                    geom.normalBuffers = new BufferView[numMotionSteps];
+                    geom.normalBufferArray = new CUdeviceptr[motionStepCount];
+                    geom.normalBuffers = new BufferView[motionStepCount];
                 }
                 geom.endcapFlags = OPTIX_CURVE_ENDCAP_DEFAULT;
             }
             else if (geomType == GeometryType::Spheres) {
                 geometry = SphereGeometry{};
                 auto &geom = std::get<SphereGeometry>(geometry);
-                geom.centerBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.centerBuffers = new BufferView[numMotionSteps];
-                geom.radiusBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.radiusBuffers = new BufferView[numMotionSteps];
+                geom.centerBufferArray = new CUdeviceptr[motionStepCount];
+                geom.centerBuffers = new BufferView[motionStepCount];
+                geom.radiusBufferArray = new CUdeviceptr[motionStepCount];
+                geom.radiusBuffers = new BufferView[motionStepCount];
                 geom.useSingleRadius = false;
             }
             else if (geomType == GeometryType::CustomPrimitives) {
                 geometry = CustomPrimitiveGeometry{};
                 auto &geom = std::get<CustomPrimitiveGeometry>(geometry);
-                geom.primitiveAabbBufferArray = new CUdeviceptr[numMotionSteps];
-                geom.primitiveAabbBuffers = new BufferView[numMotionSteps];
+                geom.primitiveAabbBufferArray = new CUdeviceptr[motionStepCount];
+                geom.primitiveAabbBuffers = new BufferView[motionStepCount];
                 geom.materialIndexSize = 0;
             }
             else {
@@ -767,8 +767,8 @@ namespace optixu {
         GeometryType getGeometryType() const {
             return geomType;
         }
-        uint32_t getNumMotionSteps() const {
-            return numMotionSteps;
+        uint32_t getMotionStepCount() const {
+            return motionStepCount;
         }
         void fillBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
         void updateBuildInput(OptixBuildInput* input, CUdeviceptr preTransform) const;
@@ -777,12 +777,12 @@ namespace optixu {
             uint32_t gasMatSetIdx,
             const SizeAlign &gasUserDataSizeAlign,
             const SizeAlign &gasChildUserDataSizeAlign,
-            SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+            SizeAlign* maxRecordSizeAlign, uint32_t* sbtRecordCount) const;
         uint32_t fillSBTRecords(
             const _Pipeline* pipeline, uint32_t gasMatSetIdx,
             const void* gasUserData, const SizeAlign &gasUserDataSizeAlign,
             const void* gasChildUserData, const SizeAlign &gasChildUserDataSizeAlign,
-            uint32_t numRayTypes, uint8_t* records) const;
+            uint32_t rayTypeCount, uint8_t* records) const;
     };
 
 
@@ -807,7 +807,7 @@ namespace optixu {
         SizeAlign userDataSizeAlign;
         std::vector<uint8_t> userData;
 
-        std::vector<uint32_t> numRayTypesPerMaterialSet;
+        std::vector<uint32_t> rayTypeCountsPerMaterialSet;
 
         std::vector<Child> children;
         std::vector<OptixBuildInput> buildInputs;
@@ -853,7 +853,7 @@ namespace optixu {
         {
             scene->addGAS(this);
 
-            numRayTypesPerMaterialSet.resize(1, 0);
+            rayTypeCountsPerMaterialSet.resize(1, 0);
 
             buildOptions = {};
 
@@ -887,15 +887,15 @@ namespace optixu {
             return serialID;
         }
 
-        uint32_t getNumMaterialSets() const {
-            return static_cast<uint32_t>(numRayTypesPerMaterialSet.size());
+        uint32_t getMaterialSetCount() const {
+            return static_cast<uint32_t>(rayTypeCountsPerMaterialSet.size());
         }
-        uint32_t getNumRayTypes(uint32_t matSetIdx) const {
-            return numRayTypesPerMaterialSet[matSetIdx];
+        uint32_t getRayTypeCount(uint32_t matSetIdx) const {
+            return rayTypeCountsPerMaterialSet[matSetIdx];
         }
 
         void calcSBTRequirements(
-            uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* numSBTRecords) const;
+            uint32_t matSetIdx, SizeAlign* maxRecordSizeAlign, uint32_t* sbtRecordCount) const;
         uint32_t fillSBTRecords(const _Pipeline* pipeline, uint32_t matSetIdx, uint8_t* records) const;
         bool hasMotion() const {
             return buildOptions.motionOptions.numKeys >= 2;
@@ -1328,8 +1328,8 @@ namespace optixu {
         std::unordered_set<_CallableProgramGroup*> callableProgramGroups;
 
         _Scene* scene;
-        uint32_t numMissRayTypes;
-        uint32_t numCallablePrograms;
+        uint32_t missRayTypeCount;
+        uint32_t callableProgramCount;
         size_t sbtSize;
 
         std::unordered_map<KeyForBuiltinISModule, _Module*, KeyForBuiltinISModule::Hash> modulesForBuiltinIS;
@@ -1373,7 +1373,7 @@ namespace optixu {
         Priv(_Context* ctxt) :
             context(ctxt), rawPipeline(nullptr),
             sizeOfPipelineLaunchParams(0),
-            scene(nullptr), numMissRayTypes(0), numCallablePrograms(0),
+            scene(nullptr), missRayTypeCount(0), callableProgramCount(0),
             currentRayGenProgram(nullptr), currentExceptionProgram(nullptr),
             pipelineIsLinked(false), sbtLayoutIsUpToDate(false),
             sbtIsUpToDate(false), hitGroupSbtIsUpToDate(false),
