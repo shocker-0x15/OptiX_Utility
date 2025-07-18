@@ -4,22 +4,6 @@ using namespace Shared;
 
 
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t identifyLevel(
-    const uint32_t* levelStartClusterIndices, const uint32_t levelCount,
-    const uint32_t clusterIdx)
-{
-    uint32_t level = 0;
-    for (uint32_t d = nextPowerOf2(levelCount) >> 1; d >= 1; d >>= 1) {
-        if (level + d >= levelCount)
-            continue;
-        if (levelStartClusterIndices[level + d] <= clusterIdx)
-            level += d;
-    }
-    Assert(level < levelCount, "Invalid level.");
-
-    return level;
-}
-
 CUDA_DEVICE_FUNCTION CUDA_INLINE float estimateClusterErrorInNormalizedScreen(
     const Sphere &bounds, const float errorInWorld,
     const float3 &cameraPosition, const Matrix3x3 &/*cameraOrientation*/,
@@ -36,8 +20,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     const float3 cameraPosition, const Matrix3x3 cameraOrientation,
     const float cameraFovY, const uint32_t imageHeight,
     const Cluster* clusters, const OptixClusterAccelBuildInputTrianglesArgs* const srcClusterArgsArray,
-    const uint32_t meshTotalClusterCount,
-    const uint32_t* const levelStartClusterIndices, const uint32_t levelCount,
+    const uint32_t meshTotalClusterCount, const uint32_t levelCount,
     ClusterSetInfo* const clusterSetInfo,
     ClusterGasInstanceInfo* const clusterGasInstInfos, const uint32_t instCount)
 {

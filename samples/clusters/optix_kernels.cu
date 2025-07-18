@@ -76,7 +76,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         }
         else if (plp.visMode == VisualizationMode_Cluster) {
             if (hitInfo.clusterId == OPTIX_CLUSTER_ID_INVALID) {
-                color = make_float3(0.5f, 0.0f, 1.0f);
+                color = make_float3(0.25f, 0.0f, 0.5f);
             }
             else {
                 color = HSVtoRGB(
@@ -86,7 +86,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         }
         else if (plp.visMode == VisualizationMode_Level) {
             if (hitInfo.clusterId == OPTIX_CLUSTER_ID_INVALID) {
-                color = make_float3(0.5f, 0.0f, 1.0f);
+                color = make_float3(0.25f, 0.0f, 0.5f);
             }
             else {
                 color = calcFalseColor(hitInfo.hiMeshData->clusters[hitInfo.clusterId].level, 0, 10);
@@ -126,10 +126,10 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     const uint32_t clusterId = optixGetClusterId();
     if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
         const NormalMeshData &meshData = getNormalMeshData();
-        const Triangle &tri = meshData.triangleBuffer[hp.primIndex];
-        vs[0] = meshData.vertexBuffer[tri.index0];
-        vs[1] = meshData.vertexBuffer[tri.index1];
-        vs[2] = meshData.vertexBuffer[tri.index2];
+        const Triangle &tri = meshData.triangles[hp.primIndex];
+        vs[0] = meshData.vertices[tri.index0];
+        vs[1] = meshData.vertices[tri.index1];
+        vs[2] = meshData.vertices[tri.index2];
     }
     else {
         const HierarchicalMeshData &meshData = getHierarchicalMeshData();
