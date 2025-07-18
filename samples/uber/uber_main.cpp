@@ -154,7 +154,7 @@ public:
         geomInst.setVertexBuffer(m_vertexBuffer);
         geomInst.setTriangleBuffer(*triangleBuffer);
         geomInst.setUserData(m_sceneContext->geometryID);
-        geomInst.setNumMaterials(1, optixu::BufferView());
+        geomInst.setMaterialCount(1, optixu::BufferView());
         geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         geomInst.setMaterial(0, 0, material);
         ++m_sceneContext->geometryID;
@@ -452,10 +452,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = std::max(
+    pipelineOptions.payloadCountInDwords = std::max(
         Shared::SearchRayPayloadSignature::numDwords,
         Shared::VisibilityRayPayloadSignature::numDwords);
-    pipelineOptions.numAttributeValuesInDwords = std::max<uint32_t>(
+    pipelineOptions.attributeCountInDwords = std::max<uint32_t>(
         optixu::calcSumDwords<float2>(),
         Shared::SphereAttributeSignature::numDwords);
     pipelineOptions.launchParamsVariableName = "plp";
@@ -553,11 +553,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set, the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, searchRayMissProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, visibilityRayMissProgram);
 
-    pipeline.setNumCallablePrograms(nextCallableProgramIndex);
+    pipeline.setCallableProgramCount(nextCallableProgramIndex);
     pipeline.setCallableProgram(callableProgramSampleTextureIndex, callableProgramSampleTexture);
     pipeline.setCallableProgram(callableProgramDecodeHitPointTriangleIndex, callableProgramDecodeHitPointTriangle);
     pipeline.setCallableProgram(callableProgramDecodeHitPointCurveIndex, callableProgramDecodeHitPointCurve);
@@ -1104,7 +1104,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static_assert(sizeof(AABB) == sizeof(OptixAabb),
                       "Custom AABB buffer must obey the same format as OptixAabb.");
         customPrimInstance.setCustomPrimitiveAABBBuffer(customPrimAABBs);
-        customPrimInstance.setNumMaterials(1, optixu::BufferView());
+        customPrimInstance.setMaterialCount(1, optixu::BufferView());
         customPrimInstance.setMaterial(0, 0, matCustomPrimObject);
         customPrimInstance.setUserData(sceneContext.geometryID);
 
@@ -1141,8 +1141,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    gasCornellBox.setNumMaterialSets(1);
-    gasCornellBox.setNumRayTypes(0, Shared::NumRayTypes);
+    gasCornellBox.setMaterialSetCount(1);
+    gasCornellBox.setRayTypeCount(0, Shared::NumRayTypes);
     meshCornellBox.addToGAS(&gasCornellBox);
     gasCornellBox.prepareForBuild(&asMemReqs);
     gasCornellBoxMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -1156,8 +1156,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    gasAreaLight.setNumMaterialSets(1);
-    gasAreaLight.setNumRayTypes(0, Shared::NumRayTypes);
+    gasAreaLight.setMaterialSetCount(1);
+    gasAreaLight.setRayTypeCount(0, Shared::NumRayTypes);
     meshAreaLight.addToGAS(&gasAreaLight);
     gasAreaLight.prepareForBuild(&asMemReqs);
     gasAreaLightMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -1170,8 +1170,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasFloorFiber.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable,
         curveASAllowRandomVertexAccess);
-    gasFloorFiber.setNumMaterialSets(1);
-    gasFloorFiber.setNumRayTypes(0, Shared::NumRayTypes);
+    gasFloorFiber.setMaterialSetCount(1);
+    gasFloorFiber.setRayTypeCount(0, Shared::NumRayTypes);
     gasFloorFiber.addChild(floorFiberGeomInst);
     gasFloorFiber.prepareForBuild(&asMemReqs);
     gasFloorFiberMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -1183,9 +1183,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasObject.setConfiguration(
         optixu::ASTradeoff::PreferFastBuild,
         optixu::AllowUpdate::Yes);
-    gasObject.setNumMaterialSets(2);
-    gasObject.setNumRayTypes(0, Shared::NumRayTypes);
-    gasObject.setNumRayTypes(1, Shared::NumRayTypes);
+    gasObject.setMaterialSetCount(2);
+    gasObject.setRayTypeCount(0, Shared::NumRayTypes);
+    gasObject.setRayTypeCount(1, Shared::NumRayTypes);
     meshObject.addToGAS(&gasObject);
     gasObject.prepareForBuild(&asMemReqs);
     gasObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -1201,8 +1201,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gasCustomPrimObject.setConfiguration(
         optixu::ASTradeoff::PreferFastBuild,
         optixu::AllowUpdate::Yes);
-    gasCustomPrimObject.setNumMaterialSets(1);
-    gasCustomPrimObject.setNumRayTypes(0, Shared::NumRayTypes);
+    gasCustomPrimObject.setMaterialSetCount(1);
+    gasCustomPrimObject.setRayTypeCount(0, Shared::NumRayTypes);
     gasCustomPrimObject.addChild(customPrimInstance);
     gasCustomPrimObject.prepareForBuild(&asMemReqs);
     gasCustomPrimObjectMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -1312,7 +1312,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     iasScene.addChild(instObject1);
     iasScene.addChild(instCustomPrimObject);
     iasScene.prepareForBuild(&asMemReqs);
-    instanceBuffer.initialize(cuContext, g_bufferType, iasScene.getNumChildren());
+    instanceBuffer.initialize(cuContext, g_bufferType, iasScene.getChildCount());
     iasSceneMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     size_t tempBufferForIAS = std::max(asMemReqs.tempSizeInBytes, asMemReqs.tempUpdateSizeInBytes);
     if (tempBufferForIAS >= asBuildScratchMem.sizeInBytes()) {

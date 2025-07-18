@@ -35,8 +35,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Appropriately setting primitive type flags is required since this sample uses sphere intersection.
     //     The attribute size of spheres is 1 Dword (float).
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = std::max(
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = std::max(
         optixu::calcSumDwords<float2>(),
         optixu::calcSumDwords<float>());
     pipelineOptions.launchParamsVariableName = "plp";
@@ -91,7 +91,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     cudau::Buffer shaderBindingTable;
@@ -180,7 +180,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         roomGeomInst.setVertexBuffer(roomVertexBuffer);
         roomGeomInst.setTriangleBuffer(roomTriangleBuffer);
-        roomGeomInst.setNumMaterials(1, optixu::BufferView());
+        roomGeomInst.setMaterialCount(1, optixu::BufferView());
         roomGeomInst.setMaterial(0, 0, matForTriangles);
         roomGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         roomGeomInst.setUserData(geomData);
@@ -249,8 +249,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    roomGas.setNumMaterialSets(1);
-    roomGas.setNumRayTypes(0, Shared::NumRayTypes);
+    roomGas.setMaterialSetCount(1);
+    roomGas.setRayTypeCount(0, Shared::NumRayTypes);
     roomGas.addChild(roomGeomInst);
     roomGas.prepareForBuild(&asMemReqs);
     roomGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -265,8 +265,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer spheresGasMem;
     spheresGas.setConfiguration(
         sphereASTradeOff, sphereASUpdatable, sphereASCompactable);
-    spheresGas.setNumMaterialSets(1);
-    spheresGas.setNumRayTypes(0, Shared::NumRayTypes);
+    spheresGas.setMaterialSetCount(1);
+    spheresGas.setRayTypeCount(0, Shared::NumRayTypes);
     spheresGas.addChild(sphereGeomInst);
     spheresGas.prepareForBuild(&asMemReqs);
     spheresGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -294,7 +294,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(spheresInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

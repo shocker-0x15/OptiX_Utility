@@ -45,10 +45,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: このサンプルでは2段階のAS(1段階のインスタンシング)を使用する。
     // EN: This sample uses two-level AS (single-level instancing).
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = std::max(
+    pipelineOptions.payloadCountInDwords = std::max(
         Shared::SearchRayPayloadSignature::numDwords,
         Shared::VisibilityRayPayloadSignature::numDwords);
-    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
     pipelineOptions.launchParamsVariableName = "plp";
     pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
     pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -113,7 +113,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: Callable Programを作成し、パイプラインにセットする。
     // EN: Create callable programs and set them to the pipeline.
-    pipeline.setNumCallablePrograms(NumCallablePrograms);
+    pipeline.setCallableProgramCount(NumCallablePrograms);
     for (int i = 0; i < NumCallablePrograms; ++i) {
         optixu::CallableProgramGroup program = pipeline.createCallableProgramGroup(
             bsdfsModule, callableProgramEntryPoints[i],
@@ -127,7 +127,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Search, missProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, emptyMissProgram);
 
@@ -546,7 +546,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);
@@ -574,7 +574,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);
@@ -602,7 +602,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);
@@ -630,7 +630,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);
@@ -658,7 +658,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);
@@ -671,8 +671,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        room.optixGas.setNumMaterialSets(1);
-        room.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        room.optixGas.setMaterialSetCount(1);
+        room.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         for (uint32_t i = 0; i < room.matGroups.size(); ++i)
             room.optixGas.addChild(room.matGroups[i].optixGeomInst);
         room.optixGas.prepareForBuild(&asMemReqs);
@@ -711,7 +711,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);
@@ -724,8 +724,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        areaLight.optixGas.setNumMaterialSets(1);
-        areaLight.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        areaLight.optixGas.setMaterialSetCount(1);
+        areaLight.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         for (uint32_t i = 0; i < areaLight.matGroups.size(); ++i)
             areaLight.optixGas.addChild(areaLight.matGroups[i].optixGeomInst);
         areaLight.optixGas.prepareForBuild(&asMemReqs);
@@ -771,7 +771,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(*vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, commonMaterial);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomInstData);

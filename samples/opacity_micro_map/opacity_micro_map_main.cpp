@@ -136,10 +136,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // JP: Opacity Micro-Mapを使う場合、パイプラインオプションで使用を宣言する必要がある。
     // EN: Declaring the use of Opacity micro-map is required in the pipeline option when using it.
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = std::max(
+    pipelineOptions.payloadCountInDwords = std::max(
         Shared::PrimaryRayPayloadSignature::numDwords,
         Shared::VisibilityRayPayloadSignature::numDwords);
-    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
     pipelineOptions.launchParamsVariableName = "plp";
     pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
     pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -184,7 +184,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
     pipeline.setMissProgram(Shared::RayType_Visibility, emptyMissProgram);
 
@@ -301,8 +301,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        floor.optixGas.setNumMaterialSets(1);
-        floor.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        floor.optixGas.setMaterialSetCount(1);
+        floor.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
 
         Geometry::MaterialGroup group;
         {
@@ -317,7 +317,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             group.optixGeomInst = scene.createGeometryInstance();
             group.optixGeomInst.setVertexBuffer(floor.vertexBuffer);
             group.optixGeomInst.setTriangleBuffer(group.triangleBuffer);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, defaultMat);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomData);
@@ -355,8 +355,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::AllowRandomVertexAccess::No,
             optixu::AllowOpacityMicroMapUpdate::No,
             optixu::AllowDisableOpacityMicroMaps::No);
-        alphaTestGeom.optixGas.setNumMaterialSets(1);
-        alphaTestGeom.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        alphaTestGeom.optixGas.setMaterialSetCount(1);
+        alphaTestGeom.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
 
         uint32_t maxNumTrianglesPerGroup = 0;
         for (int groupIdx = 0; groupIdx < matGroups.size(); ++groupIdx) {
@@ -503,7 +503,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     group.optixOmmArray, ommUsageCounts.data(), ommUsageCounts.size(),
                     useOmmIndexBuffer ? group.ommIndexBuffer : optixu::BufferView(),
                     ommIndexSize);
-            group.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+            group.optixGeomInst.setMaterialCount(1, optixu::BufferView());
             group.optixGeomInst.setMaterial(0, 0, alphaTestMat);
             group.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
             group.optixGeomInst.setUserData(geomData);
@@ -547,7 +547,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(cutOutInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

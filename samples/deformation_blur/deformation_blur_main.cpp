@@ -61,8 +61,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         Specify UseMotionBlur::Yes since the sample uses deformation motion blur.
     */
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = std::max<uint32_t>({
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = std::max<uint32_t>({
         optixu::calcSumDwords<float2>(),
         optixu::calcSumDwords<float>(),
         Shared::PartialSphereAttributeSignature::numDwords });
@@ -130,7 +130,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     cudau::Buffer shaderBindingTable;
@@ -287,11 +287,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunny.optixGeomInst = scene.createGeometryInstance();
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
-        bunny.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        bunny.optixGeomInst.setMotionStepCount(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
             bunny.optixGeomInst.setVertexBuffer(shape.vertexBuffers[i], i);
         bunny.optixGeomInst.setTriangleBuffer(shape.triangleBuffer);
-        bunny.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        bunny.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         bunny.optixGeomInst.setMaterial(0, 0, matForTriangles);
         bunny.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         bunny.optixGeomInst.setUserData(geomData);
@@ -304,8 +304,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         bunny.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        bunny.optixGas.setNumMaterialSets(1);
-        bunny.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        bunny.optixGas.setMaterialSetCount(1);
+        bunny.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         bunny.optixGas.addChild(bunny.optixGeomInst);
         bunny.optixGas.prepareForBuild(&asMemReqs);
         bunny.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -375,7 +375,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         curves.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CubicBSplines);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
-        curves.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        curves.optixGeomInst.setMotionStepCount(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i) {
             cudau::TypedBuffer<Shared::CurveVertex> &buffer = shape.vertexBuffers[i];
             curves.optixGeomInst.setVertexBuffer(
@@ -397,8 +397,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         curves.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        curves.optixGas.setNumMaterialSets(1);
-        curves.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        curves.optixGas.setMaterialSetCount(1);
+        curves.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         curves.optixGas.addChild(curves.optixGeomInst);
         curves.optixGas.prepareForBuild(&asMemReqs);
         curves.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -451,7 +451,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         spheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::Spheres);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
-        spheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        spheres.optixGeomInst.setMotionStepCount(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i) {
             optixu::BufferView centerView(
                 shape.sphereBuffers[i].getCUdeviceptr() + offsetof(Shared::Sphere, center),
@@ -464,7 +464,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 shape.sphereBuffers[i].stride());
             spheres.optixGeomInst.setRadiusBuffer(radiusView, i);
         }
-        spheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        spheres.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         spheres.optixGeomInst.setMaterial(0, 0, matForSpheres);
         spheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         spheres.optixGeomInst.setUserData(geomData);
@@ -475,8 +475,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         spheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        spheres.optixGas.setNumMaterialSets(1);
-        spheres.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        spheres.optixGas.setMaterialSetCount(1);
+        spheres.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         spheres.optixGas.addChild(spheres.optixGeomInst);
         spheres.optixGas.prepareForBuild(&asMemReqs);
         spheres.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -541,10 +541,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         partialSpheres.optixGeomInst = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
         // JP: モーションステップ数を設定、各ステップに頂点バッファーを設定する。
         // EN: Set the number of motion steps then set the vertex buffer for each step.
-        partialSpheres.optixGeomInst.setNumMotionSteps(numMotionSteps);
+        partialSpheres.optixGeomInst.setMotionStepCount(numMotionSteps);
         for (int i = 0; i < numMotionSteps; ++i)
             partialSpheres.optixGeomInst.setCustomPrimitiveAABBBuffer(shape.partialSphereParamBuffers[i], i);
-        partialSpheres.optixGeomInst.setNumMaterials(1, optixu::BufferView());
+        partialSpheres.optixGeomInst.setMaterialCount(1, optixu::BufferView());
         partialSpheres.optixGeomInst.setMaterial(0, 0, matForPartialSpheres);
         partialSpheres.optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         partialSpheres.optixGeomInst.setUserData(geomData);
@@ -558,8 +558,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         // JP: GASのモーション設定を行う。
         // EN: Set the GAS's motion configuration.
         partialSpheres.optixGas.setMotionOptions(numMotionSteps, 0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
-        partialSpheres.optixGas.setNumMaterialSets(1);
-        partialSpheres.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        partialSpheres.optixGas.setMaterialSetCount(1);
+        partialSpheres.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         partialSpheres.optixGas.addChild(partialSpheres.optixGeomInst);
         partialSpheres.optixGas.prepareForBuild(&asMemReqs);
         partialSpheres.gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -631,7 +631,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(partialSpheresInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

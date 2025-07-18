@@ -94,8 +94,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         The attribute size of curves is 1 Dword (float).
     */
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = std::max(
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = std::max(
         optixu::calcSumDwords<float2>(),
         optixu::calcSumDwords<float>());
     pipelineOptions.launchParamsVariableName = "plp";
@@ -206,7 +206,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     cudau::Buffer shaderBindingTable;
@@ -289,7 +289,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         floorGeomInst.setVertexBuffer(floorVertexBuffer);
         floorGeomInst.setTriangleBuffer(floorTriangleBuffer);
-        floorGeomInst.setNumMaterials(1, optixu::BufferView());
+        floorGeomInst.setMaterialCount(1, optixu::BufferView());
         floorGeomInst.setMaterial(0, 0, matForTriangles);
         floorGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
         floorGeomInst.setUserData(geomData);
@@ -661,8 +661,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         optixu::ASTradeoff::PreferFastTrace,
         optixu::AllowUpdate::No,
         optixu::AllowCompaction::Yes);
-    floorGas.setNumMaterialSets(1);
-    floorGas.setNumRayTypes(0, Shared::NumRayTypes);
+    floorGas.setMaterialSetCount(1);
+    floorGas.setRayTypeCount(0, Shared::NumRayTypes);
     floorGas.addChild(floorGeomInst);
     floorGas.prepareForBuild(&asMemReqs);
     floorGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -679,8 +679,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer linearCurvesGasMem;
     linearCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    linearCurvesGas.setNumMaterialSets(1);
-    linearCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    linearCurvesGas.setMaterialSetCount(1);
+    linearCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     linearCurvesGas.addChild(linearCurveGeomInst);
     linearCurvesGas.prepareForBuild(&asMemReqs);
     linearCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -691,8 +691,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer quadraticCurvesGasMem;
     quadraticCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    quadraticCurvesGas.setNumMaterialSets(1);
-    quadraticCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    quadraticCurvesGas.setMaterialSetCount(1);
+    quadraticCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     quadraticCurvesGas.addChild(quadraticCurveGeomInst);
     quadraticCurvesGas.prepareForBuild(&asMemReqs);
     quadraticCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -703,8 +703,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer quadraticRocapCurvesGasMem;
     quadraticRocapCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    quadraticRocapCurvesGas.setNumMaterialSets(1);
-    quadraticRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    quadraticRocapCurvesGas.setMaterialSetCount(1);
+    quadraticRocapCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     quadraticRocapCurvesGas.addChild(quadraticRocapCurveGeomInst);
     quadraticRocapCurvesGas.prepareForBuild(&asMemReqs);
     quadraticRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -715,8 +715,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer cubicCurvesGasMem;
     cubicCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    cubicCurvesGas.setNumMaterialSets(1);
-    cubicCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicCurvesGas.setMaterialSetCount(1);
+    cubicCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     cubicCurvesGas.addChild(cubicCurveGeomInst);
     cubicCurvesGas.prepareForBuild(&asMemReqs);
     cubicCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -727,8 +727,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer cubicRocapCurvesGasMem;
     cubicRocapCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    cubicRocapCurvesGas.setNumMaterialSets(1);
-    cubicRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicRocapCurvesGas.setMaterialSetCount(1);
+    cubicRocapCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     cubicRocapCurvesGas.addChild(cubicRocapCurveGeomInst);
     cubicRocapCurvesGas.prepareForBuild(&asMemReqs);
     cubicRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -739,8 +739,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer catmullRomCurvesGasMem;
     catmullRomCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    catmullRomCurvesGas.setNumMaterialSets(1);
-    catmullRomCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    catmullRomCurvesGas.setMaterialSetCount(1);
+    catmullRomCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     catmullRomCurvesGas.addChild(catmullRomCurveGeomInst);
     catmullRomCurvesGas.prepareForBuild(&asMemReqs);
     catmullRomCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -751,8 +751,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer catmullRomRocapCurvesGasMem;
     catmullRomRocapCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    catmullRomRocapCurvesGas.setNumMaterialSets(1);
-    catmullRomRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    catmullRomRocapCurvesGas.setMaterialSetCount(1);
+    catmullRomRocapCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     catmullRomRocapCurvesGas.addChild(catmullRomRocapCurveGeomInst);
     catmullRomRocapCurvesGas.prepareForBuild(&asMemReqs);
     catmullRomRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -763,8 +763,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer cubicBezierCurvesGasMem;
     cubicBezierCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    cubicBezierCurvesGas.setNumMaterialSets(1);
-    cubicBezierCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicBezierCurvesGas.setMaterialSetCount(1);
+    cubicBezierCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     cubicBezierCurvesGas.addChild(cubicBezierCurveGeomInst);
     cubicBezierCurvesGas.prepareForBuild(&asMemReqs);
     cubicBezierCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -775,8 +775,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer cubicBezierRocapCurvesGasMem;
     cubicBezierRocapCurvesGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    cubicBezierRocapCurvesGas.setNumMaterialSets(1);
-    cubicBezierRocapCurvesGas.setNumRayTypes(0, Shared::NumRayTypes);
+    cubicBezierRocapCurvesGas.setMaterialSetCount(1);
+    cubicBezierRocapCurvesGas.setRayTypeCount(0, Shared::NumRayTypes);
     cubicBezierRocapCurvesGas.addChild(cubicBezierRocapCurveGeomInst);
     cubicBezierRocapCurvesGas.prepareForBuild(&asMemReqs);
     cubicBezierRocapCurvesGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -787,8 +787,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Buffer quadraticRibbonsGasMem;
     quadraticRibbonsGas.setConfiguration(
         curveASTradeOff, curveASUpdatable, curveASCompactable);
-    quadraticRibbonsGas.setNumMaterialSets(1);
-    quadraticRibbonsGas.setNumRayTypes(0, Shared::NumRayTypes);
+    quadraticRibbonsGas.setMaterialSetCount(1);
+    quadraticRibbonsGas.setRayTypeCount(0, Shared::NumRayTypes);
     quadraticRibbonsGas.addChild(quadraticRibbonGeomInst);
     quadraticRibbonsGas.prepareForBuild(&asMemReqs);
     quadraticRibbonsGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -912,7 +912,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(quadraticRibbonsInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 

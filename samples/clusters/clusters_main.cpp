@@ -294,8 +294,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     EN: 
     */
     optixu::PipelineOptions pipelineOptions;
-    pipelineOptions.numPayloadValuesInDwords = Shared::MyPayloadSignature::numDwords;
-    pipelineOptions.numAttributeValuesInDwords = optixu::calcSumDwords<float2>();
+    pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
+    pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
     pipelineOptions.launchParamsVariableName = "plp";
     pipelineOptions.sizeOfLaunchParams = sizeof(Shared::PipelineLaunchParameters);
     pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -329,7 +329,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // If an exception program is not set but exception flags are set,
     // the default exception program will by provided by OptiX.
     //pipeline.setExceptionProgram(exceptionProgram);
-    pipeline.setNumMissRayTypes(Shared::NumRayTypes);
+    pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
 
     cudau::Buffer shaderBindingTable;
@@ -380,7 +380,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     HierarchicalMesh himesh;
     himesh.read(
         cuContext, scene, mat,
-        R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
+        R"(D:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
 
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, himesh.asMemReqs.tempSizeInBytes);
 
@@ -399,7 +399,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::ClusterGeometryAccelerationStructureSet cgasSet =
         scene.createClusterGeometryAccelerationStructureSet();
-    cgasSet.setNumRayTypes(Shared::NumRayTypes);
+    cgasSet.setRayTypeCount(Shared::NumRayTypes);
     cgasSet.setBuildInput(
         OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
         bunnyCount, maxClasCountPerCgas, maxClasCountPerCgas * bunnyCount,
@@ -436,7 +436,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ias.addChild(bunnyInsts[bunnyIdx].optixInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> clusterGasInstInfoBuffers[2];
