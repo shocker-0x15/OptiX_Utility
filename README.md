@@ -32,7 +32,9 @@ Currently based on OptiX 9.0.0
   - Single-level instancing [[&raquo;]](samples/single_level_instancing/)
   - Multi-level instancing  [[&raquo;]](samples/multi_level_instancing/)
 - Primitive types
-  - Triangles [[&raquo;]](samples/single_gas/)
+  - Triangles
+    - Normal mesh [[&raquo;]](samples/single_gas/)
+    - Clustered mesh [[&raquo;]](samples/clusters/)
   - Curves [[&raquo;]](samples/curve_primitive/)
     - 1st order: Round linear segments
     - 2nd order: Round quadratic B-splines, Ribbons (Flat quadratic B-splines)
@@ -65,7 +67,8 @@ Currently based on OptiX 9.0.0
 - Payload usage annotation to reduce register consumption in complex pipelines [[&raquo;]](samples/payload_annotation/)
 
 ### TODO
-- Clusters API
+- Support cluster template.
+- Support grid clusters.
 - Support new HitObject functionalities
 - Support SBT offset summation accross all instances in the traversal graph
 - Test NVRTC compilation.

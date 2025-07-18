@@ -29,6 +29,11 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 
 変更履歴 / Update History:
+- JP: - 非構造化クラスターをサポート。
+        具体的にはClusterAccelerationStructure (CLAS), ClusterGeometryAccelerationStructure (CGAS)を追加。
+  EN: - Supported unstructured clusters.
+        Specifically added ClusterAccelerationStructure (CLAS) and ClusterGeometryAccelerationStructure (CGAS).
+
 - !!BREAKING
 - JP: - PipelineのsetPipelineOptions()のパラメターを変更。
   EN: - Changed the parameters of Pipeline::setPipelineOptions().
