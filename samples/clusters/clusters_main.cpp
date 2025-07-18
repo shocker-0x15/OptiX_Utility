@@ -29,6 +29,11 @@ public:
 };
 
 struct HierarchicalMesh {
+    struct LevelInfo {
+        uint32_t startClusterIndex;
+        uint32_t clusterCount;
+    };
+
     OptixClusterAccelBuildMode static constexpr clasAccelBuildMode =
         OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
 
@@ -36,7 +41,6 @@ struct HierarchicalMesh {
     cudau::TypedBuffer<Shared::LocalTriangle> trianglePool;
     cudau::TypedBuffer<uint32_t> childIndexPool;
     cudau::TypedBuffer<Shared::Cluster> clusters;
-    cudau::TypedBuffer<uint32_t> levelStartClusterIndices;
 
     cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> argsArray;
     cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> argsArrayToBuild;
@@ -48,7 +52,7 @@ struct HierarchicalMesh {
     optixu::ClusterAccelerationStructureSet clasSet;
     OptixAccelBufferSizes asMemReqs;
 
-    std::vector<uint32_t> levelStartClusterIndicesOnHost;
+    std::vector<LevelInfo> levelInfos;
     uint32_t maxVertCountPerCluster;
     uint32_t maxTriCountPerCluster;
 
@@ -80,7 +84,7 @@ struct HierarchicalMesh {
         std::vector<uint8_t> padding(paddingByteCount, 0);
         std::vector<uint32_t> childIndicesOnHost(childIndexCount);
         std::vector<Shared::Cluster> clustersOnHost(clusterCount);
-        levelStartClusterIndicesOnHost.resize(levelCount);
+        std::vector<uint32_t> levelStartClusterIndicesOnHost(levelCount);
         ifs
             .read(verticesOnHost)
             .read(trianglesOnHost)
@@ -88,6 +92,19 @@ struct HierarchicalMesh {
             .read(childIndicesOnHost)
             .read(clustersOnHost)
             .read(levelStartClusterIndicesOnHost);
+
+        levelInfos.resize(levelCount);
+        for (uint32_t level = 0; level < levelCount; ++level) {
+            LevelInfo &levelInfo = levelInfos[level];
+            levelInfo.startClusterIndex = levelStartClusterIndicesOnHost[level];
+            if (level + 1 < levelCount) {
+                levelInfo.clusterCount =
+                  levelStartClusterIndicesOnHost[level + 1] - levelStartClusterIndicesOnHost[level];
+            }
+            else {
+                levelInfo.clusterCount = clusterCount - levelStartClusterIndicesOnHost[level];
+            }
+        }
 
         vertexPool.initialize(
             cuContext, cudau::BufferType::Device, verticesOnHost);
@@ -97,8 +114,6 @@ struct HierarchicalMesh {
             cuContext, cudau::BufferType::Device, childIndicesOnHost);
         clusters.initialize(
             cuContext, cudau::BufferType::Device, clustersOnHost);
-        levelStartClusterIndices.initialize(
-            cuContext, cudau::BufferType::Device, levelStartClusterIndicesOnHost);
 
 
 
@@ -172,7 +187,6 @@ struct HierarchicalMesh {
         trianglePool.finalize();
         childIndexPool.finalize();
         clusters.finalize();
-        levelStartClusterIndices.finalize();
 
         argsArray.finalize();
         argsArrayToBuild.finalize();
@@ -377,12 +391,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     uint32_t clusterGasInstId = 0;
 
-    HierarchicalMesh himesh;
-    himesh.read(
+    HierarchicalMesh bunnyHiMesh;
+    bunnyHiMesh.read(
         cuContext, scene, mat,
         R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
 
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, himesh.asMemReqs.tempSizeInBytes);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyHiMesh.asMemReqs.tempSizeInBytes);
 
 
     
@@ -394,31 +408,30 @@ int32_t main(int32_t argc, const char* argv[]) try {
         { 1.0f, Quaternion(), float3(15.0f, 0.0f, -50.0f) },
     };
 
-    const uint32_t maxClasCountPerCgas =
-        himesh.levelStartClusterIndicesOnHost[1] - himesh.levelStartClusterIndicesOnHost[0];
+    const uint32_t maxClasCountPerBunnyCgas = bunnyHiMesh.levelInfos[0].clusterCount;
 
-    optixu::ClusterGeometryAccelerationStructureSet cgasSet = scene.createClusterGeometryAccelerationStructureSet();
-    cudau::Buffer cgasSetMem;
-    cgasSet.setRayTypeCount(Shared::NumRayTypes);
-    cgasSet.setBuildInput(
+    optixu::ClusterGeometryAccelerationStructureSet bunnyCgasSet = scene.createClusterGeometryAccelerationStructureSet();
+    cudau::Buffer bunnyCgasSetMem;
+    bunnyCgasSet.setRayTypeCount(Shared::NumRayTypes);
+    bunnyCgasSet.setBuildInput(
         OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
-        bunnyCount, maxClasCountPerCgas, maxClasCountPerCgas * bunnyCount,
+        bunnyCount, maxClasCountPerBunnyCgas, maxClasCountPerBunnyCgas * bunnyCount,
         &asMemReqs);
-    cgasSet.setChild(himesh.clasSet);
+    bunnyCgasSet.setChild(bunnyHiMesh.clasSet);
 
-    cgasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    bunnyCgasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
-    cudau::TypedBuffer<uint32_t> cgasCount(
+    cudau::TypedBuffer<uint32_t> bunnyCgasCount(
         cuContext, cudau::BufferType::Device, 1, bunnyCount);
-    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> cgasArgsArray(
+    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> bunnyCgasArgsArray(
         cuContext, cudau::BufferType::Device, bunnyCount);
-    cudau::TypedBuffer<OptixTraversableHandle> cgasHandles(
+    cudau::TypedBuffer<OptixTraversableHandle> bunnyCgasHandles(
         cuContext, cudau::BufferType::Device, bunnyCount);
 
     for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
         ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
-        bunnyInst.initialize(cuContext, scene, cgasSet, clusterGasInstId++, maxClasCountPerCgas);
+        bunnyInst.initialize(cuContext, scene, bunnyCgasSet, clusterGasInstId++, maxClasCountPerBunnyCgas);
         bunnyInst.setTransform(bunnyInstXfms[bunnyIdx]);
     }
 
@@ -443,8 +456,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         floorTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
         Shared::NormalMeshData meshData = {};
-        meshData.vertexBuffer = floorVertexBuffer.getROBuffer<enableBufferOobCheck>();
-        meshData.triangleBuffer = floorTriangleBuffer.getROBuffer<enableBufferOobCheck>();
+        meshData.vertices = floorVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        meshData.triangles = floorTriangleBuffer.getROBuffer<enableBufferOobCheck>();
 
         floorGeomInst.setVertexBuffer(floorVertexBuffer);
         floorGeomInst.setTriangleBuffer(floorTriangleBuffer);
@@ -764,37 +777,36 @@ int32_t main(int32_t argc, const char* argv[]) try {
             // JP: ビルドするCLAS数カウンターとArgs設定済みを表すフラグ列をリセットする。
             // EN: 
             const CUdeviceptr clasCountToBuildPtr =
-                himesh.clusterSetInfo.getCUdeviceptr() + offsetof(Shared::ClusterSetInfo, argsCountToBuild);
+                bunnyHiMesh.clusterSetInfo.getCUdeviceptr() + offsetof(Shared::ClusterSetInfo, argsCountToBuild);
             CUDADRV_CHECK(cuMemsetD32Async(clasCountToBuildPtr, 0, 1, curStream));
             CUDADRV_CHECK(cuMemsetD32Async(
-                himesh.usedFlags.getCUdeviceptr(), 0, himesh.usedFlags.sizeInBytes() / 4, curStream));
+                bunnyHiMesh.usedFlags.getCUdeviceptr(), 0, bunnyHiMesh.usedFlags.sizeInBytes() / 4, curStream));
 
             // JP: メッシュの各インスタンス・各クラスターをテストして、ビルドの必要があるクラスターを特定する。
             // EN: 
-            const uint32_t meshTotalClusterCount = himesh.clusters.numElements();
+            const uint32_t meshTotalClusterCount = bunnyHiMesh.clusters.numElements();
             const uint32_t instClusterCountStride = (meshTotalClusterCount + 31) / 32 * 32;
             emitClasArgsArray.launchWithThreadDim(
                 curStream, cudau::dim3(instClusterCountStride * bunnyCount),
                 lodMode, lodLevel,
                 plp.camera.position, plp.camera.orientation,
                 plp.camera.fovY, args.windowContentRenderHeight,
-                himesh.clusters, himesh.argsArray,
-                meshTotalClusterCount,
-                himesh.levelStartClusterIndices, himesh.levelStartClusterIndices.numElements(),
-                himesh.clusterSetInfo, curClusterGasInstInfoBuffer, bunnyCount);
+                bunnyHiMesh.clusters, bunnyHiMesh.argsArray,
+                meshTotalClusterCount, bunnyHiMesh.levelInfos.size(),
+                bunnyHiMesh.clusterSetInfo, curClusterGasInstInfoBuffer, bunnyCount);
 
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
             // EN: 
-            himesh.clasSet.rebuild(
+            bunnyHiMesh.clasSet.rebuild(
                 curStream,
-                himesh.argsArrayToBuild, clasCountToBuildPtr, himesh.clasSetMem, asBuildScratchMem,
-                himesh.clasHandles);
+                bunnyHiMesh.argsArrayToBuild, clasCountToBuildPtr, bunnyHiMesh.clasSetMem, asBuildScratchMem,
+                bunnyHiMesh.clasHandles);
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
             //     対応するクラスターのハンドルをコピーする。
             copyClasHandles.launchWithThreadDim(
-                curStream, cudau::dim3(maxClasCountPerCgas * bunnyCount),
-                maxClasCountPerCgas, himesh.clusterSetInfo,
+                curStream, cudau::dim3(maxClasCountPerBunnyCgas * bunnyCount),
+                maxClasCountPerBunnyCgas, bunnyHiMesh.clusterSetInfo,
                 curClusterGasInstInfoBuffer, bunnyCount);
 
             // JP: 各インスタンスに対応するCGAS入力を生成する。
@@ -802,14 +814,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             emitClusterGasArgsArray.launchWithThreadDim(
                 curStream, cudau::dim3(bunnyCount),
                 curClusterGasInstInfoBuffer, bunnyCount,
-                cgasArgsArray);
+                bunnyCgasArgsArray);
 
             // JP: CGAS集合をビルドする。
             // EN: 
-            cgasSet.rebuild(
+            bunnyCgasSet.rebuild(
                 curStream,
-                cgasArgsArray, cgasCount.getCUdeviceptr(), cgasSetMem, asBuildScratchMem,
-                cgasHandles);
+                bunnyCgasArgsArray, bunnyCgasCount.getCUdeviceptr(), bunnyCgasSetMem, asBuildScratchMem,
+                bunnyCgasHandles);
 
             CUDADRV_CHECK(cuMemcpyDtoDAsync(
                 curClasBuildCount.getCUdeviceptr(), clasCountToBuildPtr,
@@ -951,13 +963,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx)
         bunnyInsts[bunnyIdx].finalize();
-    cgasHandles.finalize();
-    cgasArgsArray.finalize();
-    cgasCount.finalize();
-    cgasSetMem.finalize();
-    cgasSet.destroy();
+    bunnyCgasHandles.finalize();
+    bunnyCgasArgsArray.finalize();
+    bunnyCgasCount.finalize();
+    bunnyCgasSetMem.finalize();
+    bunnyCgasSet.destroy();
 
-    himesh.finalize();
+    bunnyHiMesh.finalize();
 
     scene.destroy();
 

@@ -92,8 +92,8 @@ namespace Shared {
 
 
     struct NormalMeshData {
-        ROBuffer<Vertex> vertexBuffer;
-        ROBuffer<Triangle> triangleBuffer;
+        ROBuffer<Vertex> vertices;
+        ROBuffer<Triangle> triangles;
     };
 
     struct HierarchicalMeshData {
