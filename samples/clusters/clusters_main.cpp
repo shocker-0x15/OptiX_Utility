@@ -149,9 +149,12 @@ struct HierarchicalMesh {
         clasSet.setBuildInput(
             OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
             clusterCount, OPTIX_VERTEX_FORMAT_FLOAT3,
-            1, 1, maxTriCountPerCluster, maxVertCountPerCluster,
-            0, 0, 0, &asMemReqs);
+            1, maxTriCountPerCluster, maxVertCountPerCluster,
+            0, 0, 0);
+        clasSet.setMaterialCount(1);
         clasSet.setMaterial(0, mat);
+
+        clasSet.prepareForBuild(&asMemReqs);
 
         Shared::HierarchicalMeshData hiMeshData = {};
         hiMeshData.vertexPool = vertexPool.getROBuffer<enableBufferOobCheck>();

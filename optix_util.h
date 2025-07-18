@@ -1900,15 +1900,31 @@ namespace optixu {
     public:
         void destroy();
 
+        // JP: 以下のAPIを呼んだ場合はCLASが自動でdirty状態になる。
+        // EN: Calling the following APIs automatically marks the CLAS dirty.
         void setBuildInput(
             OptixClusterAccelBuildFlags flags,
             uint32_t maxArgCount, OptixVertexFormat vertexFormat,
-            uint32_t maxMaterialCount, uint32_t maxUniqueMaterialCountPerArg,
+            uint32_t maxUniqueMaterialCountPerArg,
             uint32_t maxTriCountPerArg, uint32_t maxVertCountPerArg,
             uint32_t maxTotalTriCount, uint32_t maxTotalVertCount,
-            uint32_t minPositionTruncateBitCount,
-            OptixAccelBufferSizes* memoryRequirement) const;
+            uint32_t minPositionTruncateBitCount) const;
 
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウト
+        //     が自動で無効化される。
+        // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
+        void setMaterialCount(uint32_t matCount) const;
+
+        /*
+        JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。
+            パイプラインのmarkHitGroupShaderBindingTableDirty()を呼べばローンチ時にセットアップされる。
+            シェーダーバインディングテーブルのレイアウト生成後に、再度ユーザーデータのサイズや
+            アラインメントを変更する場合レイアウトが自動で無効化される。
+        EN: Updating a shader binding table is required when calling the following APIs.
+            Calling pipeline's markHitGroupShaderBindingTableDirty() triggers re-setup of the table at launch.
+            In the case where user data size and/or alignment changes again after generating the layout of
+            a shader binding table, the layout is automatically invalidated.
+        */
         void setMaterial(uint32_t matIdx, Material mat) const;
         void setUserData(const void* data, uint32_t size, uint32_t alignment) const;
         template <typename T>
@@ -1916,12 +1932,15 @@ namespace optixu {
             setUserData(&data, sizeof(T), alignof(T));
         }
 
+        // JP: 
+        // EN: 
+        void prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const;
         void rebuild(
             CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,
             const BufferView &clasHandleBuffer) const;
 
-        uint32_t getNumMaterials() const;
+        uint32_t getMaterialCount() const;
         Material getMaterial(uint32_t matIdx) const;
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
         template <typename T>
@@ -1936,6 +1955,10 @@ namespace optixu {
     public:
         void destroy();
 
+        // JP: 以下のAPIを呼んだ場合はCGASが自動でdirty状態になる。
+        //     子が変更される場合はヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。
+        // EN: Calling the following APIs automatically marks the CGAS dirty.
+        //     Changing the child invalidates the shader binding table layout of hit group.
         void setBuildInput(
             OptixClusterAccelBuildFlags flags,
             uint32_t maxArgCount,
@@ -1943,8 +1966,15 @@ namespace optixu {
             OptixAccelBufferSizes* memoryRequirement) const;
         void setChild(ClusterAccelerationStructureSet clasSet) const;
 
+        // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウト
+        //     が自動で無効化される。
+        // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
         void setNumRayTypes(uint32_t numRayTypes) const;
 
+        // JP: リビルドを行った場合はこのCGASが(間接的に)所属するTraversable (例: IAS)
+        //     のmarkDirty()を呼ぶ必要がある。
+        // EN: Calling markDirty() of a traversable (e.g. IAS) to which this CGAS (indirectly) belongs
+        //     is required when performing rebuild.
         void rebuild(
             CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,

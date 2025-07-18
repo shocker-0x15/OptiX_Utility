@@ -934,6 +934,7 @@ namespace optixu {
 
         std::vector<_Material*> materials;
 
+        uint32_t readyToBuild : 1;
         uint32_t available : 1;
 
     public:
@@ -942,8 +943,11 @@ namespace optixu {
         Priv(_Scene* _scene) :
             scene(_scene),
             userData(sizeof(uint32_t)),
-            available(false)
-        {}
+            readyToBuild(false), available(false)
+        {
+            buildInput = {};
+            buildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES;
+        }
         ~Priv() {
             getContext()->unregisterName(this);
         }
