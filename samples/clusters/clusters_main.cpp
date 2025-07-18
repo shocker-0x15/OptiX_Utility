@@ -290,8 +290,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
     /*
-    JP: 
-    EN: 
+    JP: クラスタージオメトリを使う場合はパイプラインで許可する必要がある。
+    EN: When using clustered geometry, it must be allowed in the pipeline.
     */
     optixu::PipelineOptions pipelineOptions;
     pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
@@ -380,7 +380,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     HierarchicalMesh himesh;
     himesh.read(
         cuContext, scene, mat,
-        R"(D:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
+        R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
 
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, himesh.asMemReqs.tempSizeInBytes);
 
@@ -389,16 +389,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     constexpr uint32_t bunnyCount = 3;
     std::vector<ClusterGasInstance> bunnyInsts(bunnyCount);
     const Shared::InstanceTransform bunnyInstXfms[bunnyCount] = {
-        { 1.0f, Quaternion(), float3(0.0f, -0.5f, 0.0f) },
-        { 1.0f, Quaternion(), float3(-3.0f, -0.5f, -5.0f) },
-        { 1.0f, Quaternion(), float3(15.0f, -0.5f, -50.0f) },
+        { 1.0f, Quaternion(), float3(0.0f, 0.0f, 0.0f) },
+        { 1.0f, Quaternion(), float3(-3.0f, 0.0f, -5.0f) },
+        { 1.0f, Quaternion(), float3(15.0f, 0.0f, -50.0f) },
     };
 
     const uint32_t maxClasCountPerCgas =
         himesh.levelStartClusterIndicesOnHost[1] - himesh.levelStartClusterIndicesOnHost[0];
 
-    optixu::ClusterGeometryAccelerationStructureSet cgasSet =
-        scene.createClusterGeometryAccelerationStructureSet();
+    optixu::ClusterGeometryAccelerationStructureSet cgasSet = scene.createClusterGeometryAccelerationStructureSet();
+    cudau::Buffer cgasSetMem;
     cgasSet.setRayTypeCount(Shared::NumRayTypes);
     cgasSet.setBuildInput(
         OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
@@ -406,10 +406,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         &asMemReqs);
     cgasSet.setChild(himesh.clasSet);
 
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    cudau::Buffer cgasSetMem;
     cgasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
     cudau::TypedBuffer<uint32_t> cgasCount(
         cuContext, cudau::BufferType::Device, 1, bunnyCount);
@@ -426,6 +424,54 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    optixu::GeometryInstance floorGeomInst = scene.createGeometryInstance();
+    cudau::TypedBuffer<Shared::Vertex> floorVertexBuffer;
+    cudau::TypedBuffer<Shared::Triangle> floorTriangleBuffer;
+    {
+        Shared::Vertex vertices[] = {
+            { make_float3(-100.0f, 0.0f, -100.0f), make_float3(0, 1, 0) },
+            { make_float3(-100.0f, 0.0f, 100.0f), make_float3(0, 1, 0) },
+            { make_float3(100.0f, 0.0f, 100.0f), make_float3(0, 1, 0) },
+            { make_float3(100.0f, 0.0f, -100.0f), make_float3(0, 1, 0) },
+        };
+
+        Shared::Triangle triangles[] = {
+            { 0, 1, 2 }, { 0, 2, 3 },
+        };
+
+        floorVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
+        floorTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
+
+        Shared::NormalMeshData meshData = {};
+        meshData.vertexBuffer = floorVertexBuffer.getROBuffer<enableBufferOobCheck>();
+        meshData.triangleBuffer = floorTriangleBuffer.getROBuffer<enableBufferOobCheck>();
+
+        floorGeomInst.setVertexBuffer(floorVertexBuffer);
+        floorGeomInst.setTriangleBuffer(floorTriangleBuffer);
+        floorGeomInst.setMaterialCount(1, optixu::BufferView());
+        floorGeomInst.setMaterial(0, 0, mat);
+        floorGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+        floorGeomInst.setUserData(meshData);
+    }
+
+    optixu::GeometryAccelerationStructure floorGas = scene.createGeometryAccelerationStructure();
+    cudau::Buffer floorGasMem;
+    floorGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes);
+    floorGas.setMaterialSetCount(1);
+    floorGas.setRayTypeCount(0, Shared::NumRayTypes);
+    floorGas.addChild(floorGeomInst);
+    floorGas.prepareForBuild(&asMemReqs);
+    floorGasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+
+    optixu::Instance floorInst = scene.createInstance();
+    floorInst.setChild(floorGas);
+
+
+
     // JP: Instance Acceleration Structureを生成する。
     // EN: Create an instance acceleration structure.
     optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
@@ -434,6 +480,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx)
         ias.addChild(bunnyInsts[bunnyIdx].optixInst);
+    ias.addChild(floorInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
@@ -460,6 +507,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
+
+    floorGas.rebuild(0, floorGasMem, asBuildScratchMem);
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -507,7 +556,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     initConfig.resourceDir = resourceDir;
     initConfig.windowContentRenderWidth = initWindowContentWidth;
     initConfig.windowContentRenderHeight = initWindowContentHeight;
-    initConfig.cameraPosition = make_float3(0, 0.5f, 3.16f);
+    initConfig.cameraPosition = make_float3(0, 1.0f, 3.16f);
     initConfig.cameraOrientation = qRotateY(pi_v<float>);
     initConfig.cameraMovingSpeed = 0.05f;
     initConfig.cuContext = cuContext;
@@ -892,6 +941,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
+
+    floorInst.destroy();
+    floorGasMem.finalize();
+    floorGas.destroy();
+    floorTriangleBuffer.finalize();
+    floorVertexBuffer.finalize();
+    floorGeomInst.destroy();
 
     for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx)
         bunnyInsts[bunnyIdx].finalize();

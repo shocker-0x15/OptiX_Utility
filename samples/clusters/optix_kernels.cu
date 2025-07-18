@@ -76,7 +76,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         }
         else if (plp.visMode == VisualizationMode_Cluster) {
             if (hitInfo.clusterId == OPTIX_CLUSTER_ID_INVALID) {
-                color = make_float3(0.0f, 0.0f, 0.0f);
+                color = make_float3(0.5f, 0.0f, 1.0f);
             }
             else {
                 color = HSVtoRGB(
@@ -86,7 +86,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         }
         else if (plp.visMode == VisualizationMode_Level) {
             if (hitInfo.clusterId == OPTIX_CLUSTER_ID_INVALID) {
-                color = make_float3(0.0f, 0.0f, 0.0f);
+                color = make_float3(0.5f, 0.0f, 1.0f);
             }
             else {
                 color = calcFalseColor(hitInfo.hiMeshData->clusters[hitInfo.clusterId].level, 0, 10);
