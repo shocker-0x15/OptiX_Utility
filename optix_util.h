@@ -29,17 +29,20 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 
 変更履歴 / Update History:
+- !!BREAKING
 - JP: - 非構造化クラスターをサポート。
         具体的にはClusterAccelerationStructure (CLAS), ClusterGeometryAccelerationStructure (CGAS)を追加。
+      - いくつかのset/getNum...()という関数名をset/get...Count()に変更。
   EN: - Supported unstructured clusters.
         Specifically added ClusterAccelerationStructure (CLAS) and ClusterGeometryAccelerationStructure (CGAS).
+      - Changed some set/getNum...() functions to set/get...Count().
 
 - !!BREAKING
 - JP: - PipelineのsetPipelineOptions()のパラメターを変更。
   EN: - Changed the parameters of Pipeline::setPipelineOptions().
 
 - !!BREAKING
-- JP: - OptiX 9.0.0のサポートを開始。
+  JP: - OptiX 9.0.0のサポートを開始。
       - Rocaps型のカーブをサポート。
       - DMM APIを削除。
       - Clusters APIは未対応。
@@ -670,7 +673,7 @@ namespace optixu {
             const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t numTransforms,
+            const OptixTraversableHandle* transforms, uint32_t transformCount,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes);
         template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
@@ -687,7 +690,7 @@ namespace optixu {
             const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t sbtRecordIndex, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t numTransforms,
+            const OptixTraversableHandle* transforms, uint32_t transformCount,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes);
 #endif
@@ -859,7 +862,7 @@ namespace optixu {
             const float3 &origin, const float3 &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t numTransforms,
+            const OptixTraversableHandle* transforms, uint32_t transformCount,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const uint32_t* attributes,
             index_sequence<I...>)
@@ -869,7 +872,7 @@ namespace optixu {
                 origin, direction,
                 tmin, tmax, rayTime,
                 SBToffset, SBTstride, instIdx,
-                transforms, numTransforms,
+                transforms, transformCount,
                 sbtGASIdx, primIdx, hitKind,
                 attributes[I]...);
         }
@@ -899,7 +902,7 @@ namespace optixu {
             const float3 &origin, const float3 &direction,
             float tmin, float tmax, float rayTime,
             uint32_t sbtRecordIndex, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t numTransforms,
+            const OptixTraversableHandle* transforms, uint32_t transformCount,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const uint32_t* attributes,
             index_sequence<I...>)
@@ -909,7 +912,7 @@ namespace optixu {
                 origin, direction,
                 tmin, tmax, rayTime,
                 sbtRecordIndex, instIdx,
-                transforms, numTransforms,
+                transforms, transformCount,
                 sbtGASIdx, primIdx, hitKind,
                 attributes[I]...);
         }
@@ -1191,7 +1194,7 @@ namespace optixu {
             const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t numTransforms,
+            const OptixTraversableHandle* transforms, uint32_t transformCount,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes)
     {
@@ -1203,7 +1206,7 @@ namespace optixu {
             origin, direction,
             tmin, tmax, rayTime,
             SBToffset, SBTstride, instIdx,
-            transforms, numTransforms,
+            transforms, transformCount,
             sbtGASIdx, primIdx, hitKind,
             a, make_index_sequence<numDwords>{});
     }
@@ -1239,7 +1242,7 @@ namespace optixu {
             const PosType &origin, const DirType &direction,
             float tmin, float tmax, float rayTime,
             uint32_t sbtRecordIndex, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t numTransforms,
+            const OptixTraversableHandle* transforms, uint32_t transformCount,
             uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
             const AttributeTypes &... attributes)
     {
@@ -1251,7 +1254,7 @@ namespace optixu {
             origin, direction,
             tmin, tmax, rayTime,
             sbtRecordIndex, instIdx,
-            transforms, numTransforms,
+            transforms, transformCount,
             sbtGASIdx, primIdx, hitKind,
             a, make_index_sequence<numDwords>{});
     }
@@ -1686,7 +1689,7 @@ namespace optixu {
         void setConfiguration(OptixOpacityMicromapFlags config) const;
         void computeMemoryUsage(
             const OptixOpacityMicromapHistogramEntry* microMapHistogramEntries,
-            uint32_t numMicroMapHistogramEntries,
+            uint32_t numMicromapHistogramEntries,
             OptixMicromapBufferSizes* memoryRequirement) const;
         void setBuffers(
             const BufferView &rawOmmBuffer, const BufferView &perMicroMapDescBuffer,
@@ -1722,7 +1725,7 @@ namespace optixu {
             (It is okay to only use update instead of calling markDirty()
             when changing only vertex/width/AABB buffer.)
         */
-        void setNumMotionSteps(uint32_t n) const;
+        void setMotionStepCount(uint32_t n) const;
         void setVertexFormat(OptixVertexFormat format) const;
         void setVertexBuffer(const BufferView &vertexBuffer, uint32_t motionStep = 0) const;
         void setWidthBuffer(const BufferView &widthBuffer, uint32_t motionStep = 0) const;
@@ -1742,8 +1745,8 @@ namespace optixu {
         void setCustomPrimitiveAABBBuffer(
             const BufferView &primitiveAABBBuffer, uint32_t motionStep = 0) const;
         void setPrimitiveIndexOffset(uint32_t offset) const;
-        void setNumMaterials(
-            uint32_t numMaterials, const BufferView &matIndexBuffer,
+        void setMaterialCount(
+            uint32_t matCount, const BufferView &matIndexBuffer,
             OPTIXU_EN_PRM(IndexSize, indexSize, k4Bytes)) const;
         void setGeometryFlags(uint32_t matIdx, OptixGeometryFlags flags) const;
 
@@ -1765,7 +1768,7 @@ namespace optixu {
         }
 
         GeometryType getGeometryType() const;
-        uint32_t getNumMotionSteps() const;
+        uint32_t getMotionStepCount() const;
         OptixVertexFormat getVertexFormat() const;
         BufferView getVertexBuffer(uint32_t motionStep = 0);
         BufferView getWidthBuffer(uint32_t motionStep = 0);
@@ -1778,7 +1781,7 @@ namespace optixu {
         BufferView getSegmentIndexBuffer() const;
         BufferView getCustomPrimitiveAABBBuffer(uint32_t motionStep = 0) const;
         uint32_t getPrimitiveIndexOffset() const;
-        uint32_t getNumMaterials(BufferView* matIndexBuffer = nullptr, IndexSize* indexSize = nullptr) const;
+        uint32_t getMaterialCount(BufferView* matIndexBuffer = nullptr, IndexSize* indexSize = nullptr) const;
         OptixGeometryFlags getGeometryFlags(uint32_t matIdx) const;
         Material getMaterial(uint32_t matSetIdx, uint32_t matIdx) const;
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
@@ -1826,8 +1829,8 @@ namespace optixu {
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウト
         //     が自動で無効化される。
         // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
-        void setNumMaterialSets(uint32_t numMatSets) const;
-        void setNumRayTypes(uint32_t matSetIdx, uint32_t numRayTypes) const;
+        void setMaterialSetCount(uint32_t matSetCount) const;
+        void setRayTypeCount(uint32_t matSetIdx, uint32_t rayTypeCount) const;
 
         // JP: リビルド・コンパクトを行った場合はこのGASが(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
@@ -1881,11 +1884,11 @@ namespace optixu {
             AllowOpacityMicroMapUpdate* allowOpacityMicroMapUpdate,
             AllowDisableOpacityMicroMaps* allowDisableOpacityMicroMaps) const;
         void getMotionOptions(uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
-        uint32_t getNumChildren() const;
+        uint32_t getChildCount() const;
         uint32_t findChildIndex(GeometryInstance geomInst, CUdeviceptr preTransform = 0) const;
         GeometryInstance getChild(uint32_t index, CUdeviceptr* preTransform = nullptr) const;
-        uint32_t getNumMaterialSets() const;
-        uint32_t getNumRayTypes(uint32_t matSetIdx) const;
+        uint32_t getMaterialSetCount() const;
+        uint32_t getRayTypeCount(uint32_t matSetIdx) const;
         void getChildUserData(uint32_t index, void* data, uint32_t* size, uint32_t* alignment) const;
         template <typename T>
         void getChildUserData(
@@ -1974,7 +1977,7 @@ namespace optixu {
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウト
         //     が自動で無効化される。
         // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
-        void setNumRayTypes(uint32_t numRayTypes) const;
+        void setRayTypeCount(uint32_t rayTypeCount) const;
 
         // JP: リビルドを行った場合はこのCGASが(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
@@ -2002,7 +2005,7 @@ namespace optixu {
         }
 
         ClusterAccelerationStructureSet getChild() const;
-        uint32_t getNumRayTypes() const;
+        uint32_t getRayTypeCount() const;
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
         template <typename T>
         void getUserData(T* data, uint32_t* size = nullptr, uint32_t* alignment = nullptr) const {
@@ -2143,7 +2146,7 @@ namespace optixu {
             AllowRandomInstanceAccess* allowRandomInstanceAccess) const;
         void getMotionOptions(
             uint32_t* numKeys, float* timeBegin, float* timeEnd, OptixMotionFlags* flags) const;
-        uint32_t getNumChildren() const;
+        uint32_t getChildCount() const;
         uint32_t findChildIndex(Instance instance) const;
         Instance getChild(uint32_t index) const;
     };
@@ -2151,8 +2154,8 @@ namespace optixu {
 
 
     struct PipelineOptions {
-        uint32_t numPayloadValuesInDwords;
-        uint32_t numAttributeValuesInDwords;
+        uint32_t payloadCountInDwords;
+        uint32_t attributeCountInDwords;
         const char* launchParamsVariableName;
         size_t sizeOfLaunchParams;
         OptixTraversableGraphFlags traversableGraphFlags;
@@ -2163,8 +2166,8 @@ namespace optixu {
         AllowClusteredGeometry allowClusteredGeometry;
 
         PipelineOptions() :
-            numPayloadValuesInDwords(0),
-            numAttributeValuesInDwords(0),
+            payloadCountInDwords(0),
+            attributeCountInDwords(0),
             launchParamsVariableName(nullptr),
             sizeOfLaunchParams(0),
             traversableGraphFlags(OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING),
@@ -2246,8 +2249,8 @@ namespace optixu {
         //     自動で無効化される。
         // EN: Calling the following APIs automatically invalidates
         //     the (non-hit group) shader binding table layout.
-        void setNumMissRayTypes(uint32_t numMissRayTypes) const;
-        void setNumCallablePrograms(uint32_t numCallablePrograms) const;
+        void setMissRayTypeCount(uint32_t missRayTypeCount) const;
+        void setCallableProgramCount(uint32_t callableProgramCount) const;
 
         void generateShaderBindingTableLayout(size_t* memorySize) const;
 
@@ -2390,7 +2393,7 @@ namespace optixu {
         OptixPixelFormat flowTrustworthinessFormat;
         OptixPixelFormat* aovFormats;
         OptixDenoiserAOVType* aovTypes;
-        uint32_t numAovs;
+        uint32_t aovCount;
     };
 
     class Denoiser : public Object<Denoiser> {
