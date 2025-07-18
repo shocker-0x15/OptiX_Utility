@@ -2189,6 +2189,7 @@ namespace optixu {
     }
 
     void ClusterAccelerationStructureSet::Priv::markDirty() {
+        readyToBuild = false;
         available = false;
     }
 
@@ -2203,14 +2204,11 @@ namespace optixu {
     void ClusterAccelerationStructureSet::setBuildInput(
         OptixClusterAccelBuildFlags flags,
         uint32_t maxArgCount, OptixVertexFormat vertexFormat,
-        uint32_t maxMaterialCount, uint32_t maxUniqueMaterialCountPerArg,
+        uint32_t maxUniqueMaterialCountPerArg,
         uint32_t maxTriCountPerArg, uint32_t maxVertCountPerArg,
         uint32_t maxTotalTriCount, uint32_t maxTotalVertCount,
-        uint32_t minPositionTruncateBitCount,
-        OptixAccelBufferSizes* memoryRequirement) const
+        uint32_t minPositionTruncateBitCount) const
     {
-        m->throwRuntimeError(
-            maxMaterialCount > 0, "Invalid number of materials %u.", maxMaterialCount);
         m->throwRuntimeError(
             maxTriCountPerArg <= getContext().getMaxTriangleCountPerCluster(),
             "Too many triangles per cluster %u > %u.",
@@ -2220,13 +2218,10 @@ namespace optixu {
             "Too many vertices per cluster %u > %u.",
             maxVertCountPerArg, getContext().getMaxVertexCountPerCluster());
 
-        m->buildInput = {};
-        m->buildInput.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES;
         OptixClusterAccelBuildInputTriangles &triBuildInput = m->buildInput.triangles;
         triBuildInput.flags = flags;
         triBuildInput.maxArgCount = maxArgCount;
         triBuildInput.vertexFormat = vertexFormat;
-        triBuildInput.maxSbtIndexValue = maxMaterialCount - 1;
         triBuildInput.maxUniqueSbtIndexCountPerArg = maxUniqueMaterialCountPerArg;
         triBuildInput.maxTriangleCountPerArg = maxTriCountPerArg;
         triBuildInput.maxVertexCountPerArg = maxVertCountPerArg;
@@ -2234,14 +2229,15 @@ namespace optixu {
         triBuildInput.maxTotalVertexCount = maxTotalVertCount;
         triBuildInput.minPositionTruncateBitCount = minPositionTruncateBitCount;
 
-        OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
-            m->getRawContext(), _ClusterAccelerationStructureSet::s_buildMode,
-            &m->buildInput, &m->memoryRequirement));
-
-        *memoryRequirement = m->memoryRequirement;
-        m->materials.resize(maxMaterialCount);
-
         m->markDirty();
+    }
+
+    void ClusterAccelerationStructureSet::setMaterialCount(uint32_t matCount) const {
+        m->throwRuntimeError(
+            matCount > 0, "Invalid number of materials %u.", matCount);
+        m->buildInput.triangles.maxSbtIndexValue = matCount - 1;
+        m->materials.resize(matCount);
+        m->scene->markSBTLayoutDirty();
     }
 
     void ClusterAccelerationStructureSet::setMaterial(uint32_t matIdx, Material mat) const {
@@ -2271,11 +2267,26 @@ namespace optixu {
         std::memcpy(m->userData.data(), data, size);
     }
 
+    void ClusterAccelerationStructureSet::prepareForBuild(
+        OptixAccelBufferSizes* memoryRequirement) const
+    {
+        OPTIX_CHECK(optixClusterAccelComputeMemoryUsage(
+            m->getRawContext(), _ClusterAccelerationStructureSet::s_buildMode,
+            &m->buildInput, memoryRequirement));
+
+        m->memoryRequirement = *memoryRequirement;
+
+        m->readyToBuild = true;
+    }
+
     void ClusterAccelerationStructureSet::rebuild(
         CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
         const BufferView &accelBuffer, const BufferView &scratchBuffer,
         const BufferView &clasHandleBuffer) const
     {
+        m->throwRuntimeError(
+            m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+
         OptixClusterAccelBuildModeDesc buildModeDesc = {};
         buildModeDesc.mode = _ClusterAccelerationStructureSet::s_buildMode;
         OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
@@ -2296,7 +2307,7 @@ namespace optixu {
         m->available = true;
     }
 
-    uint32_t ClusterAccelerationStructureSet::getNumMaterials() const {
+    uint32_t ClusterAccelerationStructureSet::getMaterialCount() const {
         return static_cast<uint32_t>(m->materials.size());
     }
 
