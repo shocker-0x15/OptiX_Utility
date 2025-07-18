@@ -153,6 +153,12 @@ struct HierarchicalMesh {
             0, 0, 0, &asMemReqs);
         clasSet.setMaterial(0, mat);
 
+        Shared::HierarchicalMeshData hiMeshData = {};
+        hiMeshData.vertexPool = vertexPool.getROBuffer<enableBufferOobCheck>();
+        hiMeshData.trianglePool = trianglePool.getROBuffer<enableBufferOobCheck>();
+        hiMeshData.clusters = clusters.getROBuffer<enableBufferOobCheck>();
+        clasSet.setUserData(hiMeshData);
+
         clasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
 
         return true;
@@ -790,9 +796,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curGPUTimer.render.start(curStream);
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
-            plp.vertexPool = himesh.vertexPool.getDevicePointer();
-            plp.trianglePool = himesh.trianglePool.getDevicePointer();
-            plp.clusters = himesh.clusters.getDevicePointer();
             plp.pickInfo = curPickInfo.getDevicePointer();
             plp.clusterGasInstInfoBuffer = curClusterGasInstInfoBuffer.getDevicePointer();
             plp.mousePosition = uint2(uint32_t(args.mouseX), uint32_t(args.mouseY));

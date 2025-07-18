@@ -20,13 +20,13 @@ struct HitPointParameter {
     }
 };
 
-struct HitGroupSBTRecordData {
-    GeometryData geomData;
+CUDA_DEVICE_FUNCTION CUDA_INLINE static const NormalMeshData &getNormalMeshData() {
+    return *reinterpret_cast<NormalMeshData*>(optixGetSbtDataPointer());
+}
 
-    CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData &get() {
-        return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
-    }
-};
+CUDA_DEVICE_FUNCTION CUDA_INLINE static const HierarchicalMeshData &getHierarchicalMeshData() {
+    return *reinterpret_cast<HierarchicalMeshData*>(optixGetSbtDataPointer());
+}
 
 
 
@@ -54,7 +54,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         plp.pickInfo->primitiveIndex = hitInfo.primIndex;
         plp.pickInfo->barycentrics = hitInfo.barycentrics;
         if (hitInfo.clusterId != OPTIX_CLUSTER_ID_INVALID) {
-            plp.pickInfo->cluster = plp.clusters[hitInfo.clusterId];
+            plp.pickInfo->cluster = hitInfo.hiMeshData->clusters[hitInfo.clusterId];
         }
         else {
             plp.pickInfo->cluster.level = 0;
@@ -89,7 +89,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
                 color = make_float3(0.0f, 0.0f, 0.0f);
             }
             else {
-                color = calcFalseColor(plp.clusters[hitInfo.clusterId].level, 0, 10);
+                color = calcFalseColor(hitInfo.hiMeshData->clusters[hitInfo.clusterId].level, 0, 10);
             }
         }
         else if (plp.visMode == VisualizationMode_Triangle) {
@@ -119,18 +119,28 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(miss)() {
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
-    const uint32_t clusterId = optixGetClusterId();
     const auto hp = HitPointParameter::get();
 
-    const Cluster &cluster = plp.clusters[clusterId];
-    const LocalTriangle &tri = plp.trianglePool[cluster.triPoolStartIndex + hp.primIndex];
-    const Vertex (&vs)[] = {
-        plp.vertexPool[cluster.vertPoolStartIndex + tri.index0],
-        plp.vertexPool[cluster.vertPoolStartIndex + tri.index1],
-        plp.vertexPool[cluster.vertPoolStartIndex + tri.index2],
-    };
-
     HitInfo hitInfo = {};
+    Vertex vs[3];
+    const uint32_t clusterId = optixGetClusterId();
+    if (clusterId == OPTIX_CLUSTER_ID_INVALID) {
+        const NormalMeshData &meshData = getNormalMeshData();
+        const Triangle &tri = meshData.triangleBuffer[hp.primIndex];
+        vs[0] = meshData.vertexBuffer[tri.index0];
+        vs[1] = meshData.vertexBuffer[tri.index1];
+        vs[2] = meshData.vertexBuffer[tri.index2];
+    }
+    else {
+        const HierarchicalMeshData &meshData = getHierarchicalMeshData();
+        const Cluster &cluster = meshData.clusters[clusterId];
+        const LocalTriangle &tri = meshData.trianglePool[cluster.triPoolStartIndex + hp.primIndex];
+        vs[0] = meshData.vertexPool[cluster.vertPoolStartIndex + tri.index0];
+        vs[1] = meshData.vertexPool[cluster.vertPoolStartIndex + tri.index1];
+        vs[2] = meshData.vertexPool[cluster.vertPoolStartIndex + tri.index2];
+
+        hitInfo.hiMeshData = &meshData;
+    }
 
     const float bcB = hp.b1;
     const float bcC = hp.b2;
@@ -139,11 +149,6 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         bcA * vs[0].normal + bcB * vs[1].normal + bcC * vs[2].normal;
     shadingNormal = normalize(optixTransformNormalFromObjectToWorldSpace(shadingNormal));
 
-    //float3 positions[3];
-    //optixGetTriangleVertexData(positions);
-    //float3 geomNormal = normalize(cross(
-    //    positions[1] - positions[0],
-    //    positions[2] - positions[0]));
     float3 geomNormal = normalize(cross(
         vs[1].position - vs[0].position,
         vs[2].position - vs[0].position));
@@ -155,5 +160,6 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     hitInfo.barycentrics = make_float2(hp.b1, hp.b2);
     hitInfo.shadingNormal = shadingNormal;
     hitInfo.geomNormal = geomNormal;
+
     MyPayloadSignature::set(&hitInfo);
 }

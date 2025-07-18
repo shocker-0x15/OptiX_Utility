@@ -91,9 +91,15 @@ namespace Shared {
 
 
 
-    struct GeometryData {
+    struct NormalMeshData {
         ROBuffer<Vertex> vertexBuffer;
         ROBuffer<Triangle> triangleBuffer;
+    };
+
+    struct HierarchicalMeshData {
+        ROBuffer<Vertex> vertexPool;
+        ROBuffer<LocalTriangle> trianglePool;
+        ROBuffer<Cluster> clusters;
     };
 
 
@@ -114,6 +120,7 @@ namespace Shared {
 
 
     struct HitInfo {
+        const HierarchicalMeshData* hiMeshData;
         uint32_t instIndex;
         uint32_t clusterId;
         uint32_t primIndex;
@@ -137,9 +144,6 @@ namespace Shared {
         int2 imageSize;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         PerspectiveCamera camera;
-        Vertex* vertexPool;
-        LocalTriangle* trianglePool;
-        Cluster* clusters;
         ClusterGasInstanceInfo* clusterGasInstInfoBuffer;
         PickInfo* pickInfo;
         uint2 mousePosition;
