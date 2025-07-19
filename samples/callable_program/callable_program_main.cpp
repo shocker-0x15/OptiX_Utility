@@ -784,8 +784,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             optixu::ASTradeoff::PreferFastTrace,
             optixu::AllowUpdate::No,
             optixu::AllowCompaction::Yes);
-        bunny.optixGas.setNumMaterialSets(1);
-        bunny.optixGas.setNumRayTypes(0, Shared::NumRayTypes);
+        bunny.optixGas.setMaterialSetCount(1);
+        bunny.optixGas.setRayTypeCount(0, Shared::NumRayTypes);
         for (uint32_t i = 0; i < bunny.matGroups.size(); ++i)
             bunny.optixGas.addChild(bunny.matGroups[i].optixGeomInst);
         bunny.optixGas.prepareForBuild(&asMemReqs);
@@ -854,7 +854,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     ias.addChild(bunny2Inst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getNumChildren());
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 
