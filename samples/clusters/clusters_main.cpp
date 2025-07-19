@@ -28,6 +28,8 @@ public:
     }
 };
 
+
+
 struct HierarchicalMesh {
     struct LevelInfo {
         uint32_t startClusterIndex;
@@ -199,57 +201,111 @@ struct HierarchicalMesh {
     }
 };
 
+struct HiMeshInstanceSet {
+    struct Instance {
+        optixu::Instance optixInst;
+        cudau::TypedBuffer<uint32_t> indexMapClasHandleToCluster;
+        cudau::TypedBuffer<CUdeviceptr> clasHandles;
+        Shared::InstanceTransform transform;
+    };
 
+    const HierarchicalMesh* hiMesh;
 
-struct ClusterGasInstance {
-    optixu::Instance optixInst;
-    cudau::TypedBuffer<uint32_t> indexMapClasHandleToCluster;
-    cudau::TypedBuffer<CUdeviceptr> clasHandles;
-    Shared::ClusterGasInstanceInfo instInfoOnHost;
-    uint32_t instanceId;
+    uint32_t maxClasCountPerCgas;
+    optixu::ClusterGeometryAccelerationStructureSet cgasSet;
+    cudau::Buffer cgasSetMem;
+    cudau::TypedBuffer<uint32_t> cgasCount;
+    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> cgasArgsArray;
+    cudau::TypedBuffer<OptixTraversableHandle> cgasHandles;
+    OptixAccelBufferSizes asMemReqs;
+
+    std::vector<Instance> instances;
+    uint32_t startInstanceId;
+
+    cudau::TypedBuffer<uint32_t> clasBuildCounts[2];
 
     void initialize(
-        const CUcontext cuContext, const optixu::Scene scene,
-        const optixu::ClusterGeometryAccelerationStructureSet optixCgas,
-        const uint32_t instId, const uint32_t maxClasCount)
+        const CUcontext cuContext, const optixu::Scene scene, const HierarchicalMesh* _hiMesh,
+        const Shared::InstanceTransform* const transforms, const uint32_t instCount,
+        Shared::InstanceStaticInfo* const instStaticInfos, const uint32_t startInstId)
     {
-        optixInst = scene.createInstance();
-        optixInst.setChild(optixCgas, instId);
+        hiMesh = _hiMesh;
 
-        instanceId = instId;
+        maxClasCountPerCgas = hiMesh->levelInfos[0].clusterCount;
 
-        indexMapClasHandleToCluster.initialize(cuContext, cudau::BufferType::Device, maxClasCount);
-        clasHandles.initialize(cuContext, cudau::BufferType::Device, maxClasCount);
+        cgasSet = scene.createClusterGeometryAccelerationStructureSet();
+        cgasSet.setRayTypeCount(Shared::NumRayTypes);
+        cgasSet.setBuildInput(
+            OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
+            instCount, maxClasCountPerCgas, maxClasCountPerCgas * instCount,
+            &asMemReqs);
+        cgasSet.setChild(hiMesh->clasSet);
 
-        instInfoOnHost = {};
-        instInfoOnHost.indexMapClasHandleToCluster = indexMapClasHandleToCluster.getDevicePointer();
-        instInfoOnHost.clasHandles = clasHandles.getDevicePointer();
-        instInfoOnHost.clasHandleCount = 0;
+        cgasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
 
-        instInfoOnHost.transform.scale = 1.0f;
-        instInfoOnHost.transform.orientation = Quaternion();
-        instInfoOnHost.transform.position = make_float3(0, 0, 0);
+        cgasCount.initialize(cuContext, cudau::BufferType::Device, 1, instCount);
+        cgasArgsArray.initialize(cuContext, cudau::BufferType::Device, instCount);
+        cgasHandles.initialize(cuContext, cudau::BufferType::Device, instCount);
+
+        instances.resize(instCount);
+        startInstanceId = startInstId;
+        for (uint32_t cgasIdx = 0; cgasIdx < instCount; ++cgasIdx) {
+            Instance &inst = instances[cgasIdx];
+            const uint32_t instId = startInstId + cgasIdx;
+            inst.optixInst = scene.createInstance();
+            inst.optixInst.setChild(cgasSet, cgasIdx);
+            inst.optixInst.setID(instId);
+
+            inst.indexMapClasHandleToCluster.initialize(
+                cuContext, cudau::BufferType::Device, maxClasCountPerCgas);
+            inst.clasHandles.initialize(
+                cuContext, cudau::BufferType::Device, maxClasCountPerCgas);
+
+            inst.transform = transforms[cgasIdx];
+
+            Shared::InstanceStaticInfo &instStaticInfo = instStaticInfos[instId];
+            instStaticInfo.cgas.indexMapClasHandleToCluster =
+                inst.indexMapClasHandleToCluster.getDevicePointer();
+            instStaticInfo.cgas.clasHandles = inst.clasHandles.getDevicePointer();
+        }
+
+        for (uint32_t i = 0; i < 2; ++i)
+            clasBuildCounts[i].initialize(cuContext, cudau::BufferType::Device, instCount);
     }
 
     void finalize() {
-        optixInst.destroy();
-        indexMapClasHandleToCluster.finalize();
-        clasHandles.finalize();
+        cgasSet.destroy();
+        cgasSetMem.finalize();
+        cgasCount.finalize();
+        cgasArgsArray.finalize();
+        cgasHandles.finalize();
+        for (uint32_t cgasIdx = 0; cgasIdx < instances.size(); ++cgasIdx) {
+            Instance &inst = instances[cgasIdx];
+            inst.optixInst.destroy();
+            inst.indexMapClasHandleToCluster.finalize();
+            inst.clasHandles.finalize();
+        }
+
+        for (uint32_t i = 0; i < 2; ++i)
+            clasBuildCounts[i].finalize();
     }
 
-    void setTransform(const Shared::InstanceTransform &xfm) {
-        instInfoOnHost.transform = xfm;
-        const Matrix3x3 matSR = xfm.scale * xfm.orientation.toMatrix3x3();
-        const float xfm_values[] = {
-            matSR.m00, matSR.m01, matSR.m02, xfm.position.x,
-            matSR.m10, matSR.m11, matSR.m12, xfm.position.y,
-            matSR.m20, matSR.m21, matSR.m22, xfm.position.z,
-        };
-        optixInst.setTransform(xfm_values);
-    }
+    void setInstanceInfos(Shared::InstanceDynamicInfo* instDynamicInfos) const {
+        for (uint32_t cgasIdx = 0; cgasIdx < instances.size(); ++cgasIdx) {
+            const Instance &inst = instances[cgasIdx];
+            Shared::InstanceDynamicInfo &instDynamicInfo = instDynamicInfos[startInstanceId + cgasIdx];
+            instDynamicInfo.cgas.clasHandleCount = 0;
+            instDynamicInfo.transform = inst.transform;
 
-    void setInstanceInfo(Shared::ClusterGasInstanceInfo* const instInfoBuffer) {
-        instInfoBuffer[instanceId] = instInfoOnHost;
+            const Shared::InstanceTransform &xfm = inst.transform;
+            const Matrix3x3 matSR = xfm.scale * xfm.orientation.toMatrix3x3();
+            const float xfm_values[] = {
+                matSR.m00, matSR.m01, matSR.m02, xfm.position.x,
+                matSR.m10, matSR.m11, matSR.m12, xfm.position.y,
+                matSR.m20, matSR.m21, matSR.m22, xfm.position.z,
+            };
+            inst.optixInst.setTransform(xfm_values);
+        }
     }
 };
 
@@ -389,51 +445,54 @@ int32_t main(int32_t argc, const char* argv[]) try {
     size_t maxSizeOfScratchBuffer = 0;
     cudau::Buffer asBuildScratchMem;
 
-    uint32_t clusterGasInstId = 0;
+    constexpr uint32_t maxInstCount = 1024;
+    cudau::TypedBuffer<Shared::InstanceStaticInfo> instStaticInfoBuffer(
+        cuContext, cudau::BufferType::Device, maxInstCount);
+
+    uint32_t instId = 0;
+    Shared::InstanceStaticInfo* instStaticInfos = instStaticInfoBuffer.map();
+
+
 
     HierarchicalMesh bunnyHiMesh;
     bunnyHiMesh.read(
         cuContext, scene, mat,
         R"(E:\assets\McguireCGArchive\bunny\bunny_000.himesh)");
-
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyHiMesh.asMemReqs.tempSizeInBytes);
 
-
-    
-    constexpr uint32_t bunnyCount = 3;
-    std::vector<ClusterGasInstance> bunnyInsts(bunnyCount);
-    const Shared::InstanceTransform bunnyInstXfms[bunnyCount] = {
+    const Shared::InstanceTransform bunnyInstXfms[] = {
         { 1.0f, Quaternion(), float3(0.0f, 0.0f, 0.0f) },
         { 1.0f, Quaternion(), float3(-3.0f, 0.0f, -5.0f) },
         { 1.0f, Quaternion(), float3(15.0f, 0.0f, -50.0f) },
     };
+    constexpr uint32_t bunnyCount = lengthof(bunnyInstXfms);
+    HiMeshInstanceSet bunnyHiMeshInstSet;
+    bunnyHiMeshInstSet.initialize(
+        cuContext, scene, &bunnyHiMesh,
+        bunnyInstXfms, bunnyCount, instStaticInfos, instId);
+    instId += bunnyCount;
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyHiMeshInstSet.asMemReqs.tempSizeInBytes);
 
-    const uint32_t maxClasCountPerBunnyCgas = bunnyHiMesh.levelInfos[0].clusterCount;
 
-    optixu::ClusterGeometryAccelerationStructureSet bunnyCgasSet = scene.createClusterGeometryAccelerationStructureSet();
-    cudau::Buffer bunnyCgasSetMem;
-    bunnyCgasSet.setRayTypeCount(Shared::NumRayTypes);
-    bunnyCgasSet.setBuildInput(
-        OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
-        bunnyCount, maxClasCountPerBunnyCgas, maxClasCountPerBunnyCgas * bunnyCount,
-        &asMemReqs);
-    bunnyCgasSet.setChild(bunnyHiMesh.clasSet);
 
-    bunnyCgasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
+    HierarchicalMesh dragonHiMesh;
+    dragonHiMesh.read(
+        cuContext, scene, mat,
+        R"(E:\assets\McguireCGArchive\dragon\dragon_000.himesh)");
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonHiMesh.asMemReqs.tempSizeInBytes);
 
-    cudau::TypedBuffer<uint32_t> bunnyCgasCount(
-        cuContext, cudau::BufferType::Device, 1, bunnyCount);
-    cudau::TypedBuffer<OptixClusterAccelBuildInputClustersArgs> bunnyCgasArgsArray(
-        cuContext, cudau::BufferType::Device, bunnyCount);
-    cudau::TypedBuffer<OptixTraversableHandle> bunnyCgasHandles(
-        cuContext, cudau::BufferType::Device, bunnyCount);
-
-    for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
-        ClusterGasInstance &bunnyInst = bunnyInsts[bunnyIdx];
-        bunnyInst.initialize(cuContext, scene, bunnyCgasSet, clusterGasInstId++, maxClasCountPerBunnyCgas);
-        bunnyInst.setTransform(bunnyInstXfms[bunnyIdx]);
-    }
+    const Shared::InstanceTransform dragonInstXfms[] = {
+        { 2.5f, qRotateY(0.5f * pi_v<float>), float3(1.0f, 0.7f, -3.0f) },
+        { 2.5f, qRotateY(0.5f * pi_v<float>), float3(5.0f, 0.7f, -10.0f) },
+        { 2.5f, qRotateY(0.5f * pi_v<float>), float3(-20.0f, 0.7f, -100.0f) },
+    };
+    constexpr uint32_t dragonCount = lengthof(dragonInstXfms);
+    HiMeshInstanceSet dragonHiMeshInstSet;
+    dragonHiMeshInstSet.initialize(
+        cuContext, scene, &dragonHiMesh,
+        dragonInstXfms, dragonCount, instStaticInfos, instId);
+    instId += dragonCount;
+    maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonHiMeshInstSet.asMemReqs.tempSizeInBytes);
 
 
 
@@ -482,6 +541,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Instance floorInst = scene.createInstance();
     floorInst.setChild(floorGas);
+    floorInst.setID(instId++);
 
 
 
@@ -492,16 +552,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx)
-        ias.addChild(bunnyInsts[bunnyIdx].optixInst);
+        ias.addChild(bunnyHiMeshInstSet.instances[bunnyIdx].optixInst);
+    for (uint32_t dragonIdx = 0; dragonIdx < dragonCount; ++dragonIdx)
+        ias.addChild(dragonHiMeshInstSet.instances[dragonIdx].optixInst);
     ias.addChild(floorInst);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
     instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
-
-    cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> clusterGasInstInfoBuffers[2];
-    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx)
-        clusterGasInstInfoBuffers[bufIdx].initialize(cuContext, cudau::BufferType::Device, bunnyCount);
 
 
 
@@ -522,6 +580,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hitGroupSBT.setMappedMemoryPersistent(true);
 
     floorGas.rebuild(0, floorGasMem, asBuildScratchMem);
+
+    instStaticInfoBuffer.unmap();
+
+    HiMeshInstanceSet* const hiMeshInstSets[] = {
+        &bunnyHiMeshInstSet,
+        &dragonHiMeshInstSet,
+    };
+    const char* hiMeshInstSetNames[] = {
+        "Bunny",
+        "Dragon",
+    };
 
     // END: Setup a scene.
     // ----------------------------------------------------------------
@@ -551,6 +620,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     plp.imageSize = int2(initWindowContentWidth, initWindowContentHeight);
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(initWindowContentWidth) / initWindowContentHeight;
+    plp.instStaticInfoBuffer = instStaticInfoBuffer.getROBuffer<enableBufferOobCheck>();
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -591,13 +661,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         0xFFFF'FFFF,
         float2(0.0f, 0.0f)
     };
-    cudau::TypedBuffer<Shared::PickInfo> pickInfos[2];
-    pickInfos[0].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
-    pickInfos[1].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
-
-    cudau::TypedBuffer<uint32_t> clasBuildCounts[2];
-    clasBuildCounts[0].initialize(cuContext, cudau::BufferType::Device, 1, 0);
-    clasBuildCounts[1].initialize(cuContext, cudau::BufferType::Device, 1, 0);
 
     struct GPUTimer {
         cudau::Timer frame;
@@ -616,9 +679,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
     };
 
+    cudau::TypedBuffer<Shared::InstanceDynamicInfo> instDynamicInfoBuffers[2];
+    cudau::TypedBuffer<Shared::PickInfo> pickInfos[2];
     GPUTimer gpuTimers[2];
-    gpuTimers[0].initialize(cuContext);
-    gpuTimers[1].initialize(cuContext);
+    for (uint32_t i = 0; i < 2; ++i) {
+        instDynamicInfoBuffers[i].initialize(cuContext, cudau::BufferType::Device, maxInstCount);
+        pickInfos[i].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
+        gpuTimers[i].initialize(cuContext);
+    }
 
     const auto onRenderLoop = [&]
     (const RunArguments &args) {
@@ -626,10 +694,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const CUstream curStream = args.curStream;
         const uint32_t bufIdx = frameIndex % 2;
         GPUTimer &curGPUTimer = gpuTimers[bufIdx];
-        cudau::TypedBuffer<Shared::ClusterGasInstanceInfo> &curClusterGasInstInfoBuffer =
-            clusterGasInstInfoBuffers[bufIdx];
-        cudau::TypedBuffer<uint32_t> &curClasBuildCount = clasBuildCounts[bufIdx];
         cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[bufIdx];
+        cudau::TypedBuffer<Shared::InstanceDynamicInfo> &curInstDynamicInfoBuffer =
+            instDynamicInfoBuffers[bufIdx];
 
         // Camera Window
         bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
@@ -742,17 +809,25 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Text("  Render: %.3f [ms]", renderTime);
 
             ImGui::Separator();
-            uint32_t clasCountToBuild = 0;
-            CUDADRV_CHECK(cuMemcpyDtoHAsync(
-                &clasCountToBuild, curClasBuildCount.getCUdeviceptr(),
-                sizeof(uint32_t), curStream));
-            ImGui::Text("Total CLAS Count: %u", clasCountToBuild);
 
-            std::vector<Shared::ClusterGasInstanceInfo> clusterGasInstInfos(bunnyCount);
-            curClusterGasInstInfoBuffer.read(clusterGasInstInfos, curStream);
-            for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx) {
-                const Shared::ClusterGasInstanceInfo &instInfo = clusterGasInstInfos[bunnyIdx];
-                ImGui::Text("  Inst %u CLAS Count: %u", bunnyIdx, instInfo.clasHandleCount);
+            std::vector<Shared::InstanceDynamicInfo> instDynInfos(maxInstCount);
+            curInstDynamicInfoBuffer.read(instDynInfos, curStream);
+
+            for (uint32_t setIdx = 0; setIdx < lengthof(hiMeshInstSets); ++setIdx) {
+                const HiMeshInstanceSet &hiMeshInstSet = *hiMeshInstSets[setIdx];
+                const char* const setName = hiMeshInstSetNames[setIdx];
+
+                uint32_t clasCountToBuild = 0;
+                CUDADRV_CHECK(cuMemcpyDtoHAsync(
+                    &clasCountToBuild, hiMeshInstSet.clasBuildCounts[bufIdx].getCUdeviceptr(),
+                    sizeof(uint32_t), curStream));
+                ImGui::Text("%s", setName);
+                ImGui::Text("  Total CLAS Count: %u", clasCountToBuild);
+                for (uint32_t cgasIdx = 0; cgasIdx < hiMeshInstSet.instances.size(); ++cgasIdx) {
+                    const Shared::InstanceDynamicInfo &instDynInfo =
+                        instDynInfos[hiMeshInstSet.startInstanceId + cgasIdx];
+                    ImGui::Text("    Inst %u CLAS Count: %u", cgasIdx, instDynInfo.cgas.clasHandleCount);
+                }
             }
 
             ImGui::End();
@@ -767,65 +842,126 @@ int32_t main(int32_t argc, const char* argv[]) try {
              lodLevelChanged) && !lockLod ||
             frameIndex == 0)
         {
+            const auto executeInBatch = [&]
+            (std::function<void(const HiMeshInstanceSet &)> f) {
+                for (uint32_t setIdx = 0; setIdx < lengthof(hiMeshInstSets); ++setIdx)
+                    f(*hiMeshInstSets[setIdx]);
+            };
+
             // JP: 
             // EN: 
-            Shared::ClusterGasInstanceInfo* const clusterGasInstInfos = curClusterGasInstInfoBuffer.map(curStream);
-            for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyInsts.size(); ++bunnyIdx)
-                bunnyInsts[bunnyIdx].setInstanceInfo(clusterGasInstInfos);
-            curClusterGasInstInfoBuffer.unmap(curStream);
+            Shared::InstanceDynamicInfo* const instDynInfos = curInstDynamicInfoBuffer.map(curStream);
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                hiMeshInstSet.setInstanceInfos(instDynInfos);
+            });
+            curInstDynamicInfoBuffer.unmap(curStream);
 
             // JP: ビルドするCLAS数カウンターとArgs設定済みを表すフラグ列をリセットする。
             // EN: 
-            const CUdeviceptr clasCountToBuildPtr =
-                bunnyHiMesh.clusterSetInfo.getCUdeviceptr() + offsetof(Shared::ClusterSetInfo, argsCountToBuild);
-            CUDADRV_CHECK(cuMemsetD32Async(clasCountToBuildPtr, 0, 1, curStream));
-            CUDADRV_CHECK(cuMemsetD32Async(
-                bunnyHiMesh.usedFlags.getCUdeviceptr(), 0, bunnyHiMesh.usedFlags.sizeInBytes() / 4, curStream));
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                const HierarchicalMesh &hiMesh = *hiMeshInstSet.hiMesh;
+
+                const CUdeviceptr clasCountToBuildPtr =
+                    hiMesh.clusterSetInfo.getCUdeviceptr() +
+                    offsetof(Shared::ClusterSetInfo, argsCountToBuild);
+                CUDADRV_CHECK(cuMemsetD32Async(clasCountToBuildPtr, 0, 1, curStream));
+                CUDADRV_CHECK(cuMemsetD32Async(
+                    hiMesh.usedFlags.getCUdeviceptr(), 0, hiMesh.usedFlags.sizeInBytes() / 4, curStream));
+            });
 
             // JP: メッシュの各インスタンス・各クラスターをテストして、ビルドの必要があるクラスターを特定する。
             // EN: 
-            const uint32_t meshTotalClusterCount = bunnyHiMesh.clusters.numElements();
-            const uint32_t instClusterCountStride = (meshTotalClusterCount + 31) / 32 * 32;
-            emitClasArgsArray.launchWithThreadDim(
-                curStream, cudau::dim3(instClusterCountStride * bunnyCount),
-                lodMode, lodLevel,
-                plp.camera.position, plp.camera.orientation,
-                plp.camera.fovY, args.windowContentRenderHeight,
-                bunnyHiMesh.clusters, bunnyHiMesh.argsArray,
-                meshTotalClusterCount, bunnyHiMesh.levelInfos.size(),
-                bunnyHiMesh.clusterSetInfo, curClusterGasInstInfoBuffer, bunnyCount);
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                const HierarchicalMesh &hiMesh = *hiMeshInstSet.hiMesh;
+                const uint32_t hiMeshTotalClusterCount = hiMesh.clusters.numElements();
+                const uint32_t hiMeshInstCount = hiMeshInstSet.instances.size();
+
+                const uint32_t instClusterCountStride = (hiMeshTotalClusterCount + 31) / 32 * 32;
+                emitClasArgsArray.launchWithThreadDim(
+                    curStream, cudau::dim3(instClusterCountStride * hiMeshInstCount),
+                    lodMode, lodLevel,
+                    plp.camera.position, plp.camera.orientation,
+                    plp.camera.fovY, args.windowContentRenderHeight,
+                    hiMesh.clusters, hiMesh.argsArray,
+                    hiMeshTotalClusterCount, hiMesh.levelInfos.size(),
+                    hiMesh.clusterSetInfo,
+                    instStaticInfoBuffer.getDevicePointerAt(hiMeshInstSet.startInstanceId),
+                    curInstDynamicInfoBuffer.getDevicePointerAt(hiMeshInstSet.startInstanceId),
+                    hiMeshInstCount);
+            });
 
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
             // EN: 
-            bunnyHiMesh.clasSet.rebuild(
-                curStream,
-                bunnyHiMesh.argsArrayToBuild, clasCountToBuildPtr, bunnyHiMesh.clasSetMem, asBuildScratchMem,
-                bunnyHiMesh.clasHandles);
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                const HierarchicalMesh &hiMesh = *hiMeshInstSet.hiMesh;
+
+                const CUdeviceptr clasCountToBuildPtr =
+                    hiMesh.clusterSetInfo.getCUdeviceptr() +
+                    offsetof(Shared::ClusterSetInfo, argsCountToBuild);
+                hiMesh.clasSet.rebuild(
+                    curStream,
+                    hiMesh.argsArrayToBuild, clasCountToBuildPtr, hiMesh.clasSetMem, asBuildScratchMem,
+                    hiMesh.clasHandles);
+            });
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
             //     対応するクラスターのハンドルをコピーする。
-            copyClasHandles.launchWithThreadDim(
-                curStream, cudau::dim3(maxClasCountPerBunnyCgas * bunnyCount),
-                maxClasCountPerBunnyCgas, bunnyHiMesh.clusterSetInfo,
-                curClusterGasInstInfoBuffer, bunnyCount);
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                const HierarchicalMesh &hiMesh = *hiMeshInstSet.hiMesh;
+                const uint32_t hiMeshInstCount = hiMeshInstSet.instances.size();
+
+                copyClasHandles.launchWithThreadDim(
+                    curStream, cudau::dim3(hiMeshInstSet.maxClasCountPerCgas * hiMeshInstCount),
+                    hiMeshInstSet.maxClasCountPerCgas, hiMesh.clusterSetInfo,
+                    instStaticInfoBuffer.getDevicePointerAt(hiMeshInstSet.startInstanceId),
+                    hiMeshInstCount);
+            });
 
             // JP: 各インスタンスに対応するCGAS入力を生成する。
             // EN: 
-            emitClusterGasArgsArray.launchWithThreadDim(
-                curStream, cudau::dim3(bunnyCount),
-                curClusterGasInstInfoBuffer, bunnyCount,
-                bunnyCgasArgsArray);
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                const uint32_t hiMeshInstCount = hiMeshInstSet.instances.size();
+
+                emitClusterGasArgsArray.launchWithThreadDim(
+                    curStream, cudau::dim3(hiMeshInstCount),
+                    instStaticInfoBuffer.getDevicePointerAt(hiMeshInstSet.startInstanceId),
+                    curInstDynamicInfoBuffer.getDevicePointerAt(hiMeshInstSet.startInstanceId),
+                    hiMeshInstCount,
+                    hiMeshInstSet.cgasArgsArray);
+            });
 
             // JP: CGAS集合をビルドする。
             // EN: 
-            bunnyCgasSet.rebuild(
-                curStream,
-                bunnyCgasArgsArray, bunnyCgasCount.getCUdeviceptr(), bunnyCgasSetMem, asBuildScratchMem,
-                bunnyCgasHandles);
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                hiMeshInstSet.cgasSet.rebuild(
+                    curStream,
+                    hiMeshInstSet.cgasArgsArray, hiMeshInstSet.cgasCount.getCUdeviceptr(),
+                    hiMeshInstSet.cgasSetMem, asBuildScratchMem,
+                    hiMeshInstSet.cgasHandles);
+            });
 
-            CUDADRV_CHECK(cuMemcpyDtoDAsync(
-                curClasBuildCount.getCUdeviceptr(), clasCountToBuildPtr,
-                sizeof(uint32_t), curStream));
+            // JP: 統計情報をCPU側で処理するためにコピーする。
+            // EN: 
+            executeInBatch([&](const HiMeshInstanceSet &hiMeshInstSet)
+            {
+                const HierarchicalMesh &hiMesh = *hiMeshInstSet.hiMesh;
+
+                const cudau::TypedBuffer<uint32_t> &curClasBuildCount = hiMeshInstSet.clasBuildCounts[bufIdx];
+                const CUdeviceptr clasCountToBuildPtr =
+                    hiMesh.clusterSetInfo.getCUdeviceptr() +
+                    offsetof(Shared::ClusterSetInfo, argsCountToBuild);
+
+                CUDADRV_CHECK(cuMemcpyDtoDAsync(
+                    curClasBuildCount.getCUdeviceptr(), clasCountToBuildPtr,
+                    sizeof(uint32_t), curStream));
+            });
         }
 
         /*
@@ -861,7 +997,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
             plp.pickInfo = curPickInfo.getDevicePointer();
-            plp.clusterGasInstInfoBuffer = curClusterGasInstInfoBuffer.getDevicePointer();
+            plp.instDynamicInfoBuffer = curInstDynamicInfoBuffer.getROBuffer<enableBufferOobCheck>();
             plp.mousePosition = uint2(uint32_t(args.mouseX), uint32_t(args.mouseY));
             plp.subPixelOffset = enableJittering ?
                 subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))] :
@@ -920,14 +1056,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     framework.run(onRenderLoop, onResolutionChange);
 
-    gpuTimers[1].finalize();
-    gpuTimers[0].finalize();
-
-    clasBuildCounts[1].finalize();
-    clasBuildCounts[0].finalize();
-
-    pickInfos[1].finalize();
-    pickInfos[0].finalize();
+    for (uint32_t i = 0; i < 2; ++i) {
+        instDynamicInfoBuffers[i].finalize();
+        pickInfos[i].finalize();
+        gpuTimers[i].finalize();
+    }
 
     outputBufferSurfaceHolder.finalize();
     outputArray.finalize();
@@ -947,9 +1080,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     asBuildScratchMem.finalize();
 
-    for (uint32_t bufIdx = 0; bufIdx < 2; ++bufIdx)
-        clusterGasInstInfoBuffers[bufIdx].finalize();
-
     instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
@@ -961,15 +1091,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorVertexBuffer.finalize();
     floorGeomInst.destroy();
 
-    for (uint32_t bunnyIdx = 0; bunnyIdx < bunnyCount; ++bunnyIdx)
-        bunnyInsts[bunnyIdx].finalize();
-    bunnyCgasHandles.finalize();
-    bunnyCgasArgsArray.finalize();
-    bunnyCgasCount.finalize();
-    bunnyCgasSetMem.finalize();
-    bunnyCgasSet.destroy();
+    dragonHiMeshInstSet.finalize();
+    dragonHiMesh.finalize();
 
+    bunnyHiMeshInstSet.finalize();
     bunnyHiMesh.finalize();
+
+    instStaticInfoBuffer.finalize();
 
     scene.destroy();
 

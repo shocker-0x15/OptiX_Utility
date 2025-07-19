@@ -22,7 +22,9 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     const Cluster* clusters, const OptixClusterAccelBuildInputTrianglesArgs* const srcClusterArgsArray,
     const uint32_t meshTotalClusterCount, const uint32_t levelCount,
     ClusterSetInfo* const clusterSetInfo,
-    ClusterGasInstanceInfo* const clusterGasInstInfos, const uint32_t instCount)
+    const InstanceStaticInfo* const instStaticInfos,
+    InstanceDynamicInfo* const instDynamicInfos,
+    const uint32_t instCount)
 {
     const uint32_t globalThreadIdx = blockDim.x * blockIdx.x + threadIdx.x;
     const uint32_t instClusterCountStride = (meshTotalClusterCount + 31) / 32 * 32;
@@ -35,7 +37,8 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     const uint32_t usedFlagsBinIdx = isValidThread ? clusterIdx / 32 : 0;
     const uint32_t usedFlagIdxInBin = isValidThread ? clusterIdx % 32 : 0;
 
-    ClusterGasInstanceInfo &clusterGasInstInfo = clusterGasInstInfos[isValidThread ? instIdx : 0];
+    const InstanceStaticInfo &instStaticInfo = instStaticInfos[isValidThread ? instIdx : 0];
+    InstanceDynamicInfo &instDynamicInfo = instDynamicInfos[isValidThread ? instIdx : 0];
 
     // JP: クラスターを描画すべきかどうかを決定する。
     // EN: 
@@ -46,7 +49,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
             const float onePixelInNS = 1.0f / imageHeight;
             const float threshold = 1.0f * onePixelInNS;
 
-            const InstanceTransform &xfm = clusterGasInstInfo.transform;
+            const InstanceTransform &xfm = instDynamicInfo.transform;
             const Matrix3x3 matRot = xfm.orientation.toMatrix3x3();
             Sphere selfBounds = cluster.bounds;
             selfBounds.center = matRot * selfBounds.center + xfm.position;
@@ -110,7 +113,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
         const uint32_t waveEmitFlags = __ballot_sync(0xFFFF'FFFF, emit);
         uint32_t compactClusterBaseIdx = 0;
         if (threadIdx.x == 0)
-            compactClusterBaseIdx = atomicAdd(&clusterGasInstInfo.clasHandleCount, popcnt(waveEmitFlags));
+            compactClusterBaseIdx = atomicAdd(&instDynamicInfo.cgas.clasHandleCount, popcnt(waveEmitFlags));
         clasHandleIdx = __shfl_sync(0xFFFF'FFFF, compactClusterBaseIdx, 0) +
             popcnt(waveEmitFlags & ((1u << threadIdx.x) - 1));
     }
@@ -119,14 +122,15 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     //     入力ハンドルインデックスからクラスターインデックスへのマップを作成する。
     // EN: 
     if (emit)
-        clusterGasInstInfo.indexMapClasHandleToCluster[clasHandleIdx] = clusterIdx;
+        instStaticInfo.cgas.indexMapClasHandleToCluster[clasHandleIdx] = clusterIdx;
 }
 
 
 
 CUDA_DEVICE_KERNEL void copyClasHandles(
-    const uint32_t maxClusterCountPerInst, ClusterSetInfo* const clusterSetInfo,
-    ClusterGasInstanceInfo* const clusterGasInstInfos, const uint32_t instCount)
+    const uint32_t maxClusterCountPerInst, const ClusterSetInfo* const clusterSetInfo,
+    const InstanceStaticInfo* const instStaticInfos,
+    const uint32_t instCount)
 {
     const uint32_t globalThreadIdx = blockDim.x * blockIdx.x + threadIdx.x;
     const uint32_t instIdx = globalThreadIdx / maxClusterCountPerInst;
@@ -136,19 +140,21 @@ CUDA_DEVICE_KERNEL void copyClasHandles(
         clasHandleIdx < maxClusterCountPerInst;
 
     // JP: メッシュのCLASバッチビルドの出力ハンドル列を、Cluster GASの入力ハンドルバッファーにコピーする。
-    ClusterGasInstanceInfo &clusterGasInstInfo = clusterGasInstInfos[isValidThread ? instIdx : 0];
+    const InstanceStaticInfo &instStaticInfo = instStaticInfos[isValidThread ? instIdx : 0];
     const uint32_t srcClusterIdx =
-        clusterGasInstInfo.indexMapClasHandleToCluster[isValidThread ? clasHandleIdx : 0];
+        instStaticInfo.cgas.indexMapClasHandleToCluster[isValidThread ? clasHandleIdx : 0];
     const uint32_t clasBuildIdx =
         clusterSetInfo->indexMapClusterToClasBuild[srcClusterIdx];
     if (isValidThread)
-        clusterGasInstInfo.clasHandles[clasHandleIdx] = clusterSetInfo->clasHandles[clasBuildIdx];
+        instStaticInfo.cgas.clasHandles[clasHandleIdx] = clusterSetInfo->clasHandles[clasBuildIdx];
 }
 
 
 
 CUDA_DEVICE_KERNEL void emitClusterGasArgsArray(
-    ClusterGasInstanceInfo* const clusterGasInstInfos, const uint32_t instCount,
+    const InstanceStaticInfo* const instStaticInfos,
+    const InstanceDynamicInfo* const instDynamicInfos,
+    const uint32_t instCount,
     OptixClusterAccelBuildInputClustersArgs* const cgasArgsArray)
 {
     const uint32_t globalThreadIdx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -156,11 +162,12 @@ CUDA_DEVICE_KERNEL void emitClusterGasArgsArray(
     if (instIdx >= instCount)
         return;
 
-    ClusterGasInstanceInfo &clusterGasInstInfo = clusterGasInstInfos[instIdx];
+    const InstanceStaticInfo &instStaticInfo = instStaticInfos[instIdx];
+    const InstanceDynamicInfo &instDynamicInfo = instDynamicInfos[instIdx];
     OptixClusterAccelBuildInputClustersArgs cgasArgs = {};
-    cgasArgs.clusterHandlesBuffer = reinterpret_cast<CUdeviceptr>(clusterGasInstInfo.clasHandles);
+    cgasArgs.clusterHandlesBuffer = reinterpret_cast<CUdeviceptr>(instStaticInfo.cgas.clasHandles);
     cgasArgs.clusterHandlesBufferStrideInBytes = sizeof(CUdeviceptr);
-    cgasArgs.clusterHandlesCount = clusterGasInstInfo.clasHandleCount;
+    cgasArgs.clusterHandlesCount = instDynamicInfo.cgas.clasHandleCount;
 
     cgasArgsArray[instIdx] = cgasArgs;
 }
