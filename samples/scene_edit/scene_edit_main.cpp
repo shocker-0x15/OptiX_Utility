@@ -1104,7 +1104,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         geomGroup->name = name;
                         geomGroup->optixGAS = optixEnv.scene.createGeometryAccelerationStructure();
                         geomGroup->optixGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
-                        geomGroup->optixGas.setMaterialSetCount(1);
+                        geomGroup->optixGAS.setMaterialSetCount(1);
                         geomGroup->optixGAS.setRayTypeCount(0, Shared::NumRayTypes);
                         geomGroup->preTransforms.resize(numSelectedGeomInsts);
                         geomGroup->preTransformBuffer.initialize(
