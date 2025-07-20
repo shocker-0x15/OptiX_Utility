@@ -24,8 +24,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE static const NormalMeshData &getNormalMeshData(
     return *reinterpret_cast<NormalMeshData*>(optixGetSbtDataPointer());
 }
 
-CUDA_DEVICE_FUNCTION CUDA_INLINE static const HierarchicalMeshData &getHierarchicalMeshData() {
-    return *reinterpret_cast<HierarchicalMeshData*>(optixGetSbtDataPointer());
+CUDA_DEVICE_FUNCTION CUDA_INLINE static const ClusteredMeshData &getClusteredMeshData() {
+    return *reinterpret_cast<ClusteredMeshData*>(optixGetSbtDataPointer());
 }
 
 
@@ -56,7 +56,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
         plp.pickInfo->primitiveIndex = hitInfo.primIndex;
         plp.pickInfo->barycentrics = hitInfo.barycentrics;
         if (hitInfo.clusterId != OPTIX_CLUSTER_ID_INVALID) {
-            plp.pickInfo->cluster = hitInfo.hiMeshData->clusters[hitInfo.clusterId];
+            plp.pickInfo->cluster = hitInfo.cMeshData->clusters[hitInfo.clusterId];
         }
         else {
             plp.pickInfo->cluster.level = 0;
@@ -95,7 +95,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
                     color = make_float3(0.25f, 0.0f, 0.5f);
                 }
                 else {
-                    color = calcFalseColor(hitInfo.hiMeshData->clusters[hitInfo.clusterId].level, 0, 10);
+                    color = calcFalseColor(hitInfo.cMeshData->clusters[hitInfo.clusterId].level, 0, 10);
                 }
             }
             else if (plp.visMode == VisualizationMode_Triangle) {
@@ -140,14 +140,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         vs[2] = meshData.vertices[tri.index2];
     }
     else {
-        const HierarchicalMeshData &meshData = getHierarchicalMeshData();
+        const ClusteredMeshData &meshData = getClusteredMeshData();
         const Cluster &cluster = meshData.clusters[clusterId];
         const LocalTriangle &tri = meshData.trianglePool[cluster.triPoolStartIndex + hp.primIndex];
         vs[0] = meshData.vertexPool[cluster.vertPoolStartIndex + tri.index0];
         vs[1] = meshData.vertexPool[cluster.vertPoolStartIndex + tri.index1];
         vs[2] = meshData.vertexPool[cluster.vertPoolStartIndex + tri.index2];
 
-        hitInfo.hiMeshData = &meshData;
+        hitInfo.cMeshData = &meshData;
     }
 
     const float bcB = hp.b1;

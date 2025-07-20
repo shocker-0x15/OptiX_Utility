@@ -104,7 +104,7 @@ namespace Shared {
         ROBuffer<Triangle> triangles;
     };
 
-    struct HierarchicalMeshData {
+    struct ClusteredMeshData {
         ROBuffer<Vertex> vertexPool;
         ROBuffer<LocalTriangle> trianglePool;
         ROBuffer<Cluster> clusters;
@@ -129,7 +129,7 @@ namespace Shared {
 
 
     struct HitInfo {
-        const HierarchicalMeshData* hiMeshData;
+        const ClusteredMeshData* cMeshData;
         uint32_t instIndex;
         uint32_t clusterId;
         uint32_t primIndex;
