@@ -9,6 +9,7 @@ namespace Shared {
 
     enum RayType {
         RayType_Primary = 0,
+        RayType_Visibility,
         NumRayTypes
     };
 
@@ -117,7 +118,8 @@ namespace Shared {
     };
 
     enum VisualizationMode : uint32_t {
-        VisualizationMode_ShadingNormal = 0,
+        VisualizationMode_Final = 0,
+        VisualizationMode_ShadingNormal,
         VisualizationMode_GeometricNormal,
         VisualizationMode_Cluster,
         VisualizationMode_Level,
@@ -155,6 +157,9 @@ namespace Shared {
         ROBuffer<InstanceDynamicInfo> instDynamicInfoBuffer;
         PickInfo* pickInfo;
         uint2 mousePosition;
+        float3 lightDirection;
+        float3 lightRadiance;
+        float3 envRadiance;
         float2 subPixelOffset;
         uint32_t sampleIndex : 8;
         uint32_t visMode : 3;
@@ -162,5 +167,7 @@ namespace Shared {
 
 
 
-    using MyPayloadSignature = optixu::PayloadSignature<HitInfo>;
+    using MyPayloadSignature = optixu::PayloadSignature<HitInfo, float3>;
+
+    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 }
