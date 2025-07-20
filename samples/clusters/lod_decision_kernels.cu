@@ -41,7 +41,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     InstanceDynamicInfo &instDynamicInfo = instDynamicInfos[isValidThread ? instIdx : 0];
 
     // JP: クラスターを描画すべきかどうかを決定する。
-    // EN: 
+    // EN: Determine whether to draw the cluster or not.
     bool emit = false;
     if (isValidThread) {
         const Cluster &cluster = clusters[clusterIdx];
