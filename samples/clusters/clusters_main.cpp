@@ -315,7 +315,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path resourceDir = getExecutableDirectory() / "clusters";
 
     bool takeScreenShot = false;
-    auto visualizationMode = Shared::VisualizationMode_ShadingNormal;
+    auto visualizationMode = Shared::VisualizationMode_Final;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -327,7 +327,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             if (argIdx + 1 >= argc)
                 throw std::runtime_error("Argument for --visualize is not complete.");
             std::string_view visType = argv[argIdx + 1];
-            if (visType == "shading-normal")
+            if (visType == "final")
+                visualizationMode = Shared::VisualizationMode_Final;
+            else if (visType == "shading-normal")
                 visualizationMode = Shared::VisualizationMode_ShadingNormal;
             else if (visType == "geom-normal")
                 visualizationMode = Shared::VisualizationMode_GeometricNormal;
@@ -386,14 +388,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
     //optixu::Program exceptionProgram = pipeline.createExceptionProgram(moduleOptiX, "__exception__print");
     optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+    optixu::Program emptyMissProgram = pipeline.createMissProgram(emptyModule, nullptr);
 
-    optixu::HitProgramGroup hitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+    optixu::HitProgramGroup primaryHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
         moduleOptiX, RT_CH_NAME_STR("closesthit"),
         emptyModule, nullptr);
+    optixu::HitProgramGroup visibilityHitProgramGroup = pipeline.createHitProgramGroupForTriangleIS(
+        moduleOptiX, RT_CH_NAME_STR("visibility"),
+        emptyModule, nullptr);
 
-    // JP: このサンプルはRay Generation Programからしかレイトレースを行わないのでTrace Depthは1になる。
-    // EN: Trace depth is 1 because this sample trace rays only from the ray generation program.
-    pipeline.link(1);
+    // JP: 
+    // EN: 
+    pipeline.link(2);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
     // If an exception program is not set but exception flags are set,
@@ -401,6 +407,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     //pipeline.setExceptionProgram(exceptionProgram);
     pipeline.setMissRayTypeCount(Shared::NumRayTypes);
     pipeline.setMissProgram(Shared::RayType_Primary, missProgram);
+    pipeline.setMissProgram(Shared::RayType_Visibility, emptyMissProgram);
 
     cudau::Buffer shaderBindingTable;
     size_t sbtSize;
@@ -428,7 +435,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Setup materials.
 
     optixu::Material mat = optixContext.createMaterial();
-    mat.setHitGroup(Shared::RayType_Primary, hitProgramGroup);
+    mat.setHitGroup(Shared::RayType_Primary, primaryHitProgramGroup);
+    mat.setHitGroup(Shared::RayType_Visibility, visibilityHitProgramGroup);
 
     // END: Setup materials.
     // ----------------------------------------------------------------
@@ -616,11 +624,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 0; i < lengthof(subPixelOffsets); ++i)
         subPixelOffsets[i] = float2(computeHaltonSequence(2, i), computeHaltonSequence(3, i));
 
+    float lightDirPhi = -16;
+    float lightDirTheta = 60;
+    float lightStrengthInLog10 = 0.8f;
+
     Shared::PipelineLaunchParameters plp;
     plp.imageSize = int2(initWindowContentWidth, initWindowContentHeight);
     plp.camera.fovY = 50 * pi_v<float> / 180;
     plp.camera.aspect = static_cast<float>(initWindowContentWidth) / initWindowContentHeight;
     plp.instStaticInfoBuffer = instStaticInfoBuffer.getROBuffer<enableBufferOobCheck>();
+    plp.envRadiance = float3(0.10f, 0.13f, 0.9f);
 
     pipeline.setScene(scene);
     pipeline.setHitGroupShaderBindingTable(hitGroupSBT, hitGroupSBT.getMappedPointer());
@@ -737,6 +750,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static int32_t lodLevel = 0;
         static bool lockLod = false;
         bool enableJitteringChanged = false;
+        bool lightParamChanged = false;
         bool lodModeChanged = false;
         bool lodLevelChanged = false;
         bool visModeChanged = false;
@@ -748,6 +762,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
             const bool oldEnableJittering = enableJittering;
             ImGui::Checkbox("Jittering", &enableJittering);
             enableJitteringChanged = enableJittering != oldEnableJittering;
+
+            ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen);
+            const float oldStrength = lightStrengthInLog10;
+            const float oldPhi = lightDirPhi;
+            const float oldTheta = lightDirTheta;
+            ImGui::SliderFloat("Light Strength", &lightStrengthInLog10, -2, 2);
+            ImGui::SliderFloat("Light Phi", &lightDirPhi, -180, 180);
+            ImGui::SliderFloat("Light Theta", &lightDirTheta, 0, 90);
+            lightParamChanged =
+                lightStrengthInLog10 != oldStrength
+                || lightDirPhi != oldPhi || lightDirTheta != oldTheta;
 
             const Shared::LoDMode oldLodMode = lodMode;
             const uint32_t oldLodLevel = lodLevel;
@@ -764,6 +789,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
             ImGui::PushID("visMode");
+            visModeChanged |= ImGui::RadioButtonE(
+                "Final", &visualizationMode, Shared::VisualizationMode_Final);
             visModeChanged |= ImGui::RadioButtonE(
                 "Shading Normal", &visualizationMode, Shared::VisualizationMode_ShadingNormal);
             visModeChanged |= ImGui::RadioButtonE(
@@ -983,7 +1010,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cameraIsActuallyMoving ||
             args.resized ||
             frameIndex == 0 ||
-            enableJitteringChanged || lodModeChanged || lodLevelChanged || lockLodChanged ||
+            enableJitteringChanged || lightParamChanged ||
+            lodModeChanged || lodLevelChanged || lockLodChanged ||
             visModeChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
@@ -999,6 +1027,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             plp.pickInfo = curPickInfo.getDevicePointer();
             plp.instDynamicInfoBuffer = curInstDynamicInfoBuffer.getROBuffer<enableBufferOobCheck>();
             plp.mousePosition = uint2(uint32_t(args.mouseX), uint32_t(args.mouseY));
+            plp.lightDirection = fromPolarYUp(lightDirPhi * pi_v<float> / 180, lightDirTheta * pi_v<float> / 180);
+            plp.lightRadiance = float3(std::pow(10.0f, lightStrengthInLog10));
             plp.subPixelOffset = enableJittering ?
                 subPixelOffsets[numAccumFrames % static_cast<uint32_t>(lengthof(subPixelOffsets))] :
                 float2(0.5f, 0.5f);
@@ -1021,7 +1051,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
         ReturnValuesToRenderLoop ret = {};
-        ret.enable_sRGB = false;
+        ret.enable_sRGB = visualizationMode == Shared::VisualizationMode_Final;
         ret.finish = false;
 
         if (takeScreenShot && frameIndex + 1 == lengthof(subPixelOffsets)) {
@@ -1111,8 +1141,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     shaderBindingTable.finalize();
 
-    hitProgramGroup.destroy();
+    visibilityHitProgramGroup.destroy();
+    primaryHitProgramGroup.destroy();
 
+    emptyMissProgram.destroy();
     missProgram.destroy();
     rayGenProgram.destroy();
 
