@@ -30,6 +30,73 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE static const ClusteredMeshData &getClusteredMes
 
 
 
+CUDA_DEVICE_FUNCTION CUDA_INLINE static uint32_t hash_u32(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352d;
+    x ^= x >> 15;
+    x *= 0x846ca68b;
+    x ^= x >> 16;
+    return x;
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE static float hash(const float3 &p) {
+    const uint32_t h = hash_u32(
+        __float_as_uint(p.x) ^
+        hash_u32(__float_as_uint(p.y)) ^
+        hash_u32(__float_as_uint(p.z)));
+    return static_cast<float>(h) / static_cast<float>(0xFFFF'FFFF);
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE static float noise(const float3 &p) {
+    const float3 i = floor(p);
+    const float3 f = fract(p);
+
+    const float3 u = f * f * (make_float3(3.0f) - 2.0f * f);
+
+    const float n000 = hash(i + make_float3(0.0f, 0.0f, 0.0f));
+    const float n100 = hash(i + make_float3(1.0f, 0.0f, 0.0f));
+    const float n010 = hash(i + make_float3(0.0f, 1.0f, 0.0f));
+    const float n110 = hash(i + make_float3(1.0f, 1.0f, 0.0f));
+    const float n001 = hash(i + make_float3(0.0f, 0.0f, 1.0f));
+    const float n101 = hash(i + make_float3(1.0f, 0.0f, 1.0f));
+    const float n011 = hash(i + make_float3(0.0f, 1.0f, 1.0f));
+    const float n111 = hash(i + make_float3(1.0f, 1.0f, 1.0f));
+
+    const float nx00 = lerp(n000, n100, u.x);
+    const float nx10 = lerp(n010, n110, u.x);
+    const float nx01 = lerp(n001, n101, u.x);
+    const float nx11 = lerp(n011, n111, u.x);
+
+    const float nxy0 = lerp(nx00, nx10, u.y);
+    const float nxy1 = lerp(nx01, nx11, u.y);
+
+    return lerp(nxy0, nxy1, u.z);
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE static float fbm(float3 p) {
+    float f = 0.0f;
+    float amp = 0.5f;
+    for (uint32_t i = 0; i < 5; ++i) {
+        f += amp * noise(p);
+        p = 2.0f * p;
+        amp *= 0.5f;
+    }
+    return f;
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE static float3 evalWood(const float3 &npos) {
+    const float3 p = 2.0f * npos - make_float3(1.0f);
+    const float r = length(make_float2(p.x, p.z));
+    const float grain = 1.5f * fbm(5.0f * p);
+    const float rings = fract((4.0f * r + grain));
+
+    const auto dark = sRGB_degamma(float3{ 0.396f, 0.263f, 0.129f });
+    const auto light = sRGB_degamma(float3{ 0.804f, 0.522f, 0.247f });
+    return lerp(dark, light, make_float3(std::sqrt(rings)));
+}
+
+
+
 CUDA_DEVICE_KERNEL void RT_RG_NAME(raygen)() {
     uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
@@ -161,8 +228,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     const float bcC = hp.b2;
     const float bcA = 1.0f - bcB - bcC;
 
-    float3 position = bcA * vs[0].position + bcB * vs[1].position + bcC * vs[2].position;
-    position = optixTransformPointFromObjectToWorldSpace(position);
+    const float3 localPos = bcA * vs[0].position + bcB * vs[1].position + bcC * vs[2].position;
+    const float3 position = optixTransformPointFromObjectToWorldSpace(localPos);
 
     float3 shadingNormal = bcA * vs[0].normal + bcB * vs[1].normal + bcC * vs[2].normal;
     shadingNormal = normalize(optixTransformNormalFromObjectToWorldSpace(shadingNormal));
@@ -172,7 +239,15 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         vs[2].position - vs[0].position);
     geomNormal = normalize(optixTransformNormalFromObjectToWorldSpace(geomNormal));
 
-    const float3 albedo = make_float3(0.5f, 0.5f, 0.5f);
+    float3 albedo = make_float3(0.5f, 0.5f, 0.5f);
+    if (clusterId != OPTIX_CLUSTER_ID_INVALID) {
+        // JP: クラスター化メッシュに適当なテクスチャーを設定する。
+        // EN: Set some texture for clustered mesh.
+        const ClusteredMeshData &meshData = getClusteredMeshData();
+        const float3 npos = meshData.bbox.calcNormalizedPos(localPos);
+        //albedo = npos;
+        albedo = evalWood(npos);
+    }
     float3 shadedColor = plp.envRadiance * albedo;
 
     float visibility = 1.0f;

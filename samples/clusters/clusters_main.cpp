@@ -194,10 +194,17 @@ struct ClusteredMesh {
 
         clasSet.prepareForBuild(&asMemReqs);
 
+        AABB bbox;
+        for (uint32_t vIdx = 0; vIdx < vertexCount; ++vIdx) {
+            const Shared::Vertex &v = verticesOnHost[vIdx];
+            bbox.unify(v.position);
+        }
+
         Shared::ClusteredMeshData cMeshData = {};
         cMeshData.vertexPool = vertexPool.getROBuffer<enableBufferOobCheck>();
         cMeshData.trianglePool = trianglePool.getROBuffer<enableBufferOobCheck>();
         cMeshData.clusters = clusters.getROBuffer<enableBufferOobCheck>();
+        cMeshData.bbox = bbox;
         clasSet.setUserData(cMeshData);
 
         clasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
@@ -357,6 +364,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 visualizationMode = Shared::VisualizationMode_GeometricNormal;
             else if (visType == "cluster")
                 visualizationMode = Shared::VisualizationMode_Cluster;
+            else if (visType == "level")
+                visualizationMode = Shared::VisualizationMode_Level;
+            else if (visType == "triangle")
+                visualizationMode = Shared::VisualizationMode_Triangle;
             else
                 throw std::runtime_error("Argument for --visualize is invalid.");
             argIdx += 1;
@@ -553,9 +564,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
         floorVertexBuffer.initialize(cuContext, cudau::BufferType::Device, vertices, lengthof(vertices));
         floorTriangleBuffer.initialize(cuContext, cudau::BufferType::Device, triangles, lengthof(triangles));
 
+        AABB bbox;
+        for (const Shared::Vertex &v : vertices)
+            bbox.unify(v.position);
+
         Shared::NormalMeshData meshData = {};
         meshData.vertices = floorVertexBuffer.getROBuffer<enableBufferOobCheck>();
         meshData.triangles = floorTriangleBuffer.getROBuffer<enableBufferOobCheck>();
+        meshData.bbox = bbox;
 
         floorGeomInst.setVertexBuffer(floorVertexBuffer);
         floorGeomInst.setTriangleBuffer(floorTriangleBuffer);

@@ -268,6 +268,15 @@ CUDA_COMMON_FUNCTION CUDA_INLINE T pow5(const T &x) {
     return pow4(x) * x;
 }
 
+template <typename T>
+CUDA_DEVICE_FUNCTION CUDA_INLINE T lerp(const T &a, const T &b, const T &t) {
+    return a + t * (b - a);
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE float fract(const float x) {
+    return x - std::floor(x);
+}
+
 
 
 // JP: CUDAビルトインに対応する型・関数をホスト側で定義しておく。
@@ -745,7 +754,26 @@ CUDA_COMMON_FUNCTION CUDA_INLINE float dot(const float2 &v0, const float2 &v1) {
 CUDA_COMMON_FUNCTION CUDA_INLINE float cross(const float2 &v0, const float2 &v1) {
     return v0.x * v1.y - v0.y * v1.x;
 }
+CUDA_COMMON_FUNCTION CUDA_INLINE float squaredDistance(const float2 &p0, const float2 &p1) {
+    float2 d = p1 - p0;
+    return dot(d, d);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float length(const float2 &v) {
+    return std::sqrt(v.x * v.x + v.y * v.y);
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float sqLength(const float2 &v) {
+    return v.x * v.x + v.y * v.y;
+}
+CUDA_COMMON_FUNCTION CUDA_INLINE float2 normalize(const float2 &v) {
+    return v / length(v);
+}
 
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 floor(const float3 &v) {
+    return make_float3(std::floor(v.x), std::floor(v.y), std::floor(v.z));
+}
+CUDA_DEVICE_FUNCTION CUDA_INLINE float3 fract(const float3 &v) {
+    return make_float3(fract(v.x), fract(v.y), fract(v.z));
+}
 CUDA_COMMON_FUNCTION CUDA_INLINE float3 min(const float3 &v0, const float3 &v1) {
     return make_float3(std::fmin(v0.x, v1.x),
                        std::fmin(v0.y, v1.y),
@@ -986,6 +1014,13 @@ struct AABB {
     CUDA_COMMON_FUNCTION float calcHalfSurfaceArea() const {
         float3 d = maxP - minP;
         return d.x * d.y + d.y * d.z + d.z * d.x;
+    }
+
+    CUDA_COMMON_FUNCTION float3 calcNormalizedPos(const float3 &p) const {
+        return make_float3(
+            (p.x - minP.x) / (maxP.x - minP.x),
+            (p.y - minP.y) / (maxP.y - minP.y),
+            (p.z - minP.z) / (maxP.z - minP.z));
     }
 };
 

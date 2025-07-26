@@ -102,12 +102,14 @@ namespace Shared {
     struct NormalMeshData {
         ROBuffer<Vertex> vertices;
         ROBuffer<Triangle> triangles;
+        AABB bbox;
     };
 
     struct ClusteredMeshData {
         ROBuffer<Vertex> vertexPool;
         ROBuffer<LocalTriangle> trianglePool;
         ROBuffer<Cluster> clusters;
+        AABB bbox;
     };
 
 
