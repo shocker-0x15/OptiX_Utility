@@ -16,7 +16,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float estimateClusterErrorInNormalizedScreen(
 }
 
 CUDA_DEVICE_KERNEL void emitClasArgsArray(
-    const LoDMode lodMode, const uint32_t manualUniformLevel,
+    const GeometryConfig geomConfig,
     const float3 cameraPosition, const Matrix3x3 cameraOrientation,
     const float cameraFovY, const uint32_t imageHeight,
     const Cluster* clusters, const OptixClusterAccelBuildInputTrianglesArgs* const srcClusterArgsArray,
@@ -45,7 +45,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     bool emit = false;
     if (isValidThread) {
         const Cluster &cluster = clusters[clusterIdx];
-        if (lodMode == LoDMode_ViewAdaptive) {
+        if (geomConfig.lodMode == LoDMode_ViewAdaptive) {
             const float onePixelInNS = 1.0f / imageHeight;
             const float threshold = 1.0f * onePixelInNS;
 
@@ -66,8 +66,8 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
                 cameraPosition, cameraOrientation, cameraFovY);
             emit = selfErrorInNS <= threshold && parentErrorInNS > threshold;
         }
-        else if (lodMode == LoDMode_ManualUniform) {
-            emit = cluster.level == min(manualUniformLevel, levelCount - 1);
+        else if (geomConfig.lodMode == LoDMode_ManualUniform) {
+            emit = cluster.level == min(geomConfig.manualUniformLevel, levelCount - 1);
         }
     }
 
@@ -102,7 +102,9 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     EN: 
     */
     if (isNewEmit) {
-        clusterSetInfo->argsArray[clasBuildIdx] = srcClusterArgsArray[clusterIdx];
+        OptixClusterAccelBuildInputTrianglesArgs args = srcClusterArgsArray[clusterIdx];
+        args.positionTruncateBitCount = geomConfig.positionTruncateBitWidth;
+        clusterSetInfo->argsArray[clasBuildIdx] = args;
         clusterSetInfo->indexMapClusterToClasBuild[clusterIdx] = clasBuildIdx;
     }
 

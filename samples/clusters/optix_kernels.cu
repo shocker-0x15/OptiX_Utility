@@ -150,6 +150,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
         hitInfo.cMeshData = &meshData;
     }
 
+    for (uint32_t i = 0; i < 3; ++i) {
+        const uint32_t bitMask = ~((1u << plp.posTruncateBitWidth) - 1);
+        vs[i].position.x = __uint_as_float(__float_as_uint(vs[i].position.x) & bitMask);
+        vs[i].position.y = __uint_as_float(__float_as_uint(vs[i].position.y) & bitMask);
+        vs[i].position.z = __uint_as_float(__float_as_uint(vs[i].position.z) & bitMask);
+    }
+
     const float bcB = hp.b1;
     const float bcC = hp.b2;
     const float bcA = 1.0f - bcB - bcC;
