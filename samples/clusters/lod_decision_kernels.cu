@@ -58,6 +58,9 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
             parentBounds.center = matRot * parentBounds.center + xfm.position;
             parentBounds.radius *= xfm.scale;
 
+            // Reference:
+            // - Nanite: A Deep Dive
+            // - meshoptimizer
             const float selfErrorInNS = estimateClusterErrorInNormalizedScreen(
                 selfBounds, xfm.scale * cluster.error,
                 cameraPosition, cameraOrientation, cameraFovY);
@@ -76,7 +79,8 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     {
         // JP: クラスターを描画する場合、使用フラグをセットする。
         //     また、このスレッドがクラスターの設定を初めて行うスレッドかを判定する。
-        // EN: 
+        // EN: If the cluster is to be drawn, set the used flag.
+        //     Also determine if this thread is the first thread to set the cluster.
         const uint32_t waveEmitFlags = __ballot_sync(0xFFFF'FFFF, emit);
         uint32_t oldWaveEmitFlags = 0;
         if (threadIdx.x == 0)
@@ -85,7 +89,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
         isNewEmit = emit && ((oldWaveEmitFlags >> usedFlagIdxInBin) & 0b1) == 0;
 
         // JP: 新規クラスターのCLASバッチビルド中のインデックスを決定する。
-        // EN:
+        // EN: Determine the index of the new cluster in the CLAS batch build.
         const uint32_t waveNewEmitFlags = __ballot_sync(0xFFFF'FFFF, isNewEmit);
         uint32_t clusterBuildBaseIdx = 0;
         if (threadIdx.x == 0)
@@ -99,7 +103,10 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
         CLASバッチビルドの出力ハンドル列を、複数のCluster GASそれぞれの入力である
         CLASハンドルバッファーにコピーできるよう、クラスターインデックスからCLASバッチビルド中のインデックス
         へのマップを作成する。
-    EN: 
+    EN: Set up the new cluster.
+        Create a map from the cluster index to the index in the CLAS batch build, so that
+        the output handle array of the CLAS batch build can be copied to the input CLAS handle buffer of
+        each Cluster GAS.
     */
     if (isNewEmit) {
         OptixClusterAccelBuildInputTrianglesArgs args = srcClusterArgsArray[clusterIdx];
@@ -109,7 +116,7 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
     }
 
     // JP: Cluster GASで使用するCLAS数をカウントする。
-    // EN: 
+    // EN: Count the number of CLASes to use in the Cluster GAS.
     uint32_t clasHandleIdx;
     {
         const uint32_t waveEmitFlags = __ballot_sync(0xFFFF'FFFF, emit);
@@ -122,7 +129,9 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
 
     // JP: Cluster GASの入力CLASハンドルバッファーに、CLASバッチビルドの出力ハンドル列をコピーできるよう、
     //     入力ハンドルインデックスからクラスターインデックスへのマップを作成する。
-    // EN: 
+    // EN: Create a map from the input handle index to the cluster index, so that
+    //     the output handle array of the CLAS batch build can be copied to
+    //     the input CLAS handle buffer of the Cluster GAS.
     if (emit)
         instStaticInfo.cgas.indexMapClasHandleToCluster[clasHandleIdx] = clusterIdx;
 }
@@ -142,6 +151,7 @@ CUDA_DEVICE_KERNEL void copyClasHandles(
         clasHandleIdx < maxClusterCountPerInst;
 
     // JP: メッシュのCLASバッチビルドの出力ハンドル列を、Cluster GASの入力ハンドルバッファーにコピーする。
+    // EN: Copy the output handle array of the mesh CLAS batch build to the input handle buffer of the Cluster GAS.
     const InstanceStaticInfo &instStaticInfo = instStaticInfos[isValidThread ? instIdx : 0];
     const uint32_t srcClusterIdx =
         instStaticInfo.cgas.indexMapClasHandleToCluster[isValidThread ? clasHandleIdx : 0];
