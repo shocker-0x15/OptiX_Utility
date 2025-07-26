@@ -1,8 +1,26 @@
 ﻿/*
 
-JP: 
+JP: このサンプルではクラスターAPIの使用方法を示す。
+    従来のGASは単一のメッシュが持つ頂点・三角形列から直接構築されていたが、クラスターAPIの下では
+    巨大な単一のGASを構築する代わりに、メッシュを複数のクラスターに(ユーザー側で)分割して管理し、
+    CLAS列の構築とCLAS集合の上になるGASの構築でメッシュに対応するASを行う。
+    CLASそれぞれは比較的小さなASであるため、メッシュ全体に対するASビルド時のGPU利用効率が向上し、
+    メッシュの部分ごとに容易にクラスターを差し替えられることで柔軟な高密度ジオメトリ表現が可能になる。
+    このサンプルではUnreal Engine 5 [1]で導入されたNaniteのように、DAGを使用したクラスター化メッシュの
+    AS構築とレンダリングを行う。
 
-EN: 
+EN: This sample demonstrates the usage of the cluster API.
+    Unlike the traditional GAS, which was built directly from the vertex and triangle arrays of a single mesh,
+    under the cluster API, the mesh is split into multiple clusters (managed by the user),
+    and the AS corresponding to the mesh is constructed by building a set of CLAS and
+    then building a GAS on top of the CLAS set.
+    Each CLAS is a relatively small AS, which improves GPU utilization efficiency during AS build
+    for the entire mesh, and allows for easy replacement of clusters for different parts of the mesh,
+    enabling flexible high-density geometry representation.
+    This sample performs AS construction and rendering of clustered meshes using a DAG,
+    similar to Nanite introduced in Unreal Engine 5 [1].
+
+[1] Nanite: A Deep Dive
 
 */
 
@@ -119,8 +137,9 @@ struct ClusteredMesh {
 
 
 
-        // JP: 
-        // EN: 
+        // JP: このサンプルコードにおいては、各クラスターの設定はほとんど静的なのでホスト側で構築しておく。
+        // EN: In this sample code, the settings for each cluster are mostly static,
+        //     so we build them on the host side.
         std::vector<OptixClusterAccelBuildInputTrianglesArgs> argsArrayOnHost(clusterCount);
         for (uint32_t cIdx = 0; cIdx < clusterCount; ++cIdx) {
             const Shared::Cluster &cluster = clustersOnHost[cIdx];
@@ -363,10 +382,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
-    /*
-    JP: クラスタージオメトリを使う場合はパイプラインで許可する必要がある。
-    EN: When using clustered geometry, it must be allowed in the pipeline.
-    */
+    // JP: クラスタージオメトリを使う場合はパイプラインで許可する必要がある。
+    // EN: When using clustered geometry, it must be allowed in the pipeline.
     optixu::PipelineOptions pipelineOptions;
     pipelineOptions.payloadCountInDwords = Shared::MyPayloadSignature::numDwords;
     pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
@@ -399,8 +416,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         moduleOptiX, RT_CH_NAME_STR("visibility"),
         emptyModule, nullptr);
 
-    // JP: 
-    // EN: 
+    // JP: このサンプルではClosest-Hit ProgramからシャドウレイをトレースするためTrace Depthは2になる。
+    // EN: In this sample, the trace depth is 2 because shadow rays are traced from the Closest-Hit Program.
     pipeline.link(2);
 
     pipeline.setRayGenerationProgram(rayGenProgram);
@@ -418,8 +435,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.setMappedMemoryPersistent(true);
     pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
-    // JP: 
-    // EN: 
+    // JP: 描画するクラスターを決定するカーネルなどをロードする。
+    // EN: Load kernels to determine which clusters to render.
     CUmodule lodDecisionModule;
     CUDADRV_CHECK(cuModuleLoad(
         &lodDecisionModule, (resourceDir / "ptxes/lod_decision_kernels.ptx").string().c_str()));
@@ -579,8 +596,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: 
-    // EN: 
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
@@ -888,8 +903,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     f(*cMeshInstSets[setIdx]);
             };
 
-            // JP: 
-            // EN: 
+            // JP: クラスター化メッシュの各インスタンスのトランスフォームなどをセットし、
+            //     Cluster GASに紐づくCLASカウンターをリセットする。
+            // EN: Set transforms and other information for each instance of clustered meshes,
+            //     and reset the CLAS counter associated with the Cluster GAS.
             Shared::InstanceDynamicInfo* const instDynInfos = curInstDynamicInfoBuffer.map(curStream);
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
@@ -897,8 +914,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
             curInstDynamicInfoBuffer.unmap(curStream);
 
-            // JP: ビルドするCLAS数カウンターとArgs設定済みを表すフラグ列をリセットする。
-            // EN: 
+            // JP: 各クラスター化メッシュに関して、ビルドするCLASカウンターとArgs設定済みを表すフラグ列を
+            //     リセットする。
+            // EN: For each clustered mesh, reset the CLAS counter and flags indicating that the args are set.
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -912,7 +930,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
 
             // JP: メッシュの各インスタンス・各クラスターをテストして、ビルドの必要があるクラスターを特定する。
-            // EN: 
+            // EN: Test each instance and each cluster of the mesh to identify clusters that need to be built.
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -939,7 +957,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
 
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
-            // EN: 
+            // EN: Build the CLAS set to be used in this frame.
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -968,7 +986,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
 
             // JP: 各インスタンスに対応するCGAS入力を生成する。
-            // EN: 
+            // EN: Generate CGAS inputs corresponding to each instance.
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const uint32_t cMeshInstCount = cMeshInstSet.instances.size();
@@ -981,8 +999,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstSet.cgasArgsArray);
             });
 
-            // JP: CGAS集合をビルドする。
-            // EN: 
+            // JP: 各クラスターメッシュのCGAS集合をビルドする。
+            // EN: Build the CGAS set for each clustered mesh.
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 cMeshInstSet.cgasSet.rebuild(
@@ -993,7 +1011,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
 
             // JP: 統計情報をCPU側で処理するためにコピーする。
-            // EN: 
+            // EN: Copy statistics information to the CPU side.
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -1009,15 +1027,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
         }
 
-        /*
-        JP: IASのリビルドを行う。
-            アップデートの代用としてのリビルドでは、インスタンスの追加・削除や
-            ASビルド設定の変更を行っていないのでmarkDirty()やprepareForBuild()は必要無い。
-        EN: Rebuild the IAS.
-            Rebuild as the alternative for update doesn't involves
-            add/remove of instances and changes of AS build settings
-            so neither of markDirty() nor prepareForBuild() is required.
-        */
+        // JP: IASのリビルドを行う。
+        // EN: Rebuild the IAS.
         curGPUTimer.update.start(curStream);
         //if (animate)
         plp.travHandle = ias.rebuild(curStream, instanceBuffer, iasMem, asBuildScratchMem);
