@@ -158,5 +158,29 @@
         "image": "output.png",
         "outputs": ["output.png"],
         "reference": "reference_shadow.png"
+    },
+    {
+        "name": "clusters final",
+        "sample": "clusters",
+        "options": "--screen-shot --visualize final",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_final.png"
+    },
+    {
+        "name": "clusters cluster",
+        "sample": "clusters",
+        "options": "--screen-shot --visualize cluster",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_cluster.png"
+    },
+    {
+        "name": "clusters triangle",
+        "sample": "clusters",
+        "options": "--screen-shot --visualize triangle",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference_triangle.png"
     }
 ]
