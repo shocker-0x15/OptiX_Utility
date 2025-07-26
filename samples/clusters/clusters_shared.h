@@ -128,6 +128,14 @@ namespace Shared {
 
 
 
+    struct GeometryConfig {
+        LoDMode lodMode;
+        uint32_t manualUniformLevel;
+        uint32_t positionTruncateBitWidth;
+    };
+
+
+
     struct HitInfo {
         const ClusteredMeshData* cMeshData;
         uint32_t instIndex;
@@ -163,6 +171,7 @@ namespace Shared {
         float2 subPixelOffset;
         uint32_t sampleIndex : 8;
         uint32_t visMode : 3;
+        uint32_t posTruncateBitWidth : 5;
     };
 
 

@@ -579,10 +579,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
-    //     確定している必要がある。
-    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     when building an IAS.
+    // JP: 
+    // EN: 
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
@@ -751,12 +749,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static Shared::LoDMode lodMode = Shared::LoDMode_ViewAdaptive;
         static int32_t lodLevel = 0;
         static bool lockLod = false;
+        static int32_t posTruncBitWidth = 0;
         bool enableJitteringChanged = false;
         bool lightParamChanged = false;
         bool lodModeChanged = false;
         bool lodLevelChanged = false;
         bool visModeChanged = false;
         bool lockLodChanged = false;
+        bool posTruncBitWidthChanged = false;
         {
             ImGui::SetNextWindowPos(ImVec2(712, 8), ImGuiCond_FirstUseEver);
             ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -766,60 +766,72 @@ int32_t main(int32_t argc, const char* argv[]) try {
             enableJitteringChanged = enableJittering != oldEnableJittering;
 
             ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen);
-            const float oldStrength = lightStrengthInLog10;
-            const float oldPhi = lightDirPhi;
-            const float oldTheta = lightDirTheta;
-            ImGui::SliderFloat("Light Strength", &lightStrengthInLog10, -2, 2);
-            ImGui::SliderFloat("Light Phi", &lightDirPhi, -180, 180);
-            ImGui::SliderFloat("Light Theta", &lightDirTheta, 0, 90);
-            lightParamChanged =
-                lightStrengthInLog10 != oldStrength
-                || lightDirPhi != oldPhi || lightDirTheta != oldTheta;
+            {
+                const float oldStrength = lightStrengthInLog10;
+                const float oldPhi = lightDirPhi;
+                const float oldTheta = lightDirTheta;
+                ImGui::SliderFloat("Light Strength", &lightStrengthInLog10, -2, 2);
+                ImGui::SliderFloat("Light Phi", &lightDirPhi, -180, 180);
+                ImGui::SliderFloat("Light Theta", &lightDirTheta, 0, 90);
+                lightParamChanged =
+                    lightStrengthInLog10 != oldStrength
+                    || lightDirPhi != oldPhi || lightDirTheta != oldTheta;
+            }
 
-            const Shared::LoDMode oldLodMode = lodMode;
-            const uint32_t oldLodLevel = lodLevel;
-            const bool oldLockLod = lockLod;
-            ImGui::CollapsingHeader("LoD", ImGuiTreeNodeFlags_DefaultOpen);
-            ImGui::RadioButtonE("View Adaptive", &lodMode, Shared::LoDMode_ViewAdaptive);
-            ImGui::RadioButtonE("Manual Uniform", &lodMode, Shared::LoDMode_ManualUniform);
-            if (ImGui::SliderInt("Level", &lodLevel, 0, 15))
-                lodMode = Shared::LoDMode_ManualUniform;
-            ImGui::Checkbox("Lock LoD", &lockLod);
-            lodModeChanged = lodMode != oldLodMode;
-            lodLevelChanged = lodLevel != oldLodLevel;
-            lockLodChanged = lockLod != oldLockLod;
+            ImGui::CollapsingHeader("Geometry", ImGuiTreeNodeFlags_DefaultOpen);
+            {
+                const int32_t oldPosTruncBitWidth = posTruncBitWidth;
+                const Shared::LoDMode oldLodMode = lodMode;
+                const uint32_t oldLodLevel = lodLevel;
+                const bool oldLockLod = lockLod;
+                ImGui::SliderInt("Pos Truncation", &posTruncBitWidth, 0, 20);
+                ImGui::Text("LoD");
+                ImGui::RadioButtonE("View Adaptive", &lodMode, Shared::LoDMode_ViewAdaptive);
+                ImGui::RadioButtonE("Manual Uniform", &lodMode, Shared::LoDMode_ManualUniform);
+                if (ImGui::SliderInt("Level", &lodLevel, 0, 15))
+                    lodMode = Shared::LoDMode_ManualUniform;
+                ImGui::Checkbox("Lock", &lockLod);
+                posTruncBitWidthChanged = posTruncBitWidth != oldPosTruncBitWidth;
+                lodModeChanged = lodMode != oldLodMode;
+                lodLevelChanged = lodLevel != oldLodLevel;
+                lockLodChanged = lockLod != oldLockLod;
+            }
 
             ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
-            ImGui::PushID("visMode");
-            visModeChanged |= ImGui::RadioButtonE(
-                "Final", &visualizationMode, Shared::VisualizationMode_Final);
-            visModeChanged |= ImGui::RadioButtonE(
-                "Shading Normal", &visualizationMode, Shared::VisualizationMode_ShadingNormal);
-            visModeChanged |= ImGui::RadioButtonE(
-                "Geometric Normal", &visualizationMode, Shared::VisualizationMode_GeometricNormal);
-            visModeChanged |= ImGui::RadioButtonE(
-                "Cluster", &visualizationMode, Shared::VisualizationMode_Cluster);
-            visModeChanged |= ImGui::RadioButtonE(
-                "Level", &visualizationMode, Shared::VisualizationMode_Level);
-            visModeChanged |= ImGui::RadioButtonE(
-                "Triangle", &visualizationMode, Shared::VisualizationMode_Triangle);
-            ImGui::PopID();
+            {
+                ImGui::PushID("visMode");
+                visModeChanged |= ImGui::RadioButtonE(
+                    "Final", &visualizationMode, Shared::VisualizationMode_Final);
+                visModeChanged |= ImGui::RadioButtonE(
+                    "Shading Normal", &visualizationMode, Shared::VisualizationMode_ShadingNormal);
+                visModeChanged |= ImGui::RadioButtonE(
+                    "Geometric Normal", &visualizationMode, Shared::VisualizationMode_GeometricNormal);
+                visModeChanged |= ImGui::RadioButtonE(
+                    "Cluster", &visualizationMode, Shared::VisualizationMode_Cluster);
+                visModeChanged |= ImGui::RadioButtonE(
+                    "Level", &visualizationMode, Shared::VisualizationMode_Level);
+                visModeChanged |= ImGui::RadioButtonE(
+                    "Triangle", &visualizationMode, Shared::VisualizationMode_Triangle);
+                ImGui::PopID();
+            }
 
             const Shared::PickInfo pickInfo = curPickInfo.map(curStream)[0];
             curPickInfo.unmap(curStream);
 
             ImGui::CollapsingHeader("Cursor Info", ImGuiTreeNodeFlags_DefaultOpen);
-            ImGui::Text(
-                "Cursor: %u, %u",
-                uint32_t(args.mouseX), uint32_t(args.mouseY));
-            ImGui::Text("Instance Index: %u", pickInfo.instanceIndex);
-            ImGui::Text("Cluster ID: %u", pickInfo.clusterId);
-            ImGui::Text("Primitive Index: %u", pickInfo.primitiveIndex);
-            ImGui::Text("Barycentrics: %.3f, %.3f", pickInfo.barycentrics.x, pickInfo.barycentrics.y);
-            ImGui::Text("Cluster Info");
-            ImGui::Text("  Level: %u", pickInfo.cluster.level);
-            ImGui::Text("  Vertex Count: %u", pickInfo.cluster.vertexCount);
-            ImGui::Text("  Triangle Count: %u", pickInfo.cluster.triangleCount);
+            {
+                ImGui::Text(
+                    "Cursor: %u, %u",
+                    uint32_t(args.mouseX), uint32_t(args.mouseY));
+                ImGui::Text("Instance Index: %u", pickInfo.instanceIndex);
+                ImGui::Text("Cluster ID: %u", pickInfo.clusterId);
+                ImGui::Text("Primitive Index: %u", pickInfo.primitiveIndex);
+                ImGui::Text("Barycentrics: %.3f, %.3f", pickInfo.barycentrics.x, pickInfo.barycentrics.y);
+                ImGui::Text("Cluster Info");
+                ImGui::Text("  Level: %u", pickInfo.cluster.level);
+                ImGui::Text("  Vertex Count: %u", pickInfo.cluster.vertexCount);
+                ImGui::Text("  Triangle Count: %u", pickInfo.cluster.triangleCount);
+            }
 
             ImGui::End();
         }
@@ -867,8 +879,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         curGPUTimer.frame.start(curStream);
 
         if ((lodMode == Shared::LoDMode_ViewAdaptive ||
-             lodModeChanged ||
-             lodLevelChanged) && !lockLod ||
+             lodModeChanged || lodLevelChanged || posTruncBitWidthChanged) && !lockLod ||
             frameIndex == 0)
         {
             const auto executeInBatch = [&]
@@ -908,10 +919,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 const uint32_t cMeshTotalClusterCount = cMesh.clusters.numElements();
                 const uint32_t cMeshInstCount = cMeshInstSet.instances.size();
 
+                Shared::GeometryConfig geomConfig = {};
+                geomConfig.lodMode = lodMode;
+                geomConfig.manualUniformLevel = lodLevel;
+                geomConfig.positionTruncateBitWidth = posTruncBitWidth;
+
                 const uint32_t instClusterCountStride = (cMeshTotalClusterCount + 31) / 32 * 32;
                 emitClasArgsArray.launchWithThreadDim(
                     curStream, cudau::dim3(instClusterCountStride * cMeshInstCount),
-                    lodMode, lodLevel,
+                    geomConfig,
                     plp.camera.position, plp.camera.orientation,
                     plp.camera.fovY, args.windowContentRenderHeight,
                     cMesh.clusters, cMesh.argsArray,
@@ -1013,7 +1029,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             args.resized ||
             frameIndex == 0 ||
             enableJitteringChanged || lightParamChanged ||
-            lodModeChanged || lodLevelChanged || lockLodChanged ||
+            lodModeChanged || lodLevelChanged || lockLodChanged || posTruncBitWidthChanged ||
             visModeChanged;
         static uint32_t numAccumFrames = 0;
         if (firstAccumFrame)
@@ -1036,6 +1052,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 float2(0.5f, 0.5f);
             plp.sampleIndex = std::min(numAccumFrames, static_cast<uint32_t>(lengthof(subPixelOffsets)) - 1);
             plp.visMode = visualizationMode;
+            plp.posTruncateBitWidth = posTruncBitWidth;
             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), curStream));
 
             pipeline.launch(
