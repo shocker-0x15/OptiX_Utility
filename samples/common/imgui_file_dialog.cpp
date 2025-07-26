@@ -77,7 +77,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
         // JP: ファイルリストの表示と選択処理。
 
         float fileListHeight = std::fmax(ImGui::GetWindowSize().y - windowMinHeight, 0.0f) + fileListMinHeight;
-        ImGui::BeginChild("File List", ImVec2(ImGui::GetWindowContentRegionWidth(), fileListHeight));
+        ImGui::BeginChild("File List", ImVec2(ImGui::GetContentRegionAvail().x, fileListHeight));
 
         bool multiplySelected = (m_numSelectedDirs + m_numSelectedFiles) > 1;
         bool selectionChanged = false;
