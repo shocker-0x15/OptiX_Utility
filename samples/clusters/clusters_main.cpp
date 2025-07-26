@@ -334,6 +334,7 @@ struct ClusteredMeshInstanceSet {
 
 int32_t main(int32_t argc, const char* argv[]) try {
     const std::filesystem::path resourceDir = getExecutableDirectory() / "clusters";
+    const std::filesystem::path dataDir = R"(../../data)";
 
     bool takeScreenShot = false;
     auto visualizationMode = Shared::VisualizationMode_Final;
@@ -482,9 +483,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     ClusteredMesh bunnyCMesh;
-    bunnyCMesh.read(
-        cuContext, scene, mat,
-        R"(E:\assets\McguireCGArchive\bunny\bunny_000.cmesh)");
+    bunnyCMesh.read(cuContext, scene, mat, dataDir / "bunny.cmesh");
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyCMesh.asMemReqs.tempSizeInBytes);
 
     const Shared::InstanceTransform bunnyInstXfms[] = {
@@ -503,9 +502,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     ClusteredMesh dragonCMesh;
-    dragonCMesh.read(
-        cuContext, scene, mat,
-        R"(E:\assets\McguireCGArchive\dragon\dragon_000.cmesh)");
+    dragonCMesh.read(cuContext, scene, mat, dataDir / "dragon.cmesh");
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonCMesh.asMemReqs.tempSizeInBytes);
 
     const Shared::InstanceTransform dragonInstXfms[] = {
