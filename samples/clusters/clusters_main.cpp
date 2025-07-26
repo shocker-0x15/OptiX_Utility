@@ -482,6 +482,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    /*
+    JP: クラスター化メッシュを読み込む。
+        cmeshファイルは広く使われている形式ではなく著者オリジナル。データ構造はファイル読み込みコード参照。
+        meshoptimizerとMETISを使用してメッシュのクラスター化、グルーピング、単純化を繰り返し行い、
+        DAGで表現される階層構造と各クラスターごとのBounding Sphereやエラー値などを持っている。
+    EN: Load clustered meshes.
+        The cmesh file is not a widely used format and is original to the author.
+        For the data structure, refer to the file reading code.
+        The mesh is clustered, grouped, and simplified repeatedly using meshoptimizer and METIS,
+        and it has a hierarchical structure represented by a DAG,
+        along with bounding spheres and error values for each cluster.
+    */
+
     ClusteredMesh bunnyCMesh;
     bunnyCMesh.read(cuContext, scene, mat, dataDir / "bunny.cmesh");
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyCMesh.asMemReqs.tempSizeInBytes);
@@ -520,6 +533,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    // JP: 床は通常メッシュ。
+    // EN: The floor is a normal mesh.
     optixu::GeometryInstance floorGeomInst = scene.createGeometryInstance();
     cudau::TypedBuffer<Shared::Vertex> floorVertexBuffer;
     cudau::TypedBuffer<Shared::Triangle> floorTriangleBuffer;
