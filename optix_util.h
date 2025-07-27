@@ -1318,9 +1318,9 @@ namespace optixu {
               |              |
               |              +-- GeomInst
               |              |
-              |              +-- CGAS
+              |              +-- CGAS Set
               |              |
-              |              +-- CLAS
+              |              +-- CLAS Set
               |              |
               |              +-- OMMArray
               |
@@ -1383,6 +1383,17 @@ namespace optixu {
     Per-CLAS Set SBT Layout
     | CLAS Set *                                 |
     | Material 0 | Material 1 | ... | Material * |
+
+    Per-Material SBT Layout
+    - See above
+
+    SBT Record
+    <-- SBT Record Stride (Globally Common) --------------------------->
+    | Header | CGAS Set  | CLAS Set  | Material  | Padding   |
+    |        | User Data | User Data | User Data |           |
+             ^
+             |
+             optixGetSbtDataPointer()
 
     JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
         CGAS SetのsetUserData(), CLAS SetのsetUserData(), MaterialのsetUserData()
