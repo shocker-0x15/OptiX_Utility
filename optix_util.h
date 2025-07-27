@@ -1326,13 +1326,10 @@ namespace optixu {
               |
               +-- Denoiser
 
-    JP: 
-    EN: 
-
 
 
     Hit Group Shader Binding Table Layout
-    | GAS 0 - MS 0 | GAS 0 - MS 1 | ... | GAS 0 - MS * | GAS 1 - MS 0 | GAS 1 - MS 1 | ...
+    | GAS 0 - MS 0 | GAS 0 - MS 1 | ... | GAS 0 - MS * | GAS 1 - MS 0 | GAS 1 - MS 1 | ... | GAS * - MS * |
     GAS: Geometry Acceleration Structure
     MS: Material Set
 
@@ -1372,6 +1369,28 @@ namespace optixu {
         Note that the start position of each data changes depending on the sizes of forward data.
         Therefore for example, the start positions of GeometryInstance's data are different
         if data sizes of GAS children are different even if those belong to the same GAS.
+
+    Hit Group Shader Binding Table Layout with Clustered Geometries
+    | GAS 0 - MS 0 | GAS 0 - MS 1 | ... | GAS 0 - MS * | GAS 1 - MS 0 | GAS 1 - MS 1 | ... | GAS * - MS * |
+    | CGAS Set 0   | CGAS Set 1   | ... | CGAS Set *   |
+    CGAS Set: Cluster Geometry Acceleration Structure Set
+
+    Per-CGAS Set SBT Layout
+    | CGAS Set * |
+    | CLAS Set 0 |
+    CLAS Set: Cluster-Level Acceleration Structure Set
+
+    Per-CLAS Set SBT Layout
+    | CLAS Set *                                 |
+    | Material 0 | Material 1 | ... | Material * |
+
+    JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
+        CGAS SetのsetUserData(), CLAS SetのsetUserData(), MaterialのsetUserData()
+        で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
+    EN: Data set by each of
+        CGAS Set's setUserData(), CLAS Set's setUserData(), Material's setUserData()
+        line up in the order (Each relative offset follows the specified alignment)
+        at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
 
     */
 

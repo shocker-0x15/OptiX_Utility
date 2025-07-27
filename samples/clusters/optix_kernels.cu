@@ -24,6 +24,15 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE static const NormalMeshData &getNormalMeshData(
     return *reinterpret_cast<NormalMeshData*>(optixGetSbtDataPointer());
 }
 
+/*
+JP: CH/AH/ISプログラムにてoptixGetSbtDataPointer()で取得できるポインターの位置に
+    CGAS SetのsetUserData(), CLAS SetのsetUserData(), MaterialのsetUserData()
+    で設定したデータが順番に並んでいる(各データの相対的な開始位置は指定したアラインメントに従う)。
+EN: Data set by each of
+    CGAS Set's setUserData(), CLAS Set's setUserData(), Material's setUserData()
+    line up in the order (Each relative offset follows the specified alignment)
+    at the position pointed by optixGetSbtDataPointer() called in CH/AH/IS programs.
+*/
 CUDA_DEVICE_FUNCTION CUDA_INLINE static const ClusteredMeshData &getClusteredMeshData() {
     return *reinterpret_cast<ClusteredMeshData*>(optixGetSbtDataPointer());
 }
