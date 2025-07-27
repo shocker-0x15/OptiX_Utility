@@ -250,7 +250,7 @@ struct ClusteredMeshInstanceSet {
     std::vector<Instance> instances;
     uint32_t startInstanceId;
 
-    cudau::TypedBuffer<uint32_t> clasBuildCounts[2];
+    cudau::TypedBuffer<uint32_t> clasBuildCountsArray[2];
 
     void initialize(
         const CUcontext cuContext, const optixu::Scene scene, const ClusteredMesh* _cMesh,
@@ -298,7 +298,7 @@ struct ClusteredMeshInstanceSet {
         }
 
         for (uint32_t i = 0; i < 2; ++i)
-            clasBuildCounts[i].initialize(cuContext, cudau::BufferType::Device, instCount);
+            clasBuildCountsArray[i].initialize(cuContext, cudau::BufferType::Device, 1 + instCount);
     }
 
     void finalize() {
@@ -315,7 +315,7 @@ struct ClusteredMeshInstanceSet {
         }
 
         for (uint32_t i = 0; i < 2; ++i)
-            clasBuildCounts[i].finalize();
+            clasBuildCountsArray[i].finalize();
     }
 
     void setInstanceInfos(Shared::InstanceDynamicInfo* instDynamicInfos) const {
@@ -455,6 +455,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Kernel emitClasArgsArray(lodDecisionModule, "emitClasArgsArray", cudau::dim3(32), 0);
     cudau::Kernel copyClasHandles(lodDecisionModule, "copyClasHandles", cudau::dim3(32), 0);
     cudau::Kernel emitClusterGasArgsArray(lodDecisionModule, "emitClusterGasArgsArray", cudau::dim3(32), 0);
+    cudau::Kernel copyDataForCpu(lodDecisionModule, "copyDataForCpu", cudau::dim3(32), 0);
 
     // END: Settings for OptiX context and pipeline.
     // ----------------------------------------------------------------
@@ -749,6 +750,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const uint64_t frameIndex = args.frameIndex;
         const CUstream curStream = args.curStream;
         const uint32_t bufIdx = frameIndex % 2;
+        const uint32_t prevBufIdx = (frameIndex + 1) % 2;
         GPUTimer &curGPUTimer = gpuTimers[bufIdx];
         cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[bufIdx];
         cudau::TypedBuffer<Shared::InstanceDynamicInfo> &curInstDynamicInfoBuffer =
@@ -808,40 +810,40 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Checkbox("Jittering", &enableJittering);
             enableJitteringChanged = enableJittering != oldEnableJittering;
 
-            ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen);
-            {
+            if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const float oldStrength = lightStrengthInLog10;
                 const float oldPhi = lightDirPhi;
                 const float oldTheta = lightDirTheta;
-                ImGui::SliderFloat("Light Strength", &lightStrengthInLog10, -2, 2);
-                ImGui::SliderFloat("Light Phi", &lightDirPhi, -180, 180);
-                ImGui::SliderFloat("Light Theta", &lightDirTheta, 0, 90);
+                ImGui::SliderFloat("Strength", &lightStrengthInLog10, -2, 2);
+                ImGui::SliderFloat("Phi", &lightDirPhi, -180, 180);
+                ImGui::SliderFloat("Theta", &lightDirTheta, 0, 90);
                 lightParamChanged =
                     lightStrengthInLog10 != oldStrength
                     || lightDirPhi != oldPhi || lightDirTheta != oldTheta;
             }
 
-            ImGui::CollapsingHeader("Geometry", ImGuiTreeNodeFlags_DefaultOpen);
-            {
-                const int32_t oldPosTruncBitWidth = posTruncBitWidth;
+            if (ImGui::CollapsingHeader("Geometry", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const Shared::LoDMode oldLodMode = lodMode;
                 const uint32_t oldLodLevel = lodLevel;
                 const bool oldLockLod = lockLod;
-                ImGui::SliderInt("Pos Truncation", &posTruncBitWidth, 0, 20);
                 ImGui::Text("LoD");
                 ImGui::RadioButtonE("View Adaptive", &lodMode, Shared::LoDMode_ViewAdaptive);
                 ImGui::RadioButtonE("Manual Uniform", &lodMode, Shared::LoDMode_ManualUniform);
                 if (ImGui::SliderInt("Level", &lodLevel, 0, 15))
                     lodMode = Shared::LoDMode_ManualUniform;
                 ImGui::Checkbox("Lock", &lockLod);
-                posTruncBitWidthChanged = posTruncBitWidth != oldPosTruncBitWidth;
                 lodModeChanged = lodMode != oldLodMode;
                 lodLevelChanged = lodLevel != oldLodLevel;
                 lockLodChanged = lockLod != oldLockLod;
+
+                ImGui::Separator();
+
+                const int32_t oldPosTruncBitWidth = posTruncBitWidth;
+                ImGui::SliderInt("Pos Truncation", &posTruncBitWidth, 0, 20);
+                posTruncBitWidthChanged = posTruncBitWidth != oldPosTruncBitWidth;
             }
 
-            ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen);
-            {
+            if (ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::PushID("visMode");
                 visModeChanged |= ImGui::RadioButtonE(
                     "Final", &visualizationMode, Shared::VisualizationMode_Final);
@@ -861,14 +863,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             const Shared::PickInfo pickInfo = curPickInfo.map(curStream)[0];
             curPickInfo.unmap(curStream);
 
-            ImGui::CollapsingHeader("Cursor Info", ImGuiTreeNodeFlags_DefaultOpen);
-            {
+            if (ImGui::CollapsingHeader("Cursor Info", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Text(
                     "Cursor: %u, %u",
                     uint32_t(args.mouseX), uint32_t(args.mouseY));
-                ImGui::Text("Instance Index: %u", pickInfo.instanceIndex);
-                ImGui::Text("Cluster ID: %u", pickInfo.clusterId);
-                ImGui::Text("Primitive Index: %u", pickInfo.primitiveIndex);
+                ImGui::Text("Instance Index: %d", static_cast<int32_t>(pickInfo.instanceIndex));
+                ImGui::Text("Cluster ID: %d", static_cast<int32_t>(pickInfo.clusterId));
+                ImGui::Text("Primitive Index: %d", static_cast<int32_t>(pickInfo.primitiveIndex));
                 ImGui::Text("Barycentrics: %.3f, %.3f", pickInfo.barycentrics.x, pickInfo.barycentrics.y);
                 ImGui::Text("Cluster Info");
                 ImGui::Text("  Level: %u", pickInfo.cluster.level);
@@ -892,25 +893,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Text("  Update: %.3f [ms]", updateTime);
             ImGui::Text("  Render: %.3f [ms]", renderTime);
 
-            ImGui::Separator();
+            if (ImGui::CollapsingHeader("CLAS Counts", ImGuiTreeNodeFlags_DefaultOpen)) {
+                for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx) {
+                    const ClusteredMeshInstanceSet &cMeshInstSet = *cMeshInstSets[setIdx];
+                    const char* const setName = cMeshInstSetNames[setIdx];
 
-            std::vector<Shared::InstanceDynamicInfo> instDynInfos(maxInstCount);
-            curInstDynamicInfoBuffer.read(instDynInfos, curStream);
-
-            for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx) {
-                const ClusteredMeshInstanceSet &cMeshInstSet = *cMeshInstSets[setIdx];
-                const char* const setName = cMeshInstSetNames[setIdx];
-
-                uint32_t clasCountToBuild = 0;
-                CUDADRV_CHECK(cuMemcpyDtoHAsync(
-                    &clasCountToBuild, cMeshInstSet.clasBuildCounts[bufIdx].getCUdeviceptr(),
-                    sizeof(uint32_t), curStream));
-                ImGui::Text("%s", setName);
-                ImGui::Text("  Total CLAS Count: %u", clasCountToBuild);
-                for (uint32_t cgasIdx = 0; cgasIdx < cMeshInstSet.instances.size(); ++cgasIdx) {
-                    const Shared::InstanceDynamicInfo &instDynInfo =
-                        instDynInfos[cMeshInstSet.startInstanceId + cgasIdx];
-                    ImGui::Text("    Inst %u CLAS Count: %u", cgasIdx, instDynInfo.cgas.clasHandleCount);
+                    const cudau::TypedBuffer<uint32_t> &curClasBuildCounts =
+                        cMeshInstSet.clasBuildCountsArray[bufIdx];
+                    std::vector<uint32_t> clasBuildCountsOnHost(curClasBuildCounts.numElements());
+                    curClasBuildCounts.read(clasBuildCountsOnHost, curStream);
+                    ImGui::Text("%s", setName);
+                    ImGui::Text("  Total: %u", clasBuildCountsOnHost[0]);
+                    for (uint32_t cgasIdx = 0; cgasIdx < cMeshInstSet.instances.size(); ++cgasIdx) {
+                        ImGui::Text("    Inst %u: %u", cgasIdx, clasBuildCountsOnHost[1 + cgasIdx]);
+                    }
                 }
             }
 
@@ -921,27 +917,27 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         curGPUTimer.frame.start(curStream);
 
+        const auto executeInBatch = [&]
+        (std::function<void(const ClusteredMeshInstanceSet &)> f) {
+            for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx)
+                f(*cMeshInstSets[setIdx]);
+        };
+
+        // JP: クラスター化メッシュの各インスタンスのトランスフォームなどをセットし、
+        //     Cluster GASに紐づくCLASカウンターをリセットする。
+        // EN: Set transforms and other information for each instance of clustered meshes,
+        //     and reset the CLAS counter associated with the Cluster GAS.
+        Shared::InstanceDynamicInfo* const instDynInfos = curInstDynamicInfoBuffer.map(curStream);
+        executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
+        {
+            cMeshInstSet.setInstanceInfos(instDynInfos);
+        });
+        curInstDynamicInfoBuffer.unmap(curStream);
+
         if ((lodMode == Shared::LoDMode_ViewAdaptive ||
              lodModeChanged || lodLevelChanged || posTruncBitWidthChanged) && !lockLod ||
             frameIndex == 0)
         {
-            const auto executeInBatch = [&]
-            (std::function<void(const ClusteredMeshInstanceSet &)> f) {
-                for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx)
-                    f(*cMeshInstSets[setIdx]);
-            };
-
-            // JP: クラスター化メッシュの各インスタンスのトランスフォームなどをセットし、
-            //     Cluster GASに紐づくCLASカウンターをリセットする。
-            // EN: Set transforms and other information for each instance of clustered meshes,
-            //     and reset the CLAS counter associated with the Cluster GAS.
-            Shared::InstanceDynamicInfo* const instDynInfos = curInstDynamicInfoBuffer.map(curStream);
-            executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
-            {
-                cMeshInstSet.setInstanceInfos(instDynInfos);
-            });
-            curInstDynamicInfoBuffer.unmap(curStream);
-
             // JP: 各クラスター化メッシュに関して、ビルドするCLASカウンターとArgs設定済みを表すフラグ列を
             //     リセットする。
             // EN: For each clustered mesh, reset the CLAS counter and flags indicating that the args are set.
@@ -1043,15 +1039,31 @@ int32_t main(int32_t argc, const char* argv[]) try {
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
+                const uint32_t cMeshInstCount = cMeshInstSet.instances.size();
 
-                const cudau::TypedBuffer<uint32_t> &curClasBuildCount = cMeshInstSet.clasBuildCounts[bufIdx];
-                const CUdeviceptr clasCountToBuildPtr =
-                    cMesh.clusterSetInfo.getCUdeviceptr() +
-                    offsetof(Shared::ClusterSetInfo, argsCountToBuild);
+                const cudau::TypedBuffer<uint32_t> &curClasBuildCounts =
+                    cMeshInstSet.clasBuildCountsArray[bufIdx];
+
+                copyDataForCpu.launchWithThreadDim(
+                    curStream, cudau::dim3(cMeshInstCount),
+                    cMesh.clusterSetInfo,
+                    curInstDynamicInfoBuffer.getDevicePointerAt(cMeshInstSet.startInstanceId), cMeshInstCount,
+                    curClasBuildCounts);
+            });
+        }
+        else {
+            executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
+            {
+                const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
+
+                const cudau::TypedBuffer<uint32_t> &curClasBuildCounts =
+                    cMeshInstSet.clasBuildCountsArray[bufIdx];
+                const cudau::TypedBuffer<uint32_t> &prevClasBuildCounts =
+                    cMeshInstSet.clasBuildCountsArray[prevBufIdx];
 
                 CUDADRV_CHECK(cuMemcpyDtoDAsync(
-                    curClasBuildCount.getCUdeviceptr(), clasCountToBuildPtr,
-                    sizeof(uint32_t), curStream));
+                    curClasBuildCounts.getCUdeviceptr(), prevClasBuildCounts.getCUdeviceptr(),
+                    curClasBuildCounts.sizeInBytes(), curStream));
             });
         }
 

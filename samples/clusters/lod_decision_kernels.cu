@@ -183,3 +183,21 @@ CUDA_DEVICE_KERNEL void emitClusterGasArgsArray(
 
     cgasArgsArray[instIdx] = cgasArgs;
 }
+
+
+
+CUDA_DEVICE_KERNEL void copyDataForCpu(
+    const ClusterSetInfo* const clusterSetInfo,
+    const InstanceDynamicInfo* const instDynamicInfos, const uint32_t instCount,
+    uint32_t* clasBuildCounts)
+{
+    const uint32_t globalThreadIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    const uint32_t instIdx = globalThreadIdx;
+    if (instIdx >= instCount)
+        return;
+
+    if (instIdx == 0)
+        clasBuildCounts[0] = clusterSetInfo->argsCountToBuild;
+
+    clasBuildCounts[1 + instIdx] = instDynamicInfos[instIdx].cgas.clasHandleCount;
+}
