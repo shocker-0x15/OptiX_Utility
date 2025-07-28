@@ -1976,7 +1976,7 @@ namespace optixu {
         void rebuild(
             CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,
-            const BufferView &clasHandleBuffer) const;
+            const BufferView &clasHandleBuffer, const BufferView &outputSizeBuffer = BufferView()) const;
 
         uint32_t getMaterialCount() const;
         Material getMaterial(uint32_t matIdx) const;
@@ -2016,7 +2016,7 @@ namespace optixu {
         void rebuild(
             CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
             const BufferView &accelBuffer, const BufferView &scratchBuffer,
-            const BufferView &travHandleBuffer) const;
+            const BufferView &travHandleBuffer, const BufferView &outputSizeBuffer = BufferView()) const;
 
         /*
         JP: 以下のAPIを呼んだ場合はシェーダーバインディングテーブルを更新する必要がある。

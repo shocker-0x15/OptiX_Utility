@@ -2282,7 +2282,7 @@ namespace optixu {
     void ClusterAccelerationStructureSet::rebuild(
         CUstream stream, const BufferView &clusterArgsBuffer, CUdeviceptr clusterCount,
         const BufferView &accelBuffer, const BufferView &scratchBuffer,
-        const BufferView &clasHandleBuffer) const
+        const BufferView &clasHandleBuffer, const BufferView &outputSizeBuffer) const
     {
         m->throwRuntimeError(
             m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
@@ -2297,8 +2297,8 @@ namespace optixu {
         buildModeDescImpDst.tempBufferSizeInBytes = scratchBuffer.sizeInBytes();
         buildModeDescImpDst.outputHandlesBuffer = clasHandleBuffer.getCUdeviceptr();
         buildModeDescImpDst.outputHandlesStrideInBytes = clasHandleBuffer.stride();
-        buildModeDescImpDst.outputSizesBuffer = 0; // optional
-        buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
+        buildModeDescImpDst.outputSizesBuffer = outputSizeBuffer.getCUdeviceptr();
+        buildModeDescImpDst.outputSizesStrideInBytes = outputSizeBuffer.stride();
 
         OPTIX_CHECK(optixClusterAccelBuild(
             m->getRawContext(), stream, &buildModeDesc, &m->buildInput,
@@ -2419,7 +2419,7 @@ namespace optixu {
     void ClusterGeometryAccelerationStructureSet::rebuild(
         CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
         const BufferView &accelBuffer, const BufferView &scratchBuffer,
-        const BufferView &travHandleBuffer) const
+        const BufferView &travHandleBuffer, const BufferView &outputSizeBuffer) const
     {
         OptixClusterAccelBuildModeDesc buildModeDesc = {};
         buildModeDesc.mode = _ClusterGeometryAccelerationStructureSet::s_buildMode;
@@ -2431,8 +2431,8 @@ namespace optixu {
         buildModeDescImpDst.tempBufferSizeInBytes = scratchBuffer.sizeInBytes();
         buildModeDescImpDst.outputHandlesBuffer = travHandleBuffer.getCUdeviceptr();
         buildModeDescImpDst.outputHandlesStrideInBytes = travHandleBuffer.stride();
-        buildModeDescImpDst.outputSizesBuffer = 0; // optional
-        buildModeDescImpDst.outputSizesStrideInBytes = 0; // optional
+        buildModeDescImpDst.outputSizesBuffer = outputSizeBuffer.getCUdeviceptr();
+        buildModeDescImpDst.outputSizesStrideInBytes = outputSizeBuffer.stride();
 
         OPTIX_CHECK(optixClusterAccelBuild(
             m->getRawContext(), stream, &buildModeDesc, &m->buildInput,

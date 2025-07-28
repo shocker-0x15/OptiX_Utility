@@ -48,6 +48,8 @@ public:
 
 
 
+static constexpr uint32_t minPosTruncBitCount = 0;
+
 struct ClusteredMesh {
     struct LevelInfo {
         uint32_t startClusterIndex;
@@ -71,6 +73,8 @@ struct ClusteredMesh {
     cudau::Buffer clasSetMem;
     optixu::ClusterAccelerationStructureSet clasSet;
     OptixAccelBufferSizes asMemReqs;
+
+    cudau::TypedBuffer<uint32_t> outputSizesArray[2];
 
     std::vector<LevelInfo> levelInfos;
     uint32_t maxVertCountPerCluster;
@@ -188,7 +192,7 @@ struct ClusteredMesh {
             OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
             clusterCount, OPTIX_VERTEX_FORMAT_FLOAT3,
             1, maxTriCountPerCluster, maxVertCountPerCluster,
-            0, 0, 0);
+            0, 0, minPosTruncBitCount);
         clasSet.setMaterialCount(1);
         clasSet.setMaterial(0, mat);
 
@@ -209,6 +213,9 @@ struct ClusteredMesh {
 
         clasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
 
+        for (uint32_t i = 0; i < 2; ++i)
+            outputSizesArray[i].initialize(cuContext, cudau::BufferType::Device, clusterCount);
+
         return true;
     }
 
@@ -226,6 +233,9 @@ struct ClusteredMesh {
         clusterSetInfo.finalize();
         clasSet.destroy();
         clasSetMem.finalize();
+
+        for (uint32_t i = 0; i < 2; ++i)
+            outputSizesArray[i].finalize();
     }
 };
 
@@ -839,7 +849,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 ImGui::Separator();
 
                 const int32_t oldPosTruncBitWidth = posTruncBitWidth;
-                ImGui::SliderInt("Pos Truncation", &posTruncBitWidth, 0, 20);
+                ImGui::SliderInt("Pos Truncation", &posTruncBitWidth, minPosTruncBitCount, 20);
                 posTruncBitWidthChanged = posTruncBitWidth != oldPosTruncBitWidth;
             }
 
@@ -893,20 +903,36 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Text("  Update: %.3f [ms]", updateTime);
             ImGui::Text("  Render: %.3f [ms]", renderTime);
 
-            if (ImGui::CollapsingHeader("CLAS Counts", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("CLAS Stats", ImGuiTreeNodeFlags_DefaultOpen)) {
                 for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx) {
                     const ClusteredMeshInstanceSet &cMeshInstSet = *cMeshInstSets[setIdx];
-                    const char* const setName = cMeshInstSetNames[setIdx];
-
                     const cudau::TypedBuffer<uint32_t> &curClasBuildCounts =
                         cMeshInstSet.clasBuildCountsArray[bufIdx];
+                    const cudau::TypedBuffer<uint32_t> &curOutputSizes =
+                        cMeshInstSet.cMesh->outputSizesArray[bufIdx];
+
                     std::vector<uint32_t> clasBuildCountsOnHost(curClasBuildCounts.numElements());
+                    std::vector<uint32_t> outputSizesOnHost(curOutputSizes.numElements());
                     curClasBuildCounts.read(clasBuildCountsOnHost, curStream);
-                    ImGui::Text("%s", setName);
-                    ImGui::Text("  Total: %u", clasBuildCountsOnHost[0]);
+                    curOutputSizes.read(outputSizesOnHost, curStream);
+
+                    const uint32_t buildCount = clasBuildCountsOnHost[0];
+
+                    uint32_t minSize = UINT32_MAX, maxSize = 0;
+                    uint32_t sumSizes = 0;
+                    for (uint32_t i = 0; i < buildCount; ++i) {
+                        minSize = std::min(minSize, outputSizesOnHost[i]);
+                        maxSize = std::max(maxSize, outputSizesOnHost[i]);
+                        sumSizes += outputSizesOnHost[i];
+                    }
+
+                    ImGui::Text("%s", cMeshInstSetNames[setIdx]);
+                    ImGui::Text("  Total Count: %u", buildCount);
                     for (uint32_t cgasIdx = 0; cgasIdx < cMeshInstSet.instances.size(); ++cgasIdx) {
                         ImGui::Text("    Inst %u: %u", cgasIdx, clasBuildCountsOnHost[1 + cgasIdx]);
                     }
+                    ImGui::Text("  Size: %u - %u [bytes]: ", minSize, maxSize);
+                    ImGui::Text("    Avg: %u", buildCount > 0 ? sumSizes / buildCount : 0);
                 }
             }
 
@@ -985,6 +1011,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
+                const cudau::TypedBuffer<uint32_t> &curOutputSizes = cMesh.outputSizesArray[bufIdx];
 
                 const CUdeviceptr clasCountToBuildPtr =
                     cMesh.clusterSetInfo.getCUdeviceptr() +
@@ -992,7 +1019,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 cMesh.clasSet.rebuild(
                     curStream,
                     cMesh.argsArrayToBuild, clasCountToBuildPtr, cMesh.clasSetMem, asBuildScratchMem,
-                    cMesh.clasHandles);
+                    cMesh.clasHandles, curOutputSizes);
             });
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
@@ -1060,10 +1087,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstSet.clasBuildCountsArray[bufIdx];
                 const cudau::TypedBuffer<uint32_t> &prevClasBuildCounts =
                     cMeshInstSet.clasBuildCountsArray[prevBufIdx];
+                const cudau::TypedBuffer<uint32_t> &curOutputSizes =
+                    cMesh.outputSizesArray[bufIdx];
+                const cudau::TypedBuffer<uint32_t> &prevOutputSizes =
+                    cMesh.outputSizesArray[prevBufIdx];
 
                 CUDADRV_CHECK(cuMemcpyDtoDAsync(
                     curClasBuildCounts.getCUdeviceptr(), prevClasBuildCounts.getCUdeviceptr(),
                     curClasBuildCounts.sizeInBytes(), curStream));
+                CUDADRV_CHECK(cuMemcpyDtoDAsync(
+                    curOutputSizes.getCUdeviceptr(), prevOutputSizes.getCUdeviceptr(),
+                    curOutputSizes.sizeInBytes(), curStream));
             });
         }
 
