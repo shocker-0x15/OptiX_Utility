@@ -392,11 +392,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // EN: Settings for OptiX context and pipeline.
 
     CUcontext cuContext;
-    CUstream cuStream;
     CUDADRV_CHECK(cuInit(0));
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
-    CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
 
     optixu::Context optixContext = optixu::Context::create(
         cuContext, 4,
@@ -1258,7 +1256,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     optixContext.destroy();
 
-    CUDADRV_CHECK(cuStreamDestroy(cuStream));
     CUDADRV_CHECK(cuCtxDestroy(cuContext));
 
     return 0;
