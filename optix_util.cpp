@@ -1808,7 +1808,7 @@ namespace optixu {
             m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
         m->throwRuntimeError(
             accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-            "Size of the given buffer is not enough.");
+            "Size of the given accel buffer is not enough.");
         m->throwRuntimeError(
             scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
             "Size of the given scratch buffer is not enough.");
@@ -2286,11 +2286,23 @@ namespace optixu {
     {
         m->throwRuntimeError(
             m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
+        m->throwRuntimeError(
+            accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+            "Size of the given accel buffer is not enough.");
+        m->throwRuntimeError(
+            scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+            "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(
+            clasHandleBuffer.numElements() >= m->buildInput.triangles.maxArgCount,
+            "The number of elements of the given CLAS handle buffer is not enough.");
+        m->throwRuntimeError(
+            !outputSizeBuffer.isValid() ||
+            outputSizeBuffer.numElements() >= m->buildInput.triangles.maxArgCount,
+            "The number of elements of the given output size buffer is not enough.");
 
         OptixClusterAccelBuildModeDesc buildModeDesc = {};
         buildModeDesc.mode = _ClusterAccelerationStructureSet::s_buildMode;
-        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
-            buildModeDesc.implicitDest;
+        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst = buildModeDesc.implicitDest;
         buildModeDescImpDst.outputBuffer = accelBuffer.getCUdeviceptr();
         buildModeDescImpDst.outputBufferSizeInBytes = accelBuffer.sizeInBytes();
         buildModeDescImpDst.tempBuffer = scratchBuffer.getCUdeviceptr();
@@ -2421,10 +2433,23 @@ namespace optixu {
         const BufferView &accelBuffer, const BufferView &scratchBuffer,
         const BufferView &travHandleBuffer, const BufferView &outputSizeBuffer) const
     {
+        m->throwRuntimeError(
+            accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
+            "Size of the given accel buffer is not enough.");
+        m->throwRuntimeError(
+            scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
+            "Size of the given scratch buffer is not enough.");
+        m->throwRuntimeError(
+            travHandleBuffer.numElements() >= m->buildInput.triangles.maxArgCount,
+            "The number of elements of the given CGAS handle buffer is not enough.");
+        m->throwRuntimeError(
+            !outputSizeBuffer.isValid() ||
+            outputSizeBuffer.numElements() >= m->buildInput.triangles.maxArgCount,
+            "The number of elements of the given output size buffer is not enough.");
+
         OptixClusterAccelBuildModeDesc buildModeDesc = {};
         buildModeDesc.mode = _ClusterGeometryAccelerationStructureSet::s_buildMode;
-        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst =
-            buildModeDesc.implicitDest;
+        OptixClusterAccelBuildModeDescImplicitDest &buildModeDescImpDst = buildModeDesc.implicitDest;
         buildModeDescImpDst.outputBuffer = accelBuffer.getCUdeviceptr();
         buildModeDescImpDst.outputBufferSizeInBytes = accelBuffer.sizeInBytes();
         buildModeDescImpDst.tempBuffer = scratchBuffer.getCUdeviceptr();
@@ -3215,7 +3240,7 @@ namespace optixu {
             m->readyToBuild, "You need to call prepareForBuild() before rebuild.");
         m->throwRuntimeError(
             accelBuffer.sizeInBytes() >= m->memoryRequirement.outputSizeInBytes,
-            "Size of the given buffer is not enough.");
+            "Size of the given accel buffer is not enough.");
         m->throwRuntimeError(
             scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
             "Size of the given scratch buffer is not enough.");
