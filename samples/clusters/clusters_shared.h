@@ -53,7 +53,7 @@ namespace Shared {
     struct ClusterSetInfo {
         OptixClusterAccelBuildInputTrianglesArgs* argsArray; // args array for CLAS set build
         CUdeviceptr* clasHandles; // CLAS handles' destination for CLAS set build
-        uint32_t* usedFlags;
+        uint32_t* usedFlags; // Each bit indicates whether the corresponding cluster is used in the frame.
         uint32_t* indexMapClusterToClasBuild; // cluster index => CLAS build index
         uint32_t argsCountToBuild;
     };
