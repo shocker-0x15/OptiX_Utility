@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="util">
+    <Filter Include="utils">
       <UniqueIdentifier>{4b27c78f-aa9b-4702-a1f9-06ffbecb9072}</UniqueIdentifier>
     </Filter>
     <Filter Include="non-essentials">
@@ -31,10 +31,10 @@
       <Filter>non-essentials\ext\gl3w</Filter>
     </ClCompile>
     <ClCompile Include="..\..\cuda_util.cpp">
-      <Filter>util</Filter>
+      <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="..\..\optix_util.cpp">
-      <Filter>util</Filter>
+      <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="as_update_main.cpp" />
     <ClCompile Include="..\common\common.cpp">
@@ -88,20 +88,20 @@
       <Filter>non-essentials\ext\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optix_util.h">
-      <Filter>util</Filter>
+      <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optix_util_private.h">
-      <Filter>util</Filter>
+      <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="..\..\cuda_util.h">
-      <Filter>util</Filter>
+      <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="as_update_shared.h" />
     <ClInclude Include="..\common\common.h">
       <Filter>non-essentials</Filter>
     </ClInclude>
     <ClInclude Include="..\..\optixu_on_cudau.h">
-      <Filter>util</Filter>
+      <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="..\common\gl_util.h">
       <Filter>non-essentials</Filter>
