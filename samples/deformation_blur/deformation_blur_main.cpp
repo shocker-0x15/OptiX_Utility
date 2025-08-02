@@ -415,7 +415,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<Shared::Sphere> sphereParams1(numPrimitives);
 
         std::mt19937 rng(1290527201);
-        std::uniform_real_distribution u01;
+        std::uniform_real_distribution<float> u01;
         for (int i = 0; i < numPrimitives; ++i) {
             Shared::Sphere &param0 = sphereParams0[i];
             float x = -0.8f + 1.6f * (i % 5) / 4.0f;
@@ -493,7 +493,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         std::vector<Shared::PartialSphereParameter> sphereParams1(numPrimitives);
 
         std::mt19937 rng(1290527201);
-        std::uniform_real_distribution u01;
+        std::uniform_real_distribution<float> u01;
         for (int i = 0; i < numPrimitives; ++i) {
             Shared::PartialSphereParameter &param0 = sphereParams0[i];
             float x = -0.8f + 1.6f * (i % 5) / 4.0f;
@@ -766,7 +766,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     (int32_t width, int32_t height) {
         rngBuffer.initialize(cuContext, cudau::BufferType::Device, width, height);
         {
-            std::mt19937 rng(50932423);
+            std::mt19937_64 rng(50932423);
 
             rngBuffer.map();
             for (int y = 0; y < height; ++y) {
@@ -784,7 +784,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     (int32_t width, int32_t height) {
         rngBuffer.resize(width, height);
         {
-            std::mt19937 rng(50932423);
+            std::mt19937_64 rng(50932423);
 
             rngBuffer.map();
             for (int y = 0; y < height; ++y) {

@@ -61,6 +61,8 @@
 #   include "stopwatch.h"
 #endif
 
+#include <limits>
+
 #if __cplusplus >= 202002L
 #   include <numbers>
 #endif
@@ -107,19 +109,127 @@ template <typename T>
 static constexpr T pi_v = static_cast<T>(3.141592653589793);
 #endif
 
-namespace shared {
+namespace stc {
+    template <typename T>
+    CUDA_COMMON_FUNCTION CUDA_INLINE constexpr void swap(T &a, T &b) {
+#if defined(__CUDA_ARCH__)
+        T temp = a;
+        a = b;
+        b = temp;
+#else
+        std::swap(a, b);
+#endif
+    }
+
     template <typename T>
     CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T min(const T &a, const T &b) {
-        return b < a ? b : a;
+        return a < b ? a : b;
     }
+
     template <typename T>
     CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T max(const T &a, const T &b) {
-        return b > a ? b : a;
+        return a > b ? a : b;
     }
+
     template <typename T>
-    CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T clamp(const T &v, const T &minv, const T &maxv) {
-        return min(max(v, minv), maxv);
+    CUDA_COMMON_FUNCTION CUDA_INLINE constexpr T clamp(const T &x, const T &_min, const T &_max) {
+        return min(max(x, _min), _max);
     }
+
+    template <std::floating_point F>
+    CUDA_COMMON_FUNCTION CUDA_INLINE bool isinf(const F x) {
+#if defined(__CUDA_ARCH__)
+        return static_cast<bool>(::isinf(x));
+#else
+        return std::isinf(x);
+#endif
+    }
+
+    template <std::floating_point F>
+    CUDA_COMMON_FUNCTION CUDA_INLINE bool isnan(const F x) {
+#if defined(__CUDA_ARCH__)
+        return static_cast<bool>(::isnan(x));
+#else
+        return std::isnan(x);
+#endif
+    }
+
+    template <std::floating_point F>
+    CUDA_COMMON_FUNCTION CUDA_INLINE bool isfinite(const F x) {
+#if defined(__CUDA_ARCH__)
+        return static_cast<bool>(::isfinite(x));
+#else
+        return std::isfinite(x);
+#endif
+    }
+
+    template <std::floating_point F>
+    CUDA_COMMON_FUNCTION CUDA_INLINE void sincos(const F x, F* const s, F* const c) {
+#if defined(__CUDA_ARCH__)
+        ::sincosf(x, s, c);
+#else
+        *s = std::sin(x);
+        *c = std::cos(x);
+#endif
+    }
+
+    template <typename DstType, typename SrcType>
+    CUDA_COMMON_FUNCTION CUDA_INLINE DstType bit_cast(const SrcType &x) {
+#if defined(__CUDA_ARCH__)
+        if constexpr (std::is_same_v<SrcType, int32_t> && std::is_same_v<DstType, float>)
+            return __int_as_float(x);
+        else if constexpr (std::is_same_v<SrcType, uint32_t> && std::is_same_v<DstType, float>)
+            return __uint_as_float(x);
+        else if constexpr (std::is_same_v<SrcType, float> && std::is_same_v<DstType, int32_t>)
+            return __float_as_int(x);
+        else if constexpr (std::is_same_v<SrcType, float> && std::is_same_v<DstType, uint32_t>)
+            return __float_as_uint(x);
+        static_assert(sizeof(DstType) == sizeof(SrcType), "Sizes do not match.");
+        union {
+            SrcType s;
+            DstType d;
+        } alias;
+        alias.s = x;
+        return alias.d;
+#else
+        return std::bit_cast<DstType>(x);
+#endif
+    }
+
+    template <typename T>
+    struct numeric_limits;
+
+    template <>
+    struct numeric_limits<float> {
+        CUDA_COMMON_FUNCTION CUDA_INLINE static /*constexpr*/ float min() {
+#if defined(__CUDA_ARCH__)
+            return bit_cast<float>(0b0'00000001'00000000000000000000000u);
+#else
+            return std::numeric_limits<float>::min();
+#endif
+        }
+        CUDA_COMMON_FUNCTION CUDA_INLINE static /*constexpr*/ float lowest() {
+#if defined(__CUDA_ARCH__)
+            return bit_cast<float>(0b1'11111110'11111111111111111111111u);
+#else
+            return std::numeric_limits<float>::lowest();
+#endif
+        }
+        CUDA_COMMON_FUNCTION CUDA_INLINE static /*constexpr*/ float max() {
+#if defined(__CUDA_ARCH__)
+            return bit_cast<float>(0b0'11111110'11111111111111111111111u);
+#else
+            return std::numeric_limits<float>::max();
+#endif
+        }
+        CUDA_COMMON_FUNCTION CUDA_INLINE static /*constexpr*/ float infinity() {
+#if defined(__CUDA_ARCH__)
+            return bit_cast<float>(0b0'11111111'00000000000000000000000u);
+#else
+            return std::numeric_limits<float>::infinity();
+#endif
+        }
+    };
 }
 
 
@@ -723,30 +833,30 @@ CUDA_COMMON_FUNCTION CUDA_INLINE bool allFinite(const float4 &v) {
 }
 
 CUDA_COMMON_FUNCTION CUDA_INLINE int2 min(const int2 &v0, const int2 &v1) {
-    return make_int2(shared::min(v0.x, v1.x),
-                     shared::min(v0.y, v1.y));
+    return make_int2(stc::min(v0.x, v1.x),
+                     stc::min(v0.y, v1.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE int2 max(const int2 &v0, const int2 &v1) {
-    return make_int2(shared::max(v0.x, v1.x),
-                     shared::max(v0.y, v1.y));
+    return make_int2(stc::max(v0.x, v1.x),
+                     stc::max(v0.y, v1.y));
 }
 
 CUDA_COMMON_FUNCTION CUDA_INLINE uint2 min(const uint2 &v0, const uint2 &v1) {
-    return make_uint2(shared::min(v0.x, v1.x),
-                      shared::min(v0.y, v1.y));
+    return make_uint2(stc::min(v0.x, v1.x),
+                      stc::min(v0.y, v1.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE uint2 max(const uint2 &v0, const uint2 &v1) {
-    return make_uint2(shared::max(v0.x, v1.x),
-                      shared::max(v0.y, v1.y));
+    return make_uint2(stc::max(v0.x, v1.x),
+                      stc::max(v0.y, v1.y));
 }
 
 CUDA_COMMON_FUNCTION CUDA_INLINE float2 min(const float2 &v0, const float2 &v1) {
-    return make_float2(shared::min(v0.x, v1.x),
-                       shared::min(v0.y, v1.y));
+    return make_float2(stc::min(v0.x, v1.x),
+                       stc::min(v0.y, v1.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE float2 max(const float2 &v0, const float2 &v1) {
-    return make_float2(shared::max(v0.x, v1.x),
-                       shared::max(v0.y, v1.y));
+    return make_float2(stc::max(v0.x, v1.x),
+                       stc::max(v0.y, v1.y));
 }
 CUDA_COMMON_FUNCTION CUDA_INLINE float dot(const float2 &v0, const float2 &v1) {
     return v0.x * v1.x + v0.y * v1.y;
@@ -993,8 +1103,8 @@ struct AABB {
     float3 maxP;
 
     CUDA_COMMON_FUNCTION AABB() :
-        minP(make_float3(INFINITY)),
-        maxP(make_float3(-INFINITY)) {}
+        minP(make_float3(stc::numeric_limits<float>::infinity())),
+        maxP(make_float3(-stc::numeric_limits<float>::infinity())) {}
     CUDA_COMMON_FUNCTION AABB(const float3 &_minP, const float3 &_maxP) :
         minP(_minP), maxP(_maxP) {}
 
@@ -1031,8 +1141,8 @@ struct AABBAsOrderedInt {
     float3AsOrderedInt maxP;
 
     CUDA_COMMON_FUNCTION AABBAsOrderedInt() :
-        minP(make_float3(INFINITY)),
-        maxP(make_float3(-INFINITY)) {}
+        minP(make_float3(stc::numeric_limits<float>::infinity())),
+        maxP(make_float3(-stc::numeric_limits<float>::infinity())) {}
     CUDA_COMMON_FUNCTION AABBAsOrderedInt(const AABB &v) :
         minP(v.minP), maxP(v.maxP) {
     }

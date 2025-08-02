@@ -632,7 +632,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 &width, &height, &mipCount, &sizes, &format);
 
             const auto translate = [](dds::Format srcFormat) {
-                cudau::ArrayElementType dstFormat;
                 switch (srcFormat) {
                 case dds::Format::BC1_UNorm:
                     return cudau::ArrayElementType::BC1_UNorm;
@@ -1089,7 +1088,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         Shared::SphereParameter* params = customPrimParameters.map();
         std::mt19937 rng(1290527201);
-        std::uniform_real_distribution u01;
+        std::uniform_real_distribution<float> u01;
         for (int i = 0; i < numPrimitives; ++i) {
             Shared::SphereParameter &param = params[i];
             float x = -0.8f + 1.6f * (i % 5) / 4.0f;

@@ -146,7 +146,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 &width, &height, &mipCount, &sizes, &format);
 
             const auto translate = [](dds::Format srcFormat) {
-                cudau::ArrayElementType dstFormat;
                 switch (srcFormat) {
                 case dds::Format::BC1_UNorm:
                     return cudau::ArrayElementType::BC1_UNorm;

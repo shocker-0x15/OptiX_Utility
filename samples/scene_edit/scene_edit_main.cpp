@@ -990,7 +990,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                                          io.Fonts->GetGlyphRangesJapanese());
     }
     else {
-        hpprintf("Font for Japanese not found: %s\n", fontPath.u8string().c_str());
+        hpprintf("Font for Japanese not found: %s\n", fontPath.string().c_str());
     }
 
     FileDialog fileDialog;
