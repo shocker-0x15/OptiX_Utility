@@ -222,7 +222,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         AABB* aabbs = customPrimsAabbBuffer.map();
         Shared::PartialSphereParameter* params = spheresParamBuffer.map();
         std::mt19937 rng(1290527201);
-        std::uniform_real_distribution u01;
+        std::uniform_real_distribution<float> u01;
         for (int i = 0; i < numPrimitives; ++i) {
             Shared::PartialSphereParameter &param = params[i];
             float x = -0.8f + 1.6f * (i % 5) / 4.0f;

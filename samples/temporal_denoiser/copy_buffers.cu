@@ -1,4 +1,4 @@
-#include "temporal_denoiser_shared.h"
+﻿#include "temporal_denoiser_shared.h"
 
 using namespace Shared;
 
@@ -52,8 +52,8 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
         if (bufferTypeToDisplay == BufferToDisplay::DenoisedBeauty && !performUpscale && useLowResRendering) {
             float xInP = (launchIndex.x % 2 + 0.5f) / 2;
             float yInP = (launchIndex.y % 2 + 0.5f) / 2;
-            int32_t npx = shared::clamp(pixel.x + ((xInP - 0.5f) > 0 ? 1 : -1), 0, srcImageSize.x - 1);
-            int32_t npy = shared::clamp(pixel.y + ((yInP - 0.5f) > 0 ? 1 : -1), 0, srcImageSize.y - 1);
+            int32_t npx = stc::clamp(pixel.x + ((xInP - 0.5f) > 0 ? 1 : -1), 0, srcImageSize.x - 1);
+            int32_t npy = stc::clamp(pixel.y + ((yInP - 0.5f) > 0 ? 1 : -1), 0, srcImageSize.y - 1);
             float s = std::fabs(xInP - 0.5f);
             float t = std::fabs(yInP - 0.5f);
             value =

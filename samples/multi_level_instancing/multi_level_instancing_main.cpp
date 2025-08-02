@@ -650,7 +650,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     optixu::HostBlockBuffer2D<Shared::PCG32RNG, 4> rngBuffer;
     rngBuffer.initialize(cuContext, cudau::BufferType::Device, renderTargetSizeX, renderTargetSizeY);
     {
-        std::mt19937 rng(50932423);
+        std::mt19937_64 rng(50932423);
 
         rngBuffer.map();
         for (int y = 0; y < renderTargetSizeY; ++y) {

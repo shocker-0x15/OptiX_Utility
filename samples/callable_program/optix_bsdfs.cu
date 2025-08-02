@@ -45,7 +45,6 @@ public:
         const float3 &givenLocalDir, const float uDir[2],
         float3* sampledDir, float* probDens, bool* deltaSampled) const
     {
-        using namespace shared;
         *sampledDir = cosineSampleHemisphere(uDir[0], uDir[1]);
         const float oneOverPi = 1.0f / pi_v<float>;
         *probDens = sampledDir->z * oneOverPi;
@@ -107,7 +106,6 @@ public:
         const float3 &givenLocalDir, const float uDir[2],
         float3* sampledDir, float* probDens, bool* deltaSampled) const
     {
-        using namespace shared;
         *sampledDir = make_float3(-givenLocalDir.x, -givenLocalDir.y, givenLocalDir.z);
         *probDens = 1.0f;
         *deltaSampled = true;
@@ -155,7 +153,6 @@ public:
         const float3 &givenLocalDir, const float uDir[2],
         float3* sampledDir, float* probDens, bool* deltaSampled) const
     {
-        using namespace shared;
         bool entering = givenLocalDir.z >= 0.0f;
 
         const float eEnter = entering ? 1.0f : m_ior;

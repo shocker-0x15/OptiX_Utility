@@ -41,7 +41,7 @@ namespace Shared {
     public:
         CUDA_COMMON_FUNCTION CUDA_INLINE PCG32RNG() {}
 
-        CUDA_COMMON_FUNCTION CUDA_INLINE void setState(uint32_t _state) { state = _state; }
+        CUDA_COMMON_FUNCTION CUDA_INLINE void setState(uint64_t _state) { state = _state; }
 
         CUDA_COMMON_FUNCTION CUDA_INLINE uint32_t operator()() {
             uint64_t oldstate = state;
