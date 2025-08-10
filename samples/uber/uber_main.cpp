@@ -438,7 +438,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     StreamChain<2> streamChain;
     GPUTimer gpuTimer[2];
     CUDADRV_CHECK(cuInit(0));
+#if CUDA_VERSION < 13000
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
+#else
+    CUctxCreateParams cuCtxCreateParams = {};
+    CUDADRV_CHECK(cuCtxCreate(&cuContext, &cuCtxCreateParams, 0, 0));
+#endif
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     streamChain.initialize(cuContext);
     CUstream stream = streamChain.waitAvailableAndGetCurrentStream();

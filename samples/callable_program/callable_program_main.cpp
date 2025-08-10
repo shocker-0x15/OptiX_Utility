@@ -32,7 +32,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUcontext cuContext;
     CUstream cuStream;
     CUDADRV_CHECK(cuInit(0));
+#if CUDA_VERSION < 13000
     CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
+#else
+    CUctxCreateParams cuCtxCreateParams = {};
+    CUDADRV_CHECK(cuCtxCreate(&cuContext, &cuCtxCreateParams, 0, 0));
+#endif
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
 

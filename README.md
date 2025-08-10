@@ -290,7 +290,7 @@ I've confirmed that the programs run correctly in the following environment.
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* [CUDA](https://developer.nvidia.com/cuda-downloads) 12.8 (probably works with lower CUDA versions)\
+* [CUDA](https://developer.nvidia.com/cuda-downloads) 13.0 (probably works with lower CUDA versions)\
   Note that CUDA (<= 12.5.0) has compilation issues for C++20 with Visual Studio 2022 17.10.\
   Use CUDA 12.5 Update 1 or newer for C++20.
 * [OptiX](https://developer.nvidia.com/designworks/optix/download) 9.0.0 (requires Turing or later generation NVIDIA GPU)
