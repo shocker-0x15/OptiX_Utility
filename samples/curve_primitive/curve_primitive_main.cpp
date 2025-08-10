@@ -116,12 +116,23 @@ int32_t main(int32_t argc, const char* argv[]) try {
         OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER_ROCAPS;
     pipeline.setPipelineOptions(pipelineOptions);
 
+    // OptiX-IR bug?
+    // https://forums.developer.nvidia.com/t/optix-ir-module-creation-fails-with-inheriting-constructor-580-driver/341692
+#if 1
+    const std::string ptxString =
+        readTxtFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.ptx");
+    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
+        ptxString, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+#else
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "curve_primitive/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+#endif
 
     optixu::Module emptyModule;
 
