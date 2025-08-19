@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiX Utility Library - Comprehensive Documentation</title>
+    <style>
+        :root {
+            --primary-color: #76b900;
+            --secondary-color: #1a1a1a;
+            --bg-color: #f5f5f5;
+            --code-bg: #2d2d2d;
+            --border-color: #ddd;
+            --text-color: #333;
+            --link-color: #4a90e2;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Navigation Sidebar */
+        nav {
+            width: 280px;
+            background: white;
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        nav h2 {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+        
+        nav ul {
+            list-style: none;
+        }
+        
+        nav > ul > li {
+            margin-bottom: 15px;
+        }
+        
+        nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        
+        nav a:hover {
+            background: var(--bg-color);
+            color: var(--primary-color);
+        }
+        
+        nav .sub-menu {
+            margin-left: 20px;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        
+        nav .sub-menu li {
+            margin-bottom: 5px;
+        }
+        
+        /* Main Content */
+        main {
+            flex: 1;
+            margin-left: 280px;
+            padding: 40px;
+            background: white;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary-color), #5a8d00);
+            color: white;
+            padding: 40px;
+            margin: -40px -40px 40px -40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        section {
+            margin-bottom: 60px;
+        }
+        
+        h2 {
+            color: var(--secondary-color);
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            font-size: 1.8em;
+        }
+        
+        h3 {
+            color: var(--secondary-color);
+            margin: 25px 0 15px 0;
+            font-size: 1.4em;
+        }
+        
+        h4 {
+            color: var(--secondary-color);
+            margin: 20px 0 10px 0;
+            font-size: 1.2em;
+        }
+        
+        .class-box, .function-box {
+            background: var(--bg-color);
+            border-left: 4px solid var(--primary-color);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .class-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        
+        .method-list {
+            margin-top: 15px;
+        }
+        
+        .method {
+            background: white;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .method-signature {
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #0066cc;
+            margin-bottom: 5px;
+        }
+        
+        .method-description {
+            color: #666;
+            font-size: 0.95em;
+            margin-left: 20px;
+        }
+        
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+        
+        pre {
+            background: var(--code-bg);
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 20px 0;
+            line-height: 1.4;
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: var(--bg-color);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .feature-card h4 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        th {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        td {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+        }
+        
+        tr:nth-child(even) {
+            background: var(--bg-color);
+        }
+        
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .badge.cuda {
+            background: #76b900;
+            color: white;
+        }
+        
+        .badge.optix {
+            background: #0066cc;
+            color: white;
+        }
+        
+        .badge.device {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .badge.host {
+            background: #4ecdc4;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <h2>Navigation</h2>
+            <ul>
+                <li>
+                    <a href="#overview">Overview</a>
+                </li>
+                <li>
+                    <a href="#architecture">Architecture</a>
+                    <ul class="sub-menu">
+                        <li><a href="#components">Core Components</a></li>
+                        <li><a href="#design-patterns">Design Patterns</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#optix-utility">OptiX Utility</a>
+                    <ul class="sub-menu">
+                        <li><a href="#optix-context">Context</a></li>
+                        <li><a href="#optix-pipeline">Pipeline</a></li>
+                        <li><a href="#optix-scene">Scene Management</a></li>
+                        <li><a href="#optix-materials">Materials</a></li>
+                        <li><a href="#optix-geometry">Geometry</a></li>
+                        <li><a href="#optix-acceleration">Acceleration Structures</a></li>
+                        <li><a href="#optix-denoiser">Denoiser</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#cuda-utility">CUDA Utility</a>
+                    <ul class="sub-menu">
+                        <li><a href="#cuda-buffers">Buffers</a></li>
+                        <li><a href="#cuda-arrays">Arrays</a></li>
+                        <li><a href="#cuda-textures">Textures</a></li>
+                        <li><a href="#cuda-kernels">Kernel Management</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#bridge-layer">Bridge Layer</a>
+                    <ul class="sub-menu">
+                        <li><a href="#buffer-integration">Buffer Integration</a></li>
+                        <li><a href="#device-functions">Device Functions</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#payload-system">Payload System</a>
+                </li>
+                <li>
+                    <a href="#usage-examples">Usage Examples</a>
+                </li>
+                <li>
+                    <a href="#api-reference">API Reference</a>
+                </li>
+            </ul>
+        </nav>
+        
+        <main>
+            <header>
+                <h1>OptiX Utility Library</h1>
+                <p>Comprehensive C++ Wrapper for NVIDIA OptiX 9.0 Ray Tracing</p>
+            </header>
+            
+            <section id="overview">
+                <h2>Overview</h2>
+                <p>
+                    OptiX Utility is a sophisticated C++ wrapper library designed to simplify the development of ray tracing applications using NVIDIA OptiX 9.0. 
+                    Since OptiX 7, the API has transformed into a low-level oriented interface similar to DirectX Raytracing (DXR), offering fine-grained control 
+                    but requiring extensive boilerplate code. This library encapsulates common patterns while preserving the flexibility and performance of the underlying API.
+                </p>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🚀 High Performance</h4>
+                        <p>Minimal overhead wrapper maintaining OptiX's native performance while reducing code complexity.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔧 Type Safety</h4>
+                        <p>Template-based payload signatures and type-safe buffer management prevent runtime errors.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📦 Automatic SBT</h4>
+                        <p>Automatic shader binding table generation and management removes tedious setup code.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🎯 Modern C++</h4>
+                        <p>Leverages C++17/20 features for clean, expressive API design.</p>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="architecture">
+                <h2>Architecture</h2>
+                
+                <h3 id="components">Core Components</h3>
+                <p>The library is structured into three main layers:</p>
+                
+                <div class="class-box">
+                    <div class="class-name">1. OptiX Utility Layer (optix_util.h)</div>
+                    <p>
+                        The primary interface for OptiX operations, providing high-level abstractions for:
+                    </p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>Context and pipeline management</li>
+                        <li>Scene graph construction</li>
+                        <li>Acceleration structure building</li>
+                        <li>Material and geometry handling</li>
+                        <li>Shader binding table automation</li>
+                    </ul>
+                </div>
+                
+                <div class="class-box">
+                    <div class="class-name">2. CUDA Utility Layer (cuda_util.h)</div>
+                    <p>
+                        Independent CUDA functionality for general GPU programming:
+                    </p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>Type-safe buffer management</li>
+                        <li>Array and texture handling</li>
+                        <li>Kernel launch utilities</li>
+                        <li>OpenGL interoperability (optional)</li>
+                    </ul>
+                </div>
+                
+                <div class="class-box">
+                    <div class="class-name">3. Bridge Layer (optixu_on_cudau.h)</div>
+                    <p>
+                        Seamless integration between OptiX and CUDA utilities:
+                    </p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>Implicit conversions between buffer types</li>
+                        <li>Block-based 2D buffer access patterns</li>
+                        <li>Device-side helper functions</li>
+                    </ul>
+                </div>
+                
+                <h3 id="design-patterns">Design Patterns</h3>
+                
+                <h4>RAII Resource Management</h4>
+                <p>All resources follow RAII principles with automatic cleanup:</p>
+                <pre><code>{
+    optixu::Context context = optixu::Context::create(cuContext);
+    optixu::Pipeline pipeline = context.createPipeline();
+    // Resources automatically cleaned up when out of scope
+}</code></pre>
+                
+                <h4>Builder Pattern</h4>
+                <p>Complex objects use builder pattern for configuration:</p>
+                <pre><code>gas.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::Yes,
+    optixu::AllowCompaction::Yes
+);</code></pre>
+                
+                <h4>Template Metaprogramming</h4>
+                <p>Compile-time payload signature validation:</p>
+                <pre><code>using MyPayloadSignature = optixu::PayloadSignature&lt;float3, float, uint32_t&gt;;
+static_assert(MyPayloadSignature::numDwords == 5);</code></pre>
+            </section>
+            
+            <section id="optix-utility">
+                <h2>OptiX Utility API</h2>
+                
+                <h3 id="optix-context">Context Management</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::Context</div>
+                    <p>Central management object for OptiX operations.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">static Context create(CUcontext cuContext, uint32_t logLevel = 4, EnableValidation validation = No)</div>
+                            <div class="method-description">Creates an OptiX context from a CUDA context with optional validation.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Pipeline createPipeline()</div>
+                            <div class="method-description">Creates a new ray tracing pipeline.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Material createMaterial()</div>
+                            <div class="method-description">Creates a new material for geometry.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Scene createScene()</div>
+                            <div class="method-description">Creates a new scene graph container.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Denoiser createDenoiser(OptixDenoiserType type, OptixDenoiserAlphaMode alphaMode)</div>
+                            <div class="method-description">Creates an AI denoiser for post-processing.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="optix-pipeline">Pipeline Configuration</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::Pipeline</div>
+                    <p>Manages the ray tracing pipeline including programs and shader binding table.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setPipelineOptions(const PipelineOptions& options)</div>
+                            <div class="method-description">Configures pipeline with payload size, traversable flags, and primitive types.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Module createModuleFromPTXString(const std::string& ptx, ...)</div>
+                            <div class="method-description">Creates a module from PTX string.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Module createModuleFromOptixIR(const std::vector&lt;char&gt;& ir, ...)</div>
+                            <div class="method-description">Creates a module from OptiX IR for better debugging.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Program createRayGenProgram(Module module, const char* entryPoint)</div>
+                            <div class="method-description">Creates ray generation program from module.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">HitProgramGroup createHitProgramGroupForTriangleIS(...)</div>
+                            <div class="method-description">Creates hit program group for triangle primitives.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void link(uint32_t maxTraceDepth)</div>
+                            <div class="method-description">Links the pipeline with specified maximum trace depth.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void launch(CUstream stream, CUdeviceptr plp, uint32_t width, uint32_t height, uint32_t depth = 1)</div>
+                            <div class="method-description">Launches the ray tracing pipeline.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="note">
+                    <strong>Note:</strong> The pipeline automatically manages the shader binding table layout. Call <code>generateShaderBindingTableLayout()</code> 
+                    after setting up all programs to prepare the SBT.
+                </div>
+                
+                <h3 id="optix-scene">Scene Management</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::Scene</div>
+                    <p>Container for the scene graph including geometry, instances, and acceleration structures.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">GeometryInstance createGeometryInstance()</div>
+                            <div class="method-description">Creates a geometry instance for triangles, curves, spheres, or custom primitives.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">GeometryAccelerationStructure createGeometryAccelerationStructure()</div>
+                            <div class="method-description">Creates a GAS (Geometry Acceleration Structure).</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Instance createInstance()</div>
+                            <div class="method-description">Creates an instance for instancing GAS or IAS.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">InstanceAccelerationStructure createInstanceAccelerationStructure()</div>
+                            <div class="method-description">Creates an IAS (Instance Acceleration Structure).</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">Transform createTransform()</div>
+                            <div class="method-description">Creates a transform node for hierarchical transformations.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="optix-materials">Material System</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::Material</div>
+                    <p>Defines shading behavior for geometry.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setHitGroup(uint32_t rayType, HitProgramGroup group)</div>
+                            <div class="method-description">Associates a hit program group with a specific ray type.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void setUserData(const BufferView& userdata)</div>
+                            <div class="method-description">Sets per-material user data accessible in shaders.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="optix-geometry">Geometry Types</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::GeometryInstance</div>
+                    <p>Represents geometric primitives with material associations.</p>
+                    
+                    <h4>Triangle Meshes</h4>
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setVertexBuffer(const BufferView& buffer)</div>
+                            <div class="method-description">Sets vertex positions for triangle meshes.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void setTriangleBuffer(const BufferView& buffer)</div>
+                            <div class="method-description">Sets triangle indices (optional for indexed meshes).</div>
+                        </div>
+                    </div>
+                    
+                    <h4>Curve Primitives</h4>
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setSegmentIndexBuffer(const BufferView& buffer)</div>
+                            <div class="method-description">Sets segment indices for curve primitives.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void setWidthBuffer(const BufferView& buffer)</div>
+                            <div class="method-description">Sets per-vertex widths for curves.</div>
+                        </div>
+                    </div>
+                    
+                    <h4>Sphere Primitives</h4>
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setRadiusBuffer(const BufferView& buffer)</div>
+                            <div class="method-description">Sets per-sphere radius values.</div>
+                        </div>
+                    </div>
+                    
+                    <h4>Custom Primitives</h4>
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setCustomPrimitiveAABBBuffer(const BufferView& buffer)</div>
+                            <div class="method-description">Sets axis-aligned bounding boxes for custom primitives.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="optix-acceleration">Acceleration Structures</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::GeometryAccelerationStructure (GAS)</div>
+                    <p>Bottom-level acceleration structure for geometry.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setConfiguration(ASTradeoff tradeoff, AllowUpdate update, AllowCompaction compact)</div>
+                            <div class="method-description">Configures build preferences for trace performance vs build time.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void addChild(GeometryInstance geomInst)</div>
+                            <div class="method-description">Adds geometry instance to the GAS.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void prepareForBuild(OptixAccelBufferSizes* memReqs)</div>
+                            <div class="method-description">Queries memory requirements for building.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">OptixTraversableHandle rebuild(CUstream stream, const BufferView& asMem, const BufferView& scratchMem)</div>
+                            <div class="method-description">Builds or rebuilds the acceleration structure.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void compact(CUstream stream, const BufferView& compactedMem)</div>
+                            <div class="method-description">Compacts the AS to reduce memory usage.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::InstanceAccelerationStructure (IAS)</div>
+                    <p>Top-level acceleration structure for instances.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void addChild(Instance inst)</div>
+                            <div class="method-description">Adds an instance to the IAS.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">OptixTraversableHandle rebuild(CUstream stream, const BufferView& instBuffer, const BufferView& asMem, const BufferView& scratchMem)</div>
+                            <div class="method-description">Builds the instance acceleration structure.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="optix-denoiser">AI Denoiser</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::Denoiser</div>
+                    <p>NVIDIA AI-accelerated denoising for ray traced images.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void prepare(uint32_t width, uint32_t height, uint32_t tileWidth, uint32_t tileHeight, DenoiserSizes* sizes)</div>
+                            <div class="method-description">Prepares denoiser for specific resolution and tiling.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void setupState(CUstream stream, const BufferView& state, const BufferView& scratch)</div>
+                            <div class="method-description">Initializes denoiser state.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void invoke(CUstream stream, const DenoiserInputBuffers& inputs, ...)</div>
+                            <div class="method-description">Executes denoising on input buffers.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="note">
+                    <strong>Supported Denoiser Types:</strong>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>HDR - High dynamic range denoising</li>
+                        <li>HDR + Upscaling 2x - Denoising with 2x upsampling</li>
+                        <li>HDR Temporal - Temporal denoising using motion vectors</li>
+                        <li>HDR Temporal + Upscaling 2x - Temporal with upsampling</li>
+                    </ul>
+                </div>
+            </section>
+            
+            <section id="cuda-utility">
+                <h2>CUDA Utility API</h2>
+                
+                <h3 id="cuda-buffers">Buffer Management</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">cudau::Buffer</div>
+                    <p>Generic untyped buffer with flexible memory allocation strategies.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void initialize(CUcontext context, BufferType type, size_t size)</div>
+                            <div class="method-description">Initializes buffer with specified type and size.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void resize(size_t size, CUstream stream = 0)</div>
+                            <div class="method-description">Resizes buffer, preserving contents when possible.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void* map(BufferMapFlag flag = BufferMapFlag::ReadWrite)</div>
+                            <div class="method-description">Maps buffer to host memory for direct access.</div>
+                        </div>
+                    </div>
+                    
+                    <h4>Buffer Types</h4>
+                    <table>
+                        <tr>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Use Case</th>
+                        </tr>
+                        <tr>
+                            <td><code>Device</code></td>
+                            <td>GPU-only memory</td>
+                            <td>High-performance GPU operations</td>
+                        </tr>
+                        <tr>
+                            <td><code>GL_Interop</code></td>
+                            <td>OpenGL interoperable</td>
+                            <td>Sharing data with OpenGL</td>
+                        </tr>
+                        <tr>
+                            <td><code>ZeroCopy</code></td>
+                            <td>Pinned host memory</td>
+                            <td>CPU-GPU shared access</td>
+                        </tr>
+                        <tr>
+                            <td><code>Managed</code></td>
+                            <td>Unified memory</td>
+                            <td>Automatic migration</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div class="class-box">
+                    <div class="class-name">cudau::TypedBuffer&lt;T&gt;</div>
+                    <p>Type-safe wrapper around Buffer for specific data types.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void initialize(CUcontext context, BufferType type, uint32_t numElements)</div>
+                            <div class="method-description">Initializes typed buffer for specified number of elements.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">T* getDevicePointer()</div>
+                            <div class="method-description">Returns device pointer for kernel arguments.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">ROBuffer&lt;T&gt; getROBuffer()</div>
+                            <div class="method-description">Returns read-only device accessor.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">RWBuffer&lt;T&gt; getRWBuffer()</div>
+                            <div class="method-description">Returns read-write device accessor.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="cuda-arrays">Array Management</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">cudau::Array</div>
+                    <p>CUDA array for texture operations with mipmap support.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void initialize2D(CUcontext context, ArrayElementType elemType, uint32_t numChannels, uint32_t width, uint32_t height, uint32_t numMipmapLevels = 1)</div>
+                            <div class="method-description">Creates 2D array with optional mipmaps.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void initialize3D(...)</div>
+                            <div class="method-description">Creates 3D array for volume textures.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">CUsurfObject getSurfaceObject(uint32_t mipLevel = 0)</div>
+                            <div class="method-description">Gets surface object for read/write access.</div>
+                        </div>
+                    </div>
+                    
+                    <h4>Supported Formats</h4>
+                    <ul style="margin-left: 20px;">
+                        <li>Standard formats: UInt8, Int8, UInt16, Int16, UInt32, Int32, Float16, Float32</li>
+                        <li>Block compression: BC1-BC7 (DXT/BC formats)</li>
+                        <li>sRGB variants for color textures</li>
+                    </ul>
+                </div>
+                
+                <h3 id="cuda-textures">Texture Sampling</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">cudau::TextureSampler</div>
+                    <p>Configures texture sampling parameters.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void setXyFilterMode(TextureFilterMode mode)</div>
+                            <div class="method-description">Sets filtering: Point or Linear.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">void setWrapMode(uint32_t dim, TextureWrapMode mode)</div>
+                            <div class="method-description">Sets wrap mode: Repeat, Clamp, Mirror, or Border.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">CUtexObject createTextureObject(CUarray array)</div>
+                            <div class="method-description">Creates texture object for shader sampling.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="cuda-kernels">Kernel Management</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">cudau::Kernel</div>
+                    <p>Simplified kernel launch interface.</p>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">void operator()(const dim3& gridDim, CUstream stream, Args... args)</div>
+                            <div class="method-description">Launches kernel with specified grid dimensions and arguments.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">dim3 calcGridDim(uint32_t width, uint32_t height = 1, uint32_t depth = 1)</div>
+                            <div class="method-description">Calculates optimal grid dimensions based on block size.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <pre><code>// Example kernel launch
+cudau::Kernel myKernel(cuFunction);
+myKernel.setBlockDimensions(16, 16);
+dim3 grid = myKernel.calcGridDim(imageWidth, imageHeight);
+myKernel(grid, stream, deviceBuffer, imageWidth, imageHeight);</code></pre>
+            </section>
+            
+            <section id="bridge-layer">
+                <h2>Bridge Layer (optixu_on_cudau.h)</h2>
+                
+                <h3 id="buffer-integration">Buffer Integration</h3>
+                
+                <p>The bridge layer provides seamless conversion between CUDA and OptiX buffer types:</p>
+                
+                <pre><code>// CUDA buffer automatically converts to OptiX BufferView
+cudau::TypedBuffer&lt;Vertex&gt; vertexBuffer;
+vertexBuffer.initialize(cuContext, cudau::BufferType::Device, numVertices);
+
+// Direct use with OptiX - implicit conversion happens
+geometryInstance.setVertexBuffer(vertexBuffer); // No explicit conversion needed</code></pre>
+                
+                <h3 id="device-functions">Device-Side Utilities</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::NativeBlockBuffer2D&lt;T&gt;</div>
+                    <p>Efficient 2D buffer access using surface objects.</p>
+                    <span class="badge device">Device Only</span>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">RT_DEVICE_FUNCTION T read(uint2 idx)</div>
+                            <div class="method-description">Reads value at 2D coordinates.</div>
+                        </div>
+                        
+                        <div class="method">
+                            <div class="method-signature">RT_DEVICE_FUNCTION void write(uint2 idx, const T& value)</div>
+                            <div class="method-description">Writes value at 2D coordinates.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::BlockBuffer2D&lt;T, log2BlockWidth&gt;</div>
+                    <p>Block-tiled 2D buffer for cache-efficient access patterns.</p>
+                    <span class="badge device">Device Only</span>
+                    
+                    <div class="method-list">
+                        <div class="method">
+                            <div class="method-signature">RT_DEVICE_FUNCTION T& operator[](uint2 idx)</div>
+                            <div class="method-description">Access element with automatic block tiling.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="note">
+                    <strong>Performance Tip:</strong> Block-tiled buffers improve cache locality for 2D access patterns. 
+                    Use <code>log2BlockWidth</code> of 3-5 (8x8 to 32x32 blocks) for optimal performance.
+                </div>
+            </section>
+            
+            <section id="payload-system">
+                <h2>Payload System</h2>
+                
+                <p>
+                    OptiX Utility provides a type-safe payload system that automatically handles packing and unpacking of ray payload data 
+                    across kernel boundaries.
+                </p>
+                
+                <h3>Payload Signatures</h3>
+                
+                <div class="class-box">
+                    <div class="class-name">optixu::PayloadSignature&lt;Types...&gt;</div>
+                    <p>Defines the types carried by rays during traversal.</p>
+                    
+                    <pre><code>// Define payload signature
+using MyPayloadSignature = optixu::PayloadSignature&lt;
+    float3,     // Color
+    float,      // Distance
+    uint32_t    // Flags
+&gt;;
+
+// Automatic size calculation
+static_assert(MyPayloadSignature::numDwords == 5);</code></pre>
+                </div>
+                
+                <h3>Device-Side Usage</h3>
+                
+                <pre><code>// In ray generation
+RT_RG_NAME(raygen)() {
+    float3 color = make_float3(0);
+    float distance = 0;
+    uint32_t flags = 0;
+    
+    // Type-safe trace call
+    MyPayloadSignature::trace(
+        traversable, origin, direction,
+        tMin, tMax, time, visibilityMask, rayFlags,
+        sbtOffset, sbtStride, missSbtIndex,
+        color, distance, flags  // Payload values
+    );
+}
+
+// In closest hit
+RT_CH_NAME(closesthit)() {
+    float3 color;
+    float distance;
+    uint32_t flags;
+    
+    // Type-safe payload retrieval
+    MyPayloadSignature::get(&color, &distance, &flags);
+    
+    // Modify payload
+    color = make_float3(1, 0, 0);
+    
+    // Set modified payload
+    MyPayloadSignature::set(&color, &distance, &flags);
+}</code></pre>
+                
+                <h3>Annotated Payloads</h3>
+                
+                <p>For complex pipelines, annotated payloads reduce register usage:</p>
+                
+                <pre><code>// Define payload with annotations
+template &lt;&gt;
+struct PayloadType&lt;MyPayload&gt; {
+    static constexpr uint32_t semantics = 
+        OPTIX_PAYLOAD_TYPE_SEMANTICS_TRACE_CALLER_READ |
+        OPTIX_PAYLOAD_TYPE_SEMANTICS_CH_WRITE;
+    static constexpr uint32_t numDwords = 3;
+};
+
+using AnnotatedPayload = optixu::AnnotatedPayloadSignature&lt;MyPayload&gt;;</code></pre>
+            </section>
+            
+            <section id="usage-examples">
+                <h2>Usage Examples</h2>
+                
+                <h3>Basic Ray Tracing Setup</h3>
+                
+                <pre><code>// 1. Create context and pipeline
+CUcontext cuContext;
+cuInit(0);
+cuCtxCreate(&cuContext, 0, 0);
+
+optixu::Context optixContext = optixu::Context::create(cuContext);
+optixu::Pipeline pipeline = optixContext.createPipeline();
+
+// 2. Configure pipeline
+optixu::PipelineOptions options;
+options.payloadCountInDwords = MyPayloadSignature::numDwords;
+options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+pipeline.setPipelineOptions(options);
+
+// 3. Create and compile modules
+std::vector&lt;char&gt; optixIR = readOptixIR("kernels.optixir");
+optixu::Module module = pipeline.createModuleFromOptixIR(optixIR);
+
+// 4. Create programs
+optixu::Program rayGen = pipeline.createRayGenProgram(module, "raygen");
+optixu::Program miss = pipeline.createMissProgram(module, "miss");
+optixu::HitProgramGroup hitGroup = pipeline.createHitProgramGroupForTriangleIS(
+    module, "closesthit", emptyModule, nullptr);
+
+// 5. Link pipeline
+pipeline.link(maxTraceDepth);
+
+// 6. Create scene and geometry
+optixu::Scene scene = optixContext.createScene();
+optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+
+// 7. Setup geometry data
+cudau::TypedBuffer&lt;Vertex&gt; vertices;
+vertices.initialize(cuContext, cudau::BufferType::Device, numVertices);
+// ... fill vertices ...
+
+geomInst.setVertexBuffer(vertices);
+geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+
+// 8. Create material
+optixu::Material material = optixContext.createMaterial();
+material.setHitGroup(RayType::Primary, hitGroup);
+geomInst.setMaterial(0, 0, material);
+
+// 9. Build acceleration structure
+optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
+gas.addChild(geomInst);
+
+OptixAccelBufferSizes asMemReqs;
+gas.prepareForBuild(&asMemReqs);
+
+cudau::Buffer gasMem, scratchMem;
+gasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes);
+scratchMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.tempSizeInBytes);
+
+OptixTraversableHandle gasHandle = gas.rebuild(stream, gasMem, scratchMem);
+
+// 10. Setup shader binding table
+cudau::Buffer sbt;
+size_t sbtSize;
+pipeline.generateShaderBindingTableLayout(&sbtSize);
+sbt.initialize(cuContext, cudau::BufferType::Device, sbtSize);
+pipeline.setShaderBindingTable(sbt, sbt.getMappedPointer());
+
+// 11. Launch
+PipelineLaunchParams params;
+params.traversable = gasHandle;
+// ... setup other params ...
+
+CUdeviceptr d_params;
+cuMemAlloc(&d_params, sizeof(params));
+cuMemcpyHtoD(d_params, &params, sizeof(params));
+
+pipeline.launch(stream, d_params, width, height);</code></pre>
+                
+                <h3>Multi-Level Instancing</h3>
+                
+                <pre><code>// Create bottom-level GAS for each unique geometry
+optixu::GeometryAccelerationStructure gasModel1 = createModelGAS(vertices1, triangles1);
+optixu::GeometryAccelerationStructure gasModel2 = createModelGAS(vertices2, triangles2);
+
+// Create instances with transforms
+optixu::Instance instance1 = scene.createInstance();
+instance1.setChild(gasModel1);
+instance1.setTransform(transform1);
+
+optixu::Instance instance2 = scene.createInstance();
+instance2.setChild(gasModel2);
+instance2.setTransform(transform2);
+
+// Build top-level IAS
+optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+ias.addChild(instance1);
+ias.addChild(instance2);
+
+OptixTraversableHandle iasHandle = ias.rebuild(stream, instBuffer, iasMem, scratchMem);</code></pre>
+                
+                <h3>Motion Blur</h3>
+                
+                <pre><code>// Configure motion for geometry
+geomInst.setMotionStepCount(2); // 2 time steps
+
+// Set vertex buffers for each time step
+geomInst.setVertexBuffer(verticesT0, 0); // Time 0
+geomInst.setVertexBuffer(verticesT1, 1); // Time 1
+
+// Configure motion options for GAS
+gas.setMotionOptions(
+    2,      // numKeys
+    0.0f,   // timeBegin
+    1.0f    // timeEnd
+);
+
+// Enable motion blur in pipeline
+pipelineOptions.useMotionBlur = optixu::UseMotionBlur::Yes;</code></pre>
+                
+                <h3>AI Denoiser Integration</h3>
+                
+                <pre><code>// Create denoiser
+optixu::Denoiser denoiser = optixContext.createDenoiser(
+    OPTIX_DENOISER_TYPE_HDR,
+    OPTIX_DENOISER_ALPHA_MODE_COPY
+);
+
+// Prepare denoiser
+optixu::DenoiserSizes sizes;
+denoiser.prepare(width, height, tileWidth, tileHeight, &sizes);
+
+// Allocate denoiser buffers
+cudau::Buffer denoiserState, denoiserScratch;
+denoiserState.initialize(cuContext, cudau::BufferType::Device, sizes.stateSize);
+denoiserScratch.initialize(cuContext, cudau::BufferType::Device, sizes.scratchSize);
+
+// Setup state
+denoiser.setupState(stream, denoiserState, denoiserScratch);
+
+// Denoise
+optixu::DenoiserInputBuffers inputs;
+inputs.noisyBeauty = noisyImage;
+inputs.albedo = albedoBuffer;      // Optional
+inputs.normal = normalBuffer;      // Optional
+
+denoiser.invoke(stream, inputs, outputImage, ...);</code></pre>
+            </section>
+            
+            <section id="api-reference">
+                <h2>API Reference</h2>
+                
+                <h3>Namespace Structure</h3>
+                
+                <div class="table-wrapper">
+                    <table>
+                        <tr>
+                            <th>Namespace</th>
+                            <th>Purpose</th>
+                            <th>Key Types</th>
+                        </tr>
+                        <tr>
+                            <td><code>optixu</code></td>
+                            <td>OptiX utilities</td>
+                            <td>Context, Pipeline, Scene, Material, GeometryInstance, etc.</td>
+                        </tr>
+                        <tr>
+                            <td><code>cudau</code></td>
+                            <td>CUDA utilities</td>
+                            <td>Buffer, TypedBuffer, Array, TextureSampler, Kernel</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <h3>Macro Definitions</h3>
+                
+                <div class="table-wrapper">
+                    <table>
+                        <tr>
+                            <th>Macro</th>
+                            <th>Purpose</th>
+                            <th>Usage</th>
+                        </tr>
+                        <tr>
+                            <td><code>RT_RG_NAME_STR(name)</code></td>
+                            <td>Ray generation program name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                        <tr>
+                            <td><code>RT_MS_NAME_STR(name)</code></td>
+                            <td>Miss program name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                        <tr>
+                            <td><code>RT_CH_NAME_STR(name)</code></td>
+                            <td>Closest hit program name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                        <tr>
+                            <td><code>RT_AH_NAME_STR(name)</code></td>
+                            <td>Any hit program name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                        <tr>
+                            <td><code>RT_IS_NAME_STR(name)</code></td>
+                            <td>Intersection program name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                        <tr>
+                            <td><code>RT_DC_NAME_STR(name)</code></td>
+                            <td>Direct callable name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                        <tr>
+                            <td><code>RT_CC_NAME_STR(name)</code></td>
+                            <td>Continuation callable name</td>
+                            <td>Module entry point</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <h3>Supported Primitive Types</h3>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>Triangles</h4>
+                        <ul>
+                            <li>Indexed and non-indexed meshes</li>
+                            <li>Multiple vertex formats</li>
+                            <li>Opacity micro-maps</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h4>Curves</h4>
+                        <ul>
+                            <li>Linear segments</li>
+                            <li>Quadratic B-splines</li>
+                            <li>Cubic B-splines</li>
+                            <li>Catmull-Rom splines</li>
+                            <li>Cubic Bézier</li>
+                            <li>Ribbon (flat) variants</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h4>Spheres</h4>
+                        <ul>
+                            <li>Per-sphere radius</li>
+                            <li>Efficient intersection</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h4>Custom Primitives</h4>
+                        <ul>
+                            <li>User-defined AABBs</li>
+                            <li>Custom intersection programs</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <h3>Build Requirements</h3>
+                
+                <div class="table-wrapper">
+                    <table>
+                        <tr>
+                            <th>Component</th>
+                            <th>Minimum Version</th>
+                            <th>Notes</th>
+                        </tr>
+                        <tr>
+                            <td>CUDA Toolkit</td>
+                            <td>12.0</td>
+                            <td>13.0+ recommended for latest features</td>
+                        </tr>
+                        <tr>
+                            <td>OptiX SDK</td>
+                            <td>9.0.0</td>
+                            <td>Requires Turing or newer GPU</td>
+                        </tr>
+                        <tr>
+                            <td>C++ Standard</td>
+                            <td>C++17</td>
+                            <td>C++20 supported</td>
+                        </tr>
+                        <tr>
+                            <td>CMake</td>
+                            <td>3.26</td>
+                            <td>For build configuration</td>
+                        </tr>
+                        <tr>
+                            <td>Visual Studio</td>
+                            <td>2022</td>
+                            <td>Windows platform</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <h3>Error Handling</h3>
+                
+                <p>The library uses exception-based error handling with RAII for resource management:</p>
+                
+                <pre><code>try {
+    optixu::Context context = optixu::Context::create(cuContext);
+    // Operations that may throw
+} catch (const optixu::Exception& e) {
+    std::cerr << "OptiX error: " << e.what() << std::endl;
+} catch (const cudau::Exception& e) {
+    std::cerr << "CUDA error: " << e.what() << std::endl;
+}</code></pre>
+                
+                <div class="warning">
+                    <strong>Important:</strong> Always check return values from CUDA driver API calls using <code>CUDADRV_CHECK()</code> 
+                    and OptiX API calls using <code>OPTIX_CHECK()</code> macros for proper error handling.
+                </div>
+                
+                <h3>Performance Considerations</h3>
+                
+                <ul style="margin-left: 20px;">
+                    <li><strong>Acceleration Structure Build:</strong> Use <code>ASTradeoff::PreferFastTrace</code> for scenes with many rays</li>
+                    <li><strong>Compaction:</strong> Enable for static geometry to reduce memory usage by up to 50%</li>
+                    <li><strong>Motion Blur:</strong> Increases memory usage and build time proportionally to motion steps</li>
+                    <li><strong>Material Sets:</strong> Use for efficient multi-material instancing</li>
+                    <li><strong>Payload Size:</strong> Minimize payload size to reduce register pressure</li>
+                    <li><strong>SBT Layout:</strong> Let the library manage SBT for optimal memory layout</li>
+                </ul>
+            </section>
+            
+            <footer style="margin-top: 60px; padding-top: 30px; border-top: 1px solid var(--border-color); text-align: center; color: #666;">
+                <p>OptiX Utility Library Documentation</p>
+                <p>Based on OptiX 9.0.0 | CUDA 13.0+ | © 2025</p>
+            </footer>
+        </main>
+    </div>
+</body>
+</html>
