@@ -33,7 +33,7 @@ nvcuda_compile_optix_ir(
     "$<$<CONFIG:Debug>:-O0>"
     "--gpu-architecture=compute_75"
     "-std=${CPP_VER_CUDA}"
-    "-cudart" "shared"
+    "-cudart" "static"
     "--use_fast_math"
     "--relocatable-device-code=true"
     "-I${OPTIX_INCLUDE_DIR}"
