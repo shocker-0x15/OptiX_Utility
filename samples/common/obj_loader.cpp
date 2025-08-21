@@ -1,4 +1,5 @@
-#include "obj_loader.h"
+﻿#include "obj_loader.h"
+#include "../../ext/tinyobjloader/tiny_obj_loader.h"
 
 namespace obj {
     void load(const std::filesystem::path &filepath,

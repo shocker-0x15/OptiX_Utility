@@ -1,7 +1,6 @@
-#pragma once
+ï»¿#pragma once
 
 #include "common.h"
-#include "../../ext/tinyobjloader/tiny_obj_loader.h"
 
 namespace obj {
     struct Vertex {
@@ -30,7 +29,7 @@ namespace obj {
               std::vector<Material>* materials);
 
 
-    // JP: ƒ}ƒeƒŠƒAƒ‹‚ğ‹æ•Ê‚¹‚¸‚ÉŒ`ó‚¾‚¯‚ğ“Ç‚İ‚ŞB
+    // JP: ãƒãƒ†ãƒªã‚¢ãƒ«ã‚’åŒºåˆ¥ã›ãšã«å½¢çŠ¶ã ã‘ã‚’èª­ã¿è¾¼ã‚€ã€‚
     // EN: Load only the shape without distinguishing materials.
     void load(const std::filesystem::path &filepath,
               std::vector<Vertex>* vertices, std::vector<Triangle>* triangles);

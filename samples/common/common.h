@@ -44,7 +44,6 @@
 #   include <sstream>
 #   include <array>
 #   include <vector>
-#   include <span>
 #   include <set>
 #   include <map>
 #   include <unordered_set>
@@ -104,9 +103,13 @@ CUDA_COMMON_FUNCTION CUDA_INLINE constexpr size_t lengthof(const T (&array)[size
 #if __cplusplus >= 202002L
 template <std::floating_point T>
 static constexpr T pi_v = std::numbers::pi_v<T>;
+
+#   define COMMON_FLOATING_POINT_CONCEPT std::floating_point
 #else
 template <typename T>
 static constexpr T pi_v = static_cast<T>(3.141592653589793);
+
+#   define COMMON_FLOATING_POINT_CONCEPT typename
 #endif
 
 namespace stc {
@@ -136,7 +139,7 @@ namespace stc {
         return min(max(x, _min), _max);
     }
 
-    template <std::floating_point F>
+    template <COMMON_FLOATING_POINT_CONCEPT F>
     CUDA_COMMON_FUNCTION CUDA_INLINE bool isinf(const F x) {
 #if defined(__CUDA_ARCH__)
         return static_cast<bool>(::isinf(x));
@@ -145,7 +148,7 @@ namespace stc {
 #endif
     }
 
-    template <std::floating_point F>
+    template <COMMON_FLOATING_POINT_CONCEPT F>
     CUDA_COMMON_FUNCTION CUDA_INLINE bool isnan(const F x) {
 #if defined(__CUDA_ARCH__)
         return static_cast<bool>(::isnan(x));
@@ -154,7 +157,7 @@ namespace stc {
 #endif
     }
 
-    template <std::floating_point F>
+    template <COMMON_FLOATING_POINT_CONCEPT F>
     CUDA_COMMON_FUNCTION CUDA_INLINE bool isfinite(const F x) {
 #if defined(__CUDA_ARCH__)
         return static_cast<bool>(::isfinite(x));
@@ -163,7 +166,7 @@ namespace stc {
 #endif
     }
 
-    template <std::floating_point F>
+    template <COMMON_FLOATING_POINT_CONCEPT F>
     CUDA_COMMON_FUNCTION CUDA_INLINE void sincos(const F x, F* const s, F* const c) {
 #if defined(__CUDA_ARCH__)
         ::sincosf(x, s, c);
@@ -192,7 +195,11 @@ namespace stc {
         alias.s = x;
         return alias.d;
 #else
+#   if __cplusplus >= 202002L
         return std::bit_cast<DstType>(x);
+#   else
+        return *reinterpret_cast<const DstType*>(&x);
+#   endif
 #endif
     }
 

@@ -79,7 +79,7 @@ set_property(
     CACHE CPP_VER PROPERTY STRINGS
     "c++17" "c++20")
 
-set(CPP_VER_CUDA "c++17" CACHE STRING "CUDA C++ version to test")
+set(CPP_VER_CUDA "c++20" CACHE STRING "CUDA C++ version to test")
 set_property(
     CACHE CPP_VER_CUDA PROPERTY STRINGS
     "c++17" "c++20")

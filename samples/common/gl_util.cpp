@@ -27,6 +27,7 @@
 #endif
 
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <set>
 #include <regex>
