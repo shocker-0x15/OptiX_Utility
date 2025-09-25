@@ -9,6 +9,10 @@ data/
 tests/gtest
 tests/gtest_build
 
+# CMake build directories
+build/
+Build/
+
 # User-specific files
 *.suo
 *.user

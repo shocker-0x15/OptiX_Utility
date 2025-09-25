@@ -1976,6 +1976,608 @@ TEST(EdgeCasesTest, EdgeCasesBasic) {
 
 
 
+TEST(PipelineAdvancedTest, PipelineLinkingAndAdvancedFeatures) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        optixu::Module emptyModule;
+
+        // JP: プログラムの作成。
+        optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+        optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+        optixu::HitProgramGroup hitGroup = pipeline.createHitProgramGroupForTriangleIS(
+            moduleOptiX, RT_CH_NAME_STR("ch0"), emptyModule, nullptr);
+        optixu::CallableProgramGroup callableGroup = pipeline.createCallableProgramGroup(
+            emptyModule, nullptr, emptyModule, nullptr);
+
+        // JP: プログラムをパイプラインに設定。
+        pipeline.setRayGenerationProgram(rayGenProgram);
+        pipeline.setMissProgram(0, missProgram);
+        pipeline.setCallableProgram(0, callableGroup);
+
+        // JP: プログラムの取得テスト。
+        {
+            EXPECT_EQ(pipeline.getRayGenerationProgram(), rayGenProgram);
+            EXPECT_EQ(pipeline.getMissProgram(0), missProgram);
+            EXPECT_EQ(pipeline.getCallableProgram(0), callableGroup);
+        }
+
+        // JP: パイプラインのリンク。
+        pipeline.link(2);
+
+        // JP: スタックサイズの設定。
+        pipeline.setStackSize(1024, 1024, 2048, 4);
+
+        // JP: シェーダーバインディングテーブルのレイアウト生成。
+        size_t sbtSize;
+        pipeline.generateShaderBindingTableLayout(&sbtSize);
+        EXPECT_GT(sbtSize, 0);
+
+        // JP: ヒットグループSBTをdirty状態にする。
+        pipeline.markHitGroupShaderBindingTableDirty();
+
+        // JP: クリーンアップ。
+        callableGroup.destroy();
+        hitGroup.destroy();
+        missProgram.destroy();
+        rayGenProgram.destroy();
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(SceneAdvancedTest, SceneWithMaterialsAndGeometry) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = 
+            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        optixu::Module emptyModule;
+
+        // JP: ヒットプログラムグループの作成。
+        optixu::HitProgramGroup hitGroupTriangle = pipeline.createHitProgramGroupForTriangleIS(
+            moduleOptiX, RT_CH_NAME_STR("ch0"), emptyModule, nullptr);
+        optixu::HitProgramGroup hitGroupCustom = pipeline.createHitProgramGroupForCustomIS(
+            moduleOptiX, RT_CH_NAME_STR("ch1"), emptyModule, nullptr,
+            moduleOptiX, RT_IS_NAME_STR("is"));
+
+        // JP: マテリアルの作成とヒットグループの設定。
+        optixu::Material material1 = context.createMaterial();
+        optixu::Material material2 = context.createMaterial();
+
+        material1.setHitGroup(0, hitGroupTriangle);
+        material2.setHitGroup(0, hitGroupCustom);
+
+        // JP: シーンの作成とジオメトリインスタンスの設定。
+        optixu::Scene scene = context.createScene();
+        pipeline.setScene(scene);
+        EXPECT_EQ(pipeline.getScene(), scene);
+
+        optixu::GeometryInstance triangleGeom = scene.createGeometryInstance();
+        optixu::GeometryInstance customGeom = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+
+        // JP: ジオメトリインスタンスにマテリアルを設定。
+        triangleGeom.setMaterial(0, 0, material1);
+        customGeom.setMaterial(0, 0, material2);
+
+        // JP: GASの作成と設定。
+        optixu::GeometryAccelerationStructure gasTriangle = scene.createGeometryAccelerationStructure();
+        optixu::GeometryAccelerationStructure gasCustom = scene.createGeometryAccelerationStructure(
+            optixu::GeometryType::CustomPrimitives);
+
+        gasTriangle.addChild(triangleGeom);
+        gasCustom.addChild(customGeom);
+
+        // JP: SBTレイアウトの生成。
+        size_t sbtSize;
+        scene.generateShaderBindingTableLayout(&sbtSize);
+        EXPECT_GT(sbtSize, 0);
+        EXPECT_TRUE(scene.shaderBindingTableLayoutIsReady());
+
+        // JP: クリーンアップ。
+        gasCustom.destroy();
+        gasTriangle.destroy();
+        customGeom.destroy();
+        triangleGeom.destroy();
+        scene.destroy();
+        material2.destroy();
+        material1.destroy();
+        hitGroupCustom.destroy();
+        hitGroupTriangle.destroy();
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(GeometryInstanceAdvancedTest, GeometryInstanceComplexConfiguration) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Scene scene = context.createScene();
+
+        // JP: 異なるジオメトリタイプのテスト。
+        std::vector<optixu::GeometryType> geometryTypes = {
+            optixu::GeometryType::Triangles,
+            optixu::GeometryType::LinearSegments,
+            optixu::GeometryType::QuadraticBSplines,
+            optixu::GeometryType::CubicBSplines,
+            optixu::GeometryType::CustomPrimitives,
+            optixu::GeometryType::Spheres
+        };
+
+        for (auto geomType : geometryTypes) {
+            optixu::GeometryInstance geomInst = scene.createGeometryInstance(geomType);
+
+            // JP: 共通プロパティのテスト。
+            {
+                uint32_t motionSteps = 3;
+                geomInst.setMotionStepCount(motionSteps);
+                EXPECT_EQ(geomInst.getMotionStepCount(), motionSteps);
+
+                uint32_t primitiveIndexOffset = 100;
+                geomInst.setPrimitiveIndexOffset(primitiveIndexOffset);
+                EXPECT_EQ(geomInst.getPrimitiveIndexOffset(), primitiveIndexOffset);
+            }
+
+            // JP: ジオメトリタイプ固有の設定テスト。
+            switch (geomType) {
+                case optixu::GeometryType::Triangles: {
+                    // JP: 三角形特有の設定。
+                    OptixVertexFormat vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+                    geomInst.setVertexFormat(vertexFormat);
+                    EXPECT_EQ(geomInst.getVertexFormat(), vertexFormat);
+
+                    optixu::BufferView triangleBuffer(reinterpret_cast<CUdeviceptr>(0x1000), 100, sizeof(uint32_t) * 3);
+                    geomInst.setTriangleBuffer(triangleBuffer, OPTIX_INDICES_FORMAT_UNSIGNED_INT3);
+
+                    OptixIndicesFormat retrievedFormat;
+                    optixu::BufferView retrievedBuffer = geomInst.getTriangleBuffer(&retrievedFormat);
+                    EXPECT_EQ(retrievedBuffer, triangleBuffer);
+                    EXPECT_EQ(retrievedFormat, OPTIX_INDICES_FORMAT_UNSIGNED_INT3);
+                    break;
+                }
+                case optixu::GeometryType::LinearSegments:
+                case optixu::GeometryType::QuadraticBSplines:
+                case optixu::GeometryType::CubicBSplines: {
+                    // JP: カーブ特有の設定。
+                    optixu::BufferView widthBuffer(reinterpret_cast<CUdeviceptr>(0x2000), 100, sizeof(float));
+                    geomInst.setWidthBuffer(widthBuffer);
+                    EXPECT_EQ(geomInst.getWidthBuffer(), widthBuffer);
+
+                    optixu::BufferView segmentIndexBuffer(reinterpret_cast<CUdeviceptr>(0x3000), 50, sizeof(uint32_t));
+                    geomInst.setSegmentIndexBuffer(segmentIndexBuffer);
+                    EXPECT_EQ(geomInst.getSegmentIndexBuffer(), segmentIndexBuffer);
+                    break;
+                }
+                case optixu::GeometryType::CustomPrimitives: {
+                    // JP: カスタムプリミティブ特有の設定。
+                    optixu::BufferView aabbBuffer(reinterpret_cast<CUdeviceptr>(0x4000), 25, sizeof(OptixAabb));
+                    geomInst.setCustomPrimitiveAABBBuffer(aabbBuffer);
+                    EXPECT_EQ(geomInst.getCustomPrimitiveAABBBuffer(), aabbBuffer);
+                    break;
+                }
+                case optixu::GeometryType::Spheres: {
+                    // JP: 球特有の設定。
+                    optixu::BufferView radiusBuffer(reinterpret_cast<CUdeviceptr>(0x5000), 100, sizeof(float));
+                    geomInst.setRadiusBuffer(radiusBuffer);
+                    EXPECT_EQ(geomInst.getRadiusBuffer(), radiusBuffer);
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            // JP: マテリアル設定のテスト。
+            {
+                uint32_t numMaterials = 2;
+                if (geomType != optixu::GeometryType::LinearSegments &&
+                    geomType != optixu::GeometryType::QuadraticBSplines &&
+                    geomType != optixu::GeometryType::CubicBSplines) { // カーブ系は単一マテリアルのみ
+                    
+                    optixu::BufferView matIndexBuffer(reinterpret_cast<CUdeviceptr>(0x6000), 100, sizeof(uint32_t));
+                    geomInst.setMaterialCount(numMaterials, matIndexBuffer, optixu::IndexSize::k4Bytes);
+
+                    optixu::BufferView retrievedMatBuffer;
+                    optixu::IndexSize retrievedIndexSize;
+                    uint32_t retrievedMatCount = geomInst.getMaterialCount(&retrievedMatBuffer, &retrievedIndexSize);
+                    
+                    EXPECT_EQ(retrievedMatCount, numMaterials);
+                    EXPECT_EQ(retrievedMatBuffer, matIndexBuffer);
+                    EXPECT_EQ(retrievedIndexSize, optixu::IndexSize::k4Bytes);
+
+                    // JP: 各マテリアルスロットのジオメトリフラグ設定。
+                    for (uint32_t matIdx = 0; matIdx < numMaterials; ++matIdx) {
+                        OptixGeometryFlags flags = static_cast<OptixGeometryFlags>(
+                            OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT | (matIdx == 0 ? OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL : 0));
+                        geomInst.setGeometryFlags(matIdx, flags);
+                        EXPECT_EQ(geomInst.getGeometryFlags(matIdx), flags);
+                    }
+                }
+            }
+
+            geomInst.destroy();
+        }
+
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(CurveGeometryTest, CurveSpecificFunctionality) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = 8;
+        pipelineOptions.attributeCountInDwords = 4;
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = 
+            OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE |
+            OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        optixu::Module emptyModule;
+
+        // JP: カーブ用ヒットプログラムグループの作成。
+        {
+            optixu::HitProgramGroup quadraticCurveHitGroup = pipeline.createHitProgramGroupForCurveIS(
+                OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE,
+                OPTIX_CURVE_ENDCAP_DEFAULT,
+                moduleOptiX, RT_CH_NAME_STR("ch0"),
+                emptyModule, nullptr,
+                optixu::ASTradeoff::Default,
+                optixu::AllowUpdate::No,
+                optixu::AllowCompaction::No,
+                optixu::AllowRandomVertexAccess::No);
+
+            EXPECT_NE(quadraticCurveHitGroup, optixu::HitProgramGroup());
+
+            optixu::HitProgramGroup cubicCurveHitGroup = pipeline.createHitProgramGroupForCurveIS(
+                OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE,
+                OPTIX_CURVE_ENDCAP_ON,
+                moduleOptiX, RT_CH_NAME_STR("ch1"),
+                emptyModule, nullptr,
+                optixu::ASTradeoff::PreferFastTrace,
+                optixu::AllowUpdate::Yes,
+                optixu::AllowCompaction::Yes,
+                optixu::AllowRandomVertexAccess::Yes);
+
+            EXPECT_NE(cubicCurveHitGroup, optixu::HitProgramGroup());
+
+            cubicCurveHitGroup.destroy();
+            quadraticCurveHitGroup.destroy();
+        }
+
+        // JP: 球プリミティブ用ヒットプログラムグループの作成。
+        {
+            optixu::HitProgramGroup sphereHitGroup = pipeline.createHitProgramGroupForSphereIS(
+                moduleOptiX, RT_CH_NAME_STR("ch2"),
+                emptyModule, nullptr,
+                optixu::ASTradeoff::PreferFastBuild,
+                optixu::AllowUpdate::Yes,
+                optixu::AllowCompaction::No,
+                optixu::AllowRandomVertexAccess::Yes);
+
+            EXPECT_NE(sphereHitGroup, optixu::HitProgramGroup());
+
+            sphereHitGroup.destroy();
+        }
+
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(IntegrationTest, CompleteWorkflowTest) {
+    try {
+        // JP: 完全なワークフローのテスト - Context からシーン構築まで。
+        optixu::Context context = optixu::Context::create(cuContext, 4, optixu::EnableValidation::Yes);
+
+        // JP: パイプラインの設定。
+        optixu::Pipeline pipeline = context.createPipeline();
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW;
+        pipelineOptions.supportedPrimitiveTypeFlags = 
+            OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE | OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        // JP: プログラムの作成。
+        optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+        optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+        
+        optixu::Module emptyModule;
+        optixu::HitProgramGroup hitGroupTriangle = pipeline.createHitProgramGroupForTriangleIS(
+            moduleOptiX, RT_CH_NAME_STR("ch0"), emptyModule, nullptr);
+        optixu::HitProgramGroup hitGroupCustom = pipeline.createHitProgramGroupForCustomIS(
+            moduleOptiX, RT_CH_NAME_STR("ch1"), emptyModule, nullptr,
+            moduleOptiX, RT_IS_NAME_STR("is"));
+
+        // JP: マテリアルの作成。
+        optixu::Material materialTriangle = context.createMaterial();
+        optixu::Material materialCustom = context.createMaterial();
+        
+        materialTriangle.setHitGroup(0, hitGroupTriangle);
+        materialCustom.setHitGroup(0, hitGroupCustom);
+
+        // JP: シーンとジオメトリの構築。
+        optixu::Scene scene = context.createScene();
+        
+        // JP: 三角形ジオメトリ。
+        optixu::GeometryInstance triangleGeom = scene.createGeometryInstance();
+        triangleGeom.setVertexFormat(OPTIX_VERTEX_FORMAT_FLOAT3);
+        triangleGeom.setMaterial(0, 0, materialTriangle);
+        
+        // JP: カスタムプリミティブジオメトリ。
+        optixu::GeometryInstance customGeom = scene.createGeometryInstance(optixu::GeometryType::CustomPrimitives);
+        customGeom.setMaterial(0, 0, materialCustom);
+
+        // JP: GASの構築。
+        optixu::GeometryAccelerationStructure gasTriangle = scene.createGeometryAccelerationStructure();
+        gasTriangle.setConfiguration(
+            optixu::ASTradeoff::Default,
+            optixu::AllowUpdate::Yes,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
+        gasTriangle.addChild(triangleGeom);
+
+        optixu::GeometryAccelerationStructure gasCustom = scene.createGeometryAccelerationStructure(
+            optixu::GeometryType::CustomPrimitives);
+        gasCustom.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::No,
+            optixu::AllowRandomVertexAccess::No);
+        gasCustom.addChild(customGeom);
+
+        // JP: インスタンスの作成。
+        optixu::Instance instanceTriangle = scene.createInstance();
+        instanceTriangle.setChild(gasTriangle);
+        instanceTriangle.setID(1);
+        instanceTriangle.setVisibilityMask(0xFF);
+
+        optixu::Instance instanceCustom = scene.createInstance();
+        instanceCustom.setChild(gasCustom);
+        instanceCustom.setID(2);
+        instanceCustom.setVisibilityMask(0xFF);
+
+        // JP: IASの構築。
+        optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+        ias.setConfiguration(
+            optixu::ASTradeoff::Default,
+            optixu::AllowUpdate::Yes,
+            optixu::AllowCompaction::No,
+            optixu::AllowRandomInstanceAccess::Yes);
+        ias.addChild(instanceTriangle);
+        ias.addChild(instanceCustom);
+
+        // JP: パイプラインにプログラムを設定。
+        pipeline.setRayGenerationProgram(rayGenProgram);
+        pipeline.setMissProgram(0, missProgram);
+        pipeline.setScene(scene);
+
+        // JP: SBTレイアウトの生成。
+        size_t pipelineSbtSize, sceneSbtSize;
+        pipeline.generateShaderBindingTableLayout(&pipelineSbtSize);
+        scene.generateShaderBindingTableLayout(&sceneSbtSize);
+
+        EXPECT_GT(pipelineSbtSize, 0);
+        EXPECT_GT(sceneSbtSize, 0);
+        EXPECT_TRUE(scene.shaderBindingTableLayoutIsReady());
+
+        // JP: 子要素の数をチェック。
+        EXPECT_EQ(gasTriangle.getChildCount(), 1);
+        EXPECT_EQ(gasCustom.getChildCount(), 1);
+        EXPECT_EQ(ias.getChildCount(), 2);
+
+        // JP: 検索テスト。
+        EXPECT_EQ(gasTriangle.findChildIndex(triangleGeom), 0);
+        EXPECT_EQ(gasCustom.findChildIndex(customGeom), 0);
+        EXPECT_EQ(ias.findChildIndex(instanceTriangle), 0);
+        EXPECT_EQ(ias.findChildIndex(instanceCustom), 1);
+
+        // JP: パイプラインのリンク。
+        pipeline.link(2);
+
+        // JP: クリーンアップ（逆順）。
+        ias.destroy();
+        instanceCustom.destroy();
+        instanceTriangle.destroy();
+        gasCustom.destroy();
+        gasTriangle.destroy();
+        customGeom.destroy();
+        triangleGeom.destroy();
+        scene.destroy();
+        materialCustom.destroy();
+        materialTriangle.destroy();
+        hitGroupCustom.destroy();
+        hitGroupTriangle.destroy();
+        missProgram.destroy();
+        rayGenProgram.destroy();
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(RobustnessTest, StressTestAndCornerCases) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+
+        // JP: 大量のオブジェクト作成と破棄のテスト。
+        {
+            const int numObjects = 100;
+            std::vector<optixu::Material> materials;
+            std::vector<optixu::Pipeline> pipelines;
+
+            // JP: 大量作成。
+            for (int i = 0; i < numObjects; ++i) {
+                materials.push_back(context.createMaterial());
+                pipelines.push_back(context.createPipeline());
+            }
+
+            // JP: 全て有効であることを確認。
+            for (int i = 0; i < numObjects; ++i) {
+                EXPECT_NE(materials[i], optixu::Material());
+                EXPECT_NE(pipelines[i], optixu::Pipeline());
+                EXPECT_EQ(materials[i].getContext(), context);
+                EXPECT_EQ(pipelines[i].getContext(), context);
+            }
+
+            // JP: 大量破棄。
+            for (int i = 0; i < numObjects; ++i) {
+                materials[i].destroy();
+                pipelines[i].destroy();
+            }
+        }
+
+        // JP: 名前の長さの限界テスト。
+        {
+            optixu::Material material = context.createMaterial();
+            
+            // JP: 非常に長い名前の設定。
+            std::string longName(1000, 'A');
+            material.setName(longName.c_str());
+            EXPECT_STREQ(material.getName(), longName.c_str());
+
+            // JP: 特殊文字を含む名前。
+            std::string specialName = "テスト_Material_123!@#$%^&*()";
+            material.setName(specialName.c_str());
+            EXPECT_STREQ(material.getName(), specialName.c_str());
+
+            material.destroy();
+        }
+
+        // JP: BufferViewの境界値テスト。
+        {
+            // JP: 最大値に近い値でのテスト。
+            CUdeviceptr maxPtr = ~static_cast<CUdeviceptr>(0) - 1000;
+            size_t maxElements = ~static_cast<size_t>(0) / 1000;
+            uint32_t maxStride = ~static_cast<uint32_t>(0);
+
+            optixu::BufferView largeBuffer(maxPtr, maxElements, maxStride);
+            EXPECT_EQ(largeBuffer.getCUdeviceptr(), maxPtr);
+            EXPECT_EQ(largeBuffer.numElements(), maxElements);
+            EXPECT_EQ(largeBuffer.stride(), maxStride);
+            EXPECT_TRUE(largeBuffer.isValid());
+
+            // JP: サイズオーバーフローのテスト（結果は実装依存）。
+            size_t totalSize = largeBuffer.sizeInBytes();
+            // オーバーフローしても例外は投げられない（実装による）
+        }
+
+        // JP: 空オブジェクトの操作テスト。
+        {
+            optixu::Material emptyMaterial;
+            optixu::Scene emptyScene;
+            optixu::GeometryInstance emptyGeomInst;
+
+            // JP: 空オブジェクト同士の比較。
+            EXPECT_EQ(emptyMaterial, optixu::Material());
+            EXPECT_EQ(emptyScene, optixu::Scene());
+            EXPECT_EQ(emptyGeomInst, optixu::GeometryInstance());
+
+            // JP: 空オブジェクトの破棄（何も起こらない）。
+            emptyMaterial.destroy();
+            emptyScene.destroy();
+            emptyGeomInst.destroy();
+        }
+
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
 int32_t main(int32_t argc, const char* argv[]) {
     ::testing::InitGoogleTest(&argc, const_cast<char**>(argv));
 
