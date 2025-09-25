@@ -997,6 +997,985 @@ TEST(GeometryInstanceTest, GeometryInstanceBasic) {
 
 
 
+TEST(PipelineTest, PipelineBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        // JP: 共通処理。
+        {
+            EXPECT_EQ(pipeline.getContext(), context);
+
+            // JP: 普通の名前の設定と取得。
+            const char* nameA = "Pipeline_Test";
+            pipeline.setName(nameA);
+            EXPECT_STREQ(pipeline.getName(), nameA);
+
+            // JP: 空白の名前の設定と取得。
+            const char* nameB = "";
+            pipeline.setName(nameB);
+            EXPECT_STREQ(pipeline.getName(), nameB);
+        }
+
+        // JP: パイプラインオプションの設定。
+        {
+            optixu::PipelineOptions options;
+            options.payloadCountInDwords = 8;
+            options.attributeCountInDwords = 4;
+            options.launchParamsVariableName = "plp";
+            options.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+            options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+            options.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW;
+            options.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+            options.useMotionBlur = optixu::UseMotionBlur::No;
+            options.useOpacityMicroMaps = optixu::UseOpacityMicroMaps::No;
+            options.allowClusteredGeometry = optixu::AllowClusteredGeometry::No;
+
+            pipeline.setPipelineOptions(options);
+        }
+
+        // JP: レイタイプとコール可能プログラムの数の設定。
+        {
+            pipeline.setMissRayTypeCount(2);
+            pipeline.setCallableProgramCount(1);
+
+            size_t sbtSize;
+            pipeline.generateShaderBindingTableLayout(&sbtSize);
+            EXPECT_NE(sbtSize, 0);
+        }
+
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(ModuleTest, ModuleBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        // JP: OptixIRからのモジュール作成をテスト。
+        {
+            const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+            EXPECT_GT(optixIr.size(), 0);
+
+            optixu::Module module = pipeline.createModuleFromOptixIR(
+                optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+                DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+                DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+            EXPECT_NE(module, optixu::Module());
+
+            // JP: 共通処理。
+            {
+                EXPECT_EQ(module.getContext(), context);
+
+                const char* nameA = "Test_Module";
+                module.setName(nameA);
+                EXPECT_STREQ(module.getName(), nameA);
+
+                const char* nameB = "";
+                module.setName(nameB);
+                EXPECT_STREQ(module.getName(), nameB);
+            }
+
+            module.destroy();
+        }
+
+        // JP: 空のモジュールテスト。
+        {
+            optixu::Module emptyModule;
+            EXPECT_EQ(emptyModule, optixu::Module());
+        }
+
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(ProgramTest, ProgramBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        // JP: レイ生成プログラムのテスト。
+        {
+            optixu::Program rayGenProgram = pipeline.createRayGenProgram(moduleOptiX, RT_RG_NAME_STR("raygen"));
+            EXPECT_NE(rayGenProgram, optixu::Program());
+
+            // JP: 共通処理。
+            {
+                EXPECT_EQ(rayGenProgram.getContext(), context);
+
+                const char* nameA = "RayGen_Program";
+                rayGenProgram.setName(nameA);
+                EXPECT_STREQ(rayGenProgram.getName(), nameA);
+
+                const char* nameB = "";
+                rayGenProgram.setName(nameB);
+                EXPECT_STREQ(rayGenProgram.getName(), nameB);
+            }
+
+            // JP: スタックサイズの取得。
+            uint32_t stackSize = rayGenProgram.getStackSize();
+            EXPECT_GE(stackSize, 0);
+
+            // JP: パイプラインでの有効/無効の設定。
+            rayGenProgram.setActiveInPipeline(true);
+            rayGenProgram.setActiveInPipeline(false);
+
+            rayGenProgram.destroy();
+        }
+
+        // JP: ミスプログラムのテスト。
+        {
+            optixu::Program missProgram = pipeline.createMissProgram(moduleOptiX, RT_MS_NAME_STR("miss"));
+            EXPECT_NE(missProgram, optixu::Program());
+
+            uint32_t stackSize = missProgram.getStackSize();
+            EXPECT_GE(stackSize, 0);
+
+            missProgram.destroy();
+        }
+
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(HitProgramGroupTest, HitProgramGroupBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        optixu::Module emptyModule;
+
+        // JP: 三角形用ヒットプログラムグループのテスト。
+        {
+            optixu::HitProgramGroup hitGroup = pipeline.createHitProgramGroupForTriangleIS(
+                moduleOptiX, RT_CH_NAME_STR("ch0"),
+                emptyModule, nullptr);
+            EXPECT_NE(hitGroup, optixu::HitProgramGroup());
+
+            // JP: 共通処理。
+            {
+                EXPECT_EQ(hitGroup.getContext(), context);
+
+                const char* nameA = "HitGroup_Triangle";
+                hitGroup.setName(nameA);
+                EXPECT_STREQ(hitGroup.getName(), nameA);
+
+                const char* nameB = "";
+                hitGroup.setName(nameB);
+                EXPECT_STREQ(hitGroup.getName(), nameB);
+            }
+
+            // JP: スタックサイズの取得。
+            uint32_t chStackSize = hitGroup.getCHStackSize();
+            uint32_t ahStackSize = hitGroup.getAHStackSize();
+            uint32_t isStackSize = hitGroup.getISStackSize();
+            EXPECT_GE(chStackSize, 0);
+            EXPECT_GE(ahStackSize, 0);
+            EXPECT_GE(isStackSize, 0);
+
+            // JP: パイプラインでの有効/無効の設定。
+            hitGroup.setActiveInPipeline(true);
+            hitGroup.setActiveInPipeline(false);
+
+            hitGroup.destroy();
+        }
+
+        // JP: 空のヒットプログラムグループのテスト。
+        {
+            optixu::HitProgramGroup emptyHitGroup = pipeline.createEmptyHitProgramGroup();
+            EXPECT_NE(emptyHitGroup, optixu::HitProgramGroup());
+
+            uint32_t chStackSize = emptyHitGroup.getCHStackSize();
+            uint32_t ahStackSize = emptyHitGroup.getAHStackSize();
+            uint32_t isStackSize = emptyHitGroup.getISStackSize();
+            EXPECT_GE(chStackSize, 0);
+            EXPECT_GE(ahStackSize, 0);
+            EXPECT_GE(isStackSize, 0);
+
+            emptyHitGroup.destroy();
+        }
+
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(CallableProgramGroupTest, CallableProgramGroupBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Pipeline pipeline = context.createPipeline();
+
+        optixu::PipelineOptions pipelineOptions;
+        pipelineOptions.payloadCountInDwords = shared::Pipeline0Payload0Signature::numDwords;
+        pipelineOptions.attributeCountInDwords = optixu::calcSumDwords<float2>();
+        pipelineOptions.launchParamsVariableName = "plp";
+        pipelineOptions.sizeOfLaunchParams = sizeof(shared::PipelineLaunchParameters0);
+        pipelineOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        pipelineOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+        pipeline.setPipelineOptions(pipelineOptions);
+
+        const std::vector<char> optixIr = readBinaryFile(getExecutableDirectory() / "optixu_tests/ptxes/kernels_0.optixir");
+        optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
+            optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        optixu::Module emptyModule;
+
+        // JP: コール可能プログラムグループのテスト。
+        {
+            optixu::CallableProgramGroup callableGroup = pipeline.createCallableProgramGroup(
+                emptyModule, nullptr,
+                emptyModule, nullptr);
+            EXPECT_NE(callableGroup, optixu::CallableProgramGroup());
+
+            // JP: 共通処理。
+            {
+                EXPECT_EQ(callableGroup.getContext(), context);
+
+                const char* nameA = "Callable_Group";
+                callableGroup.setName(nameA);
+                EXPECT_STREQ(callableGroup.getName(), nameA);
+
+                const char* nameB = "";
+                callableGroup.setName(nameB);
+                EXPECT_STREQ(callableGroup.getName(), nameB);
+            }
+
+            // JP: スタックサイズの取得。
+            uint32_t dcStackSize = callableGroup.getDCStackSize();
+            uint32_t ccStackSize = callableGroup.getCCStackSize();
+            EXPECT_GE(dcStackSize, 0);
+            EXPECT_GE(ccStackSize, 0);
+
+            // JP: パイプラインでの有効/無効の設定。
+            callableGroup.setActiveInPipeline(true);
+            callableGroup.setActiveInPipeline(false);
+
+            callableGroup.destroy();
+        }
+
+        moduleOptiX.destroy();
+        pipeline.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(TransformTest, TransformBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Scene scene = context.createScene();
+
+        optixu::Transform transform = scene.createTransform();
+
+        // JP: 共通処理。
+        {
+            EXPECT_EQ(transform.getContext(), context);
+
+            const char* nameA = "Test_Transform";
+            transform.setName(nameA);
+            EXPECT_STREQ(transform.getName(), nameA);
+
+            const char* nameB = "";
+            transform.setName(nameB);
+            EXPECT_STREQ(transform.getName(), nameB);
+        }
+
+        // JP: 静的変換の設定とテスト。
+        {
+            float matrix[12] = {
+                1.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 1.0f, 0.0f, 2.0f,
+                0.0f, 0.0f, 1.0f, 3.0f
+            };
+
+            transform.setStaticTransform(matrix);
+
+            optixu::TransformType type;
+            uint32_t numKeys;
+            transform.getConfiguration(&type, &numKeys);
+            EXPECT_EQ(type, optixu::TransformType::Static);
+            EXPECT_EQ(numKeys, 1);
+
+            float retrievedMatrix[12];
+            transform.getStaticTransform(retrievedMatrix);
+            for (int i = 0; i < 12; ++i) {
+                EXPECT_FLOAT_EQ(matrix[i], retrievedMatrix[i]);
+            }
+        }
+
+        // JP: モーション変換の設定とテスト。
+        {
+            uint32_t numKeys = 3;
+            size_t transformSize;
+            transform.setConfiguration(optixu::TransformType::MatrixMotion, numKeys, &transformSize);
+            EXPECT_GT(transformSize, 0);
+
+            transform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+
+            for (uint32_t keyIdx = 0; keyIdx < numKeys; ++keyIdx) {
+                float matrix[12] = {
+                    1.0f, 0.0f, 0.0f, static_cast<float>(keyIdx),
+                    0.0f, 1.0f, 0.0f, static_cast<float>(keyIdx),
+                    0.0f, 0.0f, 1.0f, static_cast<float>(keyIdx)
+                };
+                transform.setMatrixMotionKey(keyIdx, matrix);
+
+                float retrievedMatrix[12];
+                transform.getMatrixMotionKey(keyIdx, retrievedMatrix);
+                for (int i = 0; i < 12; ++i) {
+                    EXPECT_FLOAT_EQ(matrix[i], retrievedMatrix[i]);
+                }
+            }
+
+            float timeBegin, timeEnd;
+            OptixMotionFlags flags;
+            transform.getMotionOptions(&timeBegin, &timeEnd, &flags);
+            EXPECT_FLOAT_EQ(timeBegin, 0.0f);
+            EXPECT_FLOAT_EQ(timeEnd, 1.0f);
+            EXPECT_EQ(flags, OPTIX_MOTION_FLAG_NONE);
+        }
+
+        // JP: Dirty状態のテスト。
+        {
+            transform.markDirty();
+            EXPECT_EQ(transform.isReady(), false);
+        }
+
+        transform.destroy();
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(InstanceTest, InstanceBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Scene scene = context.createScene();
+
+        optixu::Instance instance = scene.createInstance();
+
+        // JP: 共通処理。
+        {
+            EXPECT_EQ(instance.getContext(), context);
+
+            const char* nameA = "Test_Instance";
+            instance.setName(nameA);
+            EXPECT_STREQ(instance.getName(), nameA);
+
+            const char* nameB = "";
+            instance.setName(nameB);
+            EXPECT_STREQ(instance.getName(), nameB);
+        }
+
+        // JP: インスタンスのプロパティ設定とテスト。
+        {
+            // JP: IDの設定と取得。
+            uint32_t testID = 42;
+            instance.setID(testID);
+            EXPECT_EQ(instance.getID(), testID);
+
+            // JP: 可視性マスクの設定と取得。
+            uint32_t visibilityMask = 0xFF;
+            instance.setVisibilityMask(visibilityMask);
+            EXPECT_EQ(instance.getVisibilityMask(), visibilityMask);
+
+            // JP: フラグの設定と取得。
+            OptixInstanceFlags flags = OPTIX_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
+            instance.setFlags(flags);
+            EXPECT_EQ(instance.getFlags(), flags);
+
+            // JP: 変換行列の設定と取得。
+            float transform[12] = {
+                1.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 1.0f, 0.0f, 2.0f,
+                0.0f, 0.0f, 1.0f, 3.0f
+            };
+            instance.setTransform(transform);
+            
+            float retrievedTransform[12];
+            instance.getTransform(retrievedTransform);
+            for (int i = 0; i < 12; ++i) {
+                EXPECT_FLOAT_EQ(transform[i], retrievedTransform[i]);
+            }
+
+            // JP: マテリアルセットインデックスの設定と取得。
+            uint32_t matSetIdx = 1;
+            instance.setMaterialSetIndex(matSetIdx);
+            EXPECT_EQ(instance.getMaterialSetIndex(), matSetIdx);
+        }
+
+        instance.destroy();
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(BufferViewTest, BufferViewBasic) {
+    try {
+        // JP: デフォルトコンストラクターのテスト。
+        {
+            optixu::BufferView defaultView;
+            EXPECT_EQ(defaultView.getCUdeviceptr(), 0);
+            EXPECT_EQ(defaultView.numElements(), 0);
+            EXPECT_EQ(defaultView.stride(), 0);
+            EXPECT_EQ(defaultView.sizeInBytes(), 0);
+            EXPECT_EQ(defaultView.isValid(), false);
+        }
+
+        // JP: パラメーター付きコンストラクターのテスト。
+        {
+            CUdeviceptr devicePtr = reinterpret_cast<CUdeviceptr>(0x12345678);
+            size_t numElements = 100;
+            uint32_t stride = 16;
+
+            optixu::BufferView bufferView(devicePtr, numElements, stride);
+            EXPECT_EQ(bufferView.getCUdeviceptr(), devicePtr);
+            EXPECT_EQ(bufferView.numElements(), numElements);
+            EXPECT_EQ(bufferView.stride(), stride);
+            EXPECT_EQ(bufferView.sizeInBytes(), numElements * stride);
+            EXPECT_EQ(bufferView.isValid(), true);
+
+            // JP: インデックス指定でのアドレス取得テスト。
+            uint32_t index = 5;
+            CUdeviceptr expectedPtr = devicePtr + stride * index;
+            EXPECT_EQ(bufferView.getCUdeviceptrAt(index), expectedPtr);
+        }
+
+        // JP: 等価演算子のテスト。
+        {
+            CUdeviceptr ptr1 = reinterpret_cast<CUdeviceptr>(0x12345678);
+            CUdeviceptr ptr2 = reinterpret_cast<CUdeviceptr>(0x87654321);
+            
+            optixu::BufferView view1(ptr1, 100, 16);
+            optixu::BufferView view2(ptr1, 100, 16);
+            optixu::BufferView view3(ptr2, 100, 16);
+            optixu::BufferView view4(ptr1, 200, 16);
+            optixu::BufferView view5(ptr1, 100, 32);
+
+            EXPECT_EQ(view1, view2);
+            EXPECT_NE(view1, view3);
+            EXPECT_NE(view1, view4);
+            EXPECT_NE(view1, view5);
+        }
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(GeometryAccelerationStructureTest, GeometryAccelerationStructureBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Scene scene = context.createScene();
+
+        optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
+
+        // JP: 共通処理。
+        {
+            EXPECT_EQ(gas.getContext(), context);
+
+            const char* nameA = "Test_GAS";
+            gas.setName(nameA);
+            EXPECT_STREQ(gas.getName(), nameA);
+
+            const char* nameB = "";
+            gas.setName(nameB);
+            EXPECT_STREQ(gas.getName(), nameB);
+        }
+
+        // JP: 設定のテスト。
+        {
+            gas.setConfiguration(
+                optixu::ASTradeoff::PreferFastTrace,
+                optixu::AllowUpdate::Yes,
+                optixu::AllowCompaction::Yes,
+                optixu::AllowRandomVertexAccess::No);
+
+            optixu::ASTradeoff tradeoff;
+            optixu::AllowUpdate allowUpdate;
+            optixu::AllowCompaction allowCompaction;
+            optixu::AllowRandomVertexAccess allowRandomVertexAccess;
+            gas.getConfiguration(&tradeoff, &allowUpdate, &allowCompaction, &allowRandomVertexAccess);
+
+            EXPECT_EQ(tradeoff, optixu::ASTradeoff::PreferFastTrace);
+            EXPECT_EQ(allowUpdate, optixu::AllowUpdate::Yes);
+            EXPECT_EQ(allowCompaction, optixu::AllowCompaction::Yes);
+            EXPECT_EQ(allowRandomVertexAccess, optixu::AllowRandomVertexAccess::No);
+        }
+
+        // JP: 子要素の追加とテスト。
+        {
+            optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+            gas.addChild(geomInst);
+            EXPECT_EQ(gas.getChildCount(), 1);
+
+            EXPECT_EQ(gas.findChildIndex(geomInst), 0);
+            EXPECT_EQ(gas.getChild(0), geomInst);
+
+            gas.removeChildAt(0);
+            EXPECT_EQ(gas.getChildCount(), 0);
+
+            gas.addChild(geomInst);
+            gas.clearChildren();
+            EXPECT_EQ(gas.getChildCount(), 0);
+
+            geomInst.destroy();
+        }
+
+        // JP: Dirty状態のテスト。
+        {
+            gas.markDirty();
+            EXPECT_EQ(gas.isReady(), false);
+        }
+
+        gas.destroy();
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(InstanceAccelerationStructureTest, InstanceAccelerationStructureBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Scene scene = context.createScene();
+
+        optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+
+        // JP: 共通処理。
+        {
+            EXPECT_EQ(ias.getContext(), context);
+
+            const char* nameA = "Test_IAS";
+            ias.setName(nameA);
+            EXPECT_STREQ(ias.getName(), nameA);
+
+            const char* nameB = "";
+            ias.setName(nameB);
+            EXPECT_STREQ(ias.getName(), nameB);
+        }
+
+        // JP: 設定のテスト。
+        {
+            ias.setConfiguration(
+                optixu::ASTradeoff::PreferFastBuild,
+                optixu::AllowUpdate::Yes,
+                optixu::AllowCompaction::No,
+                optixu::AllowRandomInstanceAccess::Yes);
+
+            optixu::ASTradeoff tradeoff;
+            optixu::AllowUpdate allowUpdate;
+            optixu::AllowCompaction allowCompaction;
+            optixu::AllowRandomInstanceAccess allowRandomInstanceAccess;
+            ias.getConfiguration(&tradeoff, &allowUpdate, &allowCompaction, &allowRandomInstanceAccess);
+
+            EXPECT_EQ(tradeoff, optixu::ASTradeoff::PreferFastBuild);
+            EXPECT_EQ(allowUpdate, optixu::AllowUpdate::Yes);
+            EXPECT_EQ(allowCompaction, optixu::AllowCompaction::No);
+            EXPECT_EQ(allowRandomInstanceAccess, optixu::AllowRandomInstanceAccess::Yes);
+        }
+
+        // JP: モーションオプションのテスト。
+        {
+            uint32_t numKeys = 5;
+            float timeBegin = 0.5f;
+            float timeEnd = 1.5f;
+            OptixMotionFlags flags = OPTIX_MOTION_FLAG_START_VANISH;
+
+            ias.setMotionOptions(numKeys, timeBegin, timeEnd, flags);
+
+            uint32_t retrievedNumKeys;
+            float retrievedTimeBegin, retrievedTimeEnd;
+            OptixMotionFlags retrievedFlags;
+            ias.getMotionOptions(&retrievedNumKeys, &retrievedTimeBegin, &retrievedTimeEnd, &retrievedFlags);
+
+            EXPECT_EQ(retrievedNumKeys, numKeys);
+            EXPECT_FLOAT_EQ(retrievedTimeBegin, timeBegin);
+            EXPECT_FLOAT_EQ(retrievedTimeEnd, timeEnd);
+            EXPECT_EQ(retrievedFlags, flags);
+        }
+
+        // JP: 子要素の追加とテスト。
+        {
+            optixu::Instance instance = scene.createInstance();
+            ias.addChild(instance);
+            EXPECT_EQ(ias.getChildCount(), 1);
+
+            EXPECT_EQ(ias.findChildIndex(instance), 0);
+            EXPECT_EQ(ias.getChild(0), instance);
+
+            ias.removeChildAt(0);
+            EXPECT_EQ(ias.getChildCount(), 0);
+
+            ias.addChild(instance);
+            ias.clearChildren();
+            EXPECT_EQ(ias.getChildCount(), 0);
+
+            instance.destroy();
+        }
+
+        // JP: Dirty状態のテスト。
+        {
+            ias.markDirty();
+            EXPECT_EQ(ias.isReady(), false);
+        }
+
+        ias.destroy();
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(DenoiserTest, DenoiserBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+
+        // JP: LDRデノイザーのテスト。
+        {
+            optixu::Denoiser denoiser = context.createDenoiser(
+                OPTIX_DENOISER_MODEL_KIND_LDR,
+                optixu::GuideAlbedo::Yes,
+                optixu::GuideNormal::Yes,
+                OPTIX_DENOISER_ALPHA_MODE_COPY);
+
+            EXPECT_NE(denoiser, optixu::Denoiser());
+
+            // JP: 共通処理。
+            {
+                EXPECT_EQ(denoiser.getContext(), context);
+
+                const char* nameA = "LDR_Denoiser";
+                denoiser.setName(nameA);
+                EXPECT_STREQ(denoiser.getName(), nameA);
+
+                const char* nameB = "";
+                denoiser.setName(nameB);
+                EXPECT_STREQ(denoiser.getName(), nameB);
+            }
+
+            // JP: デノイザーの準備テスト（ダミーパラメーター）。
+            {
+                optixu::DenoiserSizes sizes;
+                uint32_t numTasks;
+                denoiser.prepare(1024, 768, 1024, 768, &sizes, &numTasks);
+
+                EXPECT_GT(sizes.stateSize, 0);
+                EXPECT_GT(sizes.scratchSize, 0);
+                EXPECT_EQ(numTasks, 1);
+            }
+
+            denoiser.destroy();
+        }
+
+        // JP: HDRデノイザーのテスト。
+        {
+            optixu::Denoiser hdrDenoiser = context.createDenoiser(
+                OPTIX_DENOISER_MODEL_KIND_HDR,
+                optixu::GuideAlbedo::No,
+                optixu::GuideNormal::No,
+                OPTIX_DENOISER_ALPHA_MODE_DENOISE);
+
+            EXPECT_NE(hdrDenoiser, optixu::Denoiser());
+
+            hdrDenoiser.destroy();
+        }
+
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(OpacityMicroMapArrayTest, OpacityMicroMapArrayBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+        optixu::Scene scene = context.createScene();
+
+        optixu::OpacityMicroMapArray ommArray = scene.createOpacityMicroMapArray();
+
+        // JP: 共通処理。
+        {
+            EXPECT_EQ(ommArray.getContext(), context);
+
+            const char* nameA = "Test_OMM_Array";
+            ommArray.setName(nameA);
+            EXPECT_STREQ(ommArray.getName(), nameA);
+
+            const char* nameB = "";
+            ommArray.setName(nameB);
+            EXPECT_STREQ(ommArray.getName(), nameB);
+        }
+
+        // JP: 設定のテスト。
+        {
+            OptixOpacityMicromapFlags config = OPTIX_OPACITY_MICROMAP_FLAG_NONE;
+            ommArray.setConfiguration(config);
+            EXPECT_EQ(ommArray.getConfiguration(), config);
+        }
+
+        // JP: Dirty状態のテスト。
+        {
+            ommArray.markDirty();
+            EXPECT_EQ(ommArray.isReady(), false);
+        }
+
+        ommArray.destroy();
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(ErrorHandlingTest, InvalidParametersTest) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+
+        // JP: 無効なコールバックレベルでの例外テスト。
+        {
+            const auto callback = [](uint32_t level, const char* tag, const char* message, void* cbdata) {};
+            EXPECT_EXCEPTION(context.setLogCallback(callback, nullptr, 10));
+        }
+
+        // JP: 無効なデノイザーモデルでの例外テスト。
+        {
+            optixu::Denoiser denoiser;
+            EXPECT_EXCEPTION_RET(
+                denoiser,
+                context.createDenoiser(
+                    static_cast<OptixDenoiserModelKind>(999),
+                    optixu::GuideAlbedo::Yes,
+                    optixu::GuideNormal::Yes,
+                    OPTIX_DENOISER_ALPHA_MODE_COPY));
+        }
+
+        optixu::Scene scene = context.createScene();
+
+        // JP: 無効なジオメトリタイプでの例外テスト。
+        {
+            EXPECT_EXCEPTION(scene.createGeometryInstance(static_cast<optixu::GeometryType>(999)));
+            EXPECT_EXCEPTION(scene.createGeometryAccelerationStructure(static_cast<optixu::GeometryType>(999)));
+        }
+
+        scene.destroy();
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
+TEST(EdgeCasesTest, EdgeCasesBasic) {
+    try {
+        optixu::Context context = optixu::Context::create(cuContext);
+
+        // JP: 空のオブジェクトの等価比較テスト。
+        {
+            optixu::Pipeline emptyPipeline1;
+            optixu::Pipeline emptyPipeline2;
+            optixu::Module emptyModule1;
+            optixu::Module emptyModule2;
+            optixu::Program emptyProgram1;
+            optixu::Program emptyProgram2;
+
+            EXPECT_EQ(emptyPipeline1, emptyPipeline2);
+            EXPECT_EQ(emptyModule1, emptyModule2);
+            EXPECT_EQ(emptyProgram1, emptyProgram2);
+        }
+
+        // JP: マテリアルのユーザーデータ限界サイズテスト。
+        {
+            optixu::Material material = context.createMaterial();
+
+            // JP: 最大サイズのユーザーデータのテスト。
+            struct MaxUserData {
+                uint8_t data[optixu::s_maxMaterialUserDataSize];
+            };
+            MaxUserData maxData = {};
+            for (size_t i = 0; i < sizeof(maxData.data); ++i) {
+                maxData.data[i] = static_cast<uint8_t>(i & 0xFF);
+            }
+
+            material.setUserData(maxData);
+            
+            MaxUserData retrievedData;
+            uint32_t size, alignment;
+            material.getUserData(&retrievedData, &size, &alignment);
+            EXPECT_EQ(size, sizeof(maxData));
+            EXPECT_EQ(std::memcmp(&maxData, &retrievedData, sizeof(maxData)), 0);
+
+            // JP: 限界を超えるサイズでの例外テスト。
+            struct OversizedUserData {
+                uint8_t data[optixu::s_maxMaterialUserDataSize + 1];
+            };
+            OversizedUserData oversizedData = {};
+            EXPECT_EXCEPTION(material.setUserData(oversizedData));
+
+            material.destroy();
+        }
+
+        // JP: ジオメトリインスタンスのユーザーデータ限界サイズテスト。
+        {
+            optixu::Scene scene = context.createScene();
+            optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+
+            // JP: 最大サイズのユーザーデータのテスト。
+            struct MaxUserData {
+                uint8_t data[optixu::s_maxGeometryInstanceUserDataSize];
+            };
+            MaxUserData maxData = {};
+            for (size_t i = 0; i < sizeof(maxData.data); ++i) {
+                maxData.data[i] = static_cast<uint8_t>(i & 0xFF);
+            }
+
+            geomInst.setUserData(maxData);
+            
+            MaxUserData retrievedData;
+            uint32_t size, alignment;
+            geomInst.getUserData(&retrievedData, &size, &alignment);
+            EXPECT_EQ(size, sizeof(maxData));
+            EXPECT_EQ(std::memcmp(&maxData, &retrievedData, sizeof(maxData)), 0);
+
+            // JP: 限界を超えるサイズでの例外テスト。
+            struct OversizedUserData {
+                uint8_t data[optixu::s_maxGeometryInstanceUserDataSize + 1];
+            };
+            OversizedUserData oversizedData = {};
+            EXPECT_EXCEPTION(geomInst.setUserData(oversizedData));
+
+            geomInst.destroy();
+            scene.destroy();
+        }
+
+        context.destroy();
+    }
+    catch (std::exception &ex) {
+        printf("%s\n", ex.what());
+        EXPECT_EQ(0, 1);
+    }
+}
+
+
+
 int32_t main(int32_t argc, const char* argv[]) {
     ::testing::InitGoogleTest(&argc, const_cast<char**>(argv));
 
