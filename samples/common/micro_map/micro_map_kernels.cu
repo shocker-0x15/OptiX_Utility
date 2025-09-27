@@ -102,21 +102,19 @@ CUDA_DEVICE_KERNEL void findTwinHalfEdges(
     DirectedEdge twinEdge;
     twinEdge.vertexIndexA = nextHalfEdge.orgVertexIndex;
     twinEdge.vertexIndexB = halfEdge.orgVertexIndex;
-    uint32_t idx = 0;
-    bool found = false;
-    for (uint32_t d = nextPowerOf2(numHalfEdges) >> 1; d >= 1; d >>= 1) {
-        if (idx + d >= numHalfEdges)
-            continue;
-        if (sortedEdges[idx + d] <= twinEdge) {
-            idx += d;
-            found = sortedEdges[idx] == twinEdge;
-            if (found)
-                break;
-        }
+
+    uint32_t lo = 0, hi = numHalfEdges;
+    while (lo < hi) {
+        const uint32_t mid = lo + ((hi - lo) >> 1);
+        if (sortedEdges[mid] < twinEdge)
+            lo = mid + 1;
+        else
+            hi = mid;
     }
+    const bool found = (lo < numHalfEdges) && (sortedEdges[lo] == twinEdge);
 
     if (found)
-        halfEdge.twinHalfEdgeIndex = sortedHalfEdgeIndices[idx];
+        halfEdge.twinHalfEdgeIndex = sortedHalfEdgeIndices[lo];
 }
 
 CUDA_DEVICE_KERNEL void findTriangleNeighbors(
