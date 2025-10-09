@@ -20,6 +20,18 @@ EN: This sample shows how to build an instance acceleration structure (IAS) from
 #include "../common/obj_loader.h"
 
 int32_t main(int32_t argc, const char* argv[]) try {
+    bool useInstancePointers = false;
+
+    uint32_t argIdx = 1;
+    while (argIdx < argc) {
+        std::string_view arg = argv[argIdx];
+        if (arg == "--use-instance-pointers")
+            useInstancePointers = true;
+        else
+            throw std::runtime_error("Unknown command line argument.");
+        ++argIdx;
+    }
+
     // ----------------------------------------------------------------
     // JP: OptiXのコンテキストとパイプラインの設定。
     // EN: Settings for OptiX context and pipeline.
@@ -302,19 +314,52 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     // JP: GASを元にインスタンスを作成する。
     // EN: Create instances based on GASs.
-    optixu::Instance roomInst = scene.createInstance();
-    roomInst.setChild(roomGas);
+    constexpr uint32_t NumBunnies = 100;
 
-    float areaLightInstXfm[] = {
+    std::vector<uint32_t> instanceIds(2 + NumBunnies);
+    std::vector<std::array<float, 12>> transforms(2 + NumBunnies);
+    if (useInstancePointers) {
+        instanceIds[0] = 0;
+        instanceIds[1] = 1;
+        for (int i = 0; i < NumBunnies; ++i)
+            instanceIds[2 + i] = 2 + i;
+        std::mt19937 rng(12315211);
+        std::shuffle(instanceIds.begin(), instanceIds.end(), rng);
+    }
+
+    cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, 2 + NumBunnies);
+
+    const std::array<float, 12> roomXfm = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0
+    };
+    optixu::Instance roomInst = scene.createInstance();
+    if (useInstancePointers) {
+        roomInst.setAddress(instanceBuffer.getCUdeviceptrAt(instanceIds[0]));
+        transforms[0] = roomXfm;
+    }
+    else {
+        roomInst.setChild(roomGas);
+        roomInst.setTransform(roomXfm.data());
+    }
+
+    const std::array<float, 12> areaLightInstXfm = {
         1, 0, 0, 0,
         0, 1, 0, 0.75f,
         0, 0, 1, 0
     };
     optixu::Instance areaLightInst = scene.createInstance();
-    areaLightInst.setChild(areaLightGas);
-    areaLightInst.setTransform(areaLightInstXfm);
+    if (useInstancePointers) {
+        areaLightInst.setAddress(instanceBuffer.getCUdeviceptrAt(instanceIds[1]));
+        transforms[1] = areaLightInstXfm;
+    }
+    else {
+        areaLightInst.setChild(areaLightGas);
+        areaLightInst.setTransform(areaLightInstXfm.data());
+    }
 
-    constexpr uint32_t NumBunnies = 100;
     std::vector<optixu::Instance> bunnyInsts(NumBunnies);
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
     const float GoldenAngle = 2 * pi_v<float> / (GoldenRatio * GoldenRatio);
@@ -326,24 +371,34 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         float tt = std::pow(t, 0.25f);
         float scale = (1 - tt) * 0.003f + tt * 0.0006f;
-        float bunnyInstXfm[] = {
+        std::array<float, 12> bunnyInstXfm = {
             scale, 0, 0, x,
             0, scale, 0, -0.999f + (1 - tt),
             0, 0, scale, z
         };
         optixu::Instance bunnyInst = scene.createInstance();
-        bunnyInst.setChild(bunnyGas);
-        bunnyInst.setTransform(bunnyInstXfm);
+        if (useInstancePointers) {
+            bunnyInst.setAddress(instanceBuffer.getCUdeviceptrAt(instanceIds[2 + i]));
+            transforms[2 + i] = bunnyInstXfm;
+        }
+        else {
+            bunnyInst.setChild(bunnyGas);
+            bunnyInst.setTransform(bunnyInstXfm.data());
+        }
         bunnyInsts[i] = bunnyInst;
     }
 
 
 
     // JP: Instance Acceleration Structureを生成する。
+    //     インスタンス配列の代わりにポインター配列を使用することもできる。
+    //     その場合はIAS生成時に指定する。
     // EN: Create an instance acceleration structure.
-    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+    //     It is also possible to use an array of pointers instead of an array of instances.
+    //     In that case, specify it when creating an IAS.
+    optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure(
+        optixu::UseArrayOfPointers(useInstancePointers));
     cudau::Buffer iasMem;
-    cudau::TypedBuffer<OptixInstance> instanceBuffer;
     ias.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
     ias.addChild(roomInst);
     ias.addChild(areaLightInst);
@@ -351,7 +406,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
         ias.addChild(bunnyInsts[i]);
     ias.prepareForBuild(&asMemReqs);
     iasMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-    instanceBuffer.initialize(cuContext, cudau::BufferType::Device, ias.getChildCount());
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, asMemReqs.tempSizeInBytes);
 
 
@@ -418,7 +472,60 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
 
-    OptixTraversableHandle travHandle = ias.rebuild(cuStream, instanceBuffer, iasMem, asBuildScratchMem);
+    cudau::TypedBuffer<CUdeviceptr> instancePointersBuffer;
+    if (useInstancePointers) {
+        instancePointersBuffer.initialize(cuContext, cudau::BufferType::Device, instanceBuffer.numElements());
+
+        std::vector<OptixInstance> optixInsts(instanceBuffer.numElements());
+        {
+            OptixInstance &optixInst = optixInsts[instanceIds[0]];
+            optixInst = {};
+            std::copy_n(transforms[0].data(), 12, optixInst.transform);
+            optixInst.instanceId = instanceIds[0];
+            optixInst.sbtOffset = roomGas.getOffsetInShaderBindingTable(0);
+            optixInst.visibilityMask = 0xFF;
+            optixInst.flags = OPTIX_INSTANCE_FLAG_NONE;
+            optixInst.traversableHandle = roomGas.getHandle();
+        }
+        {
+            OptixInstance &optixInst = optixInsts[instanceIds[1]];
+            optixInst = {};
+            std::copy_n(transforms[1].data(), 12, optixInst.transform);
+            optixInst.instanceId = instanceIds[1];
+            optixInst.sbtOffset = areaLightGas.getOffsetInShaderBindingTable(0);
+            optixInst.visibilityMask = 0xFF;
+            optixInst.flags = OPTIX_INSTANCE_FLAG_NONE;
+            optixInst.traversableHandle = areaLightGas.getHandle();
+        }
+        const uint32_t bunnySbtOffset = bunnyGas.getOffsetInShaderBindingTable(0);
+        const OptixTraversableHandle bunnyGasHandle = bunnyGas.getHandle();
+        for (int i = 0; i < bunnyInsts.size(); ++i) {
+            OptixInstance &optixInst = optixInsts[instanceIds[2 + i]];
+            optixInst = {};
+            std::copy_n(transforms[2 + i].data(), 12, optixInst.transform);
+            optixInst.instanceId = instanceIds[2 + i];
+            optixInst.sbtOffset = bunnySbtOffset;
+            optixInst.visibilityMask = 0xFF;
+            optixInst.flags = OPTIX_INSTANCE_FLAG_NONE;
+            optixInst.traversableHandle = bunnyGasHandle;
+        }
+
+        // JP: このサンプルでは簡単のためにCPU上でOptixInstanceの内容を設定しているが、
+        //     GPU上で設定を行うこともできる。
+        // EN: This sample sets up OptixInstance contents on CPU for simplicity,
+        //     but it is also possible to set them on GPU.
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(
+            instanceBuffer.getCUdeviceptr(),
+            optixInsts.data(), sizeof(OptixInstance) * optixInsts.size(),
+            cuStream));
+    }
+
+    OptixTraversableHandle travHandle = ias.rebuild(
+        cuStream,
+        useInstancePointers ?
+            optixu::BufferView(instancePointersBuffer) :
+            optixu::BufferView(instanceBuffer),
+        iasMem, asBuildScratchMem);
 
     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
 
@@ -468,13 +575,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
+    if (useInstancePointers)
+        instancePointersBuffer.finalize();
+
     hitGroupSBT.finalize();
 
     compactedASMem.finalize();
 
     asBuildScratchMem.finalize();
 
-    instanceBuffer.finalize();
     iasMem.finalize();
     ias.destroy();
 
@@ -482,6 +591,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bunnyInsts[i].destroy();
     areaLightInst.destroy();
     roomInst.destroy();
+
+    instanceBuffer.finalize();
 
     bunnyGasMem.finalize();
     bunnyGas.destroy();
