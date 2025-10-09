@@ -114,6 +114,7 @@ option(OPTIXU_BUILD_TESTS "Build test projects for OptiX Utility." ON)
 
 file(
     GLOB META_FILES
+    ".editorconfig"
     "cuda_util.natvis"
     "optix_util.natvis"
     "README.md"
