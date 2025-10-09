@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
   <!-- optixu::Material -->
   <Type Name="optixu::Material">
@@ -52,6 +52,26 @@
 
   <!-- optixu::GeometryAccelerationStructure -->
   <Type Name="optixu::GeometryAccelerationStructure">
+    <DisplayString Condition="m != nullptr">{(void*)m}</DisplayString>
+    <DisplayString>empty</DisplayString>
+
+    <Expand>
+      <ExpandedItem Condition="m != nullptr">m</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <!-- optixu::ClusterAccelerationStructureSet -->
+  <Type Name="optixu::ClusterAccelerationStructureSet">
+    <DisplayString Condition="m != nullptr">{(void*)m}</DisplayString>
+    <DisplayString>empty</DisplayString>
+
+    <Expand>
+      <ExpandedItem Condition="m != nullptr">m</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <!-- optixu::ClusterGeometryAccelerationStructureSet -->
+  <Type Name="optixu::ClusterGeometryAccelerationStructureSet">
     <DisplayString Condition="m != nullptr">{(void*)m}</DisplayString>
     <DisplayString>empty</DisplayString>
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
   <Type Name="cudau::Array">
     <DisplayString>{{type={m_elemType}, stride={m_stride}, size={m_width}x{m_height}x{m_depth}, #mips={m_numMipmapLevels}, glTexID={m_GLTexID}}}</DisplayString>
