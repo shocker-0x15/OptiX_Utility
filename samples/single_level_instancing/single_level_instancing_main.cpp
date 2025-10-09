@@ -478,19 +478,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
-    //     確定している必要がある。
-    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     when building an IAS.
+    // JP: インスタンスポインターを使用しない場合は、IASビルドをCPU上で呼び出す時には
+    //     各インスタンスのTraversable HandleとShader Binding Table中のオフセットが確定している必要がある。
+    //     インスタンスポインターを使用する場合はIASのビルドが"GPU上"で実行されるまでに設定すれば良い。
+    // EN: When not using instance pointers, the traversable handle and the offset in the shader binding table
+    //     of each instance must be finalized when calling the IAS build on CPU.
+    //     When using instance pointers, just set them before the IAS build is executed "on GPU".
     cudau::Buffer hitGroupSBT;
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
     hitGroupSBT.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
     hitGroupSBT.setMappedMemoryPersistent(true);
 
-    cudau::TypedBuffer<CUdeviceptr> instancePointersBuffer;
+    cudau::TypedBuffer<CUdeviceptr> instancePointerBuffer;
     if (useInstancePointers) {
-        instancePointersBuffer.initialize(cuContext, cudau::BufferType::Device, instanceBuffer.numElements());
+        instancePointerBuffer.initialize(cuContext, cudau::BufferType::Device, instanceBuffer.numElements());
 
         std::vector<OptixInstance> optixInsts(instanceBuffer.numElements());
         {
@@ -539,7 +541,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     OptixTraversableHandle travHandle = ias.rebuild(
         cuStream,
         useInstancePointers ?
-            optixu::BufferView(instancePointersBuffer) :
+            optixu::BufferView(instancePointerBuffer) :
             optixu::BufferView(instanceBuffer),
         iasMem, asBuildScratchMem);
 
@@ -593,7 +595,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     if (useInstancePointers)
-        instancePointersBuffer.finalize();
+        instancePointerBuffer.finalize();
 
     hitGroupSBT.finalize();
 

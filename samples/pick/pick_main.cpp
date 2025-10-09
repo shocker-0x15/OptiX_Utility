@@ -636,10 +636,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: IASビルド時には各インスタンスのTraversable HandleとShader Binding Table中のオフセットが
-    //     確定している必要がある。
-    // EN: Traversable handle and offset in the shader binding table must be fixed for each instance
-    //     when building an IAS.
     size_t hitGroupSbtSize;
     scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
 
