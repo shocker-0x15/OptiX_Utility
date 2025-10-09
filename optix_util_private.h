@@ -1053,9 +1053,11 @@ namespace optixu {
     template <>
     class Object<Transform>::Priv : public PrivateObject {
     OPTIXU_PRIV_ACCESS_SPECIFIER:
+        struct InvalidType {};
+
         _Scene* scene;
         std::variant<
-            void*,
+            InvalidType,
             _GeometryAccelerationStructure*,
             _InstanceAccelerationStructure*,
             _Transform*
@@ -1120,13 +1122,16 @@ namespace optixu {
     template <>
     class Object<Instance>::Priv : public PrivateObject {
     OPTIXU_PRIV_ACCESS_SPECIFIER:
+        struct InvalidType {};
+
         _Scene* scene;
         std::variant<
-            void*,
+            InvalidType,
             _GeometryAccelerationStructure*,
             _ClusterGeometryAccelerationStructureSet*,
             _InstanceAccelerationStructure*,
-            _Transform*
+            _Transform*,
+            CUdeviceptr
         > child;
         uint32_t matSetIndex;
         uint32_t cgasIndex;
@@ -1169,6 +1174,15 @@ namespace optixu {
 
         void fillInstance(OptixInstance* instance) const;
         void updateInstance(OptixInstance* instance) const;
+        CUdeviceptr getAddress() const {
+            if (std::holds_alternative<CUdeviceptr>(child)) {
+                return std::get<CUdeviceptr>(child);
+            }
+            else {
+                throwRuntimeError(false, "Instance address is not set.");
+                return 0;
+            }
+        }
         void copyTraversableHandle(CUstream stream, CUdeviceptr instDescAddress) const;
         bool isMotionAS() const;
         bool isTransform() const;
@@ -1184,6 +1198,7 @@ namespace optixu {
         std::vector<_Instance*> children;
         OptixBuildInput buildInput;
         std::vector<OptixInstance> instances;
+        std::vector<CUdeviceptr> instancePointers;
 
         OptixAccelBuildOptions buildOptions;
         OptixAccelBufferSizes memoryRequirement;
@@ -1199,6 +1214,7 @@ namespace optixu {
         BufferView accelBuffer;
         BufferView compactedAccelBuffer;
         ASTradeoff tradeoff;
+        uint32_t useArrayOfPointers : 1;
         uint32_t allowUpdate : 1;
         uint32_t allowCompaction : 1;
         uint32_t allowRandomInstanceAccess : 1;
@@ -1210,10 +1226,11 @@ namespace optixu {
     public:
         OPTIXU_OPAQUE_BRIDGE(InstanceAccelerationStructure);
 
-        Priv(_Scene* _scene) :
+        Priv(_Scene* _scene, UseArrayOfPointers _useArrayOfPointers) :
             scene(_scene),
             handle(0), compactedHandle(0),
             tradeoff(ASTradeoff::Default),
+            useArrayOfPointers(_useArrayOfPointers),
             allowUpdate(false), allowCompaction(false), allowRandomInstanceAccess(false),
             readyToBuild(false), available(false),
             readyToCompact(false), compactedAvailable(false)

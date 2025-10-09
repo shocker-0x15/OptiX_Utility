@@ -29,6 +29,9 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 
 変更履歴 / Update History:
+- JP: - インスタンスポインターのサポート。
+  EN: - Supported instance pointers.
+
 - !!BREAKING
 - JP: - 非構造化クラスターをサポート。
         具体的にはClusterAccelerationStructure (CLAS), ClusterGeometryAccelerationStructure (CGAS)を追加。
@@ -205,6 +208,10 @@ EN:
 
 ----------------------------------------------------------------
 TODO:
+- クラスターテンプレートのサポート。
+- グリッドクラスターのサポート。
+- HitObjectの新たな機能のサポート。
+- Coop Vec APIのラッパー？
 - 深いトラバーサルグラフにおけるインスタンスのSBTオフセットの累積サポート。
 - NVRTC環境のテスト。
 - フローベクターの信頼性についてテスト。
@@ -1547,6 +1554,7 @@ namespace optixu {
     OPTIXU_DECLARE_TYPED_BOOL(EnableValidation);
     OPTIXU_DECLARE_TYPED_BOOL(GuideAlbedo);
     OPTIXU_DECLARE_TYPED_BOOL(GuideNormal);
+    OPTIXU_DECLARE_TYPED_BOOL(UseArrayOfPointers);
     OPTIXU_DECLARE_TYPED_BOOL(UseSingleRadius);
     OPTIXU_DECLARE_TYPED_BOOL(AllowUpdate);
     OPTIXU_DECLARE_TYPED_BOOL(AllowCompaction);
@@ -1697,7 +1705,8 @@ namespace optixu {
         [[nodiscard]]
         Instance createInstance() const;
         [[nodiscard]]
-        InstanceAccelerationStructure createInstanceAccelerationStructure() const;
+        InstanceAccelerationStructure createInstanceAccelerationStructure(
+            OPTIXU_EN_PRM(UseArrayOfPointers, elemType, No)) const;
 
         // JP: シェーダーバインディングテーブルレイアウトをdirty状態にする。
         // EN: Mark the layout of shader binding table dirty.
@@ -1907,6 +1916,8 @@ namespace optixu {
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
 
+        uint32_t getOffsetInShaderBindingTable(uint32_t matSetIdx) const;
+
         GeometryType getGeometryType() const;
         void getConfiguration(
             ASTradeoff* tradeOff, AllowUpdate* allowUpdate, AllowCompaction* allowCompaction,
@@ -2034,6 +2045,8 @@ namespace optixu {
             setUserData(&data, sizeof(T), alignof(T));
         }
 
+        uint32_t getOffsetInShaderBindingTable() const;
+
         ClusterAccelerationStructureSet getChild() const;
         uint32_t getRayTypeCount() const;
         void getUserData(void* data, uint32_t* size, uint32_t* alignment) const;
@@ -2102,9 +2115,12 @@ namespace optixu {
         void setChild(ClusterGeometryAccelerationStructureSet cgasSet, uint32_t cgasIdx) const;
         void setChild(InstanceAccelerationStructure child) const;
         void setChild(Transform child, uint32_t matSetIdx = 0) const;
+        void setAddress(CUdeviceptr addr) const;
 
         // JP: 所属するIASをリビルドもしくはアップデートする必要がある。
+        //     setAddress()でアドレスを設定している場合は、これらの設定はユーザー側で手動で行う必要がある。
         // EN: Rebulding or Updating of a IAS to which the instance belongs is required.
+        //     If the address is set by setAddress(), these settings need to be done manually by the user.
         void setID(uint32_t value) const;
         void setVisibilityMask(uint32_t mask) const;
         void setFlags(OptixInstanceFlags flags) const;

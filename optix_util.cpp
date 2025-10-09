@@ -374,8 +374,10 @@ namespace optixu {
         return (new _Instance(m))->getPublicType();
     }
 
-    InstanceAccelerationStructure Scene::createInstanceAccelerationStructure() const {
-        return (new _InstanceAccelerationStructure(m))->getPublicType();
+    InstanceAccelerationStructure Scene::createInstanceAccelerationStructure(
+        UseArrayOfPointers useArrayOfPointers) const
+    {
+        return (new _InstanceAccelerationStructure(m, useArrayOfPointers))->getPublicType();
     }
 
     void Scene::markShaderBindingTableLayoutDirty() const {
@@ -2018,6 +2020,10 @@ namespace optixu {
         return m->getHandle();
     }
 
+    uint32_t GeometryAccelerationStructure::getOffsetInShaderBindingTable(uint32_t matSetIdx) const {
+        return m->scene->getSBTOffset(m, matSetIdx);
+    }
+
     GeometryType GeometryAccelerationStructure::getGeometryType() const {
         return m->geomType;
     }
@@ -2486,6 +2492,10 @@ namespace optixu {
         std::memcpy(m->userData.data(), data, size);
     }
 
+    uint32_t ClusterGeometryAccelerationStructureSet::getOffsetInShaderBindingTable() const {
+        return m->scene->getSBTOffset(m);
+    }
+
     ClusterAccelerationStructureSet ClusterGeometryAccelerationStructureSet::getChild() const {
         return m->child->getPublicType();
     }
@@ -2728,7 +2738,7 @@ namespace optixu {
             trDeviceMem.sizeInBytes() >= m->dataSize,
             "Size of the given buffer is not enough.");
         m->throwRuntimeError(
-            !std::holds_alternative<void*>(m->child),
+            !std::holds_alternative<Priv::InvalidType>(m->child),
             "Child is invalid.");
 
         OptixTraversableHandle childHandle = 0;
@@ -2867,7 +2877,7 @@ namespace optixu {
 
 
     void Instance::Priv::fillInstance(OptixInstance* instance) const {
-        throwRuntimeError(!std::holds_alternative<void*>(child), "Child has not been set.");
+        throwRuntimeError(!std::holds_alternative<InvalidType>(child), "Child has not been set.");
 
         *instance = {};
         std::copy_n(instTransform, 12, instance->transform);
@@ -3028,6 +3038,10 @@ namespace optixu {
             _child->getName().c_str());
         m->child = _child;
         m->matSetIndex = matSetIdx;
+    }
+
+    void Instance::setAddress(CUdeviceptr addr) const {
+        m->child = addr;
     }
 
     void Instance::setTransform(const float transform[12]) const {
@@ -3200,12 +3214,17 @@ namespace optixu {
     }
 
     void InstanceAccelerationStructure::prepareForBuild(OptixAccelBufferSizes* memoryRequirement) const {
-        m->instances.resize(m->children.size());
+        if (m->useArrayOfPointers)
+            m->instancePointers.resize(m->children.size());
+        else
+            m->instances.resize(m->children.size());
 
         // Fill the build input.
         {
             m->buildInput = OptixBuildInput{};
-            m->buildInput.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+            m->buildInput.type = m->useArrayOfPointers ?
+                OPTIX_BUILD_INPUT_TYPE_INSTANCE_POINTERS :
+                OPTIX_BUILD_INPUT_TYPE_INSTANCES;
             OptixBuildInputInstanceArray &instArray = m->buildInput.instanceArray;
             instArray.instances = 0;
             instArray.numInstances = static_cast<uint32_t>(m->children.size());
@@ -3244,23 +3263,35 @@ namespace optixu {
         m->throwRuntimeError(
             scratchBuffer.sizeInBytes() >= m->memoryRequirement.tempSizeInBytes,
             "Size of the given scratch buffer is not enough.");
+        const uint32_t elemSize = m->useArrayOfPointers ? sizeof(CUdeviceptr) : sizeof(OptixInstance);
         m->throwRuntimeError(
-            instanceBuffer.sizeInBytes() >= m->instances.size() * sizeof(OptixInstance),
+            instanceBuffer.sizeInBytes() >= m->instances.size() * elemSize,
             "Size of the given instance buffer is not enough.");
         m->throwRuntimeError(
             m->scene->sbtLayoutGenerationDone(),
             "Shader binding table layout generation has not been done.");
 
         uint32_t childIdx = 0;
-        for (const _Instance* child : m->children)
-            child->fillInstance(&m->instances[childIdx++]);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(
-            instanceBuffer.getCUdeviceptr(), m->instances.data(),
-            m->instances.size() * sizeof(OptixInstance),
-            stream));
-        childIdx = 0;
-        for (const _Instance* child : m->children)
-            child->copyTraversableHandle(stream, instanceBuffer.getCUdeviceptrAt(childIdx++));
+        if (m->useArrayOfPointers) {
+            for (const _Instance* child : m->children)
+                m->instancePointers[childIdx++] = child->getAddress();
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                instanceBuffer.getCUdeviceptr(), m->instancePointers.data(),
+                m->instancePointers.size() * sizeof(CUdeviceptr),
+                stream));
+        }
+        else {
+            for (const _Instance* child : m->children)
+                child->fillInstance(&m->instances[childIdx++]);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                instanceBuffer.getCUdeviceptr(), m->instances.data(),
+                m->instances.size() * sizeof(OptixInstance),
+                stream));
+            childIdx = 0;
+            for (const _Instance* child : m->children)
+                child->copyTraversableHandle(stream, instanceBuffer.getCUdeviceptrAt(childIdx++));
+            m->buildInput.instanceArray.instanceStride = instanceBuffer.stride();
+        }
         m->buildInput.instanceArray.instances = m->children.size() > 0 ? instanceBuffer.getCUdeviceptr() : 0;
 
         const bool compactionEnabled = (m->buildOptions.buildFlags & OPTIX_BUILD_FLAG_ALLOW_COMPACTION) != 0;
@@ -3359,12 +3390,22 @@ namespace optixu {
             "Size of the given scratch buffer is not enough.");
 
         uint32_t childIdx = 0;
-        for (const _Instance* child : m->children)
-            child->updateInstance(&m->instances[childIdx++]);
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(
-            m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
-            m->instances.size() * sizeof(OptixInstance),
-            stream));
+        if (m->useArrayOfPointers) {
+            for (const _Instance* child : m->children)
+                m->instancePointers[childIdx++] = child->getAddress();
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                m->instanceBuffer.getCUdeviceptr(), m->instancePointers.data(),
+                m->instancePointers.size() * sizeof(CUdeviceptr),
+                stream));
+        }
+        else {
+            for (const _Instance* child : m->children)
+                child->updateInstance(&m->instances[childIdx++]);
+            CUDADRV_CHECK(cuMemcpyHtoDAsync(
+                m->instanceBuffer.getCUdeviceptr(), m->instances.data(),
+                m->instances.size() * sizeof(OptixInstance),
+                stream));
+        }
 
         const BufferView &accelBuffer = m->compactedAvailable ? m->compactedAccelBuffer : m->accelBuffer;
         const OptixTraversableHandle handle = m->compactedAvailable ? m->compactedHandle : m->handle;
