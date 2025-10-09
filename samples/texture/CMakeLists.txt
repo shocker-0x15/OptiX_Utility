@@ -1,4 +1,4 @@
-set(TARGET_NAME "texture")
+﻿set(TARGET_NAME "texture")
 
 file(
     GLOB_RECURSE SOURCES

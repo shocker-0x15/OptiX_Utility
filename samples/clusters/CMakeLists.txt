@@ -1,4 +1,4 @@
-set(TARGET_NAME "clusters")
+﻿set(TARGET_NAME "clusters")
 
 file(
     GLOB_RECURSE SOURCES

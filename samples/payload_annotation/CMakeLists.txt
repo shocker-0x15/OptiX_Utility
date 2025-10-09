@@ -1,4 +1,4 @@
-set(TARGET_NAME "payload_annotation")
+﻿set(TARGET_NAME "payload_annotation")
 
 file(
     GLOB_RECURSE SOURCES

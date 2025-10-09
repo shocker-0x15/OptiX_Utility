@@ -1,4 +1,4 @@
-set(TARGET_NAME "opacity_micro_map")
+﻿set(TARGET_NAME "opacity_micro_map")
 
 file(
     GLOB_RECURSE SOURCES

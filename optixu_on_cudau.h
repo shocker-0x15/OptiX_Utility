@@ -26,15 +26,17 @@ namespace optixu {
             int32_t, int2, int4,
             uint32_t, uint2, uint4>; // other types?
         static constexpr size_t typeSize = sizeof(T);
-        static_assert(typeSize == 4 || typeSize == 8 || typeSize == 16,
-                      "Unsupported size of type.");
+        static_assert(
+            typeSize == 4 || typeSize == 8 || typeSize == 16,
+            "Unsupported size of type.");
 #endif // if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         CUsurfObject m_surfObject;
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
         template <typename U>
         RT_DEVICE_FUNCTION void write(
-            uint32_t xAddr, uint32_t yAddr, const U &value, cudaSurfaceBoundaryMode boundaryMode) const {
+            uint32_t xAddr, uint32_t yAddr, const U &value, cudaSurfaceBoundaryMode boundaryMode) const
+        {
             if constexpr (sizeof(U) == 4) {
                 union Alias {
                     U targetType;
@@ -75,7 +77,9 @@ namespace optixu {
         }
 
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
-        RT_DEVICE_FUNCTION T read(uint2 idx, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const {
+        RT_DEVICE_FUNCTION T read(
+            uint2 idx, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const
+        {
             if constexpr (isNativeType) {
                 return surf2Dread<T>(m_surfObject, idx.x * sizeof(T), idx.y, boundaryMode);
             }
@@ -110,22 +114,32 @@ namespace optixu {
             }
             return T();
         }
-        RT_DEVICE_FUNCTION void write(uint2 idx, const T &value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const {
+        RT_DEVICE_FUNCTION void write(
+            uint2 idx, const T &value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const
+        {
             write(idx.x * sizeof(T), idx.y, value, boundaryMode);
         }
         template <size_t offsetInBytes, typename U>
-        RT_DEVICE_FUNCTION void writePartially(uint2 idx, U value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const {
+        RT_DEVICE_FUNCTION void writePartially(
+            uint2 idx, U value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const
+        {
             write(idx.x * sizeof(T) + offsetInBytes, idx.y, value, boundaryMode);
         }
 
-        RT_DEVICE_FUNCTION T read(int2 idx, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const {
+        RT_DEVICE_FUNCTION T read(
+            int2 idx, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const
+        {
             return read(make_uint2(idx.x, idx.y), boundaryMode);
         }
-        RT_DEVICE_FUNCTION void write(int2 idx, const T &value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const {
+        RT_DEVICE_FUNCTION void write(
+            int2 idx, const T &value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const
+        {
             write(make_uint2(idx.x, idx.y), value, boundaryMode);
         }
         template <size_t offsetInBytes, typename U>
-        RT_DEVICE_FUNCTION void writePartially(int2 idx, U value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const {
+        RT_DEVICE_FUNCTION void writePartially(
+            int2 idx, U value, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap) const
+        {
             writePartially<offsetInBytes>(make_uint2(idx.x, idx.y), value, boundaryMode);
         }
 #endif // if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
@@ -175,23 +189,27 @@ namespace optixu {
         }
 
         RT_DEVICE_FUNCTION const T &operator[](uint2 idx) const {
-            optixuAssert(idx.x < m_width && idx.y < m_height,
-                         "Out of bounds: %u, %u", idx.x, idx.y);
+            optixuAssert(
+                idx.x < m_width && idx.y < m_height,
+                "Out of bounds: %u, %u", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_DEVICE_FUNCTION T &operator[](uint2 idx) {
-            optixuAssert(idx.x < m_width && idx.y < m_height,
-                         "Out of bounds: %u, %u", idx.x, idx.y);
+            optixuAssert(
+                idx.x < m_width && idx.y < m_height,
+                "Out of bounds: %u, %u", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_DEVICE_FUNCTION const T &operator[](int2 idx) const {
-            optixuAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
-                         "Out of bounds: %d, %d", idx.x, idx.y);
+            optixuAssert(
+                idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
+                "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
         RT_DEVICE_FUNCTION T &operator[](int2 idx) {
-            optixuAssert(idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
-                         "Out of bounds: %d, %d", idx.x, idx.y);
+            optixuAssert(
+                idx.x >= 0 && idx.x < m_width && idx.y >= 0 && idx.y < m_height,
+                "Out of bounds: %d, %d", idx.x, idx.y);
             return m_rawBuffer[calcLinearIndex(idx.x, idx.y)];
         }
 
@@ -285,18 +303,20 @@ namespace optixu {
             uint32_t numYBlocksToCopy = std::min(numSrcYBlocks, numDstYBlocks);
             if (numXBlocksToCopy == m_numXBlocks) {
                 size_t numBytesToCopy = (numXBlocksToCopy * numYBlocksToCopy * blockWidth * blockWidth) * sizeof(T);
-                CUDADRV_CHECK(cuMemcpyDtoD(newBuffer.m_rawBuffer.getCUdeviceptr(),
-                                           m_rawBuffer.getCUdeviceptr(),
-                                           numBytesToCopy));
+                CUDADRV_CHECK(cuMemcpyDtoD(
+                    newBuffer.m_rawBuffer.getCUdeviceptr(),
+                    m_rawBuffer.getCUdeviceptr(),
+                    numBytesToCopy));
             }
             else {
                 for (uint32_t yb = 0; yb < numYBlocksToCopy; ++yb) {
                     size_t srcOffset = (m_numXBlocks * blockWidth * blockWidth * yb) * sizeof(T);
                     size_t dstOffset = (newBuffer.m_numXBlocks * blockWidth * blockWidth * yb) * sizeof(T);
                     size_t numBytesToCopy = (numXBlocksToCopy * blockWidth * blockWidth) * sizeof(T);
-                    CUDADRV_CHECK(cuMemcpyDtoD(newBuffer.m_rawBuffer.getCUdeviceptr() + dstOffset,
-                                               m_rawBuffer.getCUdeviceptr() + srcOffset,
-                                               numBytesToCopy));
+                    CUDADRV_CHECK(cuMemcpyDtoD(
+                        newBuffer.m_rawBuffer.getCUdeviceptr() + dstOffset,
+                        m_rawBuffer.getCUdeviceptr() + srcOffset,
+                        numBytesToCopy));
                 }
             }
 

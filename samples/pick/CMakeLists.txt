@@ -1,4 +1,4 @@
-set(TARGET_NAME "pick")
+﻿set(TARGET_NAME "pick")
 
 file(
     GLOB_RECURSE SOURCES

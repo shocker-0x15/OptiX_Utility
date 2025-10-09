@@ -24,13 +24,15 @@ namespace obj {
         uint32_t materialIndex;
     };
 
-    void load(const std::filesystem::path &filepath,
-              std::vector<Vertex>* vertices, std::vector<MaterialGroup>* matGroups,
-              std::vector<Material>* materials);
+    void load(
+        const std::filesystem::path &filepath,
+        std::vector<Vertex>* vertices, std::vector<MaterialGroup>* matGroups,
+        std::vector<Material>* materials);
 
 
     // JP: マテリアルを区別せずに形状だけを読み込む。
     // EN: Load only the shape without distinguishing materials.
-    void load(const std::filesystem::path &filepath,
-              std::vector<Vertex>* vertices, std::vector<Triangle>* triangles);
+    void load(
+        const std::filesystem::path &filepath,
+        std::vector<Vertex>* vertices, std::vector<Triangle>* triangles);
 }

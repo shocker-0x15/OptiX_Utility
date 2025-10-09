@@ -1,4 +1,4 @@
-set(TARGET_NAME "temporal_denoiser")
+﻿set(TARGET_NAME "temporal_denoiser")
 
 file(
     GLOB_RECURSE SOURCES

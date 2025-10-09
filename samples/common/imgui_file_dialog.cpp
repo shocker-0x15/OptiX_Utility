@@ -1,4 +1,4 @@
-#include "imgui_file_dialog.h"
+ï»¿#include "imgui_file_dialog.h"
 
 FileDialog::Result FileDialog::drawAndGetResult() {
     namespace fs = std::filesystem;
@@ -34,7 +34,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
         fs::path newDir;
         bool fileDoubleClicked = false;
 
-        // JP: ƒJƒŒƒ“ƒgƒfƒBƒŒƒNƒgƒŠ‚Ì•¶š—ñ‚ğ•\¦B
+        // JP: ã‚«ãƒ¬ãƒ³ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã®æ–‡å­—åˆ—ã‚’è¡¨ç¤ºã€‚
         // EN: 
         ImGui::PushID("Directory");
         ImGui::SetNextItemWidth(-1);
@@ -51,7 +51,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
         }
         ImGui::PopID();
 
-        // JP: ƒJƒŒƒ“ƒgƒfƒBƒŒƒNƒgƒŠ‚ÌƒpƒX‚ğ•ª‰ğ‚µ‚Äƒ{ƒ^ƒ“‚Æ‚µ‚Ä•\¦‚·‚éB
+        // JP: ã‚«ãƒ¬ãƒ³ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã®ãƒ‘ã‚¹ã‚’åˆ†è§£ã—ã¦ãƒœã‚¿ãƒ³ã¨ã—ã¦è¡¨ç¤ºã™ã‚‹ã€‚
         // EN: 
         //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::BeginChild("Path Buttons", ImVec2(0, ImGui::GetFrameHeight()));
@@ -74,7 +74,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
         ImGui::Separator();
 
         // ----------------------------------------------------------------
-        // JP: ƒtƒ@ƒCƒ‹ƒŠƒXƒg‚Ì•\¦‚Æ‘I‘ğˆ—B
+        // JP: ãƒ•ã‚¡ã‚¤ãƒ«ãƒªã‚¹ãƒˆã®è¡¨ç¤ºã¨é¸æŠå‡¦ç†ã€‚
 
         float fileListHeight = std::fmax(ImGui::GetWindowSize().y - windowMinHeight, 0.0f) + fileListMinHeight;
         ImGui::BeginChild("File List", ImVec2(ImGui::GetContentRegionAvail().x, fileListHeight));
@@ -89,10 +89,10 @@ FileDialog::Result FileDialog::drawAndGetResult() {
             if (ImGui::Selectable(name.c_str(), entryInfo.selected, ImGuiSelectableFlags_DontClosePopups)) {
                 if (((m_flags & Flag_DirectorySelection) && entryInfo.is_directory()) ||
                     ((m_flags & Flag_FileSelection) && !entryInfo.is_directory())) {
-                    // JP: ’Pˆê‘I‘ğ‚µ‚½ê‡‚Í‘¼‚Ì‘I‘ğÏ‚İ€–Ú‚ğ”ñ‘I‘ğó‘Ô‚É•ÏX‚·‚éB
+                    // JP: å˜ä¸€é¸æŠã—ãŸå ´åˆã¯ä»–ã®é¸æŠæ¸ˆã¿é …ç›®ã‚’éé¸æŠçŠ¶æ…‹ã«å¤‰æ›´ã™ã‚‹ã€‚
                     if (!ImGui::GetIO().KeyCtrl || ((m_flags & Flag_MultipleSelection) == 0)) {
                         for (EntryInfo &e : m_entryInfos) {
-                            // JP: •¡”‘I‘ğó‘Ô‚È‚ç‘I‘ğó‘Ô‚É‚È‚é‚æ‚¤‚É‚·‚éB
+                            // JP: è¤‡æ•°é¸æŠçŠ¶æ…‹ãªã‚‰é¸æŠçŠ¶æ…‹ã«ãªã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
                             if (&e != &entryInfo || multiplySelected)
                                 e.selected = false;
                         }
@@ -101,7 +101,7 @@ FileDialog::Result FileDialog::drawAndGetResult() {
                     selectionChanged = true;
                 }
             }
-            // JP: ƒ_ƒuƒ‹ƒNƒŠƒbƒN‚Ìˆ—B
+            // JP: ãƒ€ãƒ–ãƒ«ã‚¯ãƒªãƒƒã‚¯æ™‚ã®å‡¦ç†ã€‚
             if (ImGui::IsMouseDoubleClicked(0) && !ImGui::GetIO().KeyCtrl && ImGui::IsItemHovered()) {
                 if (entryInfo.is_directory()) {
                     if (entryInfo.path().is_relative())
@@ -110,9 +110,9 @@ FileDialog::Result FileDialog::drawAndGetResult() {
                         newDir = entryInfo.path();
                 }
                 else {
-                    // JP: ‘¼‚Ì‘I‘ğÏ‚İ€–Ú‚ğ”ñ‘I‘ğó‘Ô‚É•ÏX‚·‚éB
+                    // JP: ä»–ã®é¸æŠæ¸ˆã¿é …ç›®ã‚’éé¸æŠçŠ¶æ…‹ã«å¤‰æ›´ã™ã‚‹ã€‚
                     for (EntryInfo &e : m_entryInfos) {
-                        // JP: •¡”‘I‘ğó‘Ô‚È‚ç©g‚¾‚¯‘I‘ğó‘Ô‚É‚È‚é‚æ‚¤‚É‚·‚éB
+                        // JP: è¤‡æ•°é¸æŠçŠ¶æ…‹ãªã‚‰è‡ªèº«ã ã‘é¸æŠçŠ¶æ…‹ã«ãªã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
                         if (&e != &entryInfo || multiplySelected)
                             e.selected = false;
                     }

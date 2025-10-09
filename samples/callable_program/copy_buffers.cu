@@ -1,4 +1,4 @@
-#include "callable_program_shared.h"
+﻿#include "callable_program_shared.h"
 
 CUDA_DEVICE_KERNEL void copyBuffers(
     optixu::NativeBlockBuffer2D<float4> colorAccumBuffer,

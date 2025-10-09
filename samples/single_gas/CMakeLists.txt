@@ -1,4 +1,4 @@
-set(TARGET_NAME "single_gas")
+﻿set(TARGET_NAME "single_gas")
 
 file(
     GLOB_RECURSE SOURCES

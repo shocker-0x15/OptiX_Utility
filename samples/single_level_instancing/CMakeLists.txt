@@ -1,4 +1,4 @@
-set(TARGET_NAME "single_level_instancing")
+﻿set(TARGET_NAME "single_level_instancing")
 
 file(
     GLOB_RECURSE SOURCES

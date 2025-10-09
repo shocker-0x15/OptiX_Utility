@@ -1,4 +1,4 @@
-set(TARGET_NAME "deformation_blur")
+﻿set(TARGET_NAME "deformation_blur")
 
 file(
     GLOB_RECURSE SOURCES

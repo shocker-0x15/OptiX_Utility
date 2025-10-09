@@ -1,4 +1,4 @@
-set(TARGET_NAME "custom_primitive")
+﻿set(TARGET_NAME "custom_primitive")
 
 file(
     GLOB_RECURSE SOURCES

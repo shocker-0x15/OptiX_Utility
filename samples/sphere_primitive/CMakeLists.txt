@@ -1,4 +1,4 @@
-set(TARGET_NAME "sphere_primitive")
+﻿set(TARGET_NAME "sphere_primitive")
 
 file(
     GLOB_RECURSE SOURCES

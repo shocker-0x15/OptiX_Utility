@@ -1,4 +1,4 @@
-set(TARGET_NAME "callable_program")
+﻿set(TARGET_NAME "callable_program")
 
 file(
     GLOB_RECURSE SOURCES

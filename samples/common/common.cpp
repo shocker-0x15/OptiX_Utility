@@ -1,4 +1,4 @@
-#include "common.h"
+ï»¿#include "common.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"
@@ -243,7 +243,7 @@ void SlotFinder::setInUse(uint32_t slotIdx) {
         uint32_t binIdx = flagIdxInLayer / 32;
         uint32_t flagIdxInBin = flagIdxInLayer % 32;
 
-        // JP: Å‰º‘w‚Å‚ÍOR/AND‚Í“¯‚¶À‘Ì‚¾‚ªsetANDFlag‚ª‰Šú’lfalse‚Å‚ ‚é‚Ì‚Åİ’è‚Í1‰ñ‚«‚èB
+        // JP: æœ€ä¸‹å±¤ã§ã¯OR/ANDã¯åŒã˜å®Ÿä½“ã ãŒsetANDFlagãŒåˆæœŸå€¤falseã§ã‚ã‚‹ã®ã§è¨­å®šã¯1å›ãã‚Šã€‚
         uint32_t &ORFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 0] + binIdx];
         uint32_t &ANDFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 1] + binIdx];
         uint32_t &numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[layer] + binIdx];
@@ -252,7 +252,7 @@ void SlotFinder::setInUse(uint32_t slotIdx) {
             ANDFlagBin |= (1 << flagIdxInBin);
         ++numUsedFlagsUnderBin;
 
-        // JP: ‚±‚Ìƒrƒ“‚É—˜—p‰Â”\‚ÈƒXƒƒbƒg‚ª–³‚­‚È‚Á‚½ê‡‚ÍŸ‚ÌANDƒŒƒCƒ„[‚àƒtƒ‰ƒO‚ğ—§‚Ä‚éB
+        // JP: ã“ã®ãƒ“ãƒ³ã«åˆ©ç”¨å¯èƒ½ãªã‚¹ãƒ­ãƒƒãƒˆãŒç„¡ããªã£ãŸå ´åˆã¯æ¬¡ã®ANDãƒ¬ã‚¤ãƒ¤ãƒ¼ã‚‚ãƒ•ãƒ©ã‚°ã‚’ç«‹ã¦ã‚‹ã€‚
         uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
         setANDFlag = popcnt(ANDFlagBin) == numFlagsInBin;
 
@@ -270,7 +270,7 @@ void SlotFinder::setNotInUse(uint32_t slotIdx) {
         uint32_t binIdx = flagIdxInLayer / 32;
         uint32_t flagIdxInBin = flagIdxInLayer % 32;
 
-        // JP: Å‰º‘w‚Å‚ÍOR/AND‚Í“¯‚¶À‘Ì‚¾‚ªresetORFlag‚ª‰Šú’lfalse‚Å‚ ‚é‚Ì‚Åİ’è‚Í1‰ñ‚«‚èB
+        // JP: æœ€ä¸‹å±¤ã§ã¯OR/ANDã¯åŒã˜å®Ÿä½“ã ãŒresetORFlagãŒåˆæœŸå€¤falseã§ã‚ã‚‹ã®ã§è¨­å®šã¯1å›ãã‚Šã€‚
         uint32_t &ORFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 0] + binIdx];
         uint32_t &ANDFlagBin = m_flagBins[m_offsetsToOR_AND[2 * layer + 1] + binIdx];
         uint32_t &numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[m_offsetsToNumUsedFlags[layer] + binIdx];
@@ -279,7 +279,7 @@ void SlotFinder::setNotInUse(uint32_t slotIdx) {
         ANDFlagBin &= ~(1 << flagIdxInBin);
         --numUsedFlagsUnderBin;
 
-        // JP: ‚±‚Ìƒrƒ“‚Ég—p’†ƒXƒƒbƒg‚ª–³‚­‚È‚Á‚½ê‡‚ÍŸ‚ÌORƒŒƒCƒ„[‚Ìƒtƒ‰ƒO‚ğ‰º‚°‚éB
+        // JP: ã“ã®ãƒ“ãƒ³ã«ä½¿ç”¨ä¸­ã‚¹ãƒ­ãƒƒãƒˆãŒç„¡ããªã£ãŸå ´åˆã¯æ¬¡ã®ORãƒ¬ã‚¤ãƒ¤ãƒ¼ã®ãƒ•ãƒ©ã‚°ã‚’ä¸‹ã’ã‚‹ã€‚
         uint32_t numFlagsInBin = std::min(32u, m_numFlagsInLayerList[layer] - 32 * binIdx);
         resetORFlag = ORFlagBin == 0;
 
@@ -296,11 +296,11 @@ uint32_t SlotFinder::getFirstAvailableSlot() const {
         uint32_t ANDFlagBin = m_flagBins[ANDFlagBinOffset + binIdx];
 
         if (popcnt(ANDFlagBin) != numFlagsInBin) {
-            // JP: ‚±‚Ìƒrƒ“‚É—˜—p‰Â”\‚ÈƒXƒƒbƒg‚ğ”­Œ©B
+            // JP: ã“ã®ãƒ“ãƒ³ã«åˆ©ç”¨å¯èƒ½ãªã‚¹ãƒ­ãƒƒãƒˆã‚’ç™ºè¦‹ã€‚
             binIdx = tzcnt(~ANDFlagBin) + 32 * binIdx;
         }
         else {
-            // JP: —˜—p‰Â”\‚ÈƒXƒƒbƒg‚ªŒ©‚Â‚©‚ç‚È‚©‚Á‚½B
+            // JP: åˆ©ç”¨å¯èƒ½ãªã‚¹ãƒ­ãƒƒãƒˆãŒè¦‹ã¤ã‹ã‚‰ãªã‹ã£ãŸã€‚
             return 0xFFFFFFFF;
         }
     }
@@ -318,11 +318,11 @@ uint32_t SlotFinder::getFirstUsedSlot() const {
         uint32_t ORFlagBin = m_flagBins[ORFlagBinOffset + binIdx];
 
         if (ORFlagBin != 0) {
-            // JP: ‚±‚Ìƒrƒ“‚Ég—p’†‚ÌƒXƒƒbƒg‚ğ”­Œ©B
+            // JP: ã“ã®ãƒ“ãƒ³ã«ä½¿ç”¨ä¸­ã®ã‚¹ãƒ­ãƒƒãƒˆã‚’ç™ºè¦‹ã€‚
             binIdx = tzcnt(ORFlagBin) + 32 * binIdx;
         }
         else {
-            // JP: g—p’†ƒXƒƒbƒg‚ªŒ©‚Â‚©‚ç‚È‚©‚Á‚½B
+            // JP: ä½¿ç”¨ä¸­ã‚¹ãƒ­ãƒƒãƒˆãŒè¦‹ã¤ã‹ã‚‰ãªã‹ã£ãŸã€‚
             return 0xFFFFFFFF;
         }
     }
@@ -343,7 +343,7 @@ uint32_t SlotFinder::find_nthUsedSlot(uint32_t n) const {
         for (int binIdx = startBinIdx; binIdx < static_cast<int32_t>(numFlagBinsInLayer); ++binIdx) {
             uint32_t numUsedFlagsUnderBin = m_numUsedFlagsUnderBinList[numUsedFlagsOffset + binIdx];
 
-            // JP: Œ»İ‚Ìƒrƒ“‚Ì”z‰º‚ÉƒCƒ“ƒfƒbƒNƒXn‚Ìg—p’†ƒXƒƒbƒg‚ª‚ ‚éB
+            // JP: ç¾åœ¨ã®ãƒ“ãƒ³ã®é…ä¸‹ã«ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹nã®ä½¿ç”¨ä¸­ã‚¹ãƒ­ãƒƒãƒˆãŒã‚ã‚‹ã€‚
             if (accNumUsed + numUsedFlagsUnderBin > n) {
                 startBinIdx = 32 * binIdx;
                 if (layer == 0) {

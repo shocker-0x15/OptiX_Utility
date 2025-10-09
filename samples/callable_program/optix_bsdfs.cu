@@ -22,16 +22,16 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float fresnel(float etaEnter, float etaExit, fl
 
 
 RT_CALLABLE_PROGRAM void RT_DC_NAME(setUpLambertBRDF)(
-	const MaterialData &matData, const float2 &texCoord, BSDFData* bsdfData) {
-	float3 reflectance;
-	if (matData.asMatte.texture) {
-		reflectance = getXYZ(tex2DLod<float4>(
-			matData.asMatte.texture, texCoord.x, texCoord.y, 0.0f));
-	}
-	else {
-		reflectance = matData.asMatte.reflectance;
-	}
-	bsdfData->asLambertBRDF.reflectance = reflectance;
+    const MaterialData &matData, const float2 &texCoord, BSDFData* bsdfData) {
+    float3 reflectance;
+    if (matData.asMatte.texture) {
+        reflectance = getXYZ(tex2DLod<float4>(
+            matData.asMatte.texture, texCoord.x, texCoord.y, 0.0f));
+    }
+    else {
+        reflectance = matData.asMatte.reflectance;
+    }
+    bsdfData->asLambertBRDF.reflectance = reflectance;
 }
 
 class LambertBRDF {
@@ -68,8 +68,8 @@ public:
 };
 
 RT_CALLABLE_PROGRAM float3 RT_DC_NAME(LambertBRDF_sampleF)(
-	const BSDFData &bsdfData, const float3 &givenLocalDir, const float uDir[2],
-	float3* sampledDir, float* probDens, bool* deltaSampled) {
+    const BSDFData &bsdfData, const float3 &givenLocalDir, const float uDir[2],
+    float3* sampledDir, float* probDens, bool* deltaSampled) {
     LambertBRDF bsdf(bsdfData.asLambertBRDF.reflectance);
     return bsdf.sampleF(givenLocalDir, uDir, sampledDir, probDens, deltaSampled);
 }
@@ -83,16 +83,16 @@ RT_CALLABLE_PROGRAM float3 RT_DC_NAME(LambertBRDF_evaluateF)(
 
 
 RT_CALLABLE_PROGRAM void RT_DC_NAME(setUpMirrorBRDF)(
-	const MaterialData &matData, const float2 &texCoord, BSDFData* bsdfData) {
-	float3 f0Reflectance;
-	if (matData.asMatte.texture) {
-		f0Reflectance = getXYZ(tex2DLod<float4>(
-			matData.asMirror.texture, texCoord.x, texCoord.y, 0.0f));
-	}
-	else {
-		f0Reflectance = matData.asMirror.f0Reflectance;
-	}
-	bsdfData->asMirrorBRDF.f0Reflectance = f0Reflectance;
+    const MaterialData &matData, const float2 &texCoord, BSDFData* bsdfData) {
+    float3 f0Reflectance;
+    if (matData.asMatte.texture) {
+        f0Reflectance = getXYZ(tex2DLod<float4>(
+            matData.asMirror.texture, texCoord.x, texCoord.y, 0.0f));
+    }
+    else {
+        f0Reflectance = matData.asMirror.f0Reflectance;
+    }
+    bsdfData->asMirrorBRDF.f0Reflectance = f0Reflectance;
 }
 
 class MirrorBRDF {
@@ -123,8 +123,8 @@ public:
 };
 
 RT_CALLABLE_PROGRAM float3 RT_DC_NAME(MirrorBRDF_sampleF)(
-	const BSDFData &bsdfData, const float3 &givenLocalDir, const float uDir[2],
-	float3* sampledDir, float* probDens, bool* deltaSampled) {
+    const BSDFData &bsdfData, const float3 &givenLocalDir, const float uDir[2],
+    float3* sampledDir, float* probDens, bool* deltaSampled) {
     MirrorBRDF bsdf(bsdfData.asMirrorBRDF.f0Reflectance);
     return bsdf.sampleF(givenLocalDir, uDir, sampledDir, probDens, deltaSampled);
 }
@@ -138,8 +138,8 @@ RT_CALLABLE_PROGRAM float3 RT_DC_NAME(MirrorBRDF_evaluateF)(
 
 
 RT_CALLABLE_PROGRAM void RT_DC_NAME(setUpGlassBSDF)(
-	const MaterialData &matData, const float2 &texCoord, BSDFData* bsdfData) {
-	bsdfData->asGlassBSDF.ior = matData.asGlass.ior;
+    const MaterialData &matData, const float2 &texCoord, BSDFData* bsdfData) {
+    bsdfData->asGlassBSDF.ior = matData.asGlass.ior;
 }
 
 class GlassBSDF {
@@ -208,8 +208,8 @@ public:
 };
 
 RT_CALLABLE_PROGRAM float3 RT_DC_NAME(GlassBSDF_sampleF)(
-	const BSDFData &bsdfData, const float3 &givenLocalDir, const float uDir[2],
-	float3* sampledDir, float* probDens, bool* deltaSampled) {
+    const BSDFData &bsdfData, const float3 &givenLocalDir, const float uDir[2],
+    float3* sampledDir, float* probDens, bool* deltaSampled) {
     GlassBSDF bsdf(bsdfData.asGlassBSDF.ior);
     return bsdf.sampleF(givenLocalDir, uDir, sampledDir, probDens, deltaSampled);
 }

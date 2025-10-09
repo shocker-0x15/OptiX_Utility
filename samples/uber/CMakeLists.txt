@@ -1,4 +1,4 @@
-set(TARGET_NAME "uber")
+﻿set(TARGET_NAME "uber")
 
 file(
     GLOB_RECURSE SOURCES

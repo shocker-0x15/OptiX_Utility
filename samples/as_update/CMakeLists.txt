@@ -1,4 +1,4 @@
-set(TARGET_NAME "as_update")
+﻿set(TARGET_NAME "as_update")
 
 file(
     GLOB_RECURSE SOURCES

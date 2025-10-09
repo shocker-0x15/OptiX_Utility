@@ -2,9 +2,11 @@
 #include "../../ext/tinyobjloader/tiny_obj_loader.h"
 
 namespace obj {
-    void load(const std::filesystem::path &filepath,
-              std::vector<Vertex>* vertices, std::vector<MaterialGroup>* matGroups,
-              std::vector<Material>* materials) {
+    void load(
+        const std::filesystem::path &filepath,
+        std::vector<Vertex>* vertices, std::vector<MaterialGroup>* matGroups,
+        std::vector<Material>* materials)
+    {
         std::filesystem::path matBaseDir = filepath;
         matBaseDir.remove_filename();
 
@@ -13,8 +15,9 @@ namespace obj {
         std::vector<tinyobj::material_t> objMaterials;
         std::string warn;
         std::string err;
-        bool ret = tinyobj::LoadObj(&attrib, &objShapes, &objMaterials, &warn, &err,
-                                    filepath.string().c_str(), matBaseDir.string().c_str());
+        bool ret = tinyobj::LoadObj(
+            &attrib, &objShapes, &objMaterials, &warn, &err,
+            filepath.string().c_str(), matBaseDir.string().c_str());
         if (!ret) {
             printf("failed to load obj %s.n\n", filepath.string().c_str());
             printf("error: %s\n", err.c_str());
@@ -57,33 +60,38 @@ namespace obj {
                 for (uint32_t vIdx = 0; vIdx < 3; ++vIdx) {
                     tinyobj::index_t idx = shape.mesh.indices[idxOffset + vIdx];
 
-                    vKeys[vIdx] = std::make_tuple(smoothGroupIdx,
-                                                  idx.vertex_index,
-                                                  idx.normal_index >= 0 ? idx.normal_index : static_cast<int32_t>(fIdx),
-                                                  idx.texcoord_index);
+                    vKeys[vIdx] = std::make_tuple(
+                        smoothGroupIdx,
+                        idx.vertex_index,
+                        idx.normal_index >= 0 ? idx.normal_index : static_cast<int32_t>(fIdx),
+                        idx.texcoord_index);
                     if (unifiedVertexMap.count(vKeys[vIdx])) {
                         vs[vIdx] = unifiedVertexMap.at(vKeys[vIdx]);
                         continue;
                     }
 
-                    vs[vIdx].position = float3(attrib.vertices[static_cast<uint32_t>(3 * idx.vertex_index + 0)],
-                                               attrib.vertices[static_cast<uint32_t>(3 * idx.vertex_index + 1)],
-                                               attrib.vertices[static_cast<uint32_t>(3 * idx.vertex_index + 2)]);
+                    vs[vIdx].position = float3(
+                        attrib.vertices[static_cast<uint32_t>(3 * idx.vertex_index + 0)],
+                        attrib.vertices[static_cast<uint32_t>(3 * idx.vertex_index + 1)],
+                        attrib.vertices[static_cast<uint32_t>(3 * idx.vertex_index + 2)]);
                     if (attrib.normals.size() && idx.normal_index >= 0)
-                        vs[vIdx].normal = float3(attrib.normals[static_cast<uint32_t>(3 * idx.normal_index + 0)],
-                                                 attrib.normals[static_cast<uint32_t>(3 * idx.normal_index + 1)],
-                                                 attrib.normals[static_cast<uint32_t>(3 * idx.normal_index + 2)]);
+                        vs[vIdx].normal = float3(
+                            attrib.normals[static_cast<uint32_t>(3 * idx.normal_index + 0)],
+                            attrib.normals[static_cast<uint32_t>(3 * idx.normal_index + 1)],
+                            attrib.normals[static_cast<uint32_t>(3 * idx.normal_index + 2)]);
                     else
                         vs[vIdx].normal = float3(NAN, NAN, NAN);
                     if (attrib.texcoords.size() && idx.texcoord_index >= 0)
-                        vs[vIdx].texCoord = float2(attrib.texcoords[static_cast<uint32_t>(2 * idx.texcoord_index + 0)],
-                                                   1 - attrib.texcoords[static_cast<uint32_t>(2 * idx.texcoord_index + 1)]); // flip V dir
+                        vs[vIdx].texCoord = float2(
+                            attrib.texcoords[static_cast<uint32_t>(2 * idx.texcoord_index + 0)],
+                            1 - attrib.texcoords[static_cast<uint32_t>(2 * idx.texcoord_index + 1)]); // flip V dir
                     else
                         vs[vIdx].texCoord = float2(0.0f, 0.0f);
                 }
 
-                float3 gn = normalize(cross(vs[1].position - vs[0].position,
-                                            vs[2].position - vs[0].position));
+                float3 gn = normalize(cross(
+                    vs[1].position - vs[0].position,
+                    vs[2].position - vs[0].position));
 
                 for (int32_t vIdx = 0; vIdx < 3; ++vIdx) {
                     const VertexKey &key = vKeys[vIdx];
@@ -152,18 +160,21 @@ namespace obj {
                 tinyobj::index_t idx0 = shape.mesh.indices[idxOffset + 0];
                 tinyobj::index_t idx1 = shape.mesh.indices[idxOffset + 1];
                 tinyobj::index_t idx2 = shape.mesh.indices[idxOffset + 2];
-                auto key0 = std::make_tuple(smoothGroupIdx,
-                                            idx0.vertex_index,
-                                            idx0.normal_index >= 0 ? idx0.normal_index : static_cast<int32_t>(fIdx),
-                                            idx0.texcoord_index);
-                auto key1 = std::make_tuple(smoothGroupIdx,
-                                            idx1.vertex_index,
-                                            idx1.normal_index >= 0 ? idx1.normal_index : static_cast<int32_t>(fIdx),
-                                            idx1.texcoord_index);
-                auto key2 = std::make_tuple(smoothGroupIdx,
-                                            idx2.vertex_index,
-                                            idx2.normal_index >= 0 ? idx2.normal_index : static_cast<int32_t>(fIdx),
-                                            idx2.texcoord_index);
+                auto key0 = std::make_tuple(
+                    smoothGroupIdx,
+                    idx0.vertex_index,
+                    idx0.normal_index >= 0 ? idx0.normal_index : static_cast<int32_t>(fIdx),
+                    idx0.texcoord_index);
+                auto key1 = std::make_tuple(
+                    smoothGroupIdx,
+                    idx1.vertex_index,
+                    idx1.normal_index >= 0 ? idx1.normal_index : static_cast<int32_t>(fIdx),
+                    idx1.texcoord_index);
+                auto key2 = std::make_tuple(
+                    smoothGroupIdx,
+                    idx2.vertex_index,
+                    idx2.normal_index >= 0 ? idx2.normal_index : static_cast<int32_t>(fIdx),
+                    idx2.texcoord_index);
 
                 Triangle triangle;
                 triangle.v[0] = vertexIndices.at(key0);
@@ -188,8 +199,10 @@ namespace obj {
         }
     }
 
-    void load(const std::filesystem::path &filepath,
-              std::vector<Vertex>* vertices, std::vector<Triangle>* triangles) {
+    void load(
+        const std::filesystem::path &filepath,
+        std::vector<Vertex>* vertices, std::vector<Triangle>* triangles)
+    {
         std::vector<obj::MaterialGroup> objMatGroups;
         load(filepath, vertices, &objMatGroups, nullptr);
 
@@ -198,9 +211,10 @@ namespace obj {
             const obj::MaterialGroup &matGroup = objMatGroups[mIdx];
             uint32_t baseIndex = static_cast<uint32_t>(triangles->size());
             triangles->resize(triangles->size() + matGroup.triangles.size());
-            std::copy_n(matGroup.triangles.data(),
-                        matGroup.triangles.size(),
-                        triangles->data() + baseIndex);
+            std::copy_n(
+                matGroup.triangles.data(),
+                matGroup.triangles.size(),
+                triangles->data() + baseIndex);
         }
     }
 }

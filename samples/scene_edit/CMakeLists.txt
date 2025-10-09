@@ -1,4 +1,4 @@
-set(TARGET_NAME "scene_edit")
+﻿set(TARGET_NAME "scene_edit")
 
 file(
     GLOB_RECURSE SOURCES

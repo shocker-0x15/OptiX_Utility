@@ -1,4 +1,4 @@
-set(TARGET_NAME "material_sets")
+﻿set(TARGET_NAME "material_sets")
 
 file(
     GLOB_RECURSE SOURCES

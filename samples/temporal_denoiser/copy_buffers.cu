@@ -9,9 +9,11 @@ CUDA_DEVICE_KERNEL void copyToLinearBuffers(
     float4* linearColorBuffer,
     float4* linearAlbedoBuffer,
     float4* linearNormalBuffer,
-    uint2 imageSize) {
-    uint2 launchIndex = make_uint2(blockDim.x * blockIdx.x + threadIdx.x,
-                                   blockDim.y * blockIdx.y + threadIdx.y);
+    uint2 imageSize)
+{
+    uint2 launchIndex = make_uint2(
+        blockDim.x * blockIdx.x + threadIdx.x,
+        blockDim.y * blockIdx.y + threadIdx.y);
     if (launchIndex.x >= imageSize.x ||
         launchIndex.y >= imageSize.y)
         return;
@@ -30,9 +32,11 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     BufferToDisplay bufferTypeToDisplay,
     float motionVectorOffset, float motionVectorScale,
     optixu::NativeBlockBuffer2D<float4> outputBuffer,
-    int2 outputBufferSize, int2 srcImageSize, bool performUpscale, bool useLowResRendering) {
-    int2 launchIndex = make_int2(blockDim.x * blockIdx.x + threadIdx.x,
-                                 blockDim.y * blockIdx.y + threadIdx.y);
+    int2 outputBufferSize, int2 srcImageSize, bool performUpscale, bool useLowResRendering)
+{
+    int2 launchIndex = make_int2(
+        blockDim.x * blockIdx.x + threadIdx.x,
+        blockDim.y * blockIdx.y + threadIdx.y);
     if (launchIndex.x >= outputBufferSize.x ||
         launchIndex.y >= outputBufferSize.y)
         return;
@@ -87,9 +91,10 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     case BufferToDisplay::Flow: {
         auto typedLinearBuffer = reinterpret_cast<float2*>(linearBuffer);
         float2 f2Value = typedLinearBuffer[linearIndex];
-        value = make_float4(fminf(fmaxf(motionVectorScale * f2Value.x + motionVectorOffset, 0.0f), 1.0f),
-                            fminf(fmaxf(motionVectorScale * f2Value.y + motionVectorOffset, 0.0f), 1.0f),
-                            motionVectorOffset, 1.0f);
+        value = make_float4(
+            fminf(fmaxf(motionVectorScale * f2Value.x + motionVectorOffset, 0.0f), 1.0f),
+            fminf(fmaxf(motionVectorScale * f2Value.y + motionVectorOffset, 0.0f), 1.0f),
+            motionVectorOffset, 1.0f);
         break;
     }
     default:

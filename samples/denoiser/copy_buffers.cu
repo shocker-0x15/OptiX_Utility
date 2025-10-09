@@ -1,4 +1,4 @@
-#include "denoiser_shared.h"
+﻿#include "denoiser_shared.h"
 
 CUDA_DEVICE_KERNEL void copyBuffers(
     optixu::NativeBlockBuffer2D<float4> colorAccumBuffer,
@@ -7,9 +7,11 @@ CUDA_DEVICE_KERNEL void copyBuffers(
     float4* linearColorBuffer,
     float4* linearAlbedoBuffer,
     float4* linearNormalBuffer,
-    uint2 imageSize) {
-    uint2 launchIndex = make_uint2(blockDim.x * blockIdx.x + threadIdx.x,
-                                   blockDim.y * blockIdx.y + threadIdx.y);
+    uint2 imageSize)
+{
+    uint2 launchIndex = make_uint2(
+        blockDim.x * blockIdx.x + threadIdx.x,
+        blockDim.y * blockIdx.y + threadIdx.y);
     if (launchIndex.x >= imageSize.x ||
         launchIndex.y >= imageSize.y)
         return;
