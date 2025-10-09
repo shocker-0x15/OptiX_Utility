@@ -32,6 +32,7 @@ endif()
 
 file(
     GLOB UTIL_SOURCES
+    "${CMAKE_SOURCE_DIR}/.editorconfig"
     "${CMAKE_SOURCE_DIR}/cuda_util.h"
     "${CMAKE_SOURCE_DIR}/cuda_util.cpp"
     "${CMAKE_SOURCE_DIR}/optix_util.h"
