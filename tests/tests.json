@@ -14,6 +14,14 @@
         "reference": "reference.png"
     },
     {
+        "name": "single_level_instancing instance pointers",
+        "sample": "single_level_instancing",
+        "options": "--use-instance-pointers",
+        "image": "output.png",
+        "outputs": ["output.png"],
+        "reference": "reference.png"
+    },
+    {
         "name": "texture",
         "sample": "texture",
         "image": "output.png",
