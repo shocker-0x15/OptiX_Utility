@@ -167,9 +167,6 @@
       <PerformDeviceLink>false</PerformDeviceLink>
     </CudaLink>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <None Include="..\...editorconfig" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.0.targets" />
