@@ -96,8 +96,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(closesthit)() {
     */
     sn = normalize(optixTransformNormalFromObjectToWorldSpace(sn));
 
+    // JP: 典型的にはインスタンスIDを使ってインスタンスに紐づいたユーザーデータを参照する。
+    // EN: Typically, instance ID is used to refer to user data associated with the instance.
+    const InstanceData &instData = plp.instDataBuffer[optixGetInstanceId()];
+
     // JP: 法線の可視化。
     // EN: Display normal visualization.
     float3 color = 0.5f * sn + make_float3(0.5f);
+    color = 0.5f * instData.color + 0.5f * color;
     MyPayloadSignature::set(&color);
 }

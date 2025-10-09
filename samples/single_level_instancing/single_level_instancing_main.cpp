@@ -318,7 +318,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     std::vector<uint32_t> instanceIds(2 + NumBunnies);
     std::vector<std::array<float, 12>> transforms(2 + NumBunnies);
-    if (useInstancePointers) {
+    {
         instanceIds[0] = 0;
         instanceIds[1] = 1;
         for (int i = 0; i < NumBunnies; ++i)
@@ -344,6 +344,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         roomInst.setChild(roomGas);
         roomInst.setTransform(roomXfm.data());
     }
+    roomInst.setID(instanceIds[0]);
 
     const std::array<float, 12> areaLightInstXfm = {
         1, 0, 0, 0,
@@ -359,6 +360,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         areaLightInst.setChild(areaLightGas);
         areaLightInst.setTransform(areaLightInstXfm.data());
     }
+    areaLightInst.setID(instanceIds[1]);
 
     std::vector<optixu::Instance> bunnyInsts(NumBunnies);
     const float GoldenRatio = (1 + std::sqrt(5.0f)) / 2;
@@ -385,7 +387,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
             bunnyInst.setChild(bunnyGas);
             bunnyInst.setTransform(bunnyInstXfm.data());
         }
+        bunnyInst.setID(instanceIds[2 + i]);
         bunnyInsts[i] = bunnyInst;
+    }
+
+    cudau::TypedBuffer<Shared::InstanceData> instDataBuffer(
+        cuContext, cudau::BufferType::Device, instanceBuffer.numElements());
+    {
+        std::mt19937 rng(6234131);
+        std::uniform_real_distribution u01;
+        Shared::InstanceData* instDataArray = instDataBuffer.map();
+        for (int i = 0; i < instanceBuffer.numElements(); ++i) {
+            Shared::InstanceData &instData = instDataArray[i];
+            instData.color = HSVtoRGB(u01(rng), 0.5f + 0.5f * u01(rng), 1.0f);
+        }
+        instDataBuffer.unmap();
     }
 
 
@@ -543,6 +559,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     Shared::PipelineLaunchParameters plp;
     plp.travHandle = travHandle;
+    plp.instDataBuffer = instDataBuffer.getROBuffer<enableBufferOobCheck>();
     plp.imageSize.x = renderTargetSizeX;
     plp.imageSize.y = renderTargetSizeY;
     plp.resultBuffer = accumBuffer.getBlockBuffer2D();
@@ -586,6 +603,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     iasMem.finalize();
     ias.destroy();
+
+    instDataBuffer.finalize();
 
     for (int i = bunnyInsts.size() - 1; i >= 0; --i)
         bunnyInsts[i].destroy();

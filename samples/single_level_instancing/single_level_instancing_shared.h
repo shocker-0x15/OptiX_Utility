@@ -38,8 +38,15 @@ namespace Shared {
 
 
 
+    struct InstanceData {
+        float3 color;
+    };
+
+
+
     struct PipelineLaunchParameters {
         OptixTraversableHandle travHandle;
+        ROBuffer<InstanceData> instDataBuffer;
         int2 imageSize; // Note that CUDA/OptiX built-in vector types with width 2 require 8-byte alignment.
         optixu::BlockBuffer2D<float4, 1> resultBuffer;
         PerspectiveCamera camera;
