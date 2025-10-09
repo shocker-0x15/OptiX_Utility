@@ -73,6 +73,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <Natvis Include="..\..\cuda_util.natvis" />
+    <Natvis Include="..\..\optix_util.natvis" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\.editorconfig" />
