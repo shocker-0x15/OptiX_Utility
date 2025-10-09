@@ -97,7 +97,7 @@ def run():
 
     refImgDir = script_dir / R'ref_images'
 
-    with open(script_dir / R'tests.json') as f:
+    with open(script_dir / R'tests.json', encoding='utf_8_sig') as f:
         tests = json.load(f)
 
     # Run tests

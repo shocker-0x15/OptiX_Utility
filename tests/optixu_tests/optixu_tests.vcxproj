@@ -71,7 +71,7 @@
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <NvccCompilation>optix-ir</NvccCompilation>
       <AdditionalOptions>-std=c++20 -Xcompiler "/wd 4819 /Zc:__cplusplus" -D_DEBUG %(AdditionalOptions)</AdditionalOptions>
-      <CudaRuntime>Shared</CudaRuntime>
+      <CudaRuntime>Static</CudaRuntime>
       <FastMath>true</FastMath>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <CodeGeneration>compute_75,sm_75</CodeGeneration>
@@ -103,7 +103,7 @@
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <NvccCompilation>optix-ir</NvccCompilation>
       <AdditionalOptions>-std=c++20 -Xcompiler "/wd 4819 /Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
-      <CudaRuntime>Shared</CudaRuntime>
+      <CudaRuntime>Static</CudaRuntime>
       <FastMath>true</FastMath>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <CodeGeneration>compute_75,sm_75</CodeGeneration>
