@@ -1,4 +1,4 @@
-set(TARGET_NAME "optixu_tests")
+﻿set(TARGET_NAME "optixu_tests")
 
 set(TEST_UTIL_SOURCES ${UTIL_SOURCES})
 list(
