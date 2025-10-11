@@ -40,6 +40,7 @@ Currently based on OptiX 9.0.0
     - Each curve type (except linear and ribbon) has a Rocaps (Roving Capsules) variant
   - Spheres [[&raquo;]](samples/sphere_primitive/)
   - User-defined custom primitives [[&raquo;]](samples/custom_primitive/)
+- Instance pointers [[&raquo;]](samples/single_level_instancing/)
 - Opacity micro-map (OMM) [[&raquo;]](samples/opacity_micro_map/)
 - Clusters [[&raquo;]](samples/clusters/)
 - Motion blur types

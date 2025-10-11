@@ -312,13 +312,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-    // JP: GASを元にインスタンスを作成する。
-    // EN: Create instances based on GASs.
     constexpr uint32_t NumBunnies = 100;
 
     std::vector<uint32_t> instanceIds(2 + NumBunnies);
     std::vector<std::array<float, 12>> transforms(2 + NumBunnies);
     {
+        // JP: インスタンスごとに任意に設定できるIDをランダムに生成する。
+        // EN: Randomly generate IDs that can be set arbitrarily for each instance.
         instanceIds[0] = 0;
         instanceIds[1] = 1;
         for (int i = 0; i < NumBunnies; ++i)
@@ -337,10 +337,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
     };
     optixu::Instance roomInst = scene.createInstance();
     if (useInstancePointers) {
+        // JP: IASでインスタンスポインター配列を使う場合は、
+        //     GASの代わりにOptiXInstance構造体のポインターをセットする。
+        // EN: When using an array of instance pointers in an IAS,
+        //     set a pointer to an OptixInstance structure instead of a GAS.
         roomInst.setAddress(instanceBuffer.getCUdeviceptrAt(instanceIds[0]));
         transforms[0] = roomXfm;
     }
     else {
+        // JP: GASを元にインスタンスを作成する。
+        // EN: Create instances based on GASs.
         roomInst.setChild(roomGas);
         roomInst.setTransform(roomXfm.data());
     }
@@ -491,6 +497,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     hitGroupSBT.setMappedMemoryPersistent(true);
 
     cudau::TypedBuffer<CUdeviceptr> instancePointerBuffer;
+    // JP: OptiX Utilityでは、インスタンスポインター配列を使用する場合は、IASビルドが
+    //     自動的に各OptiXInstanceの内容を設定しないようになっている。
+    //     IASビルドの前にユーザー側で内容を設定しておく必要がある。
+    // EN: In OptiX Utility, when using an array of instance pointers,
+    //     the IAS build doesn't automatically set up the contents of each OptixInstance.
+    //     The user needs to set up the contents before the IAS build.
     if (useInstancePointers) {
         instancePointerBuffer.initialize(cuContext, cudau::BufferType::Device, instanceBuffer.numElements());
 

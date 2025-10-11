@@ -222,7 +222,6 @@ TODO:
 - OMMのRelocationサポート。
 - Multi GPUs?
 - ユニットテスト。
-- Instance Pointersサポート。
 - removeUncompacted再考。(compaction終了待ちとしてとらえる？)
 - 途中で各オブジェクトのパラメターを変更した際の処理。
   パイプラインのセットアップ順などが現状は暗黙的に固定されている。これを自由な順番で変えられるようにする。
@@ -2118,9 +2117,11 @@ namespace optixu {
         void setAddress(CUdeviceptr addr) const;
 
         // JP: 所属するIASをリビルドもしくはアップデートする必要がある。
-        //     setAddress()でアドレスを設定している場合は、これらの設定はユーザー側で手動で行う必要がある。
+        //     setAddress()でアドレスを設定している場合は、これらの設定は無視される。
+        //     (ユーザー側でOptiXInstance構造体の内容を直接設定する。)
         // EN: Rebulding or Updating of a IAS to which the instance belongs is required.
-        //     If the address is set by setAddress(), these settings need to be done manually by the user.
+        //     These settings are ignored when the address is set by setAddress().
+        //     (The user directly sets the contents of the OptixInstance structure.)
         void setID(uint32_t value) const;
         void setVisibilityMask(uint32_t mask) const;
         void setFlags(OptixInstanceFlags flags) const;
