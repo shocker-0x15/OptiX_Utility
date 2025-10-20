@@ -754,17 +754,20 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     struct GPUTimer {
         cudau::Timer frame;
-        cudau::Timer update;
+        cudau::Timer clasBuilds;
+        cudau::Timer iasBuild;
         cudau::Timer render;
 
         void initialize(CUcontext context) {
             frame.initialize(context);
-            update.initialize(context);
+            clasBuilds.initialize(context);
+            iasBuild.initialize(context);
             render.initialize(context);
         }
         void finalize() {
             render.finalize();
-            update.finalize();
+            iasBuild.finalize();
+            clasBuilds.finalize();
             frame.finalize();
         }
     };
@@ -917,11 +920,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
             float cudaFrameTime = curGPUTimer.frame.report();
-            float updateTime = curGPUTimer.update.report();
+            float clasBuildsTime = curGPUTimer.clasBuilds.report();
+            float iasBuildTime = curGPUTimer.iasBuild.report();
             float renderTime = curGPUTimer.render.report();
             //ImGui::SetNextItemWidth(100.0f);
             ImGui::Text("CUDA/OptiX GPU %.3f [ms]:", cudaFrameTime);
-            ImGui::Text("  Update: %.3f [ms]", updateTime);
+            ImGui::Text("  CLAS Builds: %.3f [ms]", clasBuildsTime);
+            ImGui::Text("  IAS Build: %.3f [ms]", iasBuildTime);
             ImGui::Text("  Render: %.3f [ms]", renderTime);
 
             if (ImGui::CollapsingHeader("CLAS Stats", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -980,6 +985,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             cMeshInstSet.setInstanceInfos(instDynInfos);
         });
         curInstDynamicInfoBuffer.unmap(curStream);
+
+        curGPUTimer.clasBuilds.start(curStream);
 
         if ((lodMode == Shared::LoDMode_ViewAdaptive ||
              lodModeChanged || lodLevelChanged || posTruncBitWidthChanged) && !lockLod ||
@@ -1122,12 +1129,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             });
         }
 
+        curGPUTimer.clasBuilds.stop(curStream);
+
         // JP: IASのリビルドを行う。
         // EN: Rebuild the IAS.
-        curGPUTimer.update.start(curStream);
+        curGPUTimer.iasBuild.start(curStream);
         //if (animate)
         plp.travHandle = ias.rebuild(curStream, instanceBuffer, iasMem, asBuildScratchMem);
-        curGPUTimer.update.stop(curStream);
+        curGPUTimer.iasBuild.stop(curStream);
 
         bool firstAccumFrame =
             //animate ||
