@@ -355,6 +355,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     bool takeScreenShot = false;
     auto visualizationMode = Shared::VisualizationMode_Final;
+    auto lodMode = Shared::LoDMode_ViewAdaptive;
+    int32_t lodLevel = 0;
 
     uint32_t argIdx = 1;
     while (argIdx < argc) {
@@ -381,6 +383,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
             else
                 throw std::runtime_error("Argument for --visualize is invalid.");
             argIdx += 1;
+        }
+        else if (arg == "--lod-mode") {
+            if (argIdx + 1 >= argc)
+                throw std::runtime_error("Argument for --lod-mode is not complete.");
+            std::string_view lodModeStr = argv[argIdx + 1];
+            if (lodModeStr == "view-adaptive") {
+                lodMode = Shared::LoDMode_ViewAdaptive;
+                argIdx += 1;
+            }
+            else if (lodModeStr == "manual-uniform") {
+                if (argIdx + 2 >= argc)
+                    throw std::runtime_error("Argument for --lod-mode manual-uniform is not complete.");
+                lodMode = Shared::LoDMode_ManualUniform;
+                lodLevel = std::stoi(argv[argIdx + 2]);
+                argIdx += 2;
+            }
+            else
+                throw std::runtime_error("Argument for --lod-mode is invalid.");
         }
         else
             throw std::runtime_error("Unknown command line argument.");
@@ -804,8 +824,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Debug Window
         static bool enableJittering = false;
-        static Shared::LoDMode lodMode = Shared::LoDMode_ViewAdaptive;
-        static int32_t lodLevel = 0;
         static bool lockLod = false;
         static int32_t posTruncBitWidth = 0;
         bool enableJitteringChanged = false;
