@@ -19,3 +19,6 @@
 [submodule "ext/tinygltf"]
 	path = ext/tinygltf
 	url = https://github.com/syoyo/tinygltf.git
+[submodule "ext/implot"]
+	path = ext/implot
+	url = https://github.com/epezent/implot.git
