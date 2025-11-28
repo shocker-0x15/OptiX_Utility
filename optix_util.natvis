@@ -1,5 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <!-- template <typename BaseType> -->
+  <!-- optixu::TypedBool -->
+  <Type Name="optixu::TypedBool&lt;*&gt;">
+    <DisplayString Condition="m_value">Yes</DisplayString>
+    <DisplayString>No</DisplayString>
+  </Type>
+
   <!-- optixu::Material -->
   <Type Name="optixu::Material">
     <DisplayString Condition="m != nullptr">{(void*)m}</DisplayString>

@@ -1525,6 +1525,7 @@ namespace optixu {
             bool b;
         };
 
+        constexpr TypedBool() : m_value(false) {}
         constexpr TypedBool(const TypedBool &b) : m_value(b.m_value) {}
         constexpr TypedBool(Bool b) : m_value(b.b) {}
         constexpr explicit TypedBool(bool b) : m_value(b) {}
@@ -1857,6 +1858,7 @@ namespace optixu {
         }
         void removeChildAt(uint32_t index) const;
         void clearChildren() const;
+        void setChildPreTransformAt(uint32_t index, CUdeviceptr preTransform) const;
 
         // JP: GASをdirty状態にする。
         //     ヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。

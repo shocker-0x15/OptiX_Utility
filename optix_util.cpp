@@ -1741,6 +1741,20 @@ namespace optixu {
         m->scene->markSBTLayoutDirty();
     }
 
+    void GeometryAccelerationStructure::setChildPreTransformAt(
+        uint32_t index, CUdeviceptr preTransform) const
+    {
+      const uint32_t numChildren = static_cast<uint32_t>(m->children.size());
+      m->throwRuntimeError(
+        index < numChildren,
+        "Index is out of bounds [0, %u).]",
+        numChildren);
+
+      m->children[index].preTransform = preTransform;
+
+      m->markDirty();
+    }
+
     void GeometryAccelerationStructure::markDirty() const {
         m->markDirty();
         m->scene->markSBTLayoutDirty();

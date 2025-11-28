@@ -147,6 +147,13 @@ namespace optixu {
 
 
 
+    // Explicit instantiation of public base classes.
+#define OPTIXU_PREPROCESS_OBJECT(Name) template class Object<Name>
+    OPTIXU_PREPROCESS_OBJECTS();
+#undef OPTIXU_PREPROCESS_OBJECT
+
+
+
 #define OPTIXU_OPAQUE_BRIDGE(BaseName) \
     friend class BaseName; \
 \
