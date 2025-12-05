@@ -1013,6 +1013,7 @@ namespace optixu {
             serialID(_serialID),
             userData(sizeof(uint32_t)),
             rayTypeCount(0),
+            child(nullptr),
             available(false)
         {
             scene->addCgasSet(this);
