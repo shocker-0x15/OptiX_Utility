@@ -542,7 +542,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     */
 
     ClusteredMesh bunnyCMesh;
-    bunnyCMesh.read(cuContext, scene, mat, dataDir / "bunny_big.cmesh", 1.0f);
+    bunnyCMesh.read(cuContext, scene, mat, dataDir / "bunny.cmesh", 1.0f);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyCMesh.asMemReqs.tempSizeInBytes);
     printf(
         "Bunny: %u clusters, %u levels\n",
@@ -564,7 +564,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     ClusteredMesh dragonCMesh;
-    dragonCMesh.read(cuContext, scene, mat, dataDir / "dragon_big.cmesh", 0.2f);
+    dragonCMesh.read(cuContext, scene, mat, dataDir / "dragon.cmesh", 0.2f);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonCMesh.asMemReqs.tempSizeInBytes);
     printf(
         "Dragon: %u clusters, %u levels\n",
