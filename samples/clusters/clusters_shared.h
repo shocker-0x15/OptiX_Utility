@@ -56,6 +56,7 @@ namespace Shared {
         uint32_t* usedFlags; // Each bit indicates whether the corresponding cluster is used in the frame.
         uint32_t* indexMapClusterToClasBuild; // cluster index => CLAS build index
         uint32_t argsCountToBuild;
+        float meshErrorScale;
     };
 
     struct InstanceTransform {

@@ -47,25 +47,26 @@ CUDA_DEVICE_KERNEL void emitClasArgsArray(
         const Cluster &cluster = clusters[clusterIdx];
         if (geomConfig.lodMode == LoDMode_ViewAdaptive) {
             const float onePixelInNS = 1.0f / imageHeight;
-            const float threshold = 1.0f * onePixelInNS;
+            const float threshold = 2.0f * onePixelInNS;
 
             const InstanceTransform &xfm = instDynamicInfo.transform;
-            const Matrix3x3 matRot = xfm.orientation.toMatrix3x3();
+            const Matrix3x3 matSR = xfm.scale * xfm.orientation.toMatrix3x3();
             Sphere selfBounds = cluster.bounds;
-            selfBounds.center = matRot * selfBounds.center + xfm.position;
+            selfBounds.center = matSR * selfBounds.center + xfm.position;
             selfBounds.radius *= xfm.scale;
             Sphere parentBounds = cluster.parentBounds;
-            parentBounds.center = matRot * parentBounds.center + xfm.position;
+            parentBounds.center = matSR * parentBounds.center + xfm.position;
             parentBounds.radius *= xfm.scale;
 
             // Reference:
             // - Nanite: A Deep Dive
             // - meshoptimizer
+            const float errorScale = xfm.scale * clusterSetInfo->meshErrorScale;
             const float selfErrorInNS = estimateClusterErrorInNormalizedScreen(
-                selfBounds, xfm.scale * cluster.error,
+                selfBounds, errorScale * cluster.error,
                 cameraPosition, cameraOrientation, cameraFovY);
             const float parentErrorInNS = estimateClusterErrorInNormalizedScreen(
-                parentBounds, xfm.scale * cluster.parentError,
+                parentBounds, errorScale * cluster.parentError,
                 cameraPosition, cameraOrientation, cameraFovY);
             emit = selfErrorInNS <= threshold && parentErrorInNS > threshold;
         }

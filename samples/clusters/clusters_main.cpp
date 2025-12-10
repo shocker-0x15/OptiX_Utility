@@ -82,7 +82,7 @@ struct ClusteredMesh {
 
     bool read(
         const CUcontext cuContext, const optixu::Scene scene, const optixu::Material mat,
-        const std::filesystem::path &filePath)
+        const std::filesystem::path &filePath, const float errorScaleCoeff)
     {
         ExIfStream ifs(filePath, std::ios::binary);
         if (!ifs)
@@ -185,6 +185,7 @@ struct ClusteredMesh {
         clusterSetInfoOnHost.usedFlags = usedFlags.getDevicePointer();
         clusterSetInfoOnHost.indexMapClusterToClasBuild = indexMapClusterToClasBuild.getDevicePointer();
         clusterSetInfoOnHost.argsCountToBuild = 0;
+        clusterSetInfoOnHost.meshErrorScale = errorScaleCoeff * clustersOnHost.back().bounds.radius;
         clusterSetInfo.initialize(cuContext, cudau::BufferType::Device, 1, clusterSetInfoOnHost);
 
         clasSet = scene.createClusterAccelerationStructureSet();
@@ -541,8 +542,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     */
 
     ClusteredMesh bunnyCMesh;
-    bunnyCMesh.read(cuContext, scene, mat, dataDir / "bunny.cmesh");
+    bunnyCMesh.read(cuContext, scene, mat, dataDir / "bunny_big.cmesh", 1.0f);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyCMesh.asMemReqs.tempSizeInBytes);
+    printf(
+        "Bunny: %u clusters, %u levels\n",
+        bunnyCMesh.clusters.sizeInBytes(), bunnyCMesh.levelInfos.size());
 
     const Shared::InstanceTransform bunnyInstXfms[] = {
         { 1.0f, Quaternion(), float3(0.0f, 0.0f, 0.0f) },
@@ -560,8 +564,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
     ClusteredMesh dragonCMesh;
-    dragonCMesh.read(cuContext, scene, mat, dataDir / "dragon.cmesh");
+    dragonCMesh.read(cuContext, scene, mat, dataDir / "dragon_big.cmesh", 0.2f);
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonCMesh.asMemReqs.tempSizeInBytes);
+    printf(
+        "Dragon: %u clusters, %u levels\n",
+        dragonCMesh.clusters.sizeInBytes(), dragonCMesh.levelInfos.size());
 
     const Shared::InstanceTransform dragonInstXfms[] = {
         { 2.5f, qRotateY(0.5f * pi_v<float>), float3(1.0f, 0.7f, -3.0f) },
