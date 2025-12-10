@@ -286,7 +286,7 @@ I've confirmed that the programs run correctly in the following environment.
 
 * Windows 11 (25H2) & Visual Studio Community 2022 (17.14.22)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 580.88\
+* NVIDIA Driver 591.44\
   590 driver looks bugs regarding debuggable PTX/OptiX-IR for now.
 
 動作させるにあたっては以下のライブラリが必要です。\
