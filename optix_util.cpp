@@ -3733,14 +3733,13 @@ namespace optixu {
         m->pipelineCompileOptions.numPayloadValues = options.payloadCountInDwords;
         m->pipelineCompileOptions.numAttributeValues = options.attributeCountInDwords;
         m->pipelineCompileOptions.pipelineLaunchParamsVariableName = options.launchParamsVariableName;
+        m->pipelineCompileOptions.pipelineLaunchParamsSizeInBytes = options.sizeOfLaunchParams;
         m->pipelineCompileOptions.usesMotionBlur = options.useMotionBlur;
         m->pipelineCompileOptions.allowOpacityMicromaps = options.useOpacityMicroMaps;
         m->pipelineCompileOptions.traversableGraphFlags = options.traversableGraphFlags;
         m->pipelineCompileOptions.exceptionFlags = options.exceptionFlags;
         m->pipelineCompileOptions.usesPrimitiveTypeFlags = options.supportedPrimitiveTypeFlags;
         m->pipelineCompileOptions.allowClusteredGeometry = options.allowClusteredGeometry;
-
-        m->sizeOfPipelineLaunchParams = options.sizeOfLaunchParams;
     }
 
     Module Pipeline::createModuleFromPTXString(
@@ -4213,6 +4212,42 @@ namespace optixu {
         m->pipelineIsLinked = true;
     }
 
+    void Pipeline::writeSymbolFromHostAsync(
+        CUstream stream, const char* name,
+        const void* mem, size_t sizeInBytes, size_t offsetInBytes) const
+    {
+        m->symbolMemcpyAsync(
+            stream, name, OPTIX_PIPELINE_SYMBOL_MEMCPY_KIND_FROM_HOST,
+            const_cast<void*>(mem), sizeInBytes, offsetInBytes);
+    }
+
+    void Pipeline::writeSymbolFromDeviceAsync(
+        CUstream stream, const char* name,
+        CUdeviceptr mem, size_t sizeInBytes, size_t offsetInBytes) const
+    {
+        m->symbolMemcpyAsync(
+            stream, name, OPTIX_PIPELINE_SYMBOL_MEMCPY_KIND_FROM_DEVICE,
+            reinterpret_cast<void*>(mem), sizeInBytes, offsetInBytes);
+    }
+
+    void Pipeline::readSymbolToHostAsync(
+        CUstream stream, const char* name,
+        void* mem, size_t sizeInBytes, size_t offsetInBytes) const
+    {
+        m->symbolMemcpyAsync(
+            stream, name, OPTIX_PIPELINE_SYMBOL_MEMCPY_KIND_TO_HOST,
+            mem, sizeInBytes, offsetInBytes);
+    }
+
+    void Pipeline::readSymbolToDeviceAsync(
+        CUstream stream, const char* name,
+        CUdeviceptr mem, size_t sizeInBytes, size_t offsetInBytes) const
+    {
+        m->symbolMemcpyAsync(
+            stream, name, OPTIX_PIPELINE_SYMBOL_MEMCPY_KIND_TO_DEVICE,
+            reinterpret_cast<void*>(mem), sizeInBytes, offsetInBytes);
+    }
+
     void Pipeline::setMissRayTypeCount(uint32_t missRayTypeCount) const {
         m->missRayTypeCount = missRayTypeCount;
         m->currentMissPrograms.resize(m->missRayTypeCount);
@@ -4399,7 +4434,7 @@ namespace optixu {
         }
 
         OPTIX_CHECK(optixLaunch(
-            m->rawPipeline, stream, plpOnDevice, m->sizeOfPipelineLaunchParams,
+            m->rawPipeline, stream, plpOnDevice, m->pipelineCompileOptions.pipelineLaunchParamsSizeInBytes,
             &m->sbtParams, dimX, dimY, dimZ));
     }
 

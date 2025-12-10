@@ -29,6 +29,13 @@ EN:
 - Setting "-std=c++17" is required for ptx compilation (at least for the case the host compiler is MSVC 16.8.2).
 
 変更履歴 / Update History:
+- JP: - OptiX 9.1.0をサポート。
+      - Pipeline::writeSymbolFromHostAsync(), Pipeline::writeSymbolFromDeviceAsync(),
+        Pipeline::readSymbolToHostAsync(), Pipeline::readSymbolToDeviceAsync()を追加。
+  EN: - Supported OptiX 9.1.0.
+      - Added Pipeline::writeSymbolFromHostAsync(), Pipeline::writeSymbolFromDeviceAsync(),
+        Pipeline::readSymbolToHostAsync(), Pipeline::readSymbolToDeviceAsync().
+
 - JP: - インスタンスポインターのサポート。
   EN: - Supported instance pointers.
 
@@ -2293,6 +2300,55 @@ namespace optixu {
             const PayloadType &payloadType = PayloadType()) const;
 
         void link(uint32_t maxTraceDepth) const;
+
+        void writeSymbolFromHostAsync(
+            CUstream stream, const char* name,
+            const void* mem, size_t sizeInBytes, size_t offsetInBytes = 0) const;
+        template <typename T>
+        void writeSymbolFromHostAsync(
+            CUstream stream, const char* name,
+            const T* mem, size_t offsetInBytes = 0) const
+        {
+            writeSymbolFromHostAsync(
+                stream, name,
+                mem, sizeof(T), offsetInBytes);
+        }
+        void writeSymbolFromDeviceAsync(
+            CUstream stream, const char* name,
+            CUdeviceptr mem, size_t sizeInBytes, size_t offsetInBytes = 0) const;
+        template <typename T>
+        void writeSymbolFromDeviceAsync(
+            CUstream stream, const char* name,
+            const T* mem, size_t offsetInBytes = 0) const
+        {
+            writeSymbolFromDeviceAsync(
+                stream, name,
+                reinterpret_cast<CUdeviceptr>(mem), sizeof(T), offsetInBytes);
+        }
+        void readSymbolToHostAsync(
+            CUstream stream, const char* name,
+            void* mem, size_t sizeInBytes, size_t offsetInBytes = 0) const;
+        template <typename T>
+        void readSymbolToHostAsync(
+            CUstream stream, const char* name,
+            T* mem, size_t offsetInBytes = 0) const
+        {
+            readSymbolToHostAsync(
+                stream, name,
+                mem, sizeof(T), offsetInBytes);
+        }
+        void readSymbolToDeviceAsync(
+            CUstream stream, const char* name,
+            CUdeviceptr mem, size_t sizeInBytes, size_t offsetInBytes = 0) const;
+        template <typename T>
+        void readSymbolToDeviceAsync(
+            CUstream stream, const char* name,
+            T* mem, size_t offsetInBytes = 0) const
+        {
+            readSymbolToDeviceAsync(
+                stream, name,
+                reinterpret_cast<CUdeviceptr>(mem), sizeof(T), offsetInBytes);
+        }
 
         // JP: 以下のAPIを呼んだ場合は(非ヒットグループの)シェーダーバインディングテーブルレイアウトが
         //     自動で無効化される。

@@ -1347,7 +1347,6 @@ namespace optixu {
         OptixPipeline rawPipeline;
 
         OptixPipelineCompileOptions pipelineCompileOptions;
-        size_t sizeOfPipelineLaunchParams;
         std::unordered_set<_Program*> programs;
         std::unordered_set<_HitProgramGroup*> hitProgramGroups;
         std::unordered_set<_CallableProgramGroup*> callableProgramGroups;
@@ -1397,7 +1396,6 @@ namespace optixu {
 
         Priv(_Context* ctxt) :
             context(ctxt), rawPipeline(nullptr),
-            sizeOfPipelineLaunchParams(0),
             scene(nullptr), missRayTypeCount(0), callableProgramCount(0),
             currentRayGenProgram(nullptr), currentExceptionProgram(nullptr),
             pipelineIsLinked(false), sbtLayoutIsUpToDate(false),
@@ -1426,6 +1424,20 @@ namespace optixu {
         void destroyProgram(_Program* program);
         void destroyHitProgramGroup(_HitProgramGroup* hitGroup);
         void destroyCallableProgramGroup(_CallableProgramGroup* callableGroup);
+
+        void symbolMemcpyAsync(
+            CUstream stream, const char* name, OptixPipelineSymbolMemcpyKind kind,
+            void* mem, size_t sizeInBytes, size_t offsetInBytes) const
+        {
+            throwRuntimeError(
+                pipelineIsLinked,
+                "Pipeline has not been linked yet.");
+
+            OPTIX_CHECK(optixPipelineSymbolMemcpyAsync(
+                rawPipeline,
+                name, mem, sizeInBytes, offsetInBytes,
+                kind, stream));
+        }
     };
 
 

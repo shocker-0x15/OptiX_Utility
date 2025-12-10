@@ -22,7 +22,7 @@ Add the followings to your program which uses OptiX Utility:
 Optionally add cuda_util.h, cuda_util.cpp and optixu_on_cudau.h as well if the program doesn't have functionalities like memory allocation for CUDA. Define `CUDA_UTIL_DONT_USE_GL_INTEROP` as a compile option when you don't need OpenGL interoperability in CUDA Utility.
 
 ## 機能 / Features
-Currently based on OptiX 9.0.0
+Currently based on OptiX 9.1.0
 
 [&raquo;] は対応する機能を使うサンプルコードへのリンク(抜粋)です。\
 [&raquo;] links to a sample code (excerpt) which uses a corresponding feature.
@@ -284,17 +284,18 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (24H2) & Visual Studio Community 2022 (17.14.13)
+* Windows 11 (25H2) & Visual Studio Community 2022 (17.14.22)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 580.88
+* NVIDIA Driver 580.88\
+  590 driver looks bugs regarding debuggable PTX/OptiX-IR for now.
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* [CUDA](https://developer.nvidia.com/cuda-downloads) 13.0 (probably works with lower CUDA versions)\
+* [CUDA](https://developer.nvidia.com/cuda-downloads) 13.1 (probably works with lower CUDA versions)\
   Note that CUDA (<= 12.5.0) has compilation issues for C++20 with Visual Studio 2022 17.10.\
   Use CUDA 12.5 Update 1 or newer for C++20.
-* [OptiX](https://developer.nvidia.com/designworks/optix/download) 9.0.0 (requires Turing or later generation NVIDIA GPU)
+* [OptiX](https://developer.nvidia.com/designworks/optix/download) 9.1.0 (requires Turing or later generation NVIDIA GPU)
 
 ## ライセンス / License
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))

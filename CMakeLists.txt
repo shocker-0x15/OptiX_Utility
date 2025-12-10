@@ -15,14 +15,14 @@ set(
     "${CMAKE_SOURCE_DIR}/cmake"
     ${CMAKE_MODULE_PATH})
 find_package(CUDAToolkit 12.0 REQUIRED)
-find_package(OptiX90)
+find_package(OptiX91)
 include("copy_files")
 include("nvcuda_compile_ptx")
 
-if (OptiX90_FOUND)
-    set(OPTIX_INCLUDE_DIR "${OPTIX90_INCLUDE_DIR}")
+if (OptiX91_FOUND)
+    set(OPTIX_INCLUDE_DIR "${OPTIX91_INCLUDE_DIR}")
 else()
-    message(FATAL_ERROR "OptiX SDK 9.0.0 not found.")
+    message(FATAL_ERROR "OptiX SDK 9.1.0 not found.")
 endif()
 
 
