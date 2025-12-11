@@ -27,7 +27,7 @@ nvcuda_compile_optix_ir(
     TARGET_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_CFG_INTDIR}/${TARGET_NAME}/ptxes"
     GENERATED_FILES OPTIX_PTXES
     NVCC_OPTIONS
-    "-Xcompiler" "\"/wd 4819 /Zc:__cplusplus\""
+    "-Xcompiler" "\"/wd 4819 /Zc:__cplusplus /Zc:preprocessor\""
     "$<$<CONFIG:Debug>:-D_DEBUG=1>"
     "$<$<CONFIG:Debug>:-G>"
     "$<$<CONFIG:Debug>:-O0>"

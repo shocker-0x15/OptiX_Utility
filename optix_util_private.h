@@ -179,7 +179,7 @@ namespace optixu {
                 return; \
 \
             std::stringstream ss; \
-            ss << TypeName ## " " << getName() << ": " << fmt; \
+            ss << TypeName " " << getName() << ": " << fmt; \
             optixu::_throwRuntimeError(ss.str().c_str(), args...); \
         }
 #else // if OPTIXU_ENABLE_RUNTIME_ERROR
