@@ -546,7 +546,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, bunnyCMesh.asMemReqs.tempSizeInBytes);
     printf(
         "Bunny: %u clusters, %u levels\n",
-        bunnyCMesh.clusters.sizeInBytes(), bunnyCMesh.levelInfos.size());
+        bunnyCMesh.clusters.numElements(), bunnyCMesh.levelInfos.size());
 
     const Shared::InstanceTransform bunnyInstXfms[] = {
         { 1.0f, Quaternion(), float3(0.0f, 0.0f, 0.0f) },
@@ -568,7 +568,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonCMesh.asMemReqs.tempSizeInBytes);
     printf(
         "Dragon: %u clusters, %u levels\n",
-        dragonCMesh.clusters.sizeInBytes(), dragonCMesh.levelInfos.size());
+        dragonCMesh.clusters.numElements(), dragonCMesh.levelInfos.size());
 
     const Shared::InstanceTransform dragonInstXfms[] = {
         { 2.5f, qRotateY(0.5f * pi_v<float>), float3(1.0f, 0.7f, -3.0f) },
