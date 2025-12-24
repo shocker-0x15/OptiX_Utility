@@ -334,7 +334,7 @@ namespace cudau {
 
     struct dim3 {
         uint32_t x, y, z;
-        dim3(uint32_t xx = 1, uint32_t yy = 1, uint32_t zz = 1) : x(xx), y(yy), z(zz) {}
+        constexpr dim3(uint32_t xx = 1, uint32_t yy = 1, uint32_t zz = 1) : x(xx), y(yy), z(zz) {}
     };
 
 
@@ -597,11 +597,17 @@ namespace cudau {
         CUdeviceptr getCUdeviceptrAt(uint32_t idx) const {
             return m_devicePointer + m_stride * idx;
         }
+        CUdeviceptr getCUdeviceptrAtBack() const {
+            return m_devicePointer + m_stride * (m_numElements - 1);
+        }
         void* getDevicePointer() const {
             return reinterpret_cast<void*>(getCUdeviceptr());
         }
         void* getDevicePointerAt(uint32_t idx) const {
             return reinterpret_cast<void*>(getCUdeviceptrAt(idx));
+        }
+        void* getDevicePointerAtBack() const {
+            return reinterpret_cast<void*>(getCUdeviceptrAtBack());
         }
         size_t sizeInBytes() const {
             return m_numElements * m_stride;
@@ -759,15 +765,22 @@ namespace cudau {
         T* getDevicePointerAt(uint32_t idx) const {
             return reinterpret_cast<T*>(getCUdeviceptrAt(idx));
         }
-        template <bool oobCheck>
-        ROBufferTemplate<T, oobCheck> getROBuffer() const {
-            CUDAUAssert(numElements() <= 0xFFFFFFFF, "Too many elements.");
-            return ROBufferTemplate<T, oobCheck>(getDevicePointer(), static_cast<uint32_t>(numElements()));
+        T* getDevicePointerAtBack() const {
+            return reinterpret_cast<T*>(getCUdeviceptrAtBack());
         }
         template <bool oobCheck>
-        RWBufferTemplate<T, oobCheck> getRWBuffer() const {
-            CUDAUAssert(numElements() <= 0xFFFFFFFF, "Too many elements.");
-            return RWBufferTemplate<T, oobCheck>(getDevicePointer(), static_cast<uint32_t>(numElements()));
+        ROBufferTemplate<T, oobCheck> getROBuffer(uint32_t offset = 0, uint32_t elemCount = UINT32_MAX) const {
+            CUDAUAssert(numElements() <= UINT32_MAX, "Too many elements.");
+            return ROBufferTemplate<T, oobCheck>(
+                getDevicePointerAt(offset),
+                std::min(elemCount, static_cast<uint32_t>(numElements())));
+        }
+        template <bool oobCheck>
+        RWBufferTemplate<T, oobCheck> getRWBuffer(uint32_t offset = 0, uint32_t elemCount = UINT32_MAX) const {
+            CUDAUAssert(numElements() <= UINT32_MAX, "Too many elements.");
+            return RWBufferTemplate<T, oobCheck>(
+                getDevicePointerAt(offset),
+                std::min(elemCount, static_cast<uint32_t>(numElements())));
         }
 
         T* map(CUstream stream = 0, BufferMapFlag flag = BufferMapFlag::ReadWrite) {
