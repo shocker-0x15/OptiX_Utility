@@ -3,6 +3,7 @@
 
 imgui.ini
 **/desktop.ini
+**/*.args.json
 samples/**/*.png
 data/
 
