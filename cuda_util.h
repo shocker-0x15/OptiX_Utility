@@ -181,7 +181,6 @@ while (0)
 
 
 
-
 namespace cudau {
 
 #if __cplusplus >= 202002L

@@ -1,7 +1,20 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="cudau::Kernel">
+    <DisplayString>{m_kernel, x}, Block Dim: {m_blockDim.x}x{m_blockDim.y}x{m_blockDim.z}, Shared Mem: {m_sharedMemSize} [B]</DisplayString>
+  </Type>
+
+  <Type Name="cudau::Buffer">
+    <DisplayString Condition="m_type == cudau::BufferType::Device">[Device] {m_devicePointer, x}, {m_numElements} elems, stride: {m_stride} [B], size: {m_numElements * m_stride} [B]</DisplayString>
+    <DisplayString Condition="m_type == cudau::BufferType::GL_Interop">[OpenGL] Buf ID: {m_GLBufferID}, {m_numElements} elems, stride: {m_stride} [B], size: {m_numElements * m_stride} [B]</DisplayString>
+    <DisplayString Condition="m_type == cudau::BufferType::ZeroCopy">[ZeroCopy] {m_devicePointer, x}, {m_numElements} elems, stride: {m_stride} [B], size: {m_numElements * m_stride} [B]</DisplayString>
+    <DisplayString Condition="m_type == cudau::BufferType::Managed">[Managed] {m_devicePointer, x}, {m_numElements} elems, stride: {m_stride} [B], size: {m_numElements * m_stride} [B]</DisplayString>
+  </Type>
+
   <Type Name="cudau::Array">
-    <DisplayString>{{type={m_elemType}, stride={m_stride}, size={m_width}x{m_height}x{m_depth}, #mips={m_numMipmapLevels}, glTexID={m_GLTexID}}}</DisplayString>
+    <DisplayString Condition="m_GLTexID != 0">[OpenGL] Tex ID: {m_GLTexID}, type={m_elemType}, size={m_width}x{m_height}x{m_depth}, #mips={m_numMipmapLevels}, stride={m_stride}</DisplayString>
+    <DisplayString>type={m_elemType}, size={m_width}x{m_height}x{m_depth}, #mips={m_numMipmapLevels}, stride={m_stride}</DisplayString>
+
     <Expand>
       <Item Name="CUDA context">m_cuContext</Item>
       <Item Name="CUDA array" Condition="m_numMipmapLevels == 1">m_array</Item>
