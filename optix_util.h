@@ -680,32 +680,6 @@ namespace optixu {
             const AttributeTypes &... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void get(AttributeTypes*... attributes);
         RT_DEVICE_FUNCTION RT_INLINE static void getFromHitObject(AttributeTypes*... attributes);
-        template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
-        RT_DEVICE_FUNCTION RT_INLINE static void makeHitObject(
-            OptixTraversableHandle handle,
-            const PosType &origin, const DirType &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t transformCount,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const AttributeTypes &... attributes);
-        template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
-        RT_DEVICE_FUNCTION RT_INLINE static void makeHitObject(
-            OptixTraversableHandle handle,
-            const PosType &origin, const DirType &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const AttributeTypes &... attributes);
-        template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
-        RT_DEVICE_FUNCTION RT_INLINE static void makeHitObjectWithRecord(
-            OptixTraversableHandle handle,
-            const PosType &origin, const DirType &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t sbtRecordIndex, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t transformCount,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const AttributeTypes &... attributes);
 #endif
     };
 
@@ -867,67 +841,6 @@ namespace optixu {
             index_sequence<I...>)
         {
             return optixReportIntersection(hitT, hitKind, attributes[I]...);
-        }
-
-        template <size_t... I>
-        RT_DEVICE_FUNCTION RT_INLINE void makeHitObject(
-            OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t transformCount,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const uint32_t* attributes,
-            index_sequence<I...>)
-        {
-            optixMakeHitObject(
-                handle,
-                origin, direction,
-                tmin, tmax, rayTime,
-                SBToffset, SBTstride, instIdx,
-                transforms, transformCount,
-                sbtGASIdx, primIdx, hitKind,
-                attributes[I]...);
-        }
-
-        template <size_t... I>
-        RT_DEVICE_FUNCTION RT_INLINE void makeHitObject(
-            OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const uint32_t* attributes,
-            index_sequence<I...>)
-        {
-            optixMakeHitObject(
-                handle,
-                origin, direction,
-                tmin, tmax, rayTime,
-                SBToffset, SBTstride, instIdx,
-                sbtGASIdx, primIdx, hitKind,
-                attributes[I]...);
-        }
-
-        template <size_t... I>
-        RT_DEVICE_FUNCTION RT_INLINE void makeHitObject(
-            OptixTraversableHandle handle,
-            const float3 &origin, const float3 &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t sbtRecordIndex, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t transformCount,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const uint32_t* attributes,
-            index_sequence<I...>)
-        {
-            optixMakeHitObjectWithRecord(
-                handle,
-                origin, direction,
-                tmin, tmax, rayTime,
-                sbtRecordIndex, instIdx,
-                transforms, transformCount,
-                sbtGASIdx, primIdx, hitKind,
-                attributes[I]...);
         }
 
         template <size_t... I>
@@ -1197,79 +1110,6 @@ namespace optixu {
         static_assert(numDwords > 0, "Calling this function for this signature has no effect.");
         if constexpr (numDwords > 0)
             detail::getValues<detail::HitObjectAttributeFunc, 0>(attributes...);
-    }
-
-    template <typename... AttributeTypes>
-    template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
-    RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
-        makeHitObject(
-            OptixTraversableHandle handle,
-            const PosType &origin, const DirType &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t transformCount,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const AttributeTypes &... attributes)
-    {
-        uint32_t a[numDwords > 0 ? numDwords : 1];
-        if constexpr (numDwords > 0)
-            detail::packToUInts<0>(a, attributes...);
-        detail::makeHitObject(
-            handle,
-            origin, direction,
-            tmin, tmax, rayTime,
-            SBToffset, SBTstride, instIdx,
-            transforms, transformCount,
-            sbtGASIdx, primIdx, hitKind,
-            a, make_index_sequence<numDwords>{});
-    }
-
-    template <typename... AttributeTypes>
-    template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
-    RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
-        makeHitObject(
-            OptixTraversableHandle handle,
-            const PosType &origin, const DirType &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t SBToffset, uint32_t SBTstride, uint32_t instIdx,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const AttributeTypes &... attributes)
-    {
-        uint32_t a[numDwords > 0 ? numDwords : 1];
-        if constexpr (numDwords > 0)
-            detail::packToUInts<0>(a, attributes...);
-        detail::makeHitObject(
-            handle,
-            origin, direction,
-            tmin, tmax, rayTime,
-            SBToffset, SBTstride, instIdx,
-            sbtGASIdx, primIdx, hitKind,
-            a, make_index_sequence<numDwords>{});
-    }
-
-    template <typename... AttributeTypes>
-    template <OPTIXU_HAS3D_CONCEPT PosType, OPTIXU_HAS3D_CONCEPT DirType>
-    RT_DEVICE_FUNCTION RT_INLINE void AttributeSignature<AttributeTypes...>::
-        makeHitObjectWithRecord(
-            OptixTraversableHandle handle,
-            const PosType &origin, const DirType &direction,
-            float tmin, float tmax, float rayTime,
-            uint32_t sbtRecordIndex, uint32_t instIdx,
-            const OptixTraversableHandle* transforms, uint32_t transformCount,
-            uint32_t sbtGASIdx, uint32_t primIdx, uint32_t hitKind,
-            const AttributeTypes &... attributes)
-    {
-        uint32_t a[numDwords > 0 ? numDwords : 1];
-        if constexpr (numDwords > 0)
-            detail::packToUInts<0>(a, attributes...);
-        detail::makeHitObject(
-            handle,
-            origin, direction,
-            tmin, tmax, rayTime,
-            sbtRecordIndex, instIdx,
-            transforms, transformCount,
-            sbtGASIdx, primIdx, hitKind,
-            a, make_index_sequence<numDwords>{});
     }
 
 
@@ -2549,8 +2389,17 @@ struct float2;
 struct float3;
 struct float4;
 
-struct OptixInvalidRayExceptionDetails;
-struct OptixParameterMismatchExceptionDetails;
+struct OptixIncomingHitObject {
+    virtual float getRayTime() const;
+    virtual unsigned int getTransformListSize() const;
+    virtual OptixTraversableHandle getTransformListHandle(unsigned int index) const;
+};
+
+struct OptixOutgoingHitObject {
+    virtual float getRayTime() const;
+    virtual unsigned int getTransformListSize() const;
+    virtual OptixTraversableHandle getTransformListHandle(unsigned int index) const;
+};
 
 void optixGetCatmullRomRocapsVertexData(float4 data[4]);
 void optixGetCatmullRomRocapsVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
@@ -2567,11 +2416,7 @@ void optixGetCubicBSplineVertexData(float4 data[4]);
 void optixGetCubicBSplineVertexDataFromHandle(OptixTraversableHandle gas, unsigned int primIdx, unsigned int sbtGASIndex, float time, float4 data[4]);
 float optixGetCurveParameter();
 int optixGetExceptionCode();
-OptixInvalidRayExceptionDetails optixGetExceptionInvalidRay();
-int optixGetExceptionInvalidSbtOffset();
-OptixTraversableHandle optixGetExceptionInvalidTraversable();
 char* optixGetExceptionLineInfo();
-OptixParameterMismatchExceptionDetails optixGetExceptionParameterMismatch();
 unsigned int optixGetGASMotionStepCount(OptixTraversableHandle gas);
 float optixGetGASMotionTimeBegin(OptixTraversableHandle gas);
 float optixGetGASMotionTimeEnd(OptixTraversableHandle gas);
@@ -2683,6 +2528,7 @@ bool optixIsFrontFaceHit();
 bool optixIsTriangleBackFaceHit();
 bool optixIsTriangleFrontFaceHit();
 bool optixIsTriangleHit();
+void optixMakeHitObject(OptixTraversableHandle handle, float3 rayOrigin, float3 rayDirection, float tmin, float rayTime, unsigned int rayFlags, OptixTraverseData traverseData, const OptixTraversableHandle* transforms, unsigned int numTransforms);
 void optixMakeMissHitObject(unsigned int missSBTIndex, float3 rayOrigin, float3 rayDirection, float tmin, float tmax, float rayTime, unsigned int rayFlags);
 void optixMakeNopHitObject();
 void optixReorder();
