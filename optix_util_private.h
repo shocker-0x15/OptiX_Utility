@@ -833,6 +833,7 @@ namespace optixu {
         BufferView compactedAccelBuffer;
         ASTradeoff tradeoff;
 
+        uint32_t active : 1;
         uint32_t allowUpdate : 1;
         uint32_t allowCompaction : 1;
         uint32_t allowRandomVertexAccess : 1;
@@ -853,6 +854,7 @@ namespace optixu {
             userData(sizeof(uint32_t)),
             handle(0), compactedHandle(0),
             tradeoff(ASTradeoff::Default),
+            active(true),
             allowUpdate(false), allowCompaction(false), allowRandomVertexAccess(false),
             allowOpacityMicroMapUpdate(false), allowDisableOpacityMicroMaps(false),
             readyToBuild(false), available(false),
@@ -909,6 +911,9 @@ namespace optixu {
         }
 
         void markDirty();
+        bool isActive() const {
+            return active;
+        }
         bool isReady() const {
             return available || compactedAvailable;
         }
@@ -1003,6 +1008,7 @@ namespace optixu {
 
         BufferView travHandleBuffer;
 
+        uint32_t active : 1;
         uint32_t available : 1;
 
     public:
@@ -1014,6 +1020,7 @@ namespace optixu {
             userData(sizeof(uint32_t)),
             rayTypeCount(0),
             child(nullptr),
+            active(true),
             available(false)
         {
             scene->addCgasSet(this);
@@ -1051,6 +1058,9 @@ namespace optixu {
         }
 
         void markDirty();
+        bool isActive() const {
+            return active;
+        }
         bool isReady() const {
             return available;
         }

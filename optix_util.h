@@ -1713,6 +1713,14 @@ namespace optixu {
         //     Invalidate the shader binding table layout of hit group as well.
         void markDirty() const;
 
+        // JP: GASをアクティブ/非アクティブにする。
+        //     ヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。
+        //     非アクティブ状態ではシェーダーバインディングテーブルの計算に組み入れられなくなる。
+        // EN: Set the GAS active/inactive.
+        //     Invalidate the shader binding table layout of hit group as well.
+        //     In inactive state, it will not be included in the calculation of shader binding table.
+        void setActive(bool active) const;
+
         // JP: 以下のAPIを呼んだ場合はヒットグループのシェーダーバインディングテーブルレイアウト
         //     が自動で無効化される。
         // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
@@ -1761,6 +1769,7 @@ namespace optixu {
             setUserData(&data, sizeof(T), alignof(T));
         }
 
+        bool isActive() const;
         bool isReady() const;
         OptixTraversableHandle getHandle() const;
 
@@ -1868,6 +1877,14 @@ namespace optixu {
         // EN: Calling the following APIs automatically invalidates the shader binding table layout of hit group.
         void setRayTypeCount(uint32_t rayTypeCount) const;
 
+        // JP: CGASをアクティブ/非アクティブにする。
+        //     ヒットグループのシェーダーバインディングテーブルレイアウトも無効化される。
+        //     非アクティブ状態ではシェーダーバインディングテーブルの計算に組み入れられなくなる。
+        // EN: Set the CGAS active/inactive.
+        //     Invalidate the shader binding table layout of hit group as well.
+        //     In inactive state, it will not be included in the calculation of shader binding table.
+        void setActive(bool active) const;
+
         // JP: リビルドを行った場合はこのCGASが(間接的に)所属するTraversable (例: IAS)
         //     のmarkDirty()を呼ぶ必要がある。
         // EN: Calling markDirty() of a traversable (e.g. IAS) to which this CGAS (indirectly) belongs
@@ -1892,6 +1909,8 @@ namespace optixu {
         void setUserData(const T &data) const {
             setUserData(&data, sizeof(T), alignof(T));
         }
+
+        bool isActive() const;
 
         uint32_t getOffsetInShaderBindingTable() const;
 

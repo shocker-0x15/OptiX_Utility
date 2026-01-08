@@ -260,6 +260,8 @@ namespace optixu {
         auto records = reinterpret_cast<uint8_t*>(hostMem);
 
         for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : geomASs) {
+            if (!gas.second->isActive())
+                continue;
             const uint32_t matSetCount = gas.second->getMaterialSetCount();
             for (uint32_t matSetIdx = 0; matSetIdx < matSetCount; ++matSetIdx) {
                 const uint32_t recordCount = gas.second->fillSBTRecords(pipeline, matSetIdx, records);
@@ -267,6 +269,8 @@ namespace optixu {
             }
         }
         for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructureSet*> &cgasSet : clusterGasSets) {
+            if (!cgasSet.second->isActive())
+                continue;
             const uint32_t recordCount = cgasSet.second->fillSBTRecords(pipeline, records);
             records += recordCount * singleRecordSize;
         }
@@ -277,8 +281,16 @@ namespace optixu {
     bool Scene::Priv::isReady(bool* hasMotionGAS, bool* hasMotionIAS) {
         *hasMotionGAS = false;
         for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : geomASs) {
+            if (!gas.second->isActive())
+                continue;
             *hasMotionGAS |= gas.second->hasMotion();
             if (!gas.second->isReady())
+                return false;
+        }
+        for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructureSet*> &cgasSet : clusterGasSets) {
+            if (!cgasSet.second->isActive())
+                continue;
+            if (!cgasSet.second->isReady())
                 return false;
         }
 
@@ -399,6 +411,8 @@ namespace optixu {
         // EN: A GAS is associated to its serial ID instead of its address to make SBT layout fixed
         //     in an environment where GAS's virtual address changes run to run.
         for (const std::pair<uint32_t, _GeometryAccelerationStructure*> &gas : m->geomASs) {
+            if (!gas.second->isActive())
+                continue;
             const uint32_t matSetCount = gas.second->getMaterialSetCount();
             for (uint32_t matSetIdx = 0; matSetIdx < matSetCount; ++matSetIdx) {
                 SizeAlign gasRecordSizeAlign;
@@ -412,6 +426,8 @@ namespace optixu {
         }
         m->clusterGasSetSbtOffsets.clear();
         for (const std::pair<uint32_t, _ClusterGeometryAccelerationStructureSet*> &cgasSet : m->clusterGasSets) {
+            if (!cgasSet.second->isActive())
+                continue;
             SizeAlign cgasSetRecordSizeAlign;
             uint32_t cgasSetSbtRecordCount;
             cgasSet.second->calcSBTRequirements(&cgasSetRecordSizeAlign, &cgasSetSbtRecordCount);
@@ -1760,6 +1776,13 @@ namespace optixu {
         m->scene->markSBTLayoutDirty();
     }
 
+    void GeometryAccelerationStructure::setActive(bool active) const {
+        if (m->isActive() != active) {
+            m->active = active;
+            m->scene->markSBTLayoutDirty();
+        }
+    }
+
     void GeometryAccelerationStructure::setMaterialSetCount(uint32_t matSetCount) const {
         m->rayTypeCountsPerMaterialSet.resize(matSetCount, 0);
 
@@ -2024,6 +2047,10 @@ namespace optixu {
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
+    }
+
+    bool GeometryAccelerationStructure::isActive() const {
+        return m->isActive();
     }
 
     bool GeometryAccelerationStructure::isReady() const {
@@ -2448,6 +2475,13 @@ namespace optixu {
         m = nullptr;
     }
 
+    void ClusterGeometryAccelerationStructureSet::setActive(bool active) const {
+        if (m->isActive() != active) {
+            m->active = active;
+            m->scene->markSBTLayoutDirty();
+        }
+    }
+
     void ClusterGeometryAccelerationStructureSet::rebuild(
         CUstream stream, const BufferView &cgasArgsBuffer, CUdeviceptr cgasCount,
         const BufferView &accelBuffer, const BufferView &scratchBuffer,
@@ -2504,6 +2538,10 @@ namespace optixu {
         m->userDataSizeAlign = SizeAlign(size, alignment);
         m->userData.resize(size);
         std::memcpy(m->userData.data(), data, size);
+    }
+
+    bool ClusterGeometryAccelerationStructureSet::isActive() const {
+        return m->isActive();
     }
 
     uint32_t ClusterGeometryAccelerationStructureSet::getOffsetInShaderBindingTable() const {
