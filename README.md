@@ -284,10 +284,10 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (25H2) & Visual Studio Community 2022 (17.14.22)
+* Windows 11 (25H2) & Visual Studio Community 2022 (17.14.27)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 591.44\
-  590 driver looks bugs regarding debuggable PTX/OptiX-IR for now.
+* NVIDIA Driver 595.71\
+  595 driver looks to have a bug regarding OMM validation.
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
@@ -301,4 +301,4 @@ It requires the following libraries.
 Released under the Apache License, Version 2.0 (See [LICENSE.md](LICENSE.md))
 
 ----
-2025 [@Shocker_0x15](https://twitter.com/Shocker_0x15), [@bsky.rayspace.xyz](https://bsky.app/profile/bsky.rayspace.xyz)
+2026 [@Shocker_0x15](https://twitter.com/Shocker_0x15), [@bsky.rayspace.xyz](https://bsky.app/profile/bsky.rayspace.xyz)

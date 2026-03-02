@@ -132,9 +132,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
     CUDADRV_CHECK(cuCtxSetCurrent(cuContext));
     CUDADRV_CHECK(cuStreamCreate(&cuStream, 0));
 
+#if 0
     optixu::Context optixContext = optixu::Context::create(
         cuContext, 4,
         optixu::EnableValidation::DEBUG_SELECT(Yes, No));
+#else
+    // Workaround for the broken validation with NVIDIA driver 595.
+    // https://forums.developer.nvidia.com/t/driver-595-71-omm-validation-is-broken/362234
+    optixu::Context optixContext = optixu::Context::create(
+        cuContext, 4,
+        optixu::EnableValidation::No);
+#endif
 
     optixu::Pipeline pipeline = optixContext.createPipeline();
 
