@@ -10,6 +10,10 @@ data/
 tests/gtest
 tests/gtest_build
 
+.venv/
+.vscode/
+ext/prebuilt/
+
 # User-specific files
 *.suo
 *.user
