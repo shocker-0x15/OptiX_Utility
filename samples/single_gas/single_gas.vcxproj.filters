@@ -1,62 +1,62 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-16"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="utils">
-      <UniqueIdentifier>{6f26d21a-72b8-449a-b8dd-7ac1d7c4bfb2}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="non-essentials">
-      <UniqueIdentifier>{a08bb6a2-6e1a-40b0-93f6-7268b82770c8}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="non-essentials\ext">
-      <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
-    </Filter>
+    <CudaCompile Include="optix_kernels.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp">
       <Filter>utils</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>non-essentials\ext</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\optix_util.cpp">
       <Filter>utils</Filter>
     </ClCompile>
-    <ClCompile Include="single_gas_main.cpp" />
     <ClCompile Include="..\common\common.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
     <ClCompile Include="..\common\obj_loader.cpp">
       <Filter>non-essentials</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\ext\tinyobjloader\tiny_obj_loader.cc">
-      <Filter>non-essentials\ext</Filter>
-    </ClCompile>
+    <ClCompile Include="single_gas_main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
       <Filter>utils</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\optix_util.h">
-      <Filter>utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\optix_util_private.h">
-      <Filter>utils</Filter>
-    </ClInclude>
-    <ClInclude Include="single_gas_shared.h" />
     <ClInclude Include="..\..\ext\stb_image_write.h">
       <Filter>non-essentials\ext</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\common.h">
-      <Filter>non-essentials</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\optixu_on_cudau.h">
-      <Filter>utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\obj_loader.h">
-      <Filter>non-essentials</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ext\tinyobjloader\tiny_obj_loader.h">
       <Filter>non-essentials\ext</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\optix_util_private.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optix_util.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\optixu_on_cudau.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\common.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\obj_loader.h">
+      <Filter>non-essentials</Filter>
+    </ClInclude>
+    <ClInclude Include="single_gas_shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="optix_kernels.cu" />
+    <Filter Include="non-essentials">
+      <UniqueIdentifier>{a08bb6a2-6e1a-40b0-93f6-7268b82770c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="non-essentials\ext">
+      <UniqueIdentifier>{e8ab81e0-a20c-43cc-b39f-e8410987f66d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{6f26d21a-72b8-449a-b8dd-7ac1d7c4bfb2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>
