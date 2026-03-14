@@ -44,7 +44,7 @@ def run():
         str(cmake_path),
         '-S', str(root_dir),
         '-B', str(build_dir),
-        '-G','Visual Studio 17 2022', '-A', 'x64',
+        '-G','Visual Studio 18 2026', '-A', 'x64',
         '-D', 'CPP_VER=' + args.cppstd,
         '-D', 'CPP_VER_CUDA=' + args.cppstd_cuda,
         '-T', 'cuda=' + args.cuda]
@@ -58,8 +58,8 @@ def run():
     # ----------------------------------------------------------------
     # Build
 
-    sln = build_dir / R'OptiX_Utility_cmake.sln'
-    msbuild = R'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
+    sln = build_dir / R'OptiX_Utility_cmake.slnx'
+    msbuild = R'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe'
     configs = ['Debug', 'Release']
 
     for config in configs:
