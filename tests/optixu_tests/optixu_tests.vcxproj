@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <VCProjectVersion>16.0</VCProjectVersion>
+    <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{fb2ea40b-108a-48d0-917f-398e6f96021a}</ProjectGuid>
     <RootNamespace>optixu</RootNamespace>
@@ -21,19 +21,19 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.1.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.2.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -67,14 +67,12 @@
       <AdditionalDependencies>$(SolutionDir)..\ext\prebuilt\lib\gtestd.lib;cuda.lib;cudart_static.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
-      <TargetMachinePlatform>64</TargetMachinePlatform>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <NvccCompilation>optix-ir</NvccCompilation>
       <AdditionalOptions>-std=c++20 -Xcompiler "/wd 4819 /Zc:__cplusplus" -D_DEBUG %(AdditionalOptions)</AdditionalOptions>
       <CudaRuntime>Static</CudaRuntime>
       <FastMath>true</FastMath>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
-      <CodeGeneration>compute_75,sm_75</CodeGeneration>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
@@ -93,40 +91,27 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(SolutionDir)..\ext\prebuilt\lib\gtest.lib;cuda.lib;cudart_static.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
-      <TargetMachinePlatform>64</TargetMachinePlatform>
       <CompileOut>$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
       <NvccCompilation>optix-ir</NvccCompilation>
       <AdditionalOptions>-std=c++20 -Xcompiler "/wd 4819 /Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
       <CudaRuntime>Static</CudaRuntime>
       <FastMath>true</FastMath>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
-      <CodeGeneration>compute_75,sm_75</CodeGeneration>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
     </CudaLink>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="kernels_0.cu" />
+    <CudaCompile Include="kernels_1.cu" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp" />
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.dll">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.pdb">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.dll">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.pdb">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <None Include="..\..\optix_util.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -136,11 +121,21 @@
     <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="kernels_0.cu" />
-    <CudaCompile Include="kernels_1.cu" />
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.dll">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.dll">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.pdb">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\optix_util.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.1.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.2.targets" />
   </ImportGroup>
 </Project>

@@ -1,10 +1,14 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
+    <CudaCompile Include="kernels_0.cu" />
+    <CudaCompile Include="kernels_1.cu" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="..\..\cuda_util.cpp">
       <Filter>utils</Filter>
     </ClCompile>
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\cuda_util.h">
@@ -19,9 +23,9 @@
     <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="utils">
-      <UniqueIdentifier>{76dab89a-5349-44c8-aff5-940c3d90f8ae}</UniqueIdentifier>
-    </Filter>
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.dll" />
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.dll" />
+    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.pdb" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\optix_util.cpp">
@@ -29,13 +33,8 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="kernels_0.cu" />
-    <CudaCompile Include="kernels_1.cu" />
-  </ItemGroup>
-  <ItemGroup>
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.pdb" />
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtestd.dll" />
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.dll" />
-    <CopyFileToFolders Include="..\..\ext\prebuilt\bin\gtest.pdb" />
+    <Filter Include="utils">
+      <UniqueIdentifier>{76dab89a-5349-44c8-aff5-940c3d90f8ae}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>
