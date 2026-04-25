@@ -2703,13 +2703,15 @@ namespace optixu {
         m->throwRuntimeError(
             m->type == TransformType::Static,
             "This transform has been configured as static transform.");
-        float invDet = 1.0f / (matrix[ 0] * matrix[ 5] * matrix[10] +
-                               matrix[ 1] * matrix[ 6] * matrix[ 8] +
-                               matrix[ 2] * matrix[ 4] * matrix[ 9] -
-                               matrix[ 2] * matrix[ 5] * matrix[ 8] -
-                               matrix[ 1] * matrix[ 4] * matrix[10] -
-                               matrix[ 0] * matrix[ 6] * matrix[ 9]);
-        m->throwRuntimeError(invDet != 0.0f, "Given matrix is not invertible.");
+        const float det =
+            + matrix[ 0] * matrix[ 5] * matrix[10]
+            + matrix[ 1] * matrix[ 6] * matrix[ 8]
+            + matrix[ 2] * matrix[ 4] * matrix[ 9]
+            - matrix[ 2] * matrix[ 5] * matrix[ 8]
+            - matrix[ 1] * matrix[ 4] * matrix[10]
+            - matrix[ 0] * matrix[ 6] * matrix[ 9];
+        m->throwRuntimeError(det != 0.0f, "Given matrix is not invertible.");
+        const float invDet = 1.0f / det;
 
         const auto xfm = reinterpret_cast<OptixStaticTransform*>(m->data);
 
@@ -2719,15 +2721,15 @@ namespace optixu {
         invMat[ 0] = invDet * (matrix[ 5] * matrix[10] - matrix[ 6] * matrix[ 9]);
         invMat[ 1] = invDet * (matrix[ 2] * matrix[ 9] - matrix[ 1] * matrix[10]);
         invMat[ 2] = invDet * (matrix[ 1] * matrix[ 6] - matrix[ 2] * matrix[ 5]);
-        invMat[ 3] = -matrix[3];
         invMat[ 4] = invDet * (matrix[ 6] * matrix[ 8] - matrix[ 4] * matrix[10]);
         invMat[ 5] = invDet * (matrix[ 0] * matrix[10] - matrix[ 2] * matrix[ 8]);
         invMat[ 6] = invDet * (matrix[ 2] * matrix[ 4] - matrix[ 0] * matrix[ 6]);
-        invMat[ 7] = -matrix[7];
         invMat[ 8] = invDet * (matrix[ 4] * matrix[ 9] - matrix[ 5] * matrix[ 8]);
         invMat[ 9] = invDet * (matrix[ 1] * matrix[ 8] - matrix[ 0] * matrix[ 9]);
         invMat[10] = invDet * (matrix[ 0] * matrix[ 5] - matrix[ 1] * matrix[ 4]);
-        invMat[11] = -matrix[11];
+        invMat[ 3] = -(invMat[ 0] * matrix[ 3] + invMat[ 1] * matrix[ 7] + invMat[ 2] * matrix[11]);
+        invMat[ 7] = -(invMat[ 4] * matrix[ 3] + invMat[ 5] * matrix[ 7] + invMat[ 6] * matrix[11]);
+        invMat[11] = -(invMat[ 8] * matrix[ 3] + invMat[ 9] * matrix[ 7] + invMat[10] * matrix[11]);
         std::copy_n(invMat, 12, xfm->invTransform);
 
         markDirty();
