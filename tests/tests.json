@@ -19,7 +19,7 @@
         "options": "--use-instance-pointers",
         "image": "output.png",
         "outputs": ["output.png"],
-        "reference": "reference.png"
+        "reference": "reference_instance_pointers.png"
     },
     {
         "name": "texture",
