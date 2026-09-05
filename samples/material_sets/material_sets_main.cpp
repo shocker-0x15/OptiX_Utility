@@ -58,12 +58,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     pipelineOptions.supportedPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
     pipeline.setPipelineOptions(pipelineOptions);
 
+    // Workaround for 616.64 driver
+#if 1
+    const std::string optixPtx =
+        readTxtFile(getExecutableDirectory() / "material_sets/ptxes/optix_kernels.ptx");
+    optixu::Module moduleOptiX = pipeline.createModuleFromPTXString(
+        optixPtx, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+#else
     const std::vector<char> optixIr =
         readBinaryFile(getExecutableDirectory() / "material_sets/ptxes/optix_kernels.optixir");
     optixu::Module moduleOptiX = pipeline.createModuleFromOptixIR(
         optixIr, OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+#endif
 
     optixu::Module emptyModule;
 

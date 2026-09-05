@@ -119,10 +119,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="optix_kernels.cu">
-      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
-      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">optix-ir</NvccCompilation>
-      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).optixir</CompileOut>
-      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">optix-ir</NvccCompilation>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)$(Platform)\$(Configuration)\$(TargetName)\ptxes\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
       <GenerateRelocatableDeviceCode Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateRelocatableDeviceCode>
       <GenerateRelocatableDeviceCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateRelocatableDeviceCode>
     </CudaCompile>
