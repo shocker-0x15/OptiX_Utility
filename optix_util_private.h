@@ -1726,6 +1726,12 @@ namespace optixu {
             modelKind(_modelKind), guideAlbedo(_guideAlbedo), guideNormal(_guideNormal),
             useTiling(false), imageSizeSet(false), stateIsReady(false)
         {
+            throwRuntimeError(
+                modelKind == OPTIX_DENOISER_MODEL_KIND_AOV ||
+                modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV ||
+                modelKind == OPTIX_DENOISER_MODEL_KIND_UPSCALE2X ||
+                modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X,
+                "Invalid denoiser model kind %d.", (int)modelKind);
             OptixDenoiserOptions options = {};
             options.guideAlbedo = _guideAlbedo;
             options.guideNormal = _guideNormal;

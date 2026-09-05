@@ -243,12 +243,22 @@ TEST(ContextTest, ContextBasic) {
                 optixu::Denoiser denoiser;
 
                 denoiser = context.createDenoiser(
-                    OPTIX_DENOISER_MODEL_KIND_LDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
+                    OPTIX_DENOISER_MODEL_KIND_AOV, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
                 denoiser = context.createDenoiser(
-                    OPTIX_DENOISER_MODEL_KIND_HDR, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
+                    OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
+                EXPECT_NE(denoiser, optixu::Denoiser());
+                denoiser.destroy();
+
+                denoiser = context.createDenoiser(
+                    OPTIX_DENOISER_MODEL_KIND_UPSCALE2X, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
+                EXPECT_NE(denoiser, optixu::Denoiser());
+                denoiser.destroy();
+
+                denoiser = context.createDenoiser(
+                    OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X, optixu::GuideAlbedo::Yes, optixu::GuideNormal::Yes, OPTIX_DENOISER_ALPHA_MODE_COPY);
                 EXPECT_NE(denoiser, optixu::Denoiser());
                 denoiser.destroy();
 
