@@ -97,6 +97,7 @@ target_link_libraries(
     "${TARGET_NAME}"
     fakelib
     CUDA::cuda_driver
+    libcubd_static
     opengl32
     glfw3
 )

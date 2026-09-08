@@ -64,6 +64,7 @@
 
 #if __cplusplus >= 202002L
 #   include <numbers>
+#   include <span>
 #endif
 
 #include "../../optixu_on_cudau.h"

@@ -25,6 +25,7 @@ EN: This sample demonstrates the usage of the cluster API.
 */
 
 #include "clusters_shared.h"
+#include "../../ext/cubd/cubd.h"
 
 #include "../common/gui_common.h"
 
@@ -64,17 +65,24 @@ struct ClusteredMesh {
     cudau::TypedBuffer<uint32_t> childIndexPool;
     cudau::TypedBuffer<Shared::Cluster> clusters;
 
-    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> argsArray;
-    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> argsArrayToBuild;
-    cudau::TypedBuffer<CUdeviceptr> clasHandles;
-    cudau::TypedBuffer<uint32_t> usedFlags;
-    cudau::TypedBuffer<uint32_t> indexMapClusterToClasBuild;
-    cudau::TypedBuffer<Shared::ClusterSetInfo> clusterSetInfo;
-    cudau::Buffer clasSetMem;
     optixu::ClusterAccelerationStructureSet clasSet;
     OptixAccelBufferSizes asMemReqs;
 
-    cudau::TypedBuffer<uint32_t> outputSizesArray[2];
+    cudau::Buffer clasSetBuildMem;
+    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> clasBuildArgsArray;
+    cudau::TypedBuffer<CUdeviceptr> clasBuildHandleArray;
+    cudau::TypedBuffer<uint32_t> clasBuildSizeArray;
+
+    cudau::Buffer clasSetReuseMems[2];
+    cudau::TypedBuffer<CUdeviceptr> clasReuseHandleArrays[2];
+    cudau::TypedBuffer<uint32_t> clasReuseSizeArrays[2];
+    cudau::TypedBuffer<uint32_t> clasReuseOffsetArray;
+
+    cudau::TypedBuffer<OptixClusterAccelBuildInputTrianglesArgs> argsArray;
+    cudau::TypedBuffer<uint32_t> usedFlagArrays[2];
+    cudau::TypedBuffer<uint32_t> buildFlagArrays[2];
+    cudau::TypedBuffer<uint32_t> indexMapClusterToClasBuildOrReuse;
+    cudau::TypedBuffer<Shared::ClusterSetInfo> clusterSetInfo;
 
     std::vector<LevelInfo> levelInfos;
     uint32_t maxVertCountPerCluster;
@@ -141,6 +149,32 @@ struct ClusteredMesh {
 
 
 
+        clasSet = scene.createClusterAccelerationStructureSet();
+        clasSet.setBuildInput(
+            OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
+            clusterCount, OPTIX_VERTEX_FORMAT_FLOAT3,
+            1, maxTriCountPerCluster, maxVertCountPerCluster,
+            0, 0, minPosTruncBitCount);
+        clasSet.setMaterialCount(1);
+        clasSet.setMaterial(0, mat);
+        clasSet.prepareForBuild(&asMemReqs);
+
+        // JP: 毎フレームCLASセットビルド時に必要なメモリ。
+        // EN: Memory required for CLAS set build per frame.
+        clasSetBuildMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+        clasBuildArgsArray.initialize(cuContext, cudau::BufferType::Device, clusterCount);
+        clasBuildHandleArray.initialize(cuContext, cudau::BufferType::Device, clusterCount);
+        clasBuildSizeArray.initialize(cuContext, cudau::BufferType::Device, clusterCount);
+
+        // JP: 毎フレームCLASサブセットコピー時に必要なメモリ。
+        // EN: Memory required for CLAS subset copy per frame.
+        for (uint32_t i = 0; i < 2; ++i) {
+            clasSetReuseMems[i].initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
+            clasReuseHandleArrays[i].initialize(cuContext, cudau::BufferType::Device, clusterCount);
+            clasReuseSizeArrays[i].initialize(cuContext, cudau::BufferType::Device, clusterCount + 1);
+        }
+        clasReuseOffsetArray.initialize(cuContext, cudau::BufferType::Device, clusterCount + 1);
+
         // JP: このサンプルコードにおいては、各クラスターの設定はほとんど静的なのでホスト側で構築しておく。
         // EN: In this sample code, the settings for each cluster are mostly static,
         //     so we build them on the host side.
@@ -173,31 +207,40 @@ struct ClusteredMesh {
         }
         argsArray.initialize(cuContext, cudau::BufferType::Device, argsArrayOnHost);
 
-        argsArrayToBuild.initialize(cuContext, cudau::BufferType::Device, clusterCount);
-        clasHandles.initialize(cuContext, cudau::BufferType::Device, clusterCount);
-        const uint32_t usedFlagsBinCount = (clusterCount + 31) / 32;
-        usedFlags.initialize(cuContext, cudau::BufferType::Device, usedFlagsBinCount);
-        indexMapClusterToClasBuild.initialize(cuContext, cudau::BufferType::Device, clusterCount);
+        const uint32_t flagsBinCount = (clusterCount + 31) / 32;
+        for (uint32_t i = 0; i < 2; ++i) {
+            usedFlagArrays[i].initialize(cuContext, cudau::BufferType::Device, flagsBinCount, 0u);
+            buildFlagArrays[i].initialize(cuContext, cudau::BufferType::Device, flagsBinCount, 0u);
+        }
+        indexMapClusterToClasBuildOrReuse.initialize(cuContext, cudau::BufferType::Device, clusterCount);
 
         Shared::ClusterSetInfo clusterSetInfoOnHost = {};
-        clusterSetInfoOnHost.argsArray = argsArrayToBuild.getDevicePointer();
-        clusterSetInfoOnHost.clasHandles = clasHandles.getDevicePointer();
-        clusterSetInfoOnHost.usedFlags = usedFlags.getDevicePointer();
-        clusterSetInfoOnHost.indexMapClusterToClasBuild = indexMapClusterToClasBuild.getDevicePointer();
-        clusterSetInfoOnHost.argsCountToBuild = 0;
+
+        // CLAS set build
+        clusterSetInfoOnHost.buildArgsArray = clasBuildArgsArray.getDevicePointer();
+        clusterSetInfoOnHost.buildHandleArray = clasBuildHandleArray.getDevicePointer();
+        clusterSetInfoOnHost.buildSizeArray = clasBuildSizeArray.getDevicePointer();
+        clusterSetInfoOnHost.buildCount = 0;
+
+        // CLAS set reuse
+        clusterSetInfoOnHost.reuseMems[0] = clasSetReuseMems[0].getCUdeviceptr();
+        clusterSetInfoOnHost.reuseMems[1] = clasSetReuseMems[1].getCUdeviceptr();
+        clusterSetInfoOnHost.reuseHandleArrays[0] = clasReuseHandleArrays[0].getDevicePointer();
+        clusterSetInfoOnHost.reuseHandleArrays[1] = clasReuseHandleArrays[1].getDevicePointer();
+        clusterSetInfoOnHost.reuseSizeArrays[0] = clasReuseSizeArrays[0].getDevicePointer();
+        clusterSetInfoOnHost.reuseSizeArrays[1] = clasReuseSizeArrays[1].getDevicePointer();
+        clusterSetInfoOnHost.reuseOffsetArray = clasReuseOffsetArray.getDevicePointer();
+        clusterSetInfoOnHost.reuseCounts[0] = 0;
+        clusterSetInfoOnHost.reuseCounts[1] = 0;
+
+        clusterSetInfoOnHost.usedFlagArrays[0] = usedFlagArrays[0].getDevicePointer();
+        clusterSetInfoOnHost.usedFlagArrays[1] = usedFlagArrays[1].getDevicePointer();
+        clusterSetInfoOnHost.buildFlagArrays[0] = buildFlagArrays[0].getDevicePointer();
+        clusterSetInfoOnHost.buildFlagArrays[1] = buildFlagArrays[1].getDevicePointer();
+        clusterSetInfoOnHost.indexMapClusterToBuildOrReuse = indexMapClusterToClasBuildOrReuse.getDevicePointer();
         clusterSetInfoOnHost.meshErrorScale = errorScaleCoeff * clustersOnHost.back().bounds.radius;
+
         clusterSetInfo.initialize(cuContext, cudau::BufferType::Device, 1, clusterSetInfoOnHost);
-
-        clasSet = scene.createClusterAccelerationStructureSet();
-        clasSet.setBuildInput(
-            OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE,
-            clusterCount, OPTIX_VERTEX_FORMAT_FLOAT3,
-            1, maxTriCountPerCluster, maxVertCountPerCluster,
-            0, 0, minPosTruncBitCount);
-        clasSet.setMaterialCount(1);
-        clasSet.setMaterial(0, mat);
-
-        clasSet.prepareForBuild(&asMemReqs);
 
         AABB bbox;
         for (uint32_t vIdx = 0; vIdx < vertexCount; ++vIdx) {
@@ -212,11 +255,6 @@ struct ClusteredMesh {
         cMeshData.bbox = bbox;
         clasSet.setUserData(cMeshData);
 
-        clasSetMem.initialize(cuContext, cudau::BufferType::Device, asMemReqs.outputSizeInBytes, 1);
-
-        for (uint32_t i = 0; i < 2; ++i)
-            outputSizesArray[i].initialize(cuContext, cudau::BufferType::Device, clusterCount);
-
         return true;
     }
 
@@ -226,17 +264,29 @@ struct ClusteredMesh {
         childIndexPool.finalize();
         clusters.finalize();
 
-        argsArray.finalize();
-        argsArrayToBuild.finalize();
-        clasHandles.finalize();
-        usedFlags.finalize();
-        indexMapClusterToClasBuild.finalize();
-        clusterSetInfo.finalize();
         clasSet.destroy();
-        clasSetMem.finalize();
 
-        for (uint32_t i = 0; i < 2; ++i)
-            outputSizesArray[i].finalize();
+        clasSetBuildMem.finalize();
+        clasBuildArgsArray.finalize();
+        clasBuildHandleArray.finalize();
+        clasBuildSizeArray.finalize();
+
+        for (uint32_t i = 0; i < 2; ++i) {
+            clasSetReuseMems[i].finalize();
+            clasReuseHandleArrays[i].finalize();
+            clasReuseSizeArrays[i].finalize();
+        }
+        clasReuseOffsetArray.finalize();
+
+        argsArray.finalize();
+
+        for (uint32_t i = 0; i < 2; ++i) {
+            usedFlagArrays[i].finalize();
+            buildFlagArrays[i].finalize();
+        }
+        indexMapClusterToClasBuildOrReuse.finalize();
+
+        clusterSetInfo.finalize();
     }
 };
 
@@ -481,12 +531,60 @@ int32_t main(int32_t argc, const char* argv[]) try {
     shaderBindingTable.setMappedMemoryPersistent(true);
     pipeline.setShaderBindingTable(shaderBindingTable, shaderBindingTable.getMappedPointer());
 
+    const auto loadModule = [&]
+    (const char* fileName, CUmodule* const cuModule) {
+        char infoLogBuffer[8192];
+        char errorLogBuffer[8192];
+        CUjit_option options[] = {
+            CU_JIT_INFO_LOG_BUFFER,
+            CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
+            CU_JIT_ERROR_LOG_BUFFER,
+            CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
+        };
+        void* optionValues[] = {
+            infoLogBuffer,
+            nullptr,
+            errorLogBuffer,
+            nullptr,
+        };
+        *reinterpret_cast<uint32_t*>(&optionValues[1]) = sizeof(infoLogBuffer);
+        *reinterpret_cast<uint32_t*>(&optionValues[3]) = sizeof(errorLogBuffer);
+
+        // JP: PTXでDynamic Parallelismを使うためにはモジュールロード時にcudadevrt.libをリンクする必要がある。
+        //     ここではcudadevrt.libをCUDA Toolkitパスから読み込んでいるが、
+        //     CUDA EULAに拠ればアプリケーションに同梱して配布することも可能。
+        // EN: To use Dynamic Parallelism in PTX, cudadevrt.lib must be linked at module load time.
+        //     Here, cudadevrt.lib is loaded from the CUDA Toolkit path,
+        //     but according to the CUDA EULA, it is also possible to bundle and distribute it with the application.
+        CUlinkState cuLinkState;
+        CUDADRV_CHECK(cuLinkCreate(
+            static_cast<uint32_t>(lengthof(options)), options, optionValues, &cuLinkState));
+        CUDADRV_CHECK(cuLinkAddFile(
+            cuLinkState, CU_JIT_INPUT_PTX,
+            (resourceDir / "ptxes" / fileName).string().c_str(),
+            0, nullptr, nullptr));
+        CUDADRV_CHECK(cuLinkAddFile(
+            cuLinkState, CU_JIT_INPUT_LIBRARY,
+            R"(C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\lib\x64\cudadevrt.lib)",
+            0, nullptr, nullptr));
+        void* moduleData;
+        size_t moduleSize;
+        CUDADRV_CHECK(cuLinkComplete(cuLinkState, &moduleData, &moduleSize));
+        CUDADRV_CHECK(cuModuleLoadData(cuModule, moduleData));
+        CUDADRV_CHECK(cuLinkDestroy(cuLinkState));
+
+        const auto infoLogLength = *reinterpret_cast<uint32_t*>(&optionValues[1]);
+        const auto errorLogLength = *reinterpret_cast<uint32_t*>(&optionValues[3]);
+    };
+
     // JP: 描画するクラスターを決定するカーネルなどをロードする。
     // EN: Load kernels to determine which clusters to render.
     CUmodule lodDecisionModule;
-    CUDADRV_CHECK(cuModuleLoad(
-        &lodDecisionModule, (resourceDir / "ptxes/lod_decision_kernels.ptx").string().c_str()));
+    loadModule("lod_decision_kernels.ptx", &lodDecisionModule);
     cudau::Kernel emitClasArgsArray(lodDecisionModule, "emitClasArgsArray", cudau::dim3(32), 0);
+    cudau::Kernel scanReuseSizeArray(lodDecisionModule, "scanReuseSizeArray", cudau::dim3(32), 0);
+    cudau::Kernel copyReusedClases(lodDecisionModule, "copyReusedClases", cudau::dim3(32), 0);
+    cudau::Kernel updateReuseClasHandles(lodDecisionModule, "updateReuseClasHandles", cudau::dim3(32), 0);
     cudau::Kernel copyClasHandles(lodDecisionModule, "copyClasHandles", cudau::dim3(32), 0);
     cudau::Kernel emitClusterGasArgsArray(lodDecisionModule, "emitClusterGasArgsArray", cudau::dim3(32), 0);
     cudau::Kernel copyDataForCpu(lodDecisionModule, "copyDataForCpu", cudau::dim3(32), 0);
@@ -582,6 +680,28 @@ int32_t main(int32_t argc, const char* argv[]) try {
         dragonInstXfms, dragonCount, instStaticInfos, instId);
     instId += dragonCount;
     maxSizeOfScratchBuffer = std::max(maxSizeOfScratchBuffer, dragonCMeshInstSet.asMemReqs.tempSizeInBytes);
+
+
+
+    cudau::Buffer commonOpScratchMem;
+    {
+        size_t commonOpScratchSize = 0;
+        ClusteredMesh* const cMeshes[] = {
+            &bunnyCMesh,
+            &dragonCMesh
+        };
+        for (ClusteredMesh* const cMesh : cMeshes) {
+            size_t scratchSize = 0;
+            cubd::DeviceScan::ExclusiveSum(
+                nullptr, scratchSize,
+                cMesh->clasReuseSizeArrays[0].getDevicePointer(),
+                cMesh->clasReuseOffsetArray.getDevicePointer(),
+                cMesh->clasReuseOffsetArray.numElements());
+            commonOpScratchSize = std::max(commonOpScratchSize, scratchSize);
+        }
+
+        commonOpScratchMem.initialize(cuContext, cudau::BufferType::Device, commonOpScratchSize, 1);
+    }
 
 
 
@@ -941,31 +1061,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     const ClusteredMeshInstanceSet &cMeshInstSet = *cMeshInstSets[setIdx];
                     const cudau::TypedBuffer<uint32_t> &curClasBuildCounts =
                         cMeshInstSet.clasBuildCountsArray[bufIdx];
-                    const cudau::TypedBuffer<uint32_t> &curOutputSizes =
-                        cMeshInstSet.cMesh->outputSizesArray[bufIdx];
 
                     std::vector<uint32_t> clasBuildCountsOnHost(curClasBuildCounts.numElements());
-                    std::vector<uint32_t> outputSizesOnHost(curOutputSizes.numElements());
                     curClasBuildCounts.read(clasBuildCountsOnHost, curStream);
-                    curOutputSizes.read(outputSizesOnHost, curStream);
 
                     const uint32_t buildCount = clasBuildCountsOnHost[0];
-
-                    uint32_t minSize = UINT32_MAX, maxSize = 0;
-                    uint32_t sumSizes = 0;
-                    for (uint32_t i = 0; i < buildCount; ++i) {
-                        minSize = std::min(minSize, outputSizesOnHost[i]);
-                        maxSize = std::max(maxSize, outputSizesOnHost[i]);
-                        sumSizes += outputSizesOnHost[i];
-                    }
 
                     ImGui::Text("%s", cMeshInstSetNames[setIdx]);
                     ImGui::Text("  Total Count: %u", buildCount);
                     for (uint32_t cgasIdx = 0; cgasIdx < cMeshInstSet.instances.size(); ++cgasIdx) {
                         ImGui::Text("    Inst %u: %u", cgasIdx, clasBuildCountsOnHost[1 + cgasIdx]);
                     }
-                    ImGui::Text("  Size: %u - %u [bytes]: ", minSize, maxSize);
-                    ImGui::Text("    Avg: %u", buildCount > 0 ? sumSizes / buildCount : 0);
                 }
             }
 
@@ -999,6 +1105,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
              lodModeChanged || lodLevelChanged || posTruncBitWidthChanged) && !lockLod ||
             frameIndex == 0)
         {
+            const bool invalidate = posTruncBitWidthChanged || lockLodChanged;
+
             // JP: 各クラスター化メッシュに関して、ビルドするCLASカウンターとArgs設定済みを表すフラグ列を
             //     リセットする。
             // EN: For each clustered mesh, reset the CLAS counter and flags indicating that the args are set.
@@ -1006,12 +1114,21 @@ int32_t main(int32_t argc, const char* argv[]) try {
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
 
-                const CUdeviceptr clasCountToBuildPtr =
+                const CUdeviceptr buildCountToBuildPtr =
                     cMesh.clusterSetInfo.getCUdeviceptr() +
-                    offsetof(Shared::ClusterSetInfo, argsCountToBuild);
-                CUDADRV_CHECK(cuMemsetD32Async(clasCountToBuildPtr, 0, 1, curStream));
+                    offsetof(Shared::ClusterSetInfo, buildCount);
+                CUDADRV_CHECK(cuMemsetD32Async(buildCountToBuildPtr, 0, 1, curStream));
+                const CUdeviceptr reuseCountToBuildPtr =
+                    cMesh.clusterSetInfo.getCUdeviceptr() +
+                    offsetof(Shared::ClusterSetInfo, reuseCounts) +
+                    sizeof(uint32_t) * bufIdx;
+                CUDADRV_CHECK(cuMemsetD32Async(reuseCountToBuildPtr, 0, 1, curStream));
                 CUDADRV_CHECK(cuMemsetD32Async(
-                    cMesh.usedFlags.getCUdeviceptr(), 0, cMesh.usedFlags.sizeInBytes() / 4, curStream));
+                    cMesh.usedFlagArrays[bufIdx].getCUdeviceptr(), 0,
+                    cMesh.usedFlagArrays[bufIdx].sizeInBytes() / 4, curStream));
+                CUDADRV_CHECK(cuMemsetD32Async(
+                    cMesh.buildFlagArrays[bufIdx].getCUdeviceptr(), 0,
+                    cMesh.buildFlagArrays[bufIdx].sizeInBytes() / 4, curStream));
             });
 
             // JP: メッシュの各インスタンス・各クラスターをテストして、ビルドの必要があるクラスターを特定する。
@@ -1034,11 +1151,42 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     plp.camera.position, plp.camera.orientation,
                     plp.camera.fovY, args.windowContentRenderHeight,
                     cMesh.clusters, cMesh.argsArray,
-                    cMeshTotalClusterCount, cMesh.levelInfos.size(),
+                    cMeshTotalClusterCount, static_cast<uint32_t>(cMesh.levelInfos.size()),
                     cMesh.clusterSetInfo,
                     instStaticInfoBuffer.getDevicePointerAt(cMeshInstSet.startInstanceId),
                     curInstDynamicInfoBuffer.getDevicePointerAt(cMeshInstSet.startInstanceId),
-                    cMeshInstCount);
+                    cMeshInstCount, invalidate, bufIdx);
+            });
+
+            executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
+            {
+                const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
+
+                scanReuseSizeArray(
+                    curStream, cudau::dim3(1),
+                    cMesh.clusterSetInfo,
+                    commonOpScratchMem, commonOpScratchMem.sizeInBytes(),
+                    bufIdx);
+            });
+
+            executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
+            {
+                const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
+
+                copyReusedClases(
+                    curStream, cudau::dim3(1),
+                    cMesh.clusterSetInfo,
+                    bufIdx);
+            });
+
+            executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
+            {
+                const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
+
+                updateReuseClasHandles(
+                    curStream, cudau::dim3(1),
+                    cMesh.clusterSetInfo,
+                    bufIdx);
             });
 
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
@@ -1046,15 +1194,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
-                const cudau::TypedBuffer<uint32_t> &curOutputSizes = cMesh.outputSizesArray[bufIdx];
 
                 const CUdeviceptr clasCountToBuildPtr =
                     cMesh.clusterSetInfo.getCUdeviceptr() +
-                    offsetof(Shared::ClusterSetInfo, argsCountToBuild);
+                    offsetof(Shared::ClusterSetInfo, buildCount);
                 cMesh.clasSet.rebuild(
                     curStream,
-                    cMesh.argsArrayToBuild, clasCountToBuildPtr, cMesh.clasSetMem, asBuildScratchMem,
-                    cMesh.clasHandles, curOutputSizes);
+                    cMesh.clasBuildArgsArray, clasCountToBuildPtr, cMesh.clasSetBuildMem, asBuildScratchMem,
+                    cMesh.clasBuildHandleArray, cMesh.clasBuildSizeArray);
             });
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
@@ -1068,7 +1215,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     curStream, cudau::dim3(cMeshInstSet.maxClasCountPerCgas * cMeshInstCount),
                     cMeshInstSet.maxClasCountPerCgas, cMesh.clusterSetInfo,
                     instStaticInfoBuffer.getDevicePointerAt(cMeshInstSet.startInstanceId),
-                    cMeshInstCount);
+                    cMeshInstCount, bufIdx);
             });
 
             // JP: 各インスタンスに対応するCGAS入力を生成する。
@@ -1122,17 +1269,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstSet.clasBuildCountsArray[bufIdx];
                 const cudau::TypedBuffer<uint32_t> &prevClasBuildCounts =
                     cMeshInstSet.clasBuildCountsArray[prevBufIdx];
-                const cudau::TypedBuffer<uint32_t> &curOutputSizes =
-                    cMesh.outputSizesArray[bufIdx];
-                const cudau::TypedBuffer<uint32_t> &prevOutputSizes =
-                    cMesh.outputSizesArray[prevBufIdx];
 
                 CUDADRV_CHECK(cuMemcpyDtoDAsync(
                     curClasBuildCounts.getCUdeviceptr(), prevClasBuildCounts.getCUdeviceptr(),
                     curClasBuildCounts.sizeInBytes(), curStream));
-                CUDADRV_CHECK(cuMemcpyDtoDAsync(
-                    curOutputSizes.getCUdeviceptr(), prevOutputSizes.getCUdeviceptr(),
-                    curOutputSizes.sizeInBytes(), curStream));
             });
         }
 
@@ -1261,6 +1401,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     floorTriangleBuffer.finalize();
     floorVertexBuffer.finalize();
     floorGeomInst.destroy();
+
+    commonOpScratchMem.finalize();
 
     dragonCMeshInstSet.finalize();
     dragonCMesh.finalize();

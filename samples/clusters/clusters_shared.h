@@ -51,11 +51,22 @@ namespace Shared {
     };
 
     struct ClusterSetInfo {
-        OptixClusterAccelBuildInputTrianglesArgs* argsArray; // args array for CLAS set build
-        CUdeviceptr* clasHandles; // CLAS handles' destination for CLAS set build
-        uint32_t* usedFlags; // Each bit indicates whether the corresponding cluster is used in the frame.
-        uint32_t* indexMapClusterToClasBuild; // cluster index => CLAS build index
-        uint32_t argsCountToBuild;
+        // CLAS set build
+        OptixClusterAccelBuildInputTrianglesArgs* buildArgsArray;
+        CUdeviceptr* buildHandleArray;
+        uint32_t* buildSizeArray;
+
+        // CLAS set reuse
+        CUdeviceptr reuseMems[2];
+        CUdeviceptr* reuseHandleArrays[2];
+        uint32_t* reuseSizeArrays[2];
+        uint32_t* reuseOffsetArray;
+
+        uint32_t* usedFlagArrays[2]; // Bit indicates whether the cluster is used in the frame
+        uint32_t* buildFlagArrays[2]; // Bit indicates whether the cluster is built in the frame
+        uint32_t* indexMapClusterToBuildOrReuse; // cluster index => CLAS build/reuse index
+        uint32_t buildCount;
+        uint32_t reuseCounts[2];
         float meshErrorScale;
     };
 
