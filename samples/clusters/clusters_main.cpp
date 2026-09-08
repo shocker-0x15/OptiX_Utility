@@ -1204,6 +1204,45 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMesh.clasBuildHandleArray, cMesh.clasBuildSizeArray);
             });
 
+            {
+                CUDADRV_CHECK(cuStreamSynchronize(curStream));
+
+                ClusteredMesh const &cMesh = bunnyCMesh;
+                ClusteredMeshInstanceSet const &instSet = bunnyCMeshInstSet;
+
+                Shared::ClusterSetInfo clusterSetInfoOnHost;
+                CUDADRV_CHECK(cuMemcpyDtoH(
+                    &clusterSetInfoOnHost, cMesh.clusterSetInfo.getCUdeviceptr(),
+                    sizeof(clusterSetInfoOnHost)));
+                const uint32_t buildCount = clusterSetInfoOnHost.buildCount;
+                const uint32_t curReuseCount = clusterSetInfoOnHost.reuseCounts[bufIdx];
+                const uint32_t prevReuseCount = clusterSetInfoOnHost.reuseCounts[prevBufIdx];
+
+                std::vector<CUdeviceptr> __curReuseHandleArray = cMesh.clasReuseHandleArrays[bufIdx];
+                std::vector<CUdeviceptr> __prevReuseHandleArray = cMesh.clasReuseHandleArrays[prevBufIdx];
+                std::vector<uint32_t> __curReuseSizeArray = cMesh.clasReuseSizeArrays[bufIdx];
+                std::vector<uint32_t> __prevReuseSizeArray = cMesh.clasReuseSizeArrays[prevBufIdx];
+                std::vector<uint32_t> __reuseOffsetArray = cMesh.clasReuseOffsetArray;
+                std::vector<OptixClusterAccelBuildInputTrianglesArgs> __buildArgsArray = cMesh.clasBuildArgsArray;
+                std::vector<CUdeviceptr> __buildHandleArray = cMesh.clasBuildHandleArray;
+                std::vector<uint32_t> __buildSizeArray = cMesh.clasBuildSizeArray;
+
+                std::vector<uint32_t> curUsedFlagArray = cMesh.usedFlagArrays[bufIdx];
+                std::vector<uint32_t> prevUsedFlagArray = cMesh.usedFlagArrays[prevBufIdx];
+                std::vector<uint32_t> curBuildFlagArray = cMesh.buildFlagArrays[bufIdx];
+                std::vector<uint32_t> prevBuildFlagArray = cMesh.buildFlagArrays[prevBufIdx];
+                std::vector<uint32_t> indexMapClusterToBuildOrReuse = cMesh.indexMapClusterToClasBuildOrReuse;
+                std::span<CUdeviceptr> curReuseHandleArray(__curReuseHandleArray.data(), curReuseCount);
+                std::span<CUdeviceptr> prevReuseHandleArray(__prevReuseHandleArray.data(), prevReuseCount);
+                std::span<uint32_t> curReuseSizeArray(__curReuseSizeArray.data(), curReuseCount);
+                std::span<uint32_t> prevReuseSizeArray(__prevReuseSizeArray.data(), prevReuseCount);
+                std::span<uint32_t> reuseOffsetArray(__reuseOffsetArray.data(), curReuseCount + 1);
+                std::span<OptixClusterAccelBuildInputTrianglesArgs> buildArgsArray(__buildArgsArray.data(), buildCount);
+                std::span<CUdeviceptr> buildHandleArray(__buildHandleArray.data(), buildCount);
+                std::span<uint32_t> buildSizeArray(__buildSizeArray.data(), buildCount);
+                printf("");
+            }
+
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
             //     対応するクラスターのハンドルをコピーする。
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
@@ -1242,6 +1281,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstSet.cgasSetMem, asBuildScratchMem,
                     cMeshInstSet.cgasHandles);
             });
+
+            {
+                CUDADRV_CHECK(cuStreamSynchronize(curStream));
+                printf("");
+            }
 
             // JP: 統計情報をCPU側で処理するためにコピーする。
             // EN: Copy statistics information to the CPU side.
