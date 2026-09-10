@@ -759,29 +759,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         float2(0.0f, 0.0f)
     };
 
-    struct GPUTimer {
-        cudau::Timer frame;
-        cudau::Timer clasBuilds;
-        cudau::Timer iasBuild;
-        cudau::Timer render;
-
-        void initialize(CUcontext context) {
-            frame.initialize(context);
-            clasBuilds.initialize(context);
-            iasBuild.initialize(context);
-            render.initialize(context);
-        }
-        void finalize() {
-            render.finalize();
-            iasBuild.finalize();
-            clasBuilds.finalize();
-            frame.finalize();
-        }
-    };
-
     cudau::TypedBuffer<Shared::InstanceDynamicInfo> instDynamicInfoBuffers[2];
     cudau::TypedBuffer<Shared::PickInfo> pickInfos[2];
-    GPUTimer gpuTimers[2];
+    HierarchicalGpuTimer gpuTimers[2];
     for (uint32_t i = 0; i < 2; ++i) {
         instDynamicInfoBuffers[i].initialize(cuContext, cudau::BufferType::Device, maxInstCount);
         pickInfos[i].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
@@ -794,10 +774,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         const CUstream curStream = args.curStream;
         const uint32_t bufIdx = frameIndex % 2;
         const uint32_t prevBufIdx = (frameIndex + 1) % 2;
-        GPUTimer &curGPUTimer = gpuTimers[bufIdx];
+        HierarchicalGpuTimer &curGPUTimer = gpuTimers[bufIdx];
         cudau::TypedBuffer<Shared::PickInfo> &curPickInfo = pickInfos[bufIdx];
         cudau::TypedBuffer<Shared::InstanceDynamicInfo> &curInstDynamicInfoBuffer =
             instDynamicInfoBuffers[bufIdx];
+
+        const auto timerBeginResult = curGPUTimer.beginFrame(curStream, frameIndex);
 
         // Camera Window
         bool cameraIsActuallyMoving = args.cameraIsActuallyMoving;
@@ -921,20 +903,33 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::End();
         }
 
+        const auto drawTimerTree = [](const auto &self, const HierarchicalGpuTimer::Node &node,
+                                      const uint32_t depth) -> void {
+            ImGui::Text(
+                "%*s%s: %.3f [ms]", static_cast<int>(depth * 2), "",
+                node.name.c_str(), node.elapsedMilliseconds);
+            for (const HierarchicalGpuTimer::Node &child : node.children)
+                self(self, child, depth + 1);
+        };
+
         // Stats Window
         {
             ImGui::SetNextWindowPos(ImVec2(8, 144), ImGuiCond_FirstUseEver);
             ImGui::Begin("Stats", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-            float cudaFrameTime = curGPUTimer.frame.report();
-            float clasBuildsTime = curGPUTimer.clasBuilds.report();
-            float iasBuildTime = curGPUTimer.iasBuild.report();
-            float renderTime = curGPUTimer.render.report();
-            //ImGui::SetNextItemWidth(100.0f);
-            ImGui::Text("CUDA/OptiX GPU %.3f [ms]:", cudaFrameTime);
-            ImGui::Text("  CLAS Builds: %.3f [ms]", clasBuildsTime);
-            ImGui::Text("  IAS Build: %.3f [ms]", iasBuildTime);
-            ImGui::Text("  Render: %.3f [ms]", renderTime);
+            if (timerBeginResult == HierarchicalGpuTimer::BeginResult::PreviousResultCollected) {
+                const HierarchicalGpuTimer::Node* const lastResult = curGPUTimer.getLastResult();
+                if (lastResult) {
+                    ImGui::Text("GPU timing frame: %llu", curGPUTimer.getLastResultFrameIndex());
+                    drawTimerTree(drawTimerTree, *lastResult, 0);
+                }
+                else {
+                    ImGui::Text("CUDA/OptiX GPU: -- [no result]");
+                }
+            }
+            else {
+                ImGui::Text("CUDA/OptiX GPU: -- [warming up]");
+            }
 
             if (ImGui::CollapsingHeader("CLAS Stats", ImGuiTreeNodeFlags_DefaultOpen)) {
                 for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx) {
@@ -974,8 +969,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
 
 
-        curGPUTimer.frame.start(curStream);
-
         const auto executeInBatch = [&]
         (std::function<void(const ClusteredMeshInstanceSet &)> f) {
             for (uint32_t setIdx = 0; setIdx < lengthof(cMeshInstSets); ++setIdx)
@@ -993,12 +986,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
         });
         curInstDynamicInfoBuffer.unmap(curStream);
 
-        curGPUTimer.clasBuilds.start(curStream);
+        curGPUTimer.start("Frame");
+        curGPUTimer.start("AS Build");
 
-        if ((lodMode == Shared::LoDMode_ViewAdaptive ||
-             lodModeChanged || lodLevelChanged || posTruncBitWidthChanged) && !lockLod ||
+        if (((lodMode == Shared::LoDMode_ViewAdaptive ||
+              lodModeChanged || lodLevelChanged || posTruncBitWidthChanged) && !lockLod) ||
             frameIndex == 0)
         {
+            curGPUTimer.start("CLAS Build");
+            curGPUTimer.start("Prepare CLAS Build");
+
             // JP: 各クラスター化メッシュに関して、ビルドするCLASカウンターとArgs設定済みを表すフラグ列を
             //     リセットする。
             // EN: For each clustered mesh, reset the CLAS counter and flags indicating that the args are set.
@@ -1041,8 +1038,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstCount);
             });
 
+            curGPUTimer.stop(); // Prepare CLAS Build
+
             // JP: 今回のフレームで使用するCLAS集合をビルドする。
             // EN: Build the CLAS set to be used in this frame.
+            curGPUTimer.start("CLAS Set Build");
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -1056,6 +1056,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMesh.argsArrayToBuild, clasCountToBuildPtr, cMesh.clasSetMem, asBuildScratchMem,
                     cMesh.clasHandles, curOutputSizes);
             });
+            curGPUTimer.stop(); // CLAS Set Build
+            curGPUTimer.stop(); // CLAS Build
+
+            curGPUTimer.start("CGAS Build");
+            curGPUTimer.start("Prepare CGAS Build");
 
             // JP: 各インスタンスのCluster GAS構築のため、それぞれのCLASハンドルバッファーに
             //     対応するクラスターのハンドルをコピーする。
@@ -1085,8 +1090,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstSet.cgasArgsArray);
             });
 
+            curGPUTimer.stop(); // Prepare CGAS Build
+
             // JP: 各クラスターメッシュのCGAS集合をビルドする。
             // EN: Build the CGAS set for each clustered mesh.
+            curGPUTimer.start("CGAS Set Build");
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 cMeshInstSet.cgasSet.rebuild(
@@ -1095,9 +1103,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     cMeshInstSet.cgasSetMem, asBuildScratchMem,
                     cMeshInstSet.cgasHandles);
             });
+            curGPUTimer.stop(); // CGAS Set Build
+            curGPUTimer.stop(); // CGAS Build
 
             // JP: 統計情報をCPU側で処理するためにコピーする。
             // EN: Copy statistics information to the CPU side.
+            curGPUTimer.start("Others");
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -1112,8 +1123,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     curInstDynamicInfoBuffer.getDevicePointerAt(cMeshInstSet.startInstanceId), cMeshInstCount,
                     curClasBuildCounts);
             });
+            curGPUTimer.stop(); // Others
         }
         else {
+            curGPUTimer.start("Others");
             executeInBatch([&](const ClusteredMeshInstanceSet &cMeshInstSet)
             {
                 const ClusteredMesh &cMesh = *cMeshInstSet.cMesh;
@@ -1134,16 +1147,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     curOutputSizes.getCUdeviceptr(), prevOutputSizes.getCUdeviceptr(),
                     curOutputSizes.sizeInBytes(), curStream));
             });
+            curGPUTimer.stop(); // Others
         }
-
-        curGPUTimer.clasBuilds.stop(curStream);
 
         // JP: IASのリビルドを行う。
         // EN: Rebuild the IAS.
-        curGPUTimer.iasBuild.start(curStream);
+        curGPUTimer.start("IAS Build");
         //if (animate)
         plp.travHandle = ias.rebuild(curStream, instanceBuffer, iasMem, asBuildScratchMem);
-        curGPUTimer.iasBuild.stop(curStream);
+        curGPUTimer.stop(); // IAS Build
+        curGPUTimer.stop(); // AS Build
 
         bool firstAccumFrame =
             //animate ||
@@ -1161,7 +1174,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         // Render
         {
-            curGPUTimer.render.start(curStream);
+            curGPUTimer.start("Render");
 
             plp.colorAccumBuffer = outputBufferSurfaceHolder.getNext();
             plp.pickInfo = curPickInfo.getDevicePointer();
@@ -1182,12 +1195,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             ++numAccumFrames;
 
-            curGPUTimer.render.stop(curStream);
+            curGPUTimer.stop(); // Render
         }
 
         outputBufferSurfaceHolder.endCUDAAccess(curStream, true);
 
-        curGPUTimer.frame.stop(curStream);
+        curGPUTimer.stop(); // Frame
 
 
 

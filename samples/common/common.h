@@ -44,6 +44,10 @@
 #   include <sstream>
 #   include <array>
 #   include <vector>
+#   include <memory>
+#   include <string>
+#   include <string_view>
+#   include <stdexcept>
 #   include <set>
 #   include <map>
 #   include <unordered_set>
@@ -1699,6 +1703,206 @@ struct MovingAverageTime {
         for (uint32_t i = 0; i < numValidValues; ++i)
             sum += values[(index - 1 - i + lengthof(values)) % lengthof(values)];
         return numValidValues > 0 ? sum / numValidValues : 0.0f;
+    }
+};
+
+
+
+class HierarchicalGpuTimer {
+public:
+    struct Node {
+        std::string name;
+        float elapsedMilliseconds = 0.0f;
+        std::vector<Node> children;
+    };
+
+    enum class BeginResult {
+        NoPreviousResult,
+        PreviousResultCollected,
+    };
+
+private:
+    struct TimerNode {
+        std::string name;
+        cudau::Timer timer;
+        std::vector<std::unique_ptr<TimerNode>> children;
+        bool timerInitialized = false;
+        bool usedInCurrentFrame = false;
+
+        explicit TimerNode(std::string _name) : name(std::move(_name)) {}
+    };
+
+    CUcontext m_context = nullptr;
+    CUstream m_stream = nullptr;
+    uint64_t m_currentFrameIndex = 0;
+    uint64_t m_pendingFrameIndex = 0;
+    uint64_t m_lastResultFrameIndex = std::numeric_limits<uint64_t>::max();
+    bool m_initialized = false;
+    bool m_frameBegun = false;
+    bool m_pendingFrame = false;
+    bool m_hasLastResult = false;
+    std::unique_ptr<TimerNode> m_root;
+    std::vector<TimerNode*> m_activeStack;
+    Node m_lastResult;
+
+    static void resetFrameState(TimerNode* const node) {
+        if (!node)
+            return;
+
+        node->usedInCurrentFrame = false;
+        for (const auto &child : node->children)
+            resetFrameState(child.get());
+    }
+
+    static void finalizeNode(TimerNode* const node) {
+        if (!node)
+            return;
+
+        for (const auto &child : node->children)
+            finalizeNode(child.get());
+        if (node->timerInitialized)
+            node->timer.finalize();
+    }
+
+    static void collectNode(TimerNode* const node, Node* const result) {
+        result->name = node->name;
+        result->elapsedMilliseconds = node->usedInCurrentFrame ? node->timer.report() : 0.0f;
+        result->children.resize(node->children.size());
+        for (size_t i = 0; i < node->children.size(); ++i)
+            collectNode(node->children[i].get(), &result->children[i]);
+        node->usedInCurrentFrame = false;
+    }
+
+    TimerNode* findOrCreateChild(TimerNode* const parent, const std::string_view name) {
+        for (const auto &child : parent->children) {
+            if (std::string_view(child->name) == name)
+                return child.get();
+        }
+
+        auto child = std::make_unique<TimerNode>(std::string(name));
+        TimerNode* const ret = child.get();
+        parent->children.emplace_back(std::move(child));
+        return ret;
+    }
+
+    TimerNode* findOrCreateRoot(const std::string_view name) {
+        if (!m_root)
+            m_root = std::make_unique<TimerNode>(std::string(name));
+        else if (std::string_view(m_root->name) != name)
+            throw std::logic_error("HierarchicalGpuTimer requires one root name per instance.");
+        return m_root.get();
+    }
+
+    void initializeNode(TimerNode* const node) {
+        if (!node->timerInitialized) {
+            node->timer.initialize(m_context);
+            node->timerInitialized = true;
+        }
+    }
+
+    void collectPendingFrame() {
+        if (!m_pendingFrame)
+            return;
+        if (!m_root || !m_root->usedInCurrentFrame)
+            throw std::logic_error("HierarchicalGpuTimer has no completed root timer.");
+
+        collectNode(m_root.get(), &m_lastResult);
+        m_lastResultFrameIndex = m_pendingFrameIndex;
+        m_hasLastResult = true;
+        m_pendingFrame = false;
+    }
+
+public:
+    HierarchicalGpuTimer() = default;
+    HierarchicalGpuTimer(const HierarchicalGpuTimer &) = delete;
+    HierarchicalGpuTimer &operator=(const HierarchicalGpuTimer &) = delete;
+    HierarchicalGpuTimer(HierarchicalGpuTimer &&) = delete;
+    HierarchicalGpuTimer &operator=(HierarchicalGpuTimer &&) = delete;
+
+    void initialize(const CUcontext context) {
+        if (m_initialized)
+            throw std::logic_error("HierarchicalGpuTimer is already initialized.");
+        if (!context)
+            throw std::invalid_argument("HierarchicalGpuTimer requires a valid CUDA context.");
+
+        m_context = context;
+        m_initialized = true;
+    }
+
+    void finalize() {
+        if (!m_initialized)
+            return;
+        if (m_frameBegun || !m_activeStack.empty())
+            throw std::logic_error("HierarchicalGpuTimer cannot be finalized during a frame.");
+
+        finalizeNode(m_root.get());
+        m_root.reset();
+        m_activeStack.clear();
+        m_lastResult = {};
+        m_lastResultFrameIndex = std::numeric_limits<uint64_t>::max();
+        m_context = nullptr;
+        m_stream = nullptr;
+        m_initialized = false;
+        m_pendingFrame = false;
+        m_hasLastResult = false;
+    }
+
+    BeginResult beginFrame(const CUstream stream, const uint64_t frameIndex) {
+        if (!m_initialized)
+            throw std::logic_error("HierarchicalGpuTimer is not initialized.");
+        if (m_frameBegun || !m_activeStack.empty())
+            throw std::logic_error("HierarchicalGpuTimer::beginFrame() called while a frame is active.");
+
+        const bool collectedPreviousResult = m_pendingFrame;
+        collectPendingFrame();
+
+        m_stream = stream;
+        m_currentFrameIndex = frameIndex;
+        resetFrameState(m_root.get());
+        m_frameBegun = true;
+
+        return collectedPreviousResult ?
+            BeginResult::PreviousResultCollected : BeginResult::NoPreviousResult;
+    }
+
+    void start(const std::string_view name) {
+        if (!m_frameBegun)
+            throw std::logic_error("HierarchicalGpuTimer::start() called outside a frame.");
+        if (name.empty())
+            throw std::invalid_argument("HierarchicalGpuTimer::start() requires a non-empty name.");
+
+        TimerNode* const parent = m_activeStack.empty() ? nullptr : m_activeStack.back();
+        TimerNode* const node = parent ? findOrCreateChild(parent, name) : findOrCreateRoot(name);
+        if (node->usedInCurrentFrame)
+            throw std::logic_error("HierarchicalGpuTimer does not allow a repeated timer path in one frame.");
+
+        initializeNode(node);
+        node->timer.start(m_stream);
+        node->usedInCurrentFrame = true;
+        m_activeStack.emplace_back(node);
+    }
+
+    void stop() {
+        if (!m_frameBegun || m_activeStack.empty())
+            throw std::logic_error("HierarchicalGpuTimer::stop() has no active timer.");
+
+        TimerNode* const node = m_activeStack.back();
+        node->timer.stop(m_stream);
+        m_activeStack.pop_back();
+
+        if (m_activeStack.empty()) {
+            m_frameBegun = false;
+            m_pendingFrame = true;
+            m_pendingFrameIndex = m_currentFrameIndex;
+        }
+    }
+
+    const Node* getLastResult() const {
+        return m_hasLastResult ? &m_lastResult : nullptr;
+    }
+
+    uint64_t getLastResultFrameIndex() const {
+        return m_lastResultFrameIndex;
     }
 };
 
