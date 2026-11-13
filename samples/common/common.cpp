@@ -1,5 +1,7 @@
 ﻿#include "common.h"
 
+#include <cstdarg>
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../ext/stb_image_write.h"
 
@@ -22,7 +24,7 @@ void devPrintf(const char* fmt, ...) {
 #else
     va_list args;
     va_start(args, fmt);
-    vprintf_s(fmt, args);
+    vprintf(fmt, args);
     va_end(args);
 #endif
 }
@@ -40,6 +42,8 @@ std::filesystem::path getExecutableDirectory() {
         Assert(length > 0, "Failed to query the executable path.");
 
         ret = filepath;
+#elif defined(HP_Platform_Linux)
+        ret = std::filesystem::canonical("/proc/self/exe");
 #else
         static_assert(false, "Not implemented");
 #endif

@@ -48,6 +48,8 @@
 #include <unordered_map>
 #include <algorithm>
 #include <variant>
+#include <cstdio>
+#include <cstring>
 
 #if __cplusplus <= 199711L
 #   if defined(OPTIXU_Platform_Windows_MSVC)
@@ -59,7 +61,7 @@
 
 #if __cplusplus >= 202002L
 #include <bit>
-#else // if __cplusplus >= 202002L
+#elif defined(OPTIXU_Platform_Windows_MSVC)
 #include <intrin.h>
 #endif // if __cplusplus >= 202002L
 
@@ -128,13 +130,17 @@ namespace optixu {
 
 
 
-#if __cplusplus < 202002L
+#if __cplusplus >= 202002L
+    using std::countr_zero;
+#elif defined(OPTIXU_Platform_Windows_MSVC)
     inline uint32_t countr_zero(uint32_t x) {
         return _tzcnt_u32(x);
     }
-#else // if __cplusplus < 202002L
-    using std::countr_zero;
-#endif // if __cplusplus < 202002L
+#else
+    inline uint32_t countr_zero(uint32_t x) {
+        return x ? static_cast<uint32_t>(__builtin_ctz(x)) : 32;
+    }
+#endif // if __cplusplus >= 202002L
 
 
 
@@ -327,7 +333,7 @@ namespace optixu {
             }
             else {
                 char ptrStr[32];
-                sprintf_s(ptrStr, "%p", p);
+                snprintf(ptrStr, sizeof(ptrStr), "%p", p);
                 return ptrStr;
             }
         }
@@ -345,7 +351,7 @@ namespace optixu {
             }
             else {
                 char ptrStr[32];
-                sprintf_s(ptrStr, "%p", this);
+                snprintf(ptrStr, sizeof(ptrStr), "%p", this);
                 return ptrStr;
             }
         }

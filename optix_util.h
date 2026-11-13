@@ -290,8 +290,12 @@ TODO:
 #           define OPTIXU_Platform_CodeCompletion
 #       endif // if defined(__INTELLISENSE__)
 #   endif // if defined(_MSC_VER)
+#elif defined(__linux__)
+#   define OPTIXU_Platform_Linux
 #elif defined(__APPLE__)
 #   define OPTIXU_Platform_macOS
+#elif defined(__OpenBSD__)
+#   define OPTIXU_Platform_OpenBSD
 #endif // if defined(_WIN32) || defined(_WIN64)
 
 
@@ -305,6 +309,8 @@ TODO:
 #include <string>
 #include <vector>
 #include <initializer_list>
+#include <tuple>
+#include <utility>
 #   if __cplusplus >= 202002L
 #       include <concepts>
 #   endif // if __cplusplus >= 202002L

@@ -13,8 +13,8 @@ if ("${OPTIX91_PATH}" STREQUAL "")
     # Try finding it inside the default installation directory under Windows first.
     set(OPTIX91_PATH "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0")
   else()
-    # Adjust this if the OptiX SDK 9.0.0 installation is in a different location.
-    set(OPTIX91_PATH "~/NVIDIA-OptiX-SDK-9.1.0-linux64")
+    # Adjust this if the OptiX SDK 9.1.0 installation is in a different location.
+    set(OPTIX91_PATH "$ENV{HOME}/NVIDIA-OptiX-SDK-9.1.0-linux64")
   endif()
 endif()
 

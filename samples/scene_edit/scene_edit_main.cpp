@@ -232,7 +232,7 @@ void loadFile(const std::filesystem::path &filepath, CUstream stream, OptiXEnv* 
         vertexBuffer->initialize(optixEnv->cuContext, g_bufferType, vertices, stream);
 
         char name[256];
-        sprintf_s(name, "%s-%d", basename.c_str(), meshIdx);
+        snprintf(name, sizeof(name), "%s-%d", basename.c_str(), meshIdx);
         GeometryInstanceRef geomInst = make_shared_with_deleter<GeometryInstance>(GeometryInstance::finalize);
         geomInst->optixEnv = optixEnv;
         geomInst->serialID = optixEnv->geomInstSerialID++;
@@ -1103,7 +1103,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         GeometryGroupRef geomGroup =
                             make_shared_with_deleter<GeometryGroup>(GeometryGroup::finalize);
                         char name[256];
-                        sprintf_s(name, "GAS-%u", serialID);
+                        snprintf(name, sizeof(name), "GAS-%u", serialID);
                         geomGroup->optixEnv = &optixEnv;
                         geomGroup->serialID = serialID;
                         geomGroup->name = name;
@@ -1218,7 +1218,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
                                 inst->optixEnv = &optixEnv;
                                 char name[256];
-                                sprintf_s(name, "Instance-%u", serialID);
+                                snprintf(name, sizeof(name), "Instance-%u", serialID);
                                 inst->serialID = serialID;
                                 inst->name = name;
                                 inst->scale = float3(1.0f, 1.0f, 1.0f);
@@ -1408,7 +1408,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         GroupRef group = make_shared_with_deleter<Group>(Group::finalize);
                         group->optixEnv = &optixEnv;
                         char name[256];
-                        sprintf_s(name, "IAS-%u", serialID);
+                        snprintf(name, sizeof(name), "IAS-%u", serialID);
                         group->serialID = serialID;
                         group->name = name;
                         group->optixIAS = optixEnv.scene.createInstanceAccelerationStructure();
@@ -1534,7 +1534,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                 InstanceRef inst = make_shared_with_deleter<Instance>(Instance::finalize);
                                 inst->optixEnv = &optixEnv;
                                 char name[256];
-                                sprintf_s(name, "Instance-%u", serialID);
+                                snprintf(name, sizeof(name), "Instance-%u", serialID);
                                 inst->serialID = serialID;
                                 inst->name = name;
                                 inst->scale = float3(1.0f, 1.0f, 1.0f);

@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include <filesystem>
 #include <vector>
+#include <cstring>
 
 class FileDialog {
 public:
@@ -48,12 +49,12 @@ private:
 
     template <size_t Size>
     static void strToChars(const std::string &src, char (&dst)[Size]) {
-        strncpy_s(dst, src.c_str(), Size - 1);
+        std::strncpy(dst, src.c_str(), Size - 1);
         dst[Size - 1] = '\0';
     }
     template <size_t Size>
     static void pathToChars(const std::filesystem::path &path, char (&dst)[Size]) {
-        strncpy_s(dst, reinterpret_cast<const char*>(path.u8string().c_str()), Size - 1);
+        std::strncpy(dst, reinterpret_cast<const char*>(path.u8string().c_str()), Size - 1);
         dst[Size - 1] = '\0';
     }
 

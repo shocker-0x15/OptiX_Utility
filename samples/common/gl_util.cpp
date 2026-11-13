@@ -26,6 +26,7 @@
 #   undef max
 #endif
 
+#include <cstdarg>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -52,7 +53,7 @@ namespace glu {
 #else // if defined(GLUPlatform_Windows_MSVC)
         va_list args;
         va_start(args, fmt);
-        vprintf_s(fmt, args);
+        vprintf(fmt, args);
         va_end(args);
 #endif // if defined(GLUPlatform_Windows_MSVC)
     }

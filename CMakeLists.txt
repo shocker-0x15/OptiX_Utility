@@ -112,6 +112,16 @@ set_project_group("External" "ext/googletest")
 option(OPTIXU_BUILD_SAMPLES "Build sample projects for OptiX Utility." ON)
 option(OPTIXU_BUILD_TESTS "Build test projects for OptiX Utility." ON)
 
+if(WIN32)
+    set(OPTIXU_BUILD_GUI_SAMPLES_DEFAULT ON)
+else()
+    set(OPTIXU_BUILD_GUI_SAMPLES_DEFAULT OFF)
+endif()
+option(
+    OPTIXU_BUILD_GUI_SAMPLES
+    "Build GUI samples (requires GLFW/OpenGL)."
+    ${OPTIXU_BUILD_GUI_SAMPLES_DEFAULT})
+
 file(
     GLOB META_FILES
     ".editorconfig"

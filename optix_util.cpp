@@ -18,6 +18,10 @@
 
 #include "optix_util_private.h"
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+
 namespace optixu {
     void devPrintf(const char* fmt, ...) {
 #if defined(OPTIXU_Platform_Windows_MSVC)
@@ -38,7 +42,7 @@ namespace optixu {
 #else // if defined(OPTIXU_Platform_Windows_MSVC)
         va_list args;
         va_start(args, fmt);
-        vprintf_s(fmt, args);
+        vprintf(fmt, args);
         va_end(args);
 #endif // if defined(OPTIXU_Platform_Windows_MSVC)
     }

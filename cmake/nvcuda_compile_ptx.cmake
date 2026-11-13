@@ -23,6 +23,11 @@ function(NVCUDA_COMPILE_PTX)
 
   CMAKE_PARSE_ARGUMENTS(NVCUDA_COMPILE_PTX "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+  if(MSVC)
+    list(PREPEND NVCUDA_COMPILE_PTX_NVCC_OPTIONS
+      "-Xcompiler" "\"/wd 4819 /Zc:__cplusplus /Zc:preprocessor\"")
+  endif()
+
   if(NOT WIN32) # Do not create a folder with the name ${ConfigurationName} under Windows.
     # Under Linux make sure the target directory exists.
     file(MAKE_DIRECTORY ${NVCUDA_COMPILE_PTX_TARGET_PATH})
@@ -59,6 +64,11 @@ function(NVCUDA_COMPILE_OPTIX_IR)
   set(multiValueArgs NVCC_OPTIONS SOURCES DEPENDENCIES)
 
   CMAKE_PARSE_ARGUMENTS(NVCUDA_COMPILE_OPTIX_IR "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  if(MSVC)
+    list(PREPEND NVCUDA_COMPILE_OPTIX_IR_NVCC_OPTIONS
+      "-Xcompiler" "\"/wd 4819 /Zc:__cplusplus /Zc:preprocessor\"")
+  endif()
 
   if(NOT WIN32) # Do not create a folder with the name ${ConfigurationName} under Windows.
     # Under Linux make sure the target directory exists.

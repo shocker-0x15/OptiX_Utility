@@ -38,6 +38,7 @@
     {
         "name": "as_update",
         "sample": "as_update",
+        "gui": true,
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -53,6 +54,7 @@
     {
         "name": "curve_primitive",
         "sample": "curve_primitive",
+        "gui": true,
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -75,6 +77,7 @@
     {
         "name": "deformation_blur",
         "sample": "deformation_blur",
+        "gui": true,
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -106,6 +109,7 @@
     {
         "name": "temporal_denoiser",
         "sample": "temporal_denoiser",
+        "gui": true,
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -114,6 +118,7 @@
     {
         "name": "temporal_denoiser upscale",
         "sample": "temporal_denoiser",
+        "gui": true,
         "options": "--screen-shot --upscale",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -122,6 +127,7 @@
     {
         "name": "pick",
         "sample": "pick",
+        "gui": true,
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -130,6 +136,7 @@
     {
         "name": "uber",
         "sample": "uber",
+        "gui": true,
         "options": "--screen-shot",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -146,6 +153,7 @@
     {
         "name": "opacity_micro_map final",
         "sample": "opacity_micro_map",
+        "gui": true,
         "options": "--screen-shot --visualize final",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -154,6 +162,7 @@
     {
         "name": "opacity_micro_map primary",
         "sample": "opacity_micro_map",
+        "gui": true,
         "options": "--screen-shot --visualize primary-any-hits",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -162,6 +171,7 @@
     {
         "name": "opacity_micro_map shadow",
         "sample": "opacity_micro_map",
+        "gui": true,
         "options": "--screen-shot --visualize shadow-any-hits --max-subdiv-level 5 --subdiv-level-bias 1",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -170,6 +180,7 @@
     {
         "name": "clusters final",
         "sample": "clusters",
+        "gui": true,
         "options": "--screen-shot --visualize final",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -178,6 +189,7 @@
     {
         "name": "clusters cluster",
         "sample": "clusters",
+        "gui": true,
         "options": "--screen-shot --visualize cluster",
         "image": "output.png",
         "outputs": ["output.png"],
@@ -186,6 +198,7 @@
     {
         "name": "clusters triangle",
         "sample": "clusters",
+        "gui": true,
         "options": "--screen-shot --visualize triangle",
         "image": "output.png",
         "outputs": ["output.png"],

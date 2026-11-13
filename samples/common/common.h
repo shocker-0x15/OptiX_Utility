@@ -6,6 +6,8 @@
 #    if defined(_MSC_VER)
 #        define HP_Platform_Windows_MSVC
 #    endif
+#elif defined(__linux__)
+#    define HP_Platform_Linux
 #elif defined(__APPLE__)
 #    define HP_Platform_macOS
 #endif
@@ -55,7 +57,9 @@
 #   include <chrono>
 #   include <variant>
 
-#   include <immintrin.h>
+#   if defined(HP_Platform_Windows_MSVC)
+#       include <immintrin.h>
+#   endif
 
 #   include "stopwatch.h"
 #endif
@@ -70,14 +74,10 @@
 
 
 
-#if defined(HP_Platform_Windows_MSVC)
-#   if defined(__CUDA_ARCH__)
+#if defined(__CUDA_ARCH__)
 #   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #else
 void devPrintf(const char* fmt, ...);
-#   endif
-#else
-#   define devPrintf(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #endif
 
 #if ENABLE_ASSERT
@@ -259,24 +259,30 @@ CUDA_COMMON_FUNCTION CUDA_INLINE T alignUp(T value, uint32_t alignment) {
 CUDA_COMMON_FUNCTION CUDA_INLINE uint32_t tzcnt(uint32_t x) {
 #if defined(__CUDA_ARCH__)
     return __clz(__brev(x));
-#else
+#elif defined(HP_Platform_Windows_MSVC)
     return _tzcnt_u32(x);
+#else
+    return x ? static_cast<uint32_t>(__builtin_ctz(x)) : 32;
 #endif
 }
 
 CUDA_COMMON_FUNCTION CUDA_INLINE uint32_t lzcnt(uint32_t x) {
 #if defined(__CUDA_ARCH__)
     return __clz(x);
-#else
+#elif defined(HP_Platform_Windows_MSVC)
     return _lzcnt_u32(x);
+#else
+    return x ? static_cast<uint32_t>(__builtin_clz(x)) : 32;
 #endif
 }
 
 CUDA_COMMON_FUNCTION CUDA_INLINE int32_t popcnt(uint32_t x) {
 #if defined(__CUDA_ARCH__)
     return __popc(x);
-#else
+#elif defined(HP_Platform_Windows_MSVC)
     return _mm_popcnt_u32(x);
+#else
+    return static_cast<int32_t>(__builtin_popcount(x));
 #endif
 }
 

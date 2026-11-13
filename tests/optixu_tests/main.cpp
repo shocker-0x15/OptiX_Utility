@@ -3,6 +3,8 @@
 #    if defined(_MSC_VER)
 #        define HP_Platform_Windows_MSVC
 #    endif
+#elif defined(__linux__)
+#    define HP_Platform_Linux
 #elif defined(__APPLE__)
 #    define HP_Platform_macOS
 #endif
@@ -30,6 +32,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <filesystem>
 
@@ -108,6 +111,8 @@ static std::filesystem::path getExecutableDirectory() {
         Assert(length > 0, "Failed to query the executable path.");
 
         ret = filepath;
+#elif defined(HP_Platform_Linux)
+        ret = std::filesystem::canonical("/proc/self/exe");
 #else
         static_assert(false, "Not implemented");
 #endif

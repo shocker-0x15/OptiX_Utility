@@ -18,6 +18,9 @@
 
 #include "cuda_util.h"
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
 #include <sstream>
 
 #if defined(CUDAUPlatform_Windows_MSVC)
@@ -50,7 +53,7 @@ namespace cudau {
 #else // if defined(CUDAUPlatform_Windows_MSVC)
         va_list args;
         va_start(args, fmt);
-        vprintf_s(fmt, args);
+        vprintf(fmt, args);
         va_end(args);
 #endif // if defined(CUDAUPlatform_Windows_MSVC)
     }

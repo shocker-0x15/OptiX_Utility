@@ -26,11 +26,22 @@ def run():
     parser.add_argument('--build-dir', default=str(root_dir / 'build'))
     parser.add_argument('--cppstd', default='c++20')
     parser.add_argument('--cppstd-cuda', default='c++20')
-    parser.add_argument('--cuda')
+    parser.add_argument('--cuda', help='CUDA Toolkit version passed to the Visual Studio generator.')
+    parser.add_argument('--gui', action='store_true',
+                        help='Build and run GUI samples (Windows always builds them).')
     args = parser.parse_args()
 
     cmake_path = Path(args.cmake_path)
     build_dir = Path(args.build_dir)
+
+    is_windows = os.name == 'nt'
+    gui_samples = is_windows or args.gui
+
+    exe_suffix = '.exe' if is_windows else ''
+    configs = ['Debug', 'Release'] if is_windows else ['Release']
+
+    def output_dir(config):
+        return (build_dir / 'bin' / config) if is_windows else (build_dir / 'bin')
 
 
 
@@ -43,11 +54,17 @@ def run():
     cmd = [
         str(cmake_path),
         '-S', str(root_dir),
-        '-B', str(build_dir),
-        '-G','Visual Studio 18 2026', '-A', 'x64',
+        '-B', str(build_dir)]
+    if is_windows:
+        cmd += ['-G', 'Visual Studio 18 2026', '-A', 'x64']
+        if args.cuda:
+            cmd += ['-T', 'cuda=' + args.cuda]
+    else:
+        cmd += ['-D', 'CMAKE_BUILD_TYPE=Release']
+        cmd += ['-D', 'OPTIXU_BUILD_GUI_SAMPLES=' + ('ON' if gui_samples else 'OFF')]
+    cmd += [
         '-D', 'CPP_VER=' + args.cppstd,
-        '-D', 'CPP_VER_CUDA=' + args.cppstd_cuda,
-        '-T', 'cuda=' + args.cuda]
+        '-D', 'CPP_VER_CUDA=' + args.cppstd_cuda]
     run_command(cmd)
 
     # END: CMake meta build
@@ -58,19 +75,23 @@ def run():
     # ----------------------------------------------------------------
     # Build
 
-    sln = build_dir / R'OptiX_Utility_cmake.slnx'
-    msbuild = R'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe'
-    configs = ['Debug', 'Release']
+    if is_windows:
+        sln = build_dir / R'OptiX_Utility_cmake.slnx'
+        msbuild = R'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe'
 
-    for config in configs:
-        # # Clean
-        # cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
-        # cmd += [str(sln)]
-        # run_command(cmd)
+        for config in configs:
+            # # Clean
+            # cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64', '/t:Clean']
+            # cmd += [str(sln)]
+            # run_command(cmd)
 
-        # Build
-        cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
-        cmd += [str(sln)]
+            # Build
+            cmd = [msbuild, '/m', '/p:Configuration=' + config, '/p:Platform=x64']
+            cmd += [str(sln)]
+            run_command(cmd)
+    else:
+        # Single-config generators build one configuration at a time.
+        cmd = [str(cmake_path), '--build', str(build_dir), '--config', configs[0]]
         run_command(cmd)
 
     # END: Build
@@ -81,7 +102,7 @@ def run():
     # ----------------------------------------------------------------
     # Unit tests
 
-    exe = build_dir / 'bin' / 'Release' / 'optixu_tests.exe'
+    exe = output_dir('Release') / ('optixu_tests' + exe_suffix)
 
     print('Run unit tests')
     cmd = [str(exe)]
@@ -104,11 +125,14 @@ def run():
     results = {}
     for config in configs:
         resultsPerConfig = {}
-        outDir = (build_dir / 'bin' / config).resolve()
+        outDir = output_dir(config).resolve()
         for test in tests:
+            if test.get('gui', False) and not gui_samples:
+                continue
+
             testName = test['name']
             testDir = Path(test['sample'])
-            exeName = Path(test['sample'] + '.exe')
+            exeName = Path(test['sample'] + exe_suffix)
 
             print('Run ' + testName + ':')
 
@@ -157,7 +181,7 @@ def run():
                     output.unlink()
 
             chdir(oldDir)
-        
+
         results[config] = resultsPerConfig
 
     # Show results
@@ -182,7 +206,7 @@ def run():
 
 if __name__ == '__main__':
     try:
-        run()
+        sys.exit(run())
     except Exception as e:
         print(e)
-        
+        sys.exit(1)
