@@ -284,14 +284,14 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
 現状以下の環境で動作を確認しています。\
 I've confirmed that the programs run correctly in the following environment.
 
-* Windows 11 (25H2) & Visual Studio Community 2026 (18.9.2)
+* Windows 11 (26H2) & Visual Studio Community 2026 (18.12.0)
 * Ryzen 9 7950X, 64GB, RTX 4080 16GB
-* NVIDIA Driver 616.64
+* NVIDIA Driver 621.01
 
 動作させるにあたっては以下のライブラリが必要です。\
 It requires the following libraries.
 
-* [CUDA](https://developer.nvidia.com/cuda-downloads) 13.2 Update 1 (probably works with lower CUDA versions)\
+* [CUDA](https://developer.nvidia.com/cuda-downloads) 13.4 Update 3 (probably works with lower CUDA versions)\
   Note that CUDA (<= 12.5.0) has compilation issues for C++20 with Visual Studio 2022 17.10.\
   Use CUDA 12.5 Update 1 or newer for C++20.
 * [OptiX](https://developer.nvidia.com/designworks/optix/download) 9.1.0 (requires Turing or later generation NVIDIA GPU)
