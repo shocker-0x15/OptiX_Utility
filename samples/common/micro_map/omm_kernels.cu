@@ -614,6 +614,7 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
                 if (dwIdx < numDwords)
                     reinterpret_cast<uint32_t*>(opacityMicroMap)[dwIdx] = 0;
             }
+            __syncwarp();
 
             const uint32_t numMicroTris = 1 << (2 * triInfo.level);
             for (uint32_t microTriBaseIdx = 0; microTriBaseIdx < numMicroTris; microTriBaseIdx += WarpSize) {
