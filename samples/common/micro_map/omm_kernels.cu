@@ -569,7 +569,11 @@ CUDA_DEVICE_KERNEL void evaluateMicroTriangleTransparencies(
     volatile uint32_t* numFetchedTriangles,
     uint8_t* opacityMicroMaps) {
     while (true) {
-        if (*numFetchedTriangles >= numTriangles)
+        uint32_t curNumFetches;
+        if (threadIdx.x == 0)
+            curNumFetches = *numFetchedTriangles;
+        curNumFetches = __shfl_sync(0xFFFFFFFF, curNumFetches, 0);
+        if (curNumFetches >= numTriangles)
             return;
 
         constexpr uint32_t numTrisPerFetch = 8;
@@ -662,7 +666,11 @@ CUDA_DEVICE_KERNEL void copyOpacityMicroMaps(
     uint32_t numTriangles, volatile uint32_t* numFetchedTriangles,
     uint8_t* opacityMicroMaps) {
     while (true) {
-        if (*numFetchedTriangles >= numTriangles)
+        uint32_t curNumFetches;
+        if (threadIdx.x == 0)
+            curNumFetches = *numFetchedTriangles;
+        curNumFetches = __shfl_sync(0xFFFFFFFF, curNumFetches, 0);
+        if (curNumFetches >= numTriangles)
             return;
 
         constexpr uint32_t numTrisPerFetch = 8;
